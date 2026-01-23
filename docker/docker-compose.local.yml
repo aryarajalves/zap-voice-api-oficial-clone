@@ -18,9 +18,8 @@ services:
     environment:
       - PORT=8000
       - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
-      - RABBITMQ_HOST=zapvoice-rabbit
-      - S3_ENDPOINT_URL=http://zapvoice-minio:9000
-      - S3_PUBLIC_URL=http://localhost:9000
+      - SECRET_KEY=${SECRET_KEY:-changeme_secret_key_12345}
+      # NOTA: Rabbit, S3 e WhatsApp são configurados na interface
 
   zapvoice_worker:
     build:
@@ -36,8 +35,7 @@ services:
       - ../backend/.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
-      - RABBITMQ_HOST=zapvoice-rabbit
-      - S3_ENDPOINT_URL=http://zapvoice-minio:9000
+      - SECRET_KEY=${SECRET_KEY:-changeme_secret_key_12345}
 
   zapvoice_frontend:
     image: node:18-alpine
@@ -56,6 +54,9 @@ services:
       - VITE_WS_URL=ws://localhost:8000
 
   # === INFRASTRUCTURE SERVICES ===
+  # Estes serviços são subidos para que você tenha onde conectar o sistema
+  # Configure os endereços abaixo na interface do ZapVoice (ex: http://zapvoice-minio:9000)
+
   zapvoice-postgres:
     image: postgres:15-alpine
     container_name: zapvoice-postgres
