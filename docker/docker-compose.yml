@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   zapvoice_app:
-    image: ${IMAGE_NAME:-aryarajalves/zap-voice-funil-api-oficial-zap:1.1.0}
+    image: ${IMAGE_NAME:-aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -44,7 +44,7 @@ services:
         - traefik.http.services.zapvoice.loadbalancer.server.port=8000
 
   zapvoice_worker:
-    image: ${IMAGE_NAME:-aryarajalves/zap-voice-funil-api-oficial-zap:1.1.0}
+    image: ${IMAGE_NAME:-aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1}
     command: python worker.py
     networks:
       - network_swarm_public

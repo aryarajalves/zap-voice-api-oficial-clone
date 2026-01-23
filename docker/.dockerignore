@@ -1,12 +1,50 @@
-.env
-backend/.env
-**/.env
-**/*.pyc
-**/__pycache__
+# === Git & Config ===
 .git
 .gitignore
-node_modules
-frontend/node_modules
-venv
+.antigravity*
 .vscode
 .idea
+*.md
+README*
+TODO*
+
+# === Logs & Temps ===
+*.log
+*.txt
+*.db
+*.sqlite3
+app_logs.txt
+zapvoice_debug.log
+baserow_debug.log
+curl_output.txt
+debug_output.txt
+keys_output.txt
+keys_simple.txt
+debug_run.txt
+test.png
+
+# === Python ===
+backend/.env
+backend/venv
+backend/env
+backend/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+backend/sql_app.db
+
+# === Node.js ===
+node_modules
+frontend/node_modules
+frontend/dist
+
+# === OS Files ===
+.DS_Store
+Thumbs.db
+
+# === Docker ===
+docker/backups
+docker/Dockerfile
+docker/docker-compose*
