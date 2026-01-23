@@ -19,7 +19,9 @@ services:
       - PORT=8000
       - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
       - SECRET_KEY=${SECRET_KEY:-changeme_secret_key_12345}
-      # NOTA: Rabbit, S3 e WhatsApp são configurados na interface
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-admin@admin.com}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-123456}
+      - REGISTER_API_KEY=${REGISTER_API_KEY}
 
   zapvoice_worker:
     build:
@@ -54,9 +56,6 @@ services:
       - VITE_WS_URL=ws://localhost:8000
 
   # === INFRASTRUCTURE SERVICES ===
-  # Estes serviços são subidos para que você tenha onde conectar o sistema
-  # Configure os endereços abaixo na interface do ZapVoice (ex: http://zapvoice-minio:9000)
-
   zapvoice-postgres:
     image: postgres:15-alpine
     container_name: zapvoice-postgres

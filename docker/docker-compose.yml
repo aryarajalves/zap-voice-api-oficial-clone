@@ -18,14 +18,17 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - CORS_ORIGINS=${CORS_ORIGINS}
 
+      # === Acesso Inicial (Super Admin) ===
+      # Use estes dados para seu primeiro login no sistema
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD}
+
+      # === Configuração de Registro ===
+      - REGISTER_API_KEY=${REGISTER_API_KEY}
+
       # === Frontend Runtime Config ===
       - VITE_API_URL=${VITE_API_URL}
       - VITE_WS_URL=${VITE_WS_URL}
-
-      # === Autenticação e Registro ===
-      - REGISTER_API_KEY=${REGISTER_API_KEY}
-      # NOTA: RabbitMQ, S3/MinIO, Chatwoot e WhatsApp 
-      # agora são configurados diretamente na interface do sistema.
 
     deploy:
       mode: replicated
