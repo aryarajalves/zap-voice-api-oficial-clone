@@ -79,8 +79,8 @@ Se não configurado, o sistema salva arquivos localmente no container.
 Se você vir erros de `LockNotAvailable` nos logs durante uma atualização, significa que uma migração anterior travou.
 **Solução:**
 1.  Acesse o console do container `zapvoice_app`.
-2.  Rode o script "matador": `python kill_locks.py` (mata processos zumbis).
-3.  Rode a migração forçada: `python force_schema_update.py`.
+2.  Rode o script "matador": `python scripts/utils/kill_locks.py` (mata processos zumbis).
+3.  Rode a migração forçada: `python scripts/database/force_schema_update.py`.
 4.  Reinicie o container.
 
 ### As mensagens não chegam?
