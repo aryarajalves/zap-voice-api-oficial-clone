@@ -21,20 +21,7 @@ def get_settings(client_id: int = None):
         "CHATWOOT_ACCOUNT_ID",
         "CHATWOOT_SELECTED_INBOX_ID",
         "CLIENT_NAME",
-        # S3 / MinIO
-        "S3_ENDPOINT_URL",
-        "S3_ACCESS_KEY",
-        "S3_SECRET_KEY",
-        "S3_BUCKET_NAME",
-        "S3_PUBLIC_URL",
-        "S3_REGION",
-        # RabbitMQ
-        "RABBITMQ_HOST",
-        "RABBITMQ_PORT",
-        "RABBITMQ_USER",
-        "RABBITMQ_PASSWORD",
-        "RABBITMQ_VHOST",
-        "RABBITMQ_PREFETCH_COUNT"
+        # S3 e RabbitMQ removidos para forçar uso via ENV (Segurança/Infra)
     ]
     
     db: Session = SessionLocal()

@@ -97,10 +97,7 @@ def update_settings(
         "CHATWOOT_ACCOUNT_ID",
         "CHATWOOT_SELECTED_INBOX_ID",
         "CLIENT_NAME",
-        # RabbitMQ
-        "RABBITMQ_HOST", "RABBITMQ_PORT", "RABBITMQ_USER", "RABBITMQ_PASSWORD", "RABBITMQ_VHOST",
-        # MinIO/S3
-        "S3_ENDPOINT_URL", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET_NAME", "S3_PUBLIC_URL", "S3_REGION",
+        # Infrastructure (RabbitMQ/MinIO) removed - managed via ENV only
         # Meta Webhook
         "META_VERIFY_TOKEN", "META_RETURN_CONFIG"
     }

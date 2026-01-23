@@ -1,0 +1,132 @@
+version: "3.8"
+
+services:
+  # =========================================
+  # 1. APLICAÇÃO PRINCIPAL (API)
+  # =========================================
+  zapvoice_app:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      - PORT=8000
+      # FIX: Mudamos de postgres:// para postgresql://
+      - DATABASE_URL=postgresql://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
+      - SECRET_KEY=changeme_secret_key_12345
+      - RABBITMQ_HOST=zapvoice-rabbit
+      - RABBITMQ_PORT=5672
+      - CORS_ORIGINS=*
+      
+      # Acesso Inicial
+      - SUPER_ADMIN_EMAIL=aryarajmarketing@gmail.com
+      - SUPER_ADMIN_PASSWORD=HareHare03
+      - REGISTER_API_KEY=238734873487389
+
+      # Frontend Config
+      - VITE_API_URL=http://zapvoice.jords.site
+      - VITE_WS_URL=ws://zapvoice.jords.site/ws
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=1
+        - traefik.http.routers.zapvoice.rule=Host(`zapvoice.jords.site`)
+        - traefik.http.routers.zapvoice.entrypoints=websecure
+        - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
+        - traefik.http.services.zapvoice.loadbalancer.server.port=8000
+
+  # =========================================
+  # 2. WORKER (PROCESSAMENTO EM SEGUNDO PLANO)
+  # =========================================
+  zapvoice_worker:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
+    command: python worker.py
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      # FIX: Variáveis repetidas aqui para garantir acesso
+      - DATABASE_URL=postgresql://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
+      - SECRET_KEY=changeme_secret_key_12345
+      - RABBITMQ_HOST=zapvoice-rabbit
+      - RABBITMQ_PORT=5672
+
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  # =========================================
+  # 3. BANCO DE DADOS (POSTGRESQL)
+  # =========================================
+  zapvoice-postgres:
+    image: postgres:15-alpine
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      # Senha igual à definida na DATABASE_URL
+      - POSTGRES_PASSWORD=35cb19b8-13cd-4f02-af3e-abdcdd373ae5
+      - POSTGRES_DB=zapvoice
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  # =========================================
+  # 4. FILA DE MENSAGENS (RABBITMQ)
+  # =========================================
+  zapvoice-rabbit:
+    image: rabbitmq:3-management-alpine
+    networks:
+      - network_swarm_public
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    deploy:
+      mode: replicated
+      replicas: 1
+    # Opcional: expor painel de gestão na porta 15672 se necessário
+    # ports:
+    #   - "15672:15672"
+
+  # =========================================
+  # 5. ARMAZENAMENTO (MINIO/S3) - Opcional
+  # =========================================
+  zapvoice-minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    deploy:
+      mode: replicated
+      replicas: 1
+
+volumes:
+  zapvoice_uploads:
+    external: true
+    name: zapvoice_uploads
+  zapvoice_db_data:
+    external: true
+    name: zapvoice_db_data
+  zapvoice_minio_data:
+    external: true
+    name: zapvoice_minio_data
+
+networks:
+  network_swarm_public:
+    name: network_swarm_public
+    external: true

@@ -1,0 +1,69 @@
+version: "3.8"
+
+services:
+  zapvoice_app:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      # === Configuração Base e Segurança ===
+      - PORT=8000
+      - DATABASE_URL=postgres://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
+      - SECRET_KEY=changeme_secret_key_12345
+      - CORS_ORIGINS=*
+
+      # === Acesso Inicial (Super Admin) ===
+      - SUPER_ADMIN_EMAIL=aryarajmarketing@gmail.com
+      - SUPER_ADMIN_PASSWORD=HareHare03
+
+      # === Configuração de Registro ===
+      - REGISTER_API_KEY=238734873487389
+
+      # === Frontend Runtime Config ===
+      - VITE_API_URL=http://zapvoice.jords.site
+      - VITE_WS_URL=ws://zapvoice.jords.site/ws
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=1
+        - traefik.http.routers.zapvoice.rule=Host(`zapvoice.jords.site`)
+        - traefik.http.routers.zapvoice.entrypoints=websecure
+        - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
+        - traefik.http.services.zapvoice.loadbalancer.server.port=8000
+
+  zapvoice_worker:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
+    command: python worker.py
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      # FIX: As variáveis DEVEM ser coladas aqui novamente ou declaradas no Portainer
+      - DATABASE_URL=postgres://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
+      - SECRET_KEY=changeme_secret_key_12345
+
+    deploy:
+      mode: replicated
+      replicas: 1
+
+volumes:
+  zapvoice_uploads:
+    external: true
+    name: zapvoice_uploads
+
+networks:
+  network_swarm_public:
+    name: network_swarm_public
+    external: true
