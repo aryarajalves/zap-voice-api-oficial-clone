@@ -1,62 +1,86 @@
 version: "3.8"
 
 services:
-  app:
-    build: .
-    container_name: zapvoice_local_app
+  # === CORE SERVICES ===
+  zapvoice_app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: zapvoice_app
     ports:
       - "8000:8000"
     networks:
-      - network_swarm_public
+      - zapvoice_net
     volumes:
-      - ./backend:/app
-      - ./entrypoint.sh:/app/entrypoint.sh
       - zapvoice_uploads:/app/static/uploads
     env_file:
-      - backend/.env
+      - ../backend/.env
     environment:
       - PORT=8000
-      - PYTHONUNBUFFERED=1
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
-      - RABBITMQ_HOST=zapvoice-rabbit
       - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
+      - RABBITMQ_HOST=zapvoice-rabbit
       - S3_ENDPOINT_URL=http://zapvoice-minio:9000
       - S3_PUBLIC_URL=http://localhost:9000
 
-  worker:
-    build: .
-    container_name: zapvoice_local_worker
+  zapvoice_worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: zapvoice_worker
     command: python worker.py
     networks:
-      - network_swarm_public
+      - zapvoice_net
     volumes:
-      - ./backend:/app
-      - ./entrypoint.sh:/app/entrypoint.sh
       - zapvoice_uploads:/app/static/uploads
     env_file:
-      - backend/.env
+      - ../backend/.env
     environment:
-      - RABBITMQ_HOST=zapvoice-rabbit
       - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
+      - RABBITMQ_HOST=zapvoice-rabbit
       - S3_ENDPOINT_URL=http://zapvoice-minio:9000
-      - S3_PUBLIC_URL=http://localhost:9000
 
-  frontend:
-    image: node:20-alpine
-    container_name: zapvoice_local_frontend
+  zapvoice_frontend:
+    image: node:18-alpine
+    container_name: zapvoice_frontend
     working_dir: /app
     volumes:
-      - ./frontend:/app
+      - ../frontend:/app
       - /app/node_modules
     ports:
       - "5173:5173"
     command: sh -c "npm install && npm run dev"
+    networks:
+      - zapvoice_net
     environment:
       - VITE_API_URL=http://localhost:8000
       - VITE_WS_URL=ws://localhost:8000
+
+  # === INFRASTRUCTURE SERVICES ===
+  zapvoice-postgres:
+    image: postgres:15-alpine
+    container_name: zapvoice-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=zapvoice
+    volumes:
+      - zapvoice_db_data:/var/lib/postgresql/data
     networks:
-      - network_swarm_public
+      - zapvoice_net
+
+  zapvoice-rabbit:
+    image: rabbitmq:3-management-alpine
+    container_name: zapvoice-rabbit
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - zapvoice_net
 
   zapvoice-minio:
     image: minio/minio
@@ -68,22 +92,10 @@ services:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     command: server /data --console-address ":9001"
-    networks:
-      - network_swarm_public
     volumes:
       - zapvoice_minio_data:/data
-
-  zapvoice-rabbit:
-    image: rabbitmq:3-management
-    container_name: zapvoice-rabbit
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
     networks:
-      - network_swarm_public
+      - zapvoice_net
 
   ngrok:
     image: ngrok/ngrok:latest
@@ -91,20 +103,20 @@ services:
     restart: unless-stopped
     command:
       - "http"
-      - "http://app:8000"
+      - "zapvoice_app:8000"
     ports:
       - "4040:4040"
     networks:
-      - network_swarm_public
+      - zapvoice_net
     env_file:
-      - backend/.env
+      - ../backend/.env
 
 volumes:
   zapvoice_uploads:
-    external: true
+  zapvoice_db_data:
   zapvoice_minio_data:
 
 
 networks:
-  network_swarm_public:
-    external: true
+  zapvoice_net:
+    driver: bridge
