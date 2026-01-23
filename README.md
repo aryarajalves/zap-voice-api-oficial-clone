@@ -1,98 +1,95 @@
 # ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.0 Official)
 
-Bem-vindo à versão **1.0 oficial** do **ZapVoice**! Este é um sistema robusto e profissional focado em extrair o máximo poder da **API Oficial do WhatsApp (Meta)**. Projetado para automação de alta performance, disparos em massa e gerenciamento inteligente de fluxos de mensagens.
+Bem-vindo à versão **1.0 oficial** do **ZapVoice**! Este é um sistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
 ## 🚀 O que o ZapVoice faz?
 
-O **ZapVoice** é a solução definitiva para escalar seu atendimento e marketing usando a infraestrutura oficial da Meta:
+O **ZapVoice** é a solução definitiva para escalar seu marketing e atendimento com estabilidade e segurança:
 
-*   **WhatsApp API Oficial:** Integração direta e estável, garantindo a entrega e conformidade com as políticas da Meta.
-*   **Disparos em Massa (Bulk Send):** Envie templates aprovados para milhares de contatos com alta velocidade e relatórios detalhados.
-*   **Funis de Mensagens Inteligentes:** Crie réguas de relacionamento complexas com vídeos, imagens e PDFs, intercalados por delays inteligentes para simular interações humanas.
-*   **Integração com Chatwoot:** Sincronização opcional e nativa para quem utiliza o Chatwoot como plataforma de atendimento.
-*   **Configuração Dinâmica:** Gerencie suas chaves da API do WhatsApp, RabbitMQ e S3 diretamente pela interface do sistema.
-
----
-
-## 🏗️ Estrutura do Projeto
-
-O projeto segue uma organização modular e limpa:
-
-```text
-/
-├── docker/                  # Configurações de Deploy e Containers
-│   ├── docker-compose.yml   # Produção (Enxuto - Swarm/Traefik)
-│   ├── docker-compose.local.yml # Local (Full Stack - Tudo incluso)
-│   └── Dockerfile, entrypoint.sh, ...
-├── backend/                 # API FastAPI (Python)
-│   ├── core/                # Segurança e Lógica Central
-│   ├── routers/             # Endpoints da API
-│   ├── scripts/             # Utilitários (Admin, Database, Tests, Debug)
-│   └── main.py, models.py, ...
-├── frontend/                # Painel Administrativo (React + Vite)
-└── .gitignore               # Proteção total contra vazamento de segredos
-```
+*   **WhatsApp API Oficial:** Integração estável seguindo todas as políticas da Meta.
+*   **Disparos em Massa (Bulk Send):** Envio de templates para milhares de contatos com alta velocidade.
+*   **Funis de Mensagens:** Réguas de relacionamento automáticas com Vídeos, Imagens e PDFs.
+*   **Gestão Multi-Cliente:** Controle múltiplos clientes e inboxes em uma única plataforma.
+*   **Configuração Dinâmica:** Gerencie APIs e infraestrutura diretamente pelo painel.
 
 ---
 
-## 🔐 Primeiro Acesso e Sistema de Login
+## 📺 Conheça as Funcionalidades (Telas)
 
-O ZapVoice utiliza um sistema de autenticação segura baseado em JWT (Tokens).
+O sistema foi desenhado para ser intuitivo e poderoso:
+
+### **1. Meus Funis**
+A central de inteligência do sistema. Aqui você cria seus fluxos de mensagens, define gatilhos automáticos e pode disparar funis manualmente para listas de contatos. Cada funil pode ter múltiplas etapas com delays customizados.
+
+### **2. Histórico de Disparos**
+Transparência total sobre seus envios. Acompanhe em tempo real:
+*   **Data/Hora** do disparo.
+*   **Status detalhado** (Pendente, Enviado, Lido, Falhado).
+*   **Relatórios de Massa**: Veja quantos contatos faltam e baixe relatórios de erro.
+
+### **3. Contatos Bloqueados**
+Segurança e compliance. Gerencie uma "Lista Negra" de números que nunca devem receber mensagens de automação. Você pode adicionar números manualmente por linha ou vírgula.
+
+### **4. Gestão de Usuários**
+Controle quem acessa o quê. Crie usuários com diferentes níveis de permissão (Admin, User) e defina a quais Clientes cada usuário tem acesso.
+
+---
+
+## 🔐 Primeiro Acesso e Login
+
+O ZapVoice utiliza autenticação segura via JWT.
 
 ### **Como funciona o Primeiro Acesso:**
-Ao subir o sistema pela primeira vez, o ZapVoice cria automaticamente um usuário **Super Admin** com os dados definidos nas variáveis de ambiente:
+Ao instalar o sistema, ele cria automaticamente um **Super Admin** com os dados das variáveis de ambiente:
+*   `SUPER_ADMIN_EMAIL`: Seu email de login.
+*   `SUPER_ADMIN_PASSWORD`: Sua senha inicial.
 
-*   `SUPER_ADMIN_EMAIL`: Seu email de login principal.
-*   `SUPER_ADMIN_PASSWORD`: Sua senha inicial segura.
-
-Use estas credenciais para realizar seu primeiro login. Uma vez logado, você poderá configurar toda a conectividade com a Meta.
+### **Cadastro de Usuários:**
+*   **Via Interface**: O Super Admin pode criar novos usuários no menu "Gestão de Usuários".
+*   **Via CLI (Segurança)**: Se perder o acesso, use o script `python backend/scripts/admin/create_admin.py` dentro do container para listar ou resetar senhas.
 
 ---
 
 ## ⚙️ Configuração na Interface (UI)
 
-Toda a gestão da API Oficial é feita diretamente no menu **Configurações/Settings**, sem necessidade de mexer em código:
+Toda a conectividade é configurada no menu **Configurações**:
+*   **WhatsApp API**: Phone ID, WABA ID e User Token da Meta.
+*   **Infraestrutura**: Endereços do RabbitMQ e S3/MinIO.
+*   **Chatwoot (Opcional)**: Conecte sua instância para centralizar o atendimento.
 
-*   **WhatsApp (Meta API):** Configure seu `Phone Number ID`, `Business Account ID` e o `System User Access Token` de forma simples.
-*   **Chatwoot (Opcional):** Conecte sua instância para centralizar o histórico de conversas.
-*   **Infraestrutura (RabbitMQ / S3):** Configure a fila de envios e o armazenamento de mídias pela interface.
+---
+
+## 🏗️ Estrutura do Projeto
+
+```text
+/
+├── docker/                  # Configurações de Deploy (Local e Produção)
+├── backend/                 # API FastAPI (Python) e Scripts Utilitários
+├── frontend/                # Painel Administrativo (React + Vite)
+└── README.md                # Documentação Oficial
+```
 
 ---
 
 ## 🛠️ Como Iniciar
 
-### 1. Escolha seu ambiente
-
-#### **Ambiente Local (Teste/Instalação Zero)**
-Para subir a stack completa (App + Banco + Fila):
+**Local (Full Stack):**
 ```bash
 docker-compose -f docker/docker-compose.local.yml up -d --build
 ```
-*Acesse em: `http://localhost:5173`*
 
-#### **Ambiente de Produção**
-Para rodar no seu servidor final:
+**Produção (App Only):**
 ```bash
 docker-compose -f docker/docker-compose.yml up -d --build
 ```
 
 ---
 
-## 🚑 Troubleshooting (Manutenção)
-
-*   **Destravar Banco de Dados:** `python backend/scripts/utils/kill_locks.py`
-*   **Atualização de Esquema:** `python backend/scripts/database/force_schema_update.py`
-*   **Check de Infra:** `python backend/scripts/checks/check_infra.py`
-
----
-
 ## 🏆 Marco v1.0
-Focado em:
-1.  **Estabilidade Meta API**: Máximo aproveitamento da API oficial.
-2.  **Mídias de Alto Impacto**: Suporte completo a Vídeo, Imagem e PDF em funis.
-3.  **Segurança e Privacidade**: Base de dados local e criptografia de tokens.
-4.  **Autonomia**: Configuração amigável via interface.
+*   **Foco na API Oficial**: Estabilidade garantida pela Meta.
+*   **Mídias Ricas**: Suporte a Vídeo, Imagem e PDF (Sem áudio).
+*   **Simplicidade**: 100% configurável via interface gráfica.
 
 **Escalando seu negócio com a API Oficial do WhatsApp.** 🚀
