@@ -34,9 +34,9 @@ echo "✅ Arquivo $CONFIG_FILE gerado com sucesso!"
 # Criar banco de dados se não existir (somente se DATABASE_URL estiver definido)
 if [ -n "$DATABASE_URL" ]; then
     echo "🗄️  Verificando/criando banco de dados PostgreSQL..."
-    python create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
+    python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
     echo "🏗️  Aplicando migrações de esquema..."
-    python update_schema.py || echo "⚠️  Aviso: Falha ao aplicar migrações de esquema."
+    python scripts/database/update_schema.py || echo "⚠️  Aviso: Falha ao aplicar migrações de esquema."
 fi
 
 # Inicia a aplicação original (uvicorn)
