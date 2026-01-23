@@ -8,6 +8,7 @@
 *.env.txt
 PORTAINER_ENV.txt
 full_token.txt
+README_V2.md
 
 # === Python ===
 __pycache__/
