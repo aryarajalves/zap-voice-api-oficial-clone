@@ -3,8 +3,8 @@ services:
   zapvoice_app:
     image: zapvoice-backend:local
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
@@ -64,8 +64,8 @@ services:
   zapvoice_worker:
     image: zapvoice-backend:local
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     command: python worker.py
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:

@@ -55,7 +55,7 @@ EXPOSE 8000
 
 # Comando para iniciar o servidor
 # Definir Entrypoint script
-COPY entrypoint.sh /app/entrypoint.sh
+COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN dos2unix /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Variáveis padrão que o Entrypoint vai ler
