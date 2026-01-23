@@ -1,0 +1,143 @@
+from sqlalchemy import Table, Column, Integer, String, JSON, DateTime, ForeignKey, Boolean, Float
+from sqlalchemy.sql import func
+from database import Base
+from sqlalchemy.orm import relationship
+
+# Association table for User-Client Many-to-Many relationship
+user_clients = Table(
+    "user_clients",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("client_id", Integer, ForeignKey("clients.id"), primary_key=True)
+)
+
+class Client(Base):
+    """Multi-tenancy: Each client has isolated funnels, settings, etc."""
+    __tablename__ = "clients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    funnels = relationship("Funnel", back_populates="client")
+    triggers = relationship("ScheduledTrigger", back_populates="client")
+    configs = relationship("AppConfig", back_populates="client")
+    blocked_contacts = relationship("BlockedContact", back_populates="client")
+
+
+class Funnel(Base):
+    __tablename__ = "funnels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    name = Column(String, index=True)
+    description = Column(String, nullable=True)
+    steps = Column(JSON) # Lista de dicionários: [{"type": "message", "content": "olá", "delay": 2}]
+    trigger_phrase = Column(String, nullable=True) # Gatilho para início automático (botão/webhook)
+    allowed_phone = Column(String, nullable=True) # Restrição de telefone (só dispara para este número se definido)
+
+    client = relationship("Client", back_populates="funnels")
+    triggers = relationship("ScheduledTrigger", back_populates="funnel")
+
+class ScheduledTrigger(Base):
+    __tablename__ = "scheduled_triggers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    funnel_id = Column(Integer, ForeignKey("funnels.id"))
+    conversation_id = Column(Integer)
+    scheduled_time = Column(DateTime(timezone=True), index=True)
+    status = Column(String, default="pending") # pending, processing, completed, failed
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    contact_name = Column(String, nullable=True)
+    contact_phone = Column(String, nullable=True)
+    
+    # Bulk template send tracking
+    is_bulk = Column(Boolean, default=False)
+    template_name = Column(String, nullable=True)
+    total_sent = Column(Integer, default=0)
+    total_failed = Column(Integer, default=0)
+    contacts_list = Column(JSON, nullable=True)  # List of phone numbers
+    delay_seconds = Column(Integer, default=5)
+    concurrency_limit = Column(Integer, default=1)
+    template_language = Column(String, default="pt_BR")
+    template_components = Column(JSON, nullable=True) # Dynamic variables for template
+    
+    
+    # Cost tracking
+    cost_per_unit = Column(Float, default=0.0)
+    total_cost = Column(Float, default=0.0)
+    total_delivered = Column(Integer, default=0)  # Count of actually delivered messages
+    total_read = Column(Integer, default=0)       # Count of read messages
+    total_interactions = Column(Integer, default=0) # Count of button clicks
+    total_blocked = Column(Integer, default=0)    # Count of users who requested block
+    
+    # Contact tracking for cancellation
+    processed_contacts = Column(JSON, default=list)  # List of phone numbers already processed
+    pending_contacts = Column(JSON, default=list)    # List of phone numbers still to process
+    current_step_index = Column(Integer, default=0)  # Next step to execute
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    client = relationship("Client", back_populates="triggers")
+    funnel = relationship("Funnel", back_populates="triggers")
+    messages = relationship("MessageStatus", back_populates="trigger")
+
+class MessageStatus(Base):
+    """Track individual message delivery status from WhatsApp webhooks"""
+    __tablename__ = "message_status"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    trigger_id = Column(Integer, ForeignKey("scheduled_triggers.id"), index=True)
+    message_id = Column(String, unique=True, index=True)  # WhatsApp message ID
+    phone_number = Column(String)
+    status = Column(String, default="sent")  # sent, delivered, read, failed, interaction
+    failure_reason = Column(String, nullable=True) # Detailed error message from Meta
+    is_interaction = Column(Boolean, default=False) # True if it was a button click
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    trigger = relationship("ScheduledTrigger", back_populates="messages")
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    full_name = Column(String, nullable=True)
+    role = Column(String, default="user") # super_admin, admin, user
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    client_id = Column(Integer, ForeignKey("clients.id"), default=1)
+
+    accessible_clients = relationship("Client", secondary=user_clients, backref="users_with_access")
+    client = relationship("Client", backref="users_in_this_client")
+
+class AppConfig(Base):
+    """
+    Armazena configurações dinâmicas do sistema (ex: Credenciais WhatsApp/Chatwoot).
+    Substitui a necessidade de reiniciar para ler variáveis de ambiente.
+    """
+    __tablename__ = "app_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    key = Column(String, index=True, nullable=False)
+    value = Column(String, nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+    client = relationship("Client", back_populates="configs")
+
+class BlockedContact(Base):
+    __tablename__ = "blocked_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    phone = Column(String, index=True, nullable=False)
+    reason = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    client = relationship("Client", back_populates="blocked_contacts")

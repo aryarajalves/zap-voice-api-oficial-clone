@@ -1,0 +1,124 @@
+version: "3.7"
+services:
+  zapvoice_app:
+    image: zapvoice-backend:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    ports:
+      - "8000:8000"
+    environment:
+      # === Configuração da Aplicação ===
+      - PORT=${PORT:-8000} # Porta do servidor. ${VAR:-default} = usa variável PORT ou 8000
+      - DATABASE_URL=${DATABASE_URL} # ${VAR} = OBRIGATÓRIO definir. URL conexão PostgreSQL
+      - SECRET_KEY=${SECRET_KEY} # ${VAR} = OBRIGATÓRIO. Chave para assinar tokens JWT
+      - CORS_ORIGINS=${CORS_ORIGINS} # ${VAR} = OBRIGATÓRIO. Domínios permitidos para CORS
+
+      # === Frontend Runtime Config ===
+      - VITE_API_URL=${VITE_API_URL} # ${VAR} = OBRIGATÓRIO. URL pública da API (https://seu-dominio.com)
+      - VITE_WS_URL=${VITE_WS_URL} # ${VAR} = OBRIGATÓRIO. URL WebSocket (wss://seu-dominio.com)
+
+      # === Chatwoot (Config via Painel) ===
+      # - CHATWOOT_API_URL=${CHATWOOT_API_URL} 
+      # - CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN}
+      # - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID}
+      # - CHATWOOT_SELECTED_INBOX_ID=${CHATWOOT_SELECTED_INBOX_ID:-}
+
+      # === WhatsApp Oficial (Config via Painel) ===
+      # - WA_BUSINESS_ACCOUNT_ID=${WA_BUSINESS_ACCOUNT_ID}
+      # - WA_PHONE_NUMBER_ID=${WA_PHONE_NUMBER_ID}
+      # - WA_ACCESS_TOKEN=${WA_ACCESS_TOKEN}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-zapvoice_webhook_2026} # Token verificação webhook. Default OK
+
+      # === Baserow (REMOVIDO) ===
+
+      # === RabbitMQ (REMOVIDO) ===
+      # === MinIO/S3 (REMOVIDO) ===
+      - REGISTER_API_KEY=${REGISTER_API_KEY:-sua_chave_secreta_para_registrar_123} # Chave para registro de usuários. Default OK
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+      labels:
+        - traefik.enable=1
+        - traefik.http.routers.zapvoice.rule=Host(`zapvoice.aryaraj.shop`)
+        - traefik.http.routers.zapvoice.entrypoints=websecure
+        - traefik.http.routers.zapvoice.priority=1
+        - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.zapvoice.service=zapvoice
+        - traefik.http.services.zapvoice.loadbalancer.server.port=8000
+        - traefik.http.services.zapvoice.loadbalancer.passHostHeader=1
+
+  zapvoice_worker:
+    image: zapvoice-backend:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python worker.py
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      # Mesmas variáveis do app (pode copiar/colar - as que não usar serão ignoradas)
+      - PORT=${PORT:-8000}
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - VITE_API_URL=${VITE_API_URL}
+      - VITE_WS_URL=${VITE_WS_URL}
+      # - CHATWOOT_API_URL=${CHATWOOT_API_URL}
+      # - CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN}
+      # - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID}
+      # - CHATWOOT_SELECTED_INBOX_ID=${CHATWOOT_SELECTED_INBOX_ID:-}
+      # - WA_BUSINESS_ACCOUNT_ID=${WA_BUSINESS_ACCOUNT_ID}
+      # - WA_PHONE_NUMBER_ID=${WA_PHONE_NUMBER_ID}
+      # - WA_ACCESS_TOKEN=${WA_ACCESS_TOKEN}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-zapvoice_webhook_2026}
+      - REGISTER_API_KEY=${REGISTER_API_KEY:-sua_chave_secreta_para_registrar_123}
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # Ngrok - Expõe a API publicamente para webhooks da Meta
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command:
+      - "http"
+      - "http://zapvoice_app:8000"
+    ports:
+      - 4040:4040
+    networks:
+      - network_swarm_public
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN:-SEU_TOKEN_NGROK_AQUI}
+volumes:
+  zapvoice_uploads:
+    external: true
+    name: zapvoice_uploads
+
+networks:
+  network_swarm_public:
+    name: network_swarm_public
+    external: true

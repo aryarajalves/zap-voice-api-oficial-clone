@@ -1,0 +1,7 @@
+version: "2"
+authtoken: cr_31z9gTHWnjq2ilPc2KRqWETDdsr
+tunnels:
+  zapvoice:
+    addr: zapvoice_app:8000
+    proto: http
+    inspect: true

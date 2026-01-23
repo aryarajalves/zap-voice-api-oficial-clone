@@ -1,0 +1,136 @@
+# ========================================
+# Stack ZapVoice - Projeto Karine
+# Versão CORRIGIDA com sintaxe ${VAR:-default}
+# ========================================
+
+# IMPORTANTE: Cole este compose no Portainer!
+# Depois de colar, as variáveis hardcoded servem como FALLBACK
+# mas você ainda pode sobrescrever via Environment Variables
+
+version: "3.7"
+services:
+  zapvoice_app:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.0.23
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      # === Configuração da Aplicação ===
+      - PORT=${PORT:-8000}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:SUA_SENHA_AQUI@postgres:5432/zapvoice}
+      - SECRET_KEY=${SECRET_KEY:-SUA_CHAVE_SECRETA_ALEATORIA}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://zapvoicekarine.jords.site,http://localhost:8000}
+
+      # === Frontend Runtime Config ===
+      - VITE_API_URL=${VITE_API_URL:-https://zapvoicekarine.jords.site}
+      - VITE_WS_URL=${VITE_WS_URL:-wss://zapvoicekarine.jords.site}
+
+      # === Chatwoot ===
+      - CHATWOOT_API_URL=${CHATWOOT_API_URL:-https://chatkarine.jords.site/api/v1}
+      - CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN:-SEU_TOKEN_CHATWOOT_AQUI}
+      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID:-1}
+      - CHATWOOT_SELECTED_INBOX_ID=${CHATWOOT_SELECTED_INBOX_ID:-3}
+
+      # === WhatsApp Oficial (Meta) ===
+      - WA_BUSINESS_ACCOUNT_ID=${WA_BUSINESS_ACCOUNT_ID:-1760705468196978}
+      - WA_PHONE_NUMBER_ID=${WA_PHONE_NUMBER_ID:-954266397763484}
+      - WA_ACCESS_TOKEN=${WA_ACCESS_TOKEN:-SEU_TOKEN_WHATSAPP_AQUI}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-zapvoice_webhook_karine_2026}
+
+      # === Baserow (opcional) ===
+      - BASEROW_API_URL=${BASEROW_API_URL:-}
+      - BASEROW_TOKEN=${BASEROW_TOKEN:-}
+      - BASEROW_TABLE_ID=${BASEROW_TABLE_ID:-}
+
+      # === Infraestrutura Externa ===
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-creed}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-SUA_SENHA_RABBITMQ}
+      - RABBITMQ_PREFETCH_COUNT=${RABBITMQ_PREFETCH_COUNT:-20}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-N8N}
+
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-https://s3karine.jords.site}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-SUA_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-SUA_SECRET_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-zapvoice-files}
+
+      - REGISTER_API_KEY=${REGISTER_API_KEY:-SUA_CHAVE_REGISTRO_AQUI}
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+      labels:
+        - traefik.enable=1
+        - traefik.http.routers.zapvoice.rule=Host(`zapvoicekarine.jords.site`)
+        - traefik.http.routers.zapvoice.entrypoints=websecure
+        - traefik.http.routers.zapvoice.priority=1
+        - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.zapvoice.service=zapvoice
+        - traefik.http.services.zapvoice.loadbalancer.server.port=8000
+        - traefik.http.services.zapvoice.loadbalancer.passHostHeader=1
+
+  zapvoice_worker:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.0.23
+    command: python worker.py
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:SUA_SENHA_AQUI@postgres:5432/zapvoice}
+      - SECRET_KEY=${SECRET_KEY:-SUA_CHAVE_SECRETA_ALEATORIA}
+      - CHATWOOT_API_URL=${CHATWOOT_API_URL:-https://chatkarine.jords.site/api/v1}
+      - CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN:-SEU_TOKEN_CHATWOOT_AQUI}
+      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID:-1}
+      - CHATWOOT_SELECTED_INBOX_ID=${CHATWOOT_SELECTED_INBOX_ID:-3}
+      - WA_BUSINESS_ACCOUNT_ID=${WA_BUSINESS_ACCOUNT_ID:-1760705468196978}
+      - WA_PHONE_NUMBER_ID=${WA_PHONE_NUMBER_ID:-954266397763484}
+      - WA_ACCESS_TOKEN=${WA_ACCESS_TOKEN:-SEU_TOKEN_WHATSAPP_AQUI}
+      - BASEROW_API_URL=${BASEROW_API_URL:-}
+      - BASEROW_TOKEN=${BASEROW_TOKEN:-}
+      - BASEROW_TABLE_ID=${BASEROW_TABLE_ID:-}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-creed}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-SUA_SENHA_RABBITMQ}
+      - RABBITMQ_PREFETCH_COUNT=${RABBITMQ_PREFETCH_COUNT:-20}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-N8N}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-https://s3karine.jords.site}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-SUA_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-SUA_SECRET_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-zapvoice-files}
+      
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  zapvoice_uploads:
+    external: true
+    name: zapvoice_uploads
+
+networks:
+  network_swarm_public:
+    name: network_swarm_public
+    external: true

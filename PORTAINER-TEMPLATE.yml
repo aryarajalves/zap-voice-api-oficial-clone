@@ -1,0 +1,155 @@
+# ========================================
+# ZapVoice - Template para Portainer
+# INSTRUÇÕES: Edite os valores diretamente aqui antes de colar
+# ========================================
+
+version: "3.7"
+services:
+  zapvoice_app:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.0.23
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      # === Configuração da Aplicação ===
+      - PORT=8000
+      
+      # 🔧 EDITE AQUI: Cole a URL do seu PostgreSQL
+      - DATABASE_URL=postgresql://postgres:SUA_SENHA_POSTGRES@postgres:5432/zapvoice
+      
+      # 🔧 EDITE AQUI: Gere uma chave aleatória (ex: openssl rand -hex 32)
+      - SECRET_KEY=TROQUE_POR_CHAVE_ALEATORIA_123456789
+      
+      # 🔧 EDITE AQUI: Cole o domínio do seu projeto
+      - CORS_ORIGINS=https://seu-dominio.com,http://localhost:8000
+
+      # === Frontend Runtime Config ===
+      # 🔧 EDITE AQUI: URL pública do seu site
+      - VITE_API_URL=https://seu-dominio.com
+      - VITE_WS_URL=wss://seu-dominio.com
+
+      # === Chatwoot ===
+      # 🔧 EDITE AQUI: Credenciais do Chatwoot do seu projeto
+      - CHATWOOT_API_URL=https://seu-chatwoot.com/api/v1
+      - CHATWOOT_API_TOKEN=SEU_TOKEN_CHATWOOT_AQUI
+      - CHATWOOT_ACCOUNT_ID=1
+      - CHATWOOT_SELECTED_INBOX_ID=1
+
+      # === WhatsApp Oficial (Meta) ===
+      # 🔧 EDITE AQUI: Credenciais do WhatsApp do seu projeto
+      # Obtenha em: https://developers.facebook.com/apps/
+      - WA_BUSINESS_ACCOUNT_ID=SEU_BUSINESS_ID_AQUI
+      - WA_PHONE_NUMBER_ID=SEU_PHONE_ID_AQUI
+      - WA_ACCESS_TOKEN=SEU_TOKEN_PERMANENTE_WHATSAPP_AQUI
+      - WHATSAPP_VERIFY_TOKEN=zapvoice_webhook_2026
+
+      # === Baserow (Opcional - deixe vazio se não usar) ===
+      - BASEROW_API_URL=
+      - BASEROW_TOKEN=
+      - BASEROW_TABLE_ID=
+
+      # === RabbitMQ (OBRIGATÓRIO) ===
+      # 🔧 EDITE AQUI: Credenciais do RabbitMQ
+      - RABBITMQ_HOST=SEU_HOST_RABBITMQ
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=SEU_USUARIO_RABBITMQ
+      - RABBITMQ_PASSWORD=SUA_SENHA_RABBITMQ
+      - RABBITMQ_PREFETCH_COUNT=20
+      - RABBITMQ_VHOST=SEU_VHOST_RABBITMQ
+
+      # === Redis (Opcional) ===
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+      # === MinIO/S3 (OBRIGATÓRIO) ===
+      # 🔧 EDITE AQUI: Credenciais do MinIO/S3
+      - S3_ENDPOINT_URL=https://SEU_MINIO_OU_S3.com
+      - S3_ACCESS_KEY=SUA_ACCESS_KEY
+      - S3_SECRET_KEY=SUA_SECRET_KEY
+      - S3_BUCKET_NAME=zapvoice-files
+      - REGISTER_API_KEY=sua_chave_registro_123
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+      labels:
+        # 🔧 EDITE AQUI: Domínio do seu projeto
+        - traefik.enable=1
+        - traefik.http.routers.zapvoice.rule=Host(`seu-dominio.com`)
+        - traefik.http.routers.zapvoice.entrypoints=websecure
+        - traefik.http.routers.zapvoice.priority=1
+        - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.zapvoice.service=zapvoice
+        - traefik.http.services.zapvoice.loadbalancer.server.port=8000
+        - traefik.http.services.zapvoice.loadbalancer.passHostHeader=1
+
+  zapvoice_worker:
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.0.23
+    command: python worker.py
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    volumes:
+      - zapvoice_uploads:/app/static/uploads
+    environment:
+      # 🔧 COPIE E COLE: Mesmos valores do app acima (as que não usar serão ignoradas)
+      - PORT=8000
+      - DATABASE_URL=postgresql://postgres:SUA_SENHA_POSTGRES@postgres:5432/zapvoice
+      - SECRET_KEY=TROQUE_POR_CHAVE_ALEATORIA_123456789
+      - CORS_ORIGINS=https://seu-dominio.com,http://localhost:8000
+      - VITE_API_URL=https://seu-dominio.com
+      - VITE_WS_URL=wss://seu-dominio.com
+      - CHATWOOT_API_URL=https://seu-chatwoot.com/api/v1
+      - CHATWOOT_API_TOKEN=SEU_TOKEN_CHATWOOT_AQUI
+      - CHATWOOT_ACCOUNT_ID=1
+      - CHATWOOT_SELECTED_INBOX_ID=1
+      - WA_BUSINESS_ACCOUNT_ID=SEU_BUSINESS_ID_AQUI
+      - WA_PHONE_NUMBER_ID=SEU_PHONE_ID_AQUI
+      - WA_ACCESS_TOKEN=SEU_TOKEN_PERMANENTE_WHATSAPP_AQUI
+      - WHATSAPP_VERIFY_TOKEN=zapvoice_webhook_2026
+      - BASEROW_API_URL=
+      - BASEROW_TOKEN=
+      - BASEROW_TABLE_ID=
+      - RABBITMQ_HOST=SEU_HOST_RABBITMQ
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=SEU_USUARIO_RABBITMQ
+      - RABBITMQ_PASSWORD=SUA_SENHA_RABBITMQ
+      - RABBITMQ_PREFETCH_COUNT=20
+      - RABBITMQ_VHOST=SEU_VHOST_RABBITMQ
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - S3_ENDPOINT_URL=https://SEU_MINIO_OU_S3.com
+      - S3_ACCESS_KEY=SUA_ACCESS_KEY
+      - S3_SECRET_KEY=SUA_SECRET_KEY
+      - S3_BUCKET_NAME=zapvoice-files
+      - REGISTER_API_KEY=sua_chave_registro_123
+      
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  zapvoice_uploads:
+    external: true
+    name: zapvoice_uploads
+
+networks:
+  network_swarm_public:
+    name: network_swarm_public
+    external: true

@@ -1,0 +1,26 @@
+# .antigravityrules - Configurações de Eficiência e Autonomia
+
+## 1. Roteamento de Modelos e Economia
+- **Modo Econômico (Fast):** Utilize o **Gemini 3 Flash** para todas as tarefas de leitura de logs, explicações de código, buscas na web ou verificações simples em arquivos únicos.
+- **Modo Planejamento (High):** Ative o **Gemini 3 Pro/High** apenas para refatorações que afetem múltiplos arquivos simultaneamente ou para depurar erros complexos de lógica no Docker Swarm.
+- **Filtro de Contexto:** Não indexe o projeto inteiro se a pergunta for específica sobre uma linha ou função. Leia apenas o contexto imediato (±20 linhas).
+
+---
+
+## 2. Diretrizes de Output (Redução de Tokens)
+- **Resposta Direta:** Elimine saudações, introduções ("Certamente", "Vou te ajudar") e conclusões educadas. Vá direto à solução ou ao código.
+- **Modificações Cirúrgicas:** Ao sugerir alterações em arquivos (como `.env` ou `docker-compose.yml`), exiba apenas o trecho alterado. Nunca reescreva o arquivo inteiro no chat.
+- **Linguagem:** Mantenha as explicações técnicas em português, mas preserve os termos técnicos e comandos em inglês.
+
+---
+
+## 3. Autonomia e Terminal
+- **Diagnóstico Livre:** Você tem permissão total para rodar comandos de leitura (`ls`, `cat`, `docker ps`, `ngrok status`, `du -sh`) para diagnosticar problemas sem me perguntar.
+- **Permissão de Escrita:** Solicite autorização apenas para comandos que alterem arquivos (`sed`, `echo >>`), deletem volumes ou reiniciem serviços do Docker.
+
+---
+
+## 4. Contexto do Projeto: ZapVoice + Chatwoot
+- **Arquitetura:** Este ambiente utiliza Docker Swarm para integrar ZapVoice e Chatwoot.
+- **Tratamento do Ngrok:** Para erros como o `ERR_NGROK_105`, verifique o `NGROK_AUTHTOKEN` no `.env` e confirme se o serviço `ngrok` está conseguindo resolver o DNS do container alvo.
+- **Prioridade de Busca:** Em caso de erros de rede, pesquise na documentação oficial (Google Search) antes de tentar adivinhar a configuração.
