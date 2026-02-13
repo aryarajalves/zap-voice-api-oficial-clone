@@ -5,7 +5,7 @@ services:
   # SERVIÇO PRINCIPAL (Backend + Frontend)
   # ==========================================
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.6.4
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.6.5
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
@@ -53,7 +53,7 @@ services:
   # SERVIÇO WORKER (Processamento em Segundo Plano)
   # ==========================================
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.6.4
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.6.5
     command: python worker.py
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:

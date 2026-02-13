@@ -35,7 +35,7 @@ models.Base.metadata.create_all(bind=engine) # Ensure tables exist
 app = FastAPI(
     title="ZapVoice API - Automação Chatwoot",
     description="""
-## 🚀 ZapVoice API v1.6.4
+## 🚀 ZapVoice API v1.6.5
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
@@ -167,7 +167,7 @@ def seed_super_admin():
     """Garante que o Super Admin exista conforme o .env"""
     from database import SessionLocal
     from models import User
-    from core.security import get_password_hash
+    from core.security import get_password_hash, verify_password
     
     email = os.getenv("SUPER_ADMIN_EMAIL")
     password = os.getenv("SUPER_ADMIN_PASSWORD")
@@ -288,7 +288,7 @@ async def read_root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "1.6.4 (Auth Fix Applied)",
+        "version": "1.6.5 (Auth Fix V2)",
         "mode": "development (frontend not built)"
     }
 
