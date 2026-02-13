@@ -1,0 +1,20 @@
+﻿­ƒöº Gerando configura├º├úo din├ómica para o Frontend...
+  API_URL: http://localhost:8000/api
+  WS_URL: ws://localhost:8000/ws
+Ô£à Arquivo /app/static/dist/env-config.js gerado com sucesso!
+­ƒùä´©Å  Verificando/criando banco de dados PostgreSQL...
+­ƒöì Verificando se o banco de dados 'zapvoice' existe...
+Ô£à Banco de dados 'zapvoice' j├í existe!
+­ƒÅù´©Å  Aplicando migra├º├Áes de esquema...
+Connecting to postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice...
+Ôä╣´©Å Column current_node_id already exists.
+Ôä╣´©Å Column processed_contacts already exists.
+Ôä╣´©Å Column pending_contacts already exists.
+Ôä╣´©Å Column cost_per_unit already exists.
+Ôä╣´©Å Column total_cost already exists.
+Ôä╣´©Å Column total_delivered already exists.
+Ôä╣´©Å Column total_read already exists.
+Ôä╣´©Å Column total_interactions already exists.
+Ôä╣´©Å Column total_blocked already exists.
+Ôä╣´©Å Column updated_at already exists.
+Done!

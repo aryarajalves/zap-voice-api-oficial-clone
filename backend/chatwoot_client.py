@@ -1,7 +1,7 @@
 import os
 import tempfile
 import mimetypes
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import httpx
 from core.logger import setup_logger
 from config_loader import get_setting
@@ -18,20 +18,29 @@ logger = setup_logger("ChatwootClient")
 class ChatwootClient:
     def __init__(self, account_id: str = None, client_id: int = None):
         self.client_id = client_id
+        
+        # Otimização: Carrega todas as configurações de uma vez
+        from config_loader import get_settings
+        self.settings = get_settings(client_id=self.client_id)
+        
         # Prefer env var/db setting if not passed
-        self.account_id = account_id or get_setting("CHATWOOT_ACCOUNT_ID", "1", client_id=self.client_id)
-        self.api_url = get_setting("CHATWOOT_API_URL", "https://app.chatwoot.com/api/v1", client_id=self.client_id)
-        self.api_token = get_setting("CHATWOOT_API_TOKEN", "", client_id=self.client_id)
+        self.account_id = account_id or self.settings.get("CHATWOOT_ACCOUNT_ID", "1")
+        self.api_url = self.settings.get("CHATWOOT_API_URL", "https://app.chatwoot.com/api/v1")
+        # Auto-fix URL if /api/v1 is missing
+        if self.api_url and "/api/v1" not in self.api_url:
+            self.api_url = f"{self.api_url.rstrip('/')}/api/v1"
+        self.api_token = self.settings.get("CHATWOOT_API_TOKEN", "")
         
         self.base_url = f"{self.api_url}/accounts/{self.account_id}"
         self.headers = {
             "api_access_token": self.api_token,
             "Content-Type": "application/json"
         }
+        self._inbox_id_cache = None
     
     def log_debug(self, message):
          with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-             timestamp = datetime.now().isoformat()
+             timestamp = datetime.now(timezone.utc).isoformat()
              f.write(f"[{timestamp}] [ChatwootClient] {message}\n")
 
     async def send_message(self, conversation_id: int, content: str, private: bool = False):
@@ -39,13 +48,19 @@ class ChatwootClient:
             print("Chatwoot Token not set. Mocking send_message.")
             return {"id": 123, "content": content}
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 payload = {
                     "content": content,
-                    "message_type": "outgoing",
                     "private": private
                 }
+                
+                # Para notas privadas, omitimos o message_type ou deixamos o Chatwoot decidir
+                # Para mensagens normais, forçamos 'outgoing'
+                if not private:
+                    payload["message_type"] = "outgoing"
+                
+                print(f"DEBUG: sending message to {self.base_url}/conversations/{conversation_id}/messages")
                 
                 response = await client.post(
                     f"{self.base_url}/conversations/{conversation_id}/messages",
@@ -58,7 +73,13 @@ class ChatwootClient:
                 logger.error(f"Error sending message to Chatwoot: {e}")
                 raise e
 
-    async def send_attachment(self, conversation_id: int, url: str, attachment_type: str, custom_filename: str = None):
+    async def send_private_note(self, conversation_id: int, content: str):
+        """
+        Sends a private internal note to the conversation.
+        """
+        return await self.send_message(conversation_id, content, private=True)
+
+    async def send_attachment(self, conversation_id: int, url: str, attachment_type: str, custom_filename: str = None, caption: str = None):
         if not self.api_token:
             self.log_debug(f"Chatwoot Token not set. Mocking send_attachment ({attachment_type}): {url}")
             return {"id": 124, "content": url, "attachment": True}
@@ -107,13 +128,13 @@ class ChatwootClient:
         if not file_path or not os.path.exists(file_path):
             try:
                 self.log_debug(f"DEBUG: File not found locally. Attempting to download from URL: {url}")
-                async with httpx.AsyncClient() as dl_client:
+                async with httpx.AsyncClient(timeout=30.0) as dl_client:
                     dl_response = await dl_client.get(url)
                     if dl_response.status_code == 200:
                          # Create generic temp file
                          import tempfile
                          filename = url.split("/")[-1]
-                         if not filename: filename = f"temp_file_{int(datetime.now().timestamp())}"
+                         if not filename: filename = f"temp_file_{int(datetime.now(timezone.utc).timestamp())}"
                          
                          # Use system temp dir to avoid permission issues
                          temp_dir = tempfile.gettempdir()
@@ -138,7 +159,7 @@ class ChatwootClient:
         upload_headers = self.headers.copy()
         upload_headers.pop("Content-Type", None)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 mime_type, _ = mimetypes.guess_type(file_path)
                 if not mime_type:
@@ -162,7 +183,11 @@ class ChatwootClient:
                          mime_type = 'audio/ogg'
 
                     files = {'attachments[]': (final_filename, f, mime_type)}
-                    data = {'message_type': 'outgoing', 'private': 'false'}
+                    data = {
+                        'message_type': 'outgoing', 
+                        'private': 'false',
+                        'content': caption or ''
+                    }
                     
                     self.log_debug(f"DEBUG: Sending to Chatwoot with filename: {final_filename} and data: {data}")
 
@@ -211,7 +236,7 @@ class ChatwootClient:
         if inbox_id:
             params["inbox_id"] = inbox_id
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 response = await client.get(
                     f"{self.base_url}/conversations",
@@ -225,8 +250,8 @@ class ChatwootClient:
                 raise e
 
     async def get_inboxes(self):
-        # Env var to select specific inbox ID
-        selected_inbox_id = os.getenv("CHATWOOT_SELECTED_INBOX_ID")
+        # Use settings from DB if available
+        selected_inbox_id = self.settings.get("CHATWOOT_SELECTED_INBOX_ID")
         
         if not self.api_token:
             print("Chatwoot Token not set. Mocking get_inboxes.")
@@ -234,7 +259,7 @@ class ChatwootClient:
             # Return mocked data that respects the logic for testing
             inboxes = [{"id": 1, "name": "Whatsapp Support", "channel_type": "Channel::Whatsapp"}, {"id": 2, "name": "Website Live Chat", "channel_type": "Channel::WebWidget"}]
         else:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 try:
                     response = await client.get(
                         f"{self.base_url}/inboxes",
@@ -266,6 +291,25 @@ class ChatwootClient:
             filtered = [i for i in inboxes if 'whatsapp' in i.get('channel_type', '').lower()]
         
         return filtered
+    
+    async def get_default_whatsapp_inbox(self):
+        if self._inbox_id_cache:
+            return self._inbox_id_cache
+            
+        inboxes = await self.get_inboxes()
+        if inboxes:
+            # Prefer ones that have "whatsapp" in the name or channel_type
+            best_id = None
+            for ib in inboxes:
+                if "whatsapp" in ib.get("channel_type", "").lower() or "whatsapp" in ib.get("name", "").lower():
+                    best_id = ib["id"]
+                    break
+            if not best_id:
+                best_id = inboxes[0]["id"]
+            
+            self._inbox_id_cache = best_id
+            return best_id
+        return None
 
     async def get_accounts(self):
         if not self.api_token:
@@ -275,7 +319,7 @@ class ChatwootClient:
         # CHATWOOT_API_URL ex: https://app.chatwoot.com/api/v1
         profile_url = f"{self.api_url}/profile"
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 response = await client.get(profile_url, headers=self.headers)
                 response.raise_for_status()
@@ -291,7 +335,7 @@ class ChatwootClient:
             print(f"Chatwoot Token not set. Mocking toggle_typing: {status}")
             return
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/conversations/{conversation_id}/toggle_typing",
@@ -315,8 +359,8 @@ class ChatwootClient:
         wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
         
         if not wa_phone_id or not wa_token:
-            print("WhatsApp credentials not set. Cannot send template.")
-            return None
+            print(f"❌ WhatsApp credentials not set for client {self.client_id}. Cannot send template.")
+            return {"error": True, "detail": "Configuração do WhatsApp ausente (Token ou ID)"}
             
         # Remove caracteres não numéricos do telefone
         clean_phone = ''.join(filter(str.isdigit, phone_number))
@@ -331,14 +375,16 @@ class ChatwootClient:
         print(f"DEBUG: Received components from frontend: {components}")
         
         # Components sent from frontend are already formatted correctly
-        # Just ensure lowercase type field for WhatsApp API
+        # Just ensure lowercase type field for WhatsApp API and fix pluralization
         send_components = []
         if components:
             for comp in components:
-                # Frontend sends: { type: 'header'/'body'/'button', parameters: [...] }
-                # Just copy and ensure lowercase type
                 comp_copy = comp.copy()
+                # WhatsApp API expects 'button' (singular) or 'BUTTON'
                 comp_type = comp.get('type', '').lower()
+                if comp_type == 'buttons':
+                    comp_type = 'button'
+                
                 comp_copy['type'] = comp_type
                 send_components.append(comp_copy)
         
@@ -414,7 +460,7 @@ class ChatwootClient:
         }
         headers["Authorization"] = f"Bearer {wa_token}" # Restore full token
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.get(url, headers=headers)
                 response.raise_for_status()
@@ -425,26 +471,348 @@ class ChatwootClient:
 
                 templates = []
                 for t in raw_list:
+                    status = t.get("status")
                     # Debug log to see all found templates in console
-                    print(f"DEBUG: Template found: {t.get('name')} | Status: {t.get('status')} | Lang: {t.get('language')}")
+                    print(f"DEBUG: Template found: {t.get('name')} | Status: {status} | Lang: {t.get('language')}")
                     
-                    if t.get("status") == "APPROVED":
-                        templates.append({
-                            "name": t.get("name"),
-                            "language": t.get("language"),
-                            "category": t.get("category"),
-                            "id": t.get("id"),
-                            "status": t.get("status"),
-                            "components": t.get("components", [])  # Include components
-                        })
+                    templates.append({
+                        "name": t.get("name"),
+                        "language": t.get("language"),
+                        "category": t.get("category"),
+                        "id": t.get("id"),
+                        "status": status,
+                        "components": t.get("components", [])  # Include components
+                    })
                 
-                logger.info(f"DEBUG: Returning {len(templates)} APPROVED templates.")
+                logger.info(f"DEBUG: Returning {len(templates)} templates.")
                 return templates
             except httpx.HTTPError as e:
                 logger.error(f"Error fetching WA templates: {e}")
                 if hasattr(e, 'response') and e.response:
                     logger.error(f"Details: {e.response.text}")
                 return []
+
+
+    async def create_whatsapp_template(self, data: dict):
+        """
+        Creates a WhatsApp template on Meta Graph API.
+        """
+        wa_account_id = get_setting("WA_BUSINESS_ACCOUNT_ID", "", client_id=self.client_id)
+        wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+
+        if not wa_account_id or not wa_token:
+            return {"error": "WhatsApp credentials not set in database for this client."}
+
+        url = f"https://graph.facebook.com/v24.0/{wa_account_id}/message_templates"
+        headers = {
+            "Authorization": f"Bearer {wa_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Build Components Payload
+        components = []
+        
+        # 1. Header
+        h_type = data.get("header_type", "NONE").upper()
+        if h_type != "NONE":
+            h_comp = {"type": "HEADER", "format": h_type}
+            if h_type == "TEXT" and data.get("header_text"):
+                h_comp["text"] = data.get("header_text")
+            elif h_type in ["IMAGE", "VIDEO", "DOCUMENT"] and data.get("header_media_url"):
+                h_comp["example"] = {
+                    "header_handle": [data.get("header_media_url")]
+                }
+            components.append(h_comp)
+
+        # 2. Body
+        components.append({
+            "type": "BODY",
+            "text": data.get("body_text", "")
+        })
+
+        # 3. Footer
+        if data.get("footer_text"):
+            components.append({
+                "type": "FOOTER",
+                "text": data.get("footer_text")
+            })
+
+        # 4. Buttons
+        raw_buttons = data.get("buttons", [])
+        if raw_buttons:
+            components.append({
+                "type": "BUTTONS",
+                "buttons": raw_buttons
+            })
+
+        payload = {
+            "name": data.get("name").lower().replace(" ", "_"),
+            "category": data.get("category", "MARKETING").upper(),
+            "language": data.get("language", "pt_BR"),
+            "components": components
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                logger.info(f"🚀 [Meta API] Creating template: {payload['name']}")
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code not in [200, 201]:
+                    error_data = response.json()
+                    err_msg = error_data.get("error", {}).get("message", "Unknown error")
+                    logger.error(f"❌ [Meta API] Template creation failed: {err_msg}")
+                    return {"error": err_msg, "status_code": response.status_code}
+                
+                logger.info(f"✅ [Meta API] Template created successfully!")
+                return response.json()
+                
+            except Exception as e:
+                logger.error(f"❌ Error communicating with Meta API: {e}")
+                return {"error": str(e)}
+
+    async def edit_whatsapp_template(self, template_id: str, data: dict):
+        """
+        Edits an existing WhatsApp template on Meta Graph API.
+        """
+        wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+
+        if not wa_token:
+            return {"error": "WhatsApp credentials not set in database for this client."}
+
+        # Meta API for editing: POST /vXX.X/{template-id}
+        url = f"https://graph.facebook.com/v24.0/{template_id}"
+        headers = {
+            "Authorization": f"Bearer {wa_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Build Components Payload
+        components = []
+        
+        # 1. Header
+        h_type = data.get("header_type", "NONE").upper()
+        if h_type != "NONE":
+            h_comp = {"type": "HEADER", "format": h_type}
+            if h_type == "TEXT" and data.get("header_text"):
+                h_comp["text"] = data.get("header_text")
+            elif h_type in ["IMAGE", "VIDEO", "DOCUMENT"] and data.get("header_media_url"):
+                media_url = data.get("header_media_url", "")
+                is_meta_url = "whatsapp" in media_url or "facebook" in media_url or "fbcdn" in media_url
+                if not is_meta_url:
+                    h_comp["example"] = {
+                        "header_handle": [media_url] 
+                    }
+            components.append(h_comp)
+
+        # 2. Body
+        components.append({
+            "type": "BODY",
+            "text": data.get("body_text", "")
+        })
+
+        # 3. Footer
+        if data.get("footer_text"):
+            components.append({
+                "type": "FOOTER",
+                "text": data.get("footer_text")
+            })
+
+        # 4. Buttons
+        raw_buttons = data.get("buttons", [])
+        if raw_buttons:
+            components.append({
+                "type": "BUTTONS",
+                "buttons": raw_buttons
+            })
+
+        payload = {
+            "components": components
+        }
+        
+        if data.get("category"):
+             payload["category"] = data.get("category").upper()
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                logger.info(f"🚀 [Meta API] Editing template ID: {template_id}")
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code not in [200, 201]:
+                    error_data = response.json()
+                    err_msg = error_data.get("error", {}).get("message", "Unknown error")
+                    logger.error(f"❌ [Meta API] Template edit failed: {err_msg}")
+                    return {"error": err_msg, "status_code": response.status_code}
+                
+                logger.info(f"✅ [Meta API] Template edited successfully!")
+                return response.json()
+                
+            except Exception as e:
+                logger.error(f"❌ Error communicating with Meta API: {e}")
+
+
+                return {"error": str(e)}
+
+    async def is_within_24h_window(self, conversation_id: int):
+        """
+        Verifica se a conversa está dentro da janela de 24 horas do WhatsApp,
+        baseado na última mensagem INCOMING (do cliente).
+        """
+        if not self.api_token:
+            return False # Mock conservative
+
+        url = f"{self.base_url}/conversations/{conversation_id}/messages"
+        
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                # Chatwoot messages list returns sorted by created_at desc (paginated)
+                response = await client.get(url, headers=self.headers)
+                
+                if response.status_code != 200:
+                    logger.error(f"❌ [24h Check] Failed to fetch messages for conv {conversation_id}: {response.status_code}")
+                    return False
+
+                messages = response.json().get("payload", [])
+                
+                if not messages:
+                    logger.info(f"ℹ️ [24h Check] No messages found for conv {conversation_id}. Window Closed.")
+                    return False
+
+                # Find latest incoming message (message_type == 0)
+                # Messages are usually returned latest first if not specified otherwise
+                # But let's check safely. Chatwoot payload can be reverse chronological.
+                
+                last_incoming_ts = None
+                
+                # Sort messages by created_at DESC just in case
+                sorted_msgs = sorted(messages, key=lambda x: x.get('created_at', 0), reverse=True)
+                
+                # DEBUG: Log top 5 messages to see what's happening
+                for i, msg in enumerate(sorted_msgs[:5]):
+                    m_type = msg.get("message_type") # 0=Incoming, 1=Outgoing
+                    m_ts = msg.get("created_at")
+                    m_content = (msg.get("content") or "")[:20]
+                    # Convert to readable time
+                    try:
+                        m_dt = datetime.fromtimestamp(m_ts, tz=timezone.utc)
+                    except: 
+                        m_dt = "Invalid TS"
+                    logger.info(f"🔎 [24h Debug] Msg {i}: Type={m_type} | TS={m_ts} ({m_dt}) | Content='{m_content}...'")
+
+                for msg in sorted_msgs:
+                    # CHECK MESSAGE TYPE:
+                    # 0 = Incoming (User sent)
+                    # 1 = Outgoing (Agent sent)
+                    # 2 = Template (Sent via API/Template)
+                    if msg.get("message_type") == 0: 
+                        last_incoming_ts = msg.get("created_at")
+                        break
+                
+                if not last_incoming_ts:
+                    logger.info(f"ℹ️ [24h Check] No incoming messages (Type 0) found in conversation {conversation_id}. Window Closed.")
+                    return False
+                
+                # Convert timestamp to datetime (Chatwoot created_at is unix timestamp int)
+                last_incoming_dt = datetime.fromtimestamp(last_incoming_ts, tz=timezone.utc)
+                now_dt = datetime.now(timezone.utc)
+                
+                diff = now_dt - last_incoming_dt
+                
+                # WINDOW RULE: 24 Hours
+                is_open = diff < timedelta(hours=24)
+                
+                status_str = "OPEN ✅" if is_open else "CLOSED 🔒"
+                logger.info(f"🕒 [24h Check] Final Verdict for Conv {conversation_id}:")
+                logger.info(f"   Last Incoming: {last_incoming_dt} (UTC)")
+                logger.info(f"   Now:           {now_dt} (UTC)")
+                logger.info(f"   Diff:          {diff}")
+                logger.info(f"   Result:        {status_str}")
+                
+                return is_open
+
+            except Exception as e:
+                logger.error(f"❌ [24h Check] Exception verifying window: {e}")
+                return False
+
+    async def update_template_status(self, template_id: str, status: str):
+        """
+        Updates the status of a WhatsApp template.
+        NOTE: Meta only allows MANUALLY UNPAUSING a template that was paused by them.
+        Manual pausing via API is not currently supported.
+        """
+        wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+        if not wa_token:
+            return {"error": "WhatsApp credentials not set."}
+
+        status_upper = status.upper()
+        
+        # Meta uses a specific endpoint for unpausing
+        if status_upper == "UNPAUSED":
+            url = f"https://graph.facebook.com/v24.0/{template_id}/unpause"
+            payload = {} # No payload needed for /unpause
+        else:
+            # If they try anything else (like PAUSED), we try the standard status update,
+            # but Meta usually doesn't allow manual pausing via API.
+            url = f"https://graph.facebook.com/v24.0/{template_id}"
+            payload = {"status": status_upper}
+
+        headers = {
+            "Authorization": f"Bearer {wa_token}",
+            "Content-Type": "application/json"
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                logger.info(f"🚀 [Meta API] Action {status_upper} on template {template_id}")
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code not in [200, 201]:
+                    error_data = response.json()
+                    err_msg = error_data.get("error", {}).get("message", "Unknown error")
+                    
+                    # Se for tentativa de PAUSE manual, dar um erro mais amigável
+                    if status_upper == "PAUSED" and "invalid" in err_msg.lower():
+                        err_msg = "A Meta não permite pausar templates manualmente via API, apenas reativá-los."
+                        
+                    logger.error(f"❌ [Meta API] Status action failed: {err_msg}")
+                    return {"error": err_msg}
+                return {"success": True}
+            except Exception as e:
+                logger.error(f"❌ Error updating status: {e}")
+                return {"error": str(e)}
+
+    async def delete_whatsapp_template(self, name: str):
+        """
+        Deletes a WhatsApp template by name.
+        """
+        wa_account_id = get_setting("WA_BUSINESS_ACCOUNT_ID", "", client_id=self.client_id)
+        wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+
+        if not wa_account_id or not wa_token:
+            return {"error": "WhatsApp credentials not set."}
+
+        url = f"https://graph.facebook.com/v24.0/{wa_account_id}/message_templates"
+        params = {
+            "name": name,
+            "access_token": wa_token
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                logger.info(f"🚀 [Meta API] Deleting template: {name}")
+                response = await client.delete(url, params=params)
+                
+                if response.status_code not in [200, 204]:
+                    error_data = response.json()
+                    err_msg = error_data.get("error", {}).get("message", "Unknown error")
+                    logger.error(f"❌ [Meta API] Template deletion failed: {err_msg}")
+                    return {"error": err_msg, "status_code": response.status_code}
+                
+                logger.info(f"✅ [Meta API] Template deleted successfully!")
+                return {"success": True}
+                
+            except Exception as e:
+                logger.error(f"❌ Error communicating with Meta API during deletion: {e}")
+                return {"error": str(e)}
 
     async def send_interactive_poll(self, phone_number: str, question: str, options: list):
         """
@@ -568,7 +936,7 @@ class ChatwootClient:
             # Content-Type is multipart/form-data, handle by httpx
         }
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             try:
                 with open(file_path, "rb") as f:
                     filename = os.path.basename(file_path)
@@ -679,6 +1047,26 @@ class ChatwootClient:
                 print(f"Error fetching contact conversations: {e}")
                 return None
 
+    async def get_contact_labels(self, contact_id: int):
+        """
+        Get labels/tags for a specific contact.
+        """
+        if not self.api_token:
+             return []
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/contacts/{contact_id}/labels",
+                    headers=self.headers
+                )
+                response.raise_for_status()
+                # Retorna lista de strings (nomes das tags)
+                return response.json().get("payload", [])
+            except Exception as e:
+                print(f"Error fetching contact labels: {e}")
+                return []
+
     async def send_interactive_buttons(self, contact_phone: str, body_text: str, buttons: list):
         """
         Sends an interactive message with buttons directly via WhatsApp Cloud API.
@@ -739,7 +1127,7 @@ class ChatwootClient:
 
         self.log_debug(f"Sending Interactive Buttons to {to_phone}. Payload: {payload}")
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 response = await client.post(url, json=payload, headers=headers)
                 
@@ -769,7 +1157,7 @@ class ChatwootClient:
             "phone_number": phone_number
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 # Chatwoot API: POST /contacts
                 response = await client.post(
@@ -779,6 +1167,7 @@ class ChatwootClient:
                 )
                 if response.status_code == 422:
                      # Already exists, try search
+                     self.log_debug(f"Contact creation returned 422 (likely exists): {response.text}")
                      return None
                 
                 response.raise_for_status()
@@ -793,7 +1182,8 @@ class ChatwootClient:
 
         payload = {
             "source_id": contact_id,
-            "inbox_id": inbox_id
+            "inbox_id": inbox_id,
+            "contact_id": contact_id
         }
         
         async with httpx.AsyncClient() as client:
@@ -806,7 +1196,9 @@ class ChatwootClient:
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
-                print(f"Error creating conversation: {e}")
+                msg = f"Error creating conversation: {e}"
+                print(msg)
+                self.log_debug(msg)
                 return None
 
     async def ensure_conversation(self, phone_number: str, name: str, inbox_id: int = None):
@@ -814,48 +1206,351 @@ class ChatwootClient:
         Helper method to ensure a conversation exists for a phone number.
         Returns the conversation ID.
         """
-        if not inbox_id:
-             # Try to guess or use default. If we can't find inbox, we can't create conversation.
-             # We will try to find any existing conversation first
-             pass
-
+        self.log_debug(f"Ensuring conversation for {phone_number} (Inbox: {inbox_id})")
+        
         # 1. Search Contact
         clean_phone = ''.join(filter(str.isdigit, phone_number))
-        search_res = await self.search_contact(clean_phone)
-        
         contact_id = None
-        if search_res and search_res.get("payload"):
-            contact_id = search_res["payload"][0]["id"]
-        else:
-            # 2. Create Contact if likely needed (needs inbox_id to be safe? API docs say inbox_id not required for contact, but good practice)
-            # Actually Chatwoot contact creation doesn't STRICTLY require inbox_id, but it associates.
-            # Let's try creating without inbox first if null.
-            # But wait, create_contact usually needs nothing specific.
-            if inbox_id:
-                 res = await self.create_contact(name or phone_number, phone_number, inbox_id)
-                 if res and res.get("payload"):
-                     contact_id = res["payload"]["contact"]["id"]
+        
+        # Multiple attempts at searching to be robust
+        search_queries = [clean_phone, f"+{clean_phone}"]
+        
+        # ADDED: Search by last 8 digits (ignoring 9th digit and DDD mismatch)
+        if len(clean_phone) >= 8:
+            search_queries.append(clean_phone[-8:])
+
+        for q in search_queries:
+            search_res = await self.search_contact(q)
+            if search_res and search_res.get("payload"):
+                contact_id = search_res["payload"][0]["id"]
+                self.log_debug(f"Contact found for query '{q}': {contact_id}")
+                break
         
         if not contact_id:
-             # Fallback: maybe it existed but search failed or create failed. 
-             # If create failed 422, it means it exists. search *should* have found it.
-             # Let's assume we can't proceed without contact_id
+            # 2. Create Contact
+            if inbox_id:
+                  self.log_debug(f"Contact not found. Creating new contact for {phone_number}...")
+                  res = await self.create_contact(name or phone_number, phone_number, inbox_id)
+                  if res and res.get("payload"):
+                      contact_id = res["payload"]["contact"]["id"]
+                      self.log_debug(f"New contact created: {contact_id}")
+                  else:
+                      # If already exists (422), try search with + format one last time
+                      self.log_debug(f"Contact creation failed or already exists. Retrying search with + format...")
+                      search_res = await self.search_contact(f"+{clean_phone}")
+                      if search_res and search_res.get("payload"):
+                          contact_id = search_res["payload"][0]["id"]
+        
+        if not contact_id:
+             self.log_debug(f"❌ Aborting ensure_conversation: Could not find or create contact for {phone_number}")
              return None
 
-        # 3. Check for open conversation
+        # 3. Check for existing conversation in the CORRECT inbox
         convs_res = await self.get_contact_conversations(contact_id)
         if convs_res and convs_res.get("payload"):
-            # Return most recent
-            active = convs_res["payload"][0]
-            # Use this one
-            self.log_debug(f"Found existing conversation {active['id']} for {phone_number}")
-            return active["id"]
+            conversations = convs_res.get("payload", [])
+            
+            # Prefer an open/pending conversation in the requested inbox
+            for status_pref in ['open', 'pending', 'resolved']:
+                for conv in conversations:
+                    # Match Inbox
+                    if inbox_id and conv.get("inbox_id") != inbox_id:
+                         continue
+                         
+                    # Match Status
+                    if conv.get("status") == status_pref:
+                        self.log_debug(f"Using existing {status_pref} conversation {conv['id']} in inbox {conv.get('inbox_id')} for {phone_number}")
+                        return conv["id"]
+            
+            # Fallback for when inbox_id is not specified (rare in this app)
+            if not inbox_id:
+                active = conversations[0]
+                self.log_debug(f"Using most recent conversation {active['id']} (No inbox filter) for {phone_number}")
+                return active["id"]
         
-        # 4. Create new conversation
+        # 4. Create new conversation if none found in correct inbox (or if all were closed and we want a fresh one)
+        # Note: Chatwoot usually reopens resolved conversations if a new message arrives, 
+        # but create_conversation is safer if we want to ensure it exists in the right inbox.
         if inbox_id:
+            self.log_debug(f"No suitable conversation found in inbox {inbox_id}. Creating new one for contact {contact_id}...")
             new_conv = await self.create_conversation(contact_id, inbox_id)
             if new_conv:
                 self.log_debug(f"Created new conversation {new_conv['id']} for {phone_number}")
                 return new_conv["id"]
-                
+        
+        self.log_debug(f"❌ Failed to ensure conversation for {phone_number}")
         return None
+
+    async def upload_media_to_meta(self, file_path: str, mime_type: str = 'audio/ogg') -> str:
+        """
+        Uploads a media file to Meta/WhatsApp Cloud API and returns the media ID.
+        """
+        wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=self.client_id)
+        wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+
+        if not wa_phone_id or not wa_token:
+            print("WhatsApp credentials not set. Cannot upload media.")
+            return None
+
+        url = f"https://graph.facebook.com/v24.0/{wa_phone_id}/media"
+        headers = {
+            "Authorization": f"Bearer {wa_token}"
+            # Content-Type is multipart/form-data, handled by httpx
+        }
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                with open(file_path, "rb") as f:
+                    filename = os.path.basename(file_path)
+                    files = {
+                        'file': (filename, f, mime_type)
+                    }
+                    data = {
+                        'messaging_product': 'whatsapp'
+                    }
+                    
+                    print(f"DEBUG: Uploading media to Meta: {filename} ({mime_type})")
+                    response = await client.post(url, headers=headers, files=files, data=data)
+                    
+                    if response.status_code == 200:
+                        res_json = response.json()
+                        media_id = res_json.get('id')
+                        print(f"DEBUG: Media uploaded successfully. ID: {media_id}")
+                        return media_id
+                    else:
+                        print(f"ERROR: Media upload failed ({response.status_code}): {response.text}")
+                        return None
+            except Exception as e:
+                print(f"Error uploading media to Meta: {e}")
+                return None
+
+    async def send_audio_official(self, phone_number: str, url: str):
+        """
+        Sends an audio as a Voice Note (PTT) directly via WhatsApp Cloud API.
+        Attempts to force OGG/OPUS MIME type.
+        """
+        # 1. DOWNLOAD / RESOLVE FILE
+        # Reuse logic from send_attachment (simplified)
+        import tempfile
+        from urllib.parse import unquote
+        
+        file_path = None
+        temp_download_path = None
+        
+        # Try Local
+        if "static/uploads" in url:
+            try:
+                file_name_part = unquote(url.split("/static/")[1])
+                base_path = os.path.dirname(os.path.abspath(__file__))
+                file_path = os.path.join(base_path, "static", *file_name_part.split('/'))
+            except: pass
+
+        if not file_path or not os.path.exists(file_path):
+            # Try plain filename in uploads
+             try:
+                 filename = url.split("/")[-1]
+                 base_path = os.path.dirname(os.path.abspath(__file__))
+                 potential = os.path.join(base_path, "static", "uploads", filename)
+                 if os.path.exists(potential): file_path = potential
+             except: pass
+
+        # Download if needed
+        if not file_path or not os.path.exists(file_path):
+             try:
+                print(f"DEBUG: Downloading audio for official send: {url}")
+                async with httpx.AsyncClient(timeout=30.0) as dl:
+                    r = await dl.get(url)
+                    if r.status_code == 200:
+                        t_dir = tempfile.gettempdir()
+                        fname = f"wa_audio_{int(datetime.now(timezone.utc).timestamp())}.ogg"
+                        temp_download_path = os.path.join(t_dir, fname)
+                        with open(temp_download_path, "wb") as f:
+                            f.write(r.content)
+                        file_path = temp_download_path
+             except Exception as e:
+                 print(f"ERROR: Download failed: {e}")
+                 return {"error": str(e)}
+
+        if not file_path or not os.path.exists(file_path):
+            return {"error": "File not found"}
+
+        try:
+            # 2. UPLOAD TO META
+            # WhatsApp requires audio/ogg for PTT (Voice Messages)
+            media_id = await self.upload_media_to_meta(file_path, "audio/ogg")
+            if not media_id:
+                return {"error": "Failed to upload audio to Meta"}
+
+            # 3. SEND MESSAGE
+            wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=self.client_id)
+            wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+            clean_phone = ''.join(filter(str.isdigit, phone_number))
+
+            send_url = f"https://graph.facebook.com/v24.0/{wa_phone_id}/messages"
+            headers = {
+                "Authorization": f"Bearer {wa_token}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": clean_phone,
+                "type": "audio",
+                "audio": { 
+                    "id": media_id 
+                }
+            }
+            
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(send_url, json=payload, headers=headers)
+                print(f"DEBUG: Send Audio Response: {resp.status_code} - {resp.text}")
+                return resp.json()
+
+        except Exception as e:
+            print(f"ERROR in send_audio_official: {e}")
+            return {"error": str(e)}
+        finally:
+            if temp_download_path and os.path.exists(temp_download_path):
+                try: os.remove(temp_download_path)
+                except: pass
+
+    async def send_text_direct(self, phone_number: str, content: str):
+        """
+        Sends a simple text message directly via WhatsApp Cloud API.
+        Used when the 24h window is known to be open and no template is needed.
+        """
+        wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+        wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=self.client_id)
+
+        if not wa_token or not wa_phone_id:
+            msg = "META TOKEN or PHONE ID missing in environment variables"
+            self.log_debug(msg)
+            print(msg)
+            return None
+
+        clean_phone = ''.join(filter(str.isdigit, phone_number))
+        url = f"https://graph.facebook.com/v21.0/{wa_phone_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {wa_token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": clean_phone,
+            "type": "text",
+            "text": {
+                "body": content
+            }
+        }
+
+        self.log_debug(f"Sending Direct Text to {clean_phone}. Content: {content[:50]}...")
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code not in [200, 201]:
+                    self.log_debug(f"Meta Text API Error: {response.text}")
+                    return {"error": True, "detail": response.text}
+                    
+                data = response.json()
+                self.log_debug(f"Meta Text API Response: {data}")
+                return data
+            except httpx.HTTPError as e:
+                err_msg = f"Meta API Text Error: {e}"
+                self.log_debug(err_msg)
+                print(err_msg)
+                return {"error": True, "detail": str(e)}
+
+    async def update_contact(self, contact_id: int, payload: dict):
+        """
+        Update a contact in Chatwoot (e.g. change name).
+        """
+        if not self.api_token:
+            return None
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.put(
+                    f"{self.base_url}/contacts/{contact_id}",
+                    headers=self.headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                print(f"Error updating contact {contact_id}: {e}")
+                return None
+
+    async def get_all_labels(self):
+        """
+        List all available labels for the Chatwoot account.
+        """
+        if not self.api_token:
+            return []
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/labels",
+                    headers=self.headers
+                )
+                response.raise_for_status()
+                # Returns: { "payload": [ { "id": 1, "title": "tag", ... } ] }
+                return response.json().get("payload", [])
+            except Exception as e:
+                print(f"Error fetching all labels: {e}")
+                return []
+
+    async def add_label_to_contact(self, contact_id: int, label: str):
+        """
+        Add a specified label to a contact in Chatwoot.
+        In Chatwoot, this endpoint typically expects an array of labels.
+        """
+        if not self.api_token:
+            return None
+
+        # First, we need to know existing labels if we want to APPEND.
+        # However, the POST /labels endpoint on a contact usually appends.
+        # Let's check: Chatwoot API docs for "Add Labels to a Contact" say payload: { "labels": ["label1"] }
+        payload = {"labels": [label]}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/contacts/{contact_id}/labels",
+                    headers=self.headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                print(f"Error adding label to contact {contact_id}: {e}")
+                return None
+
+    async def add_label_to_conversation(self, conversation_id: int, label: str):
+        """
+        Add a specified label to a conversation in Chatwoot.
+        In Chatwoot, this endpoint typically expects an array of labels.
+        """
+        if not self.api_token:
+            return None
+
+        payload = {"labels": [label]}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/conversations/{conversation_id}/labels",
+                    headers=self.headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                print(f"Error adding label to conversation {conversation_id}: {e}")
+                return None
+
+

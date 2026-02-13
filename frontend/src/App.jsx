@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FiInfo, FiLayers, FiTrash2, FiEdit2, FiPlay, FiCheck, FiActivity } from 'react-icons/fi';
 import { API_URL } from './config';
 import { Toaster, toast } from 'react-hot-toast';
 import FunnelBuilder from './components/FunnelBuilder';
@@ -12,7 +13,12 @@ import Sidebar from './components/Sidebar';
 import ClientModal from './components/ClientModal';
 import BlockedContacts from './components/BlockedContacts';
 import Users from './pages/Users';
+import VisualFlowBuilder from './components/VisualFlowBuilder';
 import ConnectionStatus from './components/ConnectionStatus';
+import SchedulePage from './pages/SchedulePage';
+import TemplateCreator from './components/TemplateCreator';
+import IncomingWebhooks from './components/IncomingWebhooks';
+import Monitoring from './pages/Monitoring';
 import { AuthProvider, useAuth, fetchWithAuth } from './AuthContext';
 import { ClientProvider, useClient } from './contexts/ClientContext';
 import ProtectedRoute from './ProtectedRoute';
@@ -34,6 +40,14 @@ function AppContent() {
   const [selectedInbox, setSelectedInbox] = useState(null);
   const [triggerStatus, setTriggerStatus] = useState(null);
 
+  // Progress Modal State
+  const [progressModal, setProgressModal] = useState({
+    isOpen: false,
+    contacts: [],
+    status: 'idle',
+    isScheduled: false
+  });
+
   // Scheduling States
   const [scheduleMode, setScheduleMode] = useState(false);
   const [scheduledTime, setScheduledTime] = useState('');
@@ -47,6 +61,8 @@ function AppContent() {
   const [funnelToDelete, setFunnelToDelete] = useState(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [selectedFunnelIds, setSelectedFunnelIds] = useState([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
 
   // Trigger History Refresh State
   const [triggerHistoryRefreshKey, setTriggerHistoryRefreshKey] = useState(0);
@@ -54,6 +70,7 @@ function AppContent() {
 
   // Client Name State
   const [clientName, setClientName] = useState('');
+  const [appBranding, setAppBranding] = useState({ name: 'ZapVoice', logo: null, logoSize: 'medium' });
 
   useEffect(() => {
     if (activeClient) {
@@ -62,9 +79,20 @@ function AppContent() {
     }
   }, [activeClient, settingsRefreshKey]);
 
+  useEffect(() => {
+    if (appBranding.name) {
+      document.title = `${appBranding.name} - Chatwoot Automation`;
+    }
+  }, [appBranding]);
+
+  useEffect(() => {
+    if (user && user.role === 'user' && currentView !== 'history') {
+      setCurrentView('history');
+    }
+  }, [user]);
+
   const fetchSettings = async () => {
     if (!activeClient) return;
-
     try {
       const res = await fetchWithAuth(`${API_URL}/settings/`, {}, activeClient.id);
       if (res.ok) {
@@ -72,6 +100,11 @@ function AppContent() {
         if (data.CLIENT_NAME) {
           setClientName(data.CLIENT_NAME);
         }
+        setAppBranding({
+          name: data.APP_NAME || 'ZapVoice',
+          logo: data.APP_LOGO || null,
+          logoSize: data.APP_LOGO_SIZE || 'medium'
+        });
       }
     } catch (err) {
       console.error("Erro ao buscar configurações:", err);
@@ -80,7 +113,6 @@ function AppContent() {
 
   const fetchFunnels = async () => {
     if (!activeClient) return;
-
     try {
       const res = await fetchWithAuth(`${API_URL}/funnels`, {}, activeClient.id);
       const data = await res.json();
@@ -96,36 +128,32 @@ function AppContent() {
     }
   };
 
-  const handleSaveFunnel = async (funnelData) => {
-    const loadingToast = toast.loading(editingFunnel ? "Atualizando funil..." : "Criando funil...");
+  const handleCreateFunnel = async () => {
+    const loadingToast = toast.loading("Criando novo funil...");
     try {
-      let url = `${API_URL}/funnels`;
-      let method = 'POST';
-
-      if (editingFunnel) {
-        url = `${API_URL}/funnels/${editingFunnel.id}`;
-        method = 'PUT';
-      }
-
-      const res = await fetchWithAuth(url, {
-        method: method,
+      const res = await fetchWithAuth(`${API_URL}/funnels`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(funnelData),
+        body: JSON.stringify({
+          name: `Novo Funil ${new Date().toLocaleString()}`,
+          description: "Criado via Visual Builder",
+          steps: []
+        })
       }, activeClient?.id);
 
       if (res.ok) {
-        setShowBuilder(false);
-        setEditingFunnel(null);
-        fetchFunnels();
+        const newFunnel = await res.json();
+        setEditingFunnel(newFunnel);
+        setShowBuilder(true);
         toast.dismiss(loadingToast);
-        toast.success(editingFunnel ? "Funil atualizado com sucesso!" : "Funil criado com sucesso!");
+        toast.success("Funil criado! Pode editar.");
       } else {
-        throw new Error('Falha ao salvar');
+        throw new Error("Erro ao criar funil inicial");
       }
-    } catch (err) {
-      console.error("Erro ao salvar funil:", err);
+    } catch (e) {
+      console.error(e);
       toast.dismiss(loadingToast);
-      toast.error("Erro ao salvar o funil.");
+      toast.error("Erro ao iniciar novo funil");
     }
   };
 
@@ -144,7 +172,6 @@ function AppContent() {
 
   const handleDelete = async () => {
     if (!funnelToDelete) return;
-
     const loadingToast = toast.loading("Excluindo funil...");
     try {
       const res = await fetchWithAuth(`${API_URL}/funnels/${funnelToDelete}`, {
@@ -169,6 +196,54 @@ function AppContent() {
     }
   };
 
+  const toggleFunnelSelection = (funnelId, e) => {
+    e.stopPropagation();
+    setSelectedFunnelIds(prev =>
+      prev.includes(funnelId)
+        ? prev.filter(id => id !== funnelId)
+        : [...prev, funnelId]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedFunnelIds.length === 0) return;
+    const loadingToast = toast.loading(`Excluindo ${selectedFunnelIds.length} funis...`);
+    try {
+      const res = await fetchWithAuth(`${API_URL}/funnels/bulk`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ funnel_ids: selectedFunnelIds }),
+      }, activeClient?.id);
+
+      if (res.ok) {
+        fetchFunnels();
+        const deletedIds = new Set(selectedFunnelIds);
+        if (selectedFunnel && deletedIds.has(selectedFunnel.id)) setSelectedFunnel(null);
+        if (editingFunnel && deletedIds.has(editingFunnel.id)) {
+          setEditingFunnel(null);
+          setShowBuilder(false);
+        }
+        setSelectedFunnelIds([]);
+        toast.dismiss(loadingToast);
+        toast.success("Funis excluídos com sucesso.");
+      } else {
+        throw new Error("Erro ao excluir funis");
+      }
+    } catch (err) {
+      console.error("Erro ao excluir funis:", err);
+      toast.dismiss(loadingToast);
+      toast.error("Erro ao excluir funis.");
+    }
+  };
+
+  const toggleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedFunnelIds(funnels.map(f => f.id));
+    } else {
+      setSelectedFunnelIds([]);
+    }
+  };
+
   const handleTrigger = async () => {
     if (!selectedFunnel || selectedConversations.length === 0) return;
     if (scheduleMode && !scheduledTime) {
@@ -176,12 +251,19 @@ function AppContent() {
       return;
     }
 
+    // ABRIR MODAL
+    setProgressModal({
+      isOpen: true,
+      contacts: selectedConversations,
+      status: 'sending',
+      isScheduled: !!scheduleMode
+    });
+
     const total = selectedConversations.length;
     const useBulkEndpoint = total > 1 || scheduleMode;
 
-    if (useBulkEndpoint) {
-      setTriggerStatus('Processando...');
-      try {
+    try {
+      if (useBulkEndpoint) {
         const contactName = total === 1
           ? (selectedConversations[0].contact_name || selectedConversations[0].phone || 'Contato')
           : `Disparo em Massa (${total} contatos)`;
@@ -212,71 +294,52 @@ function AppContent() {
           throw new Error(err.detail || 'Erro ao processar disparo');
         }
 
-        toast.success(scheduleMode ? "Agendamento realizado com sucesso!" : "Disparo em massa iniciado!");
-        setTriggerStatus(scheduleMode ? 'Agendado!' : 'Concluído!');
+        // SUCESSO BULK
+        if (scheduleMode) toast.success("Agendamento realizado!");
         setTriggerHistoryRefreshKey(prev => prev + 1);
 
-      } catch (error) {
-        console.error(error);
-        toast.error(error.message);
-        setTriggerStatus('Erro');
-      } finally {
-        setTimeout(() => setTriggerStatus(null), 3000);
+        // Atualiza Modal para Done
+        setProgressModal(prev => ({ ...prev, status: 'done' }));
+
+      } else {
+        // Disparo Único Imediato
+        const conv = selectedConversations[0];
+        const convId = conv.conversation_id || '0';
+        let url = `${API_URL}/funnels/${selectedFunnel.id}/trigger?conversation_id=${convId}`;
+        const name = conv.contact_name || conv.phone;
+        const phone = conv.phone;
+        if (selectedInbox) url += `&inbox_id=${selectedInbox}`;
+        url += `&contact_name=${encodeURIComponent(name)}&contact_phone=${encodeURIComponent(phone)}`;
+
+        const response = await fetchWithAuth(url, { method: 'POST' }, activeClient?.id);
+        if (!response.ok) throw new Error('Falha ao disparar funil');
+        await response.json();
+
+        // SUCESSO SINGLE
+        setTriggerHistoryRefreshKey(prev => prev + 1);
+        setProgressModal(prev => ({ ...prev, status: 'done' }));
       }
-      return;
-    }
-
-    // Disparo Único Imediato
-    const conv = selectedConversations[0];
-    setTriggerStatus('Inicializando...');
-
-    try {
-      const convId = conv.conversation_id || '0';
-      let url = `${API_URL}/funnels/${selectedFunnel.id}/trigger?conversation_id=${convId}`;
-
-      const name = conv.contact_name || conv.phone;
-      const phone = conv.phone;
-
-      if (selectedInbox) {
-        url += `&inbox_id=${selectedInbox}`;
-      }
-
-      url += `&contact_name=${encodeURIComponent(name)}&contact_phone=${encodeURIComponent(phone)}`;
-
-      console.log("🚀 Disparando funil - URL:", url);
-      const response = await fetchWithAuth(url, { method: 'POST' }, activeClient?.id);
-      if (!response.ok) throw new Error('Falha ao disparar funil');
-
-      await response.json();
-
-      toast.success(`Disparado para ${name}`);
-      setTriggerStatus('Concluído!');
-      setTriggerHistoryRefreshKey(prev => prev + 1);
 
     } catch (error) {
       console.error(error);
-      toast.error(`Erro ao enviar para ${conv.meta?.sender?.name}`);
-      setTriggerStatus('Erro');
-    } finally {
-      setTimeout(() => setTriggerStatus(null), 3000);
+      toast.error(error.message);
+      // Fecha modal em caso de erro para não travar
+      setProgressModal({ isOpen: false, contacts: [], status: 'idle' });
     }
+  };
+
+  const handleViewChange = (view) => {
+    setCurrentView(view);
+    setShowBuilder(false);
+    setEditingFunnel(null);
   };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 dark:text-gray-100 overflow-hidden">
       <Toaster position="top-right" reverseOrder={false} />
 
-      <ClientModal
-        isOpen={isClientModalOpen}
-        onClose={() => setIsClientModalOpen(false)}
-      />
-
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        onSaved={() => setSettingsRefreshKey(prev => prev + 1)}
-      />
-
+      <ClientModal isOpen={isClientModalOpen} onClose={() => setIsClientModalOpen(false)} />
+      <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} onSaved={() => setSettingsRefreshKey(prev => prev + 1)} />
       <ConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -286,24 +349,39 @@ function AppContent() {
         confirmText="Excluir"
         isDangerous={true}
       />
+      <ConfirmModal
+        isOpen={isBulkDeleteModalOpen}
+        onClose={() => setIsBulkDeleteModalOpen(false)}
+        onConfirm={handleBulkDelete}
+        title="Excluir Selecionados"
+        message={`Tem certeza que deseja excluir ${selectedFunnelIds.length} funis selecionados? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir Todos"
+        isDangerous={true}
+      />
 
-      {/* Sidebar */}
       <Sidebar
         activeView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={handleViewChange}
         onLogout={logout}
         onSettings={() => setIsSettingsModalOpen(true)}
         user={user}
         clientName={clientName}
         onClientCreate={() => setIsClientModalOpen(true)}
+        appBranding={appBranding}
       />
 
-      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto">
-        <div className="p-8">
-          {/* Header */}
-          <header className="mb-8">
-            <div className="flex justify-between items-start">
+        {!activeClient ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 text-center animate-fade-in">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
+              <FiLayers size={40} className="text-gray-300 dark:text-gray-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Inicie uma Sessão</h2>
+            <p className="max-w-xs text-sm leading-relaxed">Selecione um cliente ativo no menu ao lado.</p>
+          </div>
+        ) : (
+          <div className="p-8">
+            <header className="mb-8 flex justify-between items-start">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                   {currentView === 'bulk_sender' && 'Disparo em Massa'}
@@ -311,295 +389,351 @@ function AppContent() {
                   {currentView === 'history' && 'Histórico de Disparos'}
                   {currentView === 'blocked' && 'Contatos Bloqueados'}
                   {currentView === 'users' && 'Gestão de Usuários'}
+                  {currentView === 'templates' && 'Gerenciar Templates'}
+                  {currentView === 'schedules' && 'Agenda de Disparos'}
+                  {currentView === 'monitoring' && 'Status do Sistema'}
                 </h1>
                 {clientName && currentView === 'bulk_sender' && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Api Oficial do WhatsApp do cliente {clientName}
-                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Api Oficial do WhatsApp do cliente {clientName}</p>
                 )}
               </div>
               <ConnectionStatus refreshKey={settingsRefreshKey} />
-            </div>
-          </header>
+            </header>
 
-          {/* View Content */}
-          {currentView === 'blocked' && (
-            <BlockedContacts />
-          )}
+            {currentView === 'blocked' && <BlockedContacts />}
+            {currentView === 'users' && <Users />}
+            {currentView === 'schedules' && <SchedulePage />}
+            {currentView === 'monitoring' && <Monitoring />}
+            {currentView === 'bulk_sender' && (
+              <div className="space-y-8">
+                <TemplateBulkSender onSuccess={() => setTriggerHistoryRefreshKey(prev => prev + 1)} refreshKey={settingsRefreshKey} onViewChange={handleViewChange} />
+              </div>
+            )}
 
-          {currentView === 'users' && (
-            <Users />
-          )}
-
-          {currentView === 'bulk_sender' && (
-            <div className="space-y-8">
-              <TemplateBulkSender
-                onSuccess={() => setTriggerHistoryRefreshKey(prev => prev + 1)}
-                refreshKey={settingsRefreshKey}
-              />
-            </div>
-          )}
-
-          {currentView === 'funnels' && (
-            <>
-              {showBuilder ? (
-                <FunnelBuilder
-                  onSave={handleSaveFunnel}
-                  initialData={editingFunnel}
-                  existingFunnels={funnels}
-                  onCancel={() => {
-                    setShowBuilder(false);
-                    setEditingFunnel(null);
-                  }}
-                />
-              ) : (
-                <div className="space-y-8">
-                  {/* Action Bar */}
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => {
-                        setShowBuilder(true);
-                        setEditingFunnel(null);
-                      }}
-                      className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all active:scale-95 flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                      </svg>
-                      Novo Funil
-                    </button>
+            {currentView === 'funnels' && (
+              <>
+                {showBuilder ? (
+                  <div className="h-full">
+                    <VisualFlowBuilder
+                      funnelId={editingFunnel?.id}
+                      onBack={() => { setShowBuilder(false); setEditingFunnel(null); fetchFunnels(); }}
+                      onSave={fetchFunnels}
+                    />
                   </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Lista de Funis */}
-                    <div className="lg:col-span-7 space-y-4">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-200">
-                        <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                          <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                              <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
-                            </svg>
-                            Seus Funis
-                          </h2>
-                        </div>
-
-                        <div className="p-4 space-y-3">
-                          {funnels.length === 0 && (
-                            <div className="text-center py-10 text-gray-400">
-                              <p>Nenhum funil criado ainda.</p>
-                              <button onClick={() => setShowBuilder(true)} className="text-blue-600 font-medium hover:underline mt-2">Criar o primeiro</button>
-                            </div>
-                          )}
-
-                          {funnels.map(funnel => (
-                            <div
-                              key={funnel.id}
-                              onClick={() => setSelectedFunnel(funnel)}
-                              className={`group p-4 rounded-xl cursor-pointer transition-all duration-200 border-2 flex justify-between items-center bg-white dark:bg-gray-700/50 hover:shadow-lg ${selectedFunnel?.id === funnel.id
-                                ? 'border-blue-500 shadow-md ring-1 ring-blue-500/20'
-                                : 'border-transparent hover:border-blue-200 dark:hover:border-gray-500 border-gray-100 dark:border-gray-700 shadow-sm'
-                                }`}
+                ) : (
+                  <div className="space-y-8">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        {selectedFunnelIds.length > 0 && (
+                          <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-200">
+                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{selectedFunnelIds.length} selecionado(s)</span>
+                            <button
+                              onClick={() => setIsBulkDeleteModalOpen(true)}
+                              className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg font-bold hover:bg-red-200"
                             >
-                              <div>
-                                <h3 className={`font-bold text-lg ${selectedFunnel?.id === funnel.id ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>
-                                  {funnel.name}
-                                </h3>
-                                <div className="flex items-center gap-3 mt-1">
-                                  <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-medium">
-                                    {funnel.steps?.length || 0} etapas
-                                  </span>
-                                  {funnel.trigger_phrase && (
-                                    <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded font-medium flex items-center gap-1 border border-yellow-200">
-                                      ⚡ Gatilho Automático
-                                    </span>
-                                  )}
-                                  {funnel.description && <span className="text-sm text-gray-400 truncate max-w-[200px]">{funnel.description}</span>}
-                                </div>
-                              </div>
-
-                              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
-                                <button
-                                  onClick={(e) => handleEdit(funnel, e)}
-                                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                  title="Editar Funil"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={(e) => confirmDelete(funnel.id, e)}
-                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Excluir Funil"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                              <FiTrash2 size={16} className="inline mr-2" /> Excluir
+                            </button>
+                            <button onClick={() => setSelectedFunnelIds([])} className="text-sm text-gray-500 hover:underline">Limpar</button>
+                          </div>
+                        )}
                       </div>
+                      <button onClick={handleCreateFunnel} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all active:scale-95 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                        Novo Funil
+                      </button>
                     </div>
 
-                    {/* Painel de Disparo */}
-                    <div className="lg:col-span-5">
-                      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-blue-100 dark:border-gray-700 sticky top-8 transition-colors duration-200">
-                        <div className="rounded-t-2xl p-6 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
-                          <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                            </svg>
-                            Disparar Funil
-                          </h2>
-                        </div>
-
-                        <div className="p-6 space-y-6">
-                          {!selectedFunnel ? (
-                            <div className="flex flex-col items-center justify-center py-10 text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-dashed border-gray-200 dark:border-gray-600">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-3 text-gray-300 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                              </svg>
-                              <p>Selecione um funil para configurar o disparo.</p>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                                <label className="block text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Funil Selecionado</label>
-                                <div className="text-lg font-bold text-gray-900 dark:text-white">{selectedFunnel.name}</div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">{selectedFunnel.steps?.length || 0} etapas configuradas</div>
-                                <button
-                                  onClick={() => setSelectedFunnel(null)}
-                                  className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 underline mt-1"
-                                >
-                                  Trocar funil
-                                </button>
-                              </div>
-
-                              <div className="space-y-4">
-                                <InboxSelector onSelect={setSelectedInbox} />
-                                <RecipientSelector
-                                  selectedInbox={selectedInbox}
-                                  onSelect={setSelectedConversations}
-                                  requireOpenWindow={true}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                      <div className="lg:col-span-7 space-y-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                          <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                              {funnels.length > 0 && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedFunnelIds.length === funnels.length && funnels.length > 0}
+                                  onChange={toggleSelectAll}
+                                  className="w-5 h-5 text-blue-600 rounded border-gray-300"
+                                  title="Selecionar Todos"
                                 />
-
-                                {/* Agendamento */}
-                                <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                                  <label className="flex items-center gap-2 cursor-pointer mb-3">
-                                    <input
-                                      type="checkbox"
-                                      checked={scheduleMode}
-                                      onChange={(e) => setScheduleMode(e.target.checked)}
-                                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Agendar disparo para depois?</span>
-                                  </label>
-
-                                  {scheduleMode && (
-                                    <div className="animated-fade-in">
-                                      <label className="block text-xs font-semibold text-gray-500 mb-1">DATA E HORA DO DISPARO</label>
-                                      <input
-                                        type="datetime-local"
-                                        min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
-                                        value={scheduledTime}
-                                        onChange={(e) => {
-                                          const selected = e.target.value;
-                                          if (selected) {
-                                            const selectedDate = new Date(selected);
-                                            const now = new Date();
-                                            if (selectedDate < now) {
-                                              toast.error("Não é possível agendar para o passado.");
-                                              setScheduledTime('');
-                                              return;
-                                            }
-                                          }
-                                          setScheduledTime(selected);
-                                        }}
-                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                      />
-                                      <p className="text-xs text-gray-400 mt-1">O funil será disparado automaticamente neste horário.</p>
+                              )}
+                              <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">Seus Funis</h2>
+                            </div>
+                            {selectedFunnelIds.length > 0 && (
+                              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                                {selectedFunnelIds.length} de {funnels.length} selecionados
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-4 space-y-3">
+                            {funnels.length === 0 && (
+                              <div className="text-center py-10 text-gray-400">
+                                <p>Nenhum funil criado ainda.</p>
+                                <button onClick={handleCreateFunnel} className="text-blue-600 font-medium hover:underline mt-2">Criar o primeiro</button>
+                              </div>
+                            )}
+                            {funnels.map(funnel => (
+                              <div
+                                key={funnel.id}
+                                className={`group p-4 rounded-xl transition-all border-2 flex justify-between items-center ${selectedFunnel?.id === funnel.id ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100 dark:border-gray-700'}`}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedFunnelIds.includes(funnel.id)}
+                                    onChange={(e) => toggleFunnelSelection(funnel.id, e)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-5 h-5 text-blue-600 rounded border-gray-300"
+                                  />
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h3 className={`font-bold text-lg ${selectedFunnel?.id === funnel.id ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>{funnel.name}</h3>
+                                      {funnel.steps?.nodes?.some(n => n.type === 'templateNode') && (
+                                        <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-bold uppercase border border-purple-200 dark:border-purple-800/50">
+                                          Template
+                                        </span>
+                                      )}
                                     </div>
-                                  )}
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                      <span>{Array.isArray(funnel.steps) ? funnel.steps.length : (funnel.steps?.nodes?.length || 0)} etapas</span>
+                                      {funnel.trigger_phrase && <span className="text-yellow-600">⚡ Gatilho</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (funnel.steps?.nodes?.some(n => n.type === 'templateNode')) {
+                                        toast.error("Funis de Template devem ser disparados pela aba 'Disparo em Massa'.", {
+                                          duration: 5000,
+                                          icon: '⚠️'
+                                        });
+                                        return;
+                                      }
+                                      setSelectedFunnel(funnel);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${funnel.steps?.nodes?.some(n => n.type === 'templateNode')
+                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                                      : selectedFunnel?.id === funnel.id
+                                        ? 'bg-green-100 text-green-700 shadow-sm'
+                                        : 'hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600'
+                                      }`}
+                                    title={funnel.steps?.nodes?.some(n => n.type === 'templateNode') ? "Use o Disparo em Massa" : "Disparar Funil"}
+                                  >
+                                    <FiPlay size={16} />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Disparar</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => handleEdit(funnel, e)}
+                                    className="px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-blue-600 flex items-center gap-1.5 transition-all"
+                                    title="Editar Funil"
+                                  >
+                                    <FiEdit2 size={16} />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Editar</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => confirmDelete(funnel.id, e)}
+                                    className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-600 transition-all"
+                                    title="Excluir"
+                                  >
+                                    <FiTrash2 size={16} />
+                                  </button>
                                 </div>
                               </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
 
-                              {(selectedConversations.length > 1 || scheduleMode) && (
-                                <div className="grid grid-cols-2 gap-4 animated-fade-in mt-4">
-                                  <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">INTERVALO (SEG)</label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        value={delay}
-                                        onChange={(e) => setDelay(e.target.value)}
-                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                      />
-                                      <span className="text-gray-400 text-xs" title="Tempo de espera entre cada envio (evita bloqueios)">ℹ️</span>
-                                    </div>
+                      <div className="lg:col-span-5">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-blue-100 dark:border-gray-700 sticky top-8 p-6">
+                          <h2 className="text-xl font-bold mb-6 flex items-center gap-2">Disparar Funil</h2>
+                          {!selectedFunnel ? (
+                            <p className="text-gray-400 text-center py-10 border border-dashed rounded-xl">Selecione um funil para configurar o disparo.</p>
+                          ) : (
+                            <div className="space-y-6">
+                              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                                <div className="font-bold text-lg">{selectedFunnel.name}</div>
+                                <button onClick={() => setSelectedFunnel(null)} className="text-xs text-blue-500 underline">Trocar funil</button>
+                              </div>
+                              <div className="hidden">
+                                <InboxSelector onSelect={setSelectedInbox} />
+                              </div>
+                              <RecipientSelector selectedInbox={selectedInbox} onSelect={setSelectedConversations} requireOpenWindow={true} />
+
+                              <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border">
+                                <label className="flex items-center gap-2 cursor-pointer mb-3">
+                                  <input type="checkbox" checked={scheduleMode} onChange={(e) => setScheduleMode(e.target.checked)} className="w-4 h-4" />
+                                  <span className="text-sm">Agendar disparo?</span>
+                                </label>
+                                {scheduleMode && (
+                                  <div className="space-y-3">
+                                    <input
+                                      type="datetime-local"
+                                      value={scheduledTime}
+                                      onChange={(e) => setScheduledTime(e.target.value)}
+                                      className="w-full p-2 border rounded text-sm bg-white dark:bg-gray-800 dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                    {(() => {
+                                      if (!scheduledTime || !selectedFunnel) return null;
+                                      const now = new Date();
+                                      const sched = new Date(scheduledTime);
+                                      const diffHours = (sched - now) / (1000 * 60 * 60);
+
+                                      // Verificamos se o funil começa com template
+                                      // A estrutura do funnel.steps.nodes tem nodes[i].data.isStart e nodes[i].type
+                                      const steps = selectedFunnel.steps;
+                                      const nodes = steps?.nodes || [];
+                                      const startNode = nodes.find(n => n.data?.isStart);
+                                      const startsWithTemplate = startNode?.type === 'templateNode'; // No seu builder atual o templateNode é usado no BulkSender, mas no Funil os tipos são outros.
+
+                                      // No VisualFlowBuilder, os tipos são messageNode, mediaNode, delayNode, conditionNode, randomizerNode, linkFunnelNode
+                                      // Atualmente não há um "TemplateNode" direto no VisualFlowBuilder, então qualquer agendamento > 24h é arriscado.
+
+                                      if (diffHours >= 24) {
+                                        return (
+                                          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                            <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
+                                              ⚠️ <b>Atenção:</b> Disparo agendado para mais de 24h. Se a janela de contato fechar até lá, o envio falhará, a menos que o funil inicie com um Template Oficial.
+                                            </p>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
-                                  <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">CONCORRÊNCIA</label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        max="50"
-                                        value={concurrency}
-                                        onChange={(e) => setConcurrency(e.target.value)}
-                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                      />
-                                      <span className="text-gray-400 text-xs" title="Quantos contatos recebem ao mesmo tempo">ℹ️</span>
-                                    </div>
-                                  </div>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">INTERVALO (SEG)</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={delay}
+                                    onChange={(e) => setDelay(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
                                 </div>
-                              )}
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">CONCORRÊNCIA</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={concurrency}
+                                    onChange={(e) => setConcurrency(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+                              </div>
 
                               <button
                                 onClick={handleTrigger}
                                 disabled={selectedConversations.length === 0 || (scheduleMode && !scheduledTime)}
-                                className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all transform flex items-center justify-center gap-2 ${(selectedConversations.length === 0 || (scheduleMode && !scheduledTime))
-                                  ? 'bg-gray-300 cursor-not-allowed shadow-none'
-                                  : scheduleMode
-                                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 hover:-translate-y-1 hover:shadow-xl active:translate-y-0'
-                                    : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:-translate-y-1 hover:shadow-xl active:translate-y-0'
-                                  }`}
+                                className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${selectedConversations.length === 0
+                                  ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                                  : 'bg-blue-600 hover:bg-blue-700 active:scale-95'}`}
                               >
-                                {(triggerStatus?.startsWith('Processando') || triggerStatus === 'Inicializando...') ? (
-                                  <>
-                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    {scheduleMode ? 'Agendando...' : 'Enviando...'}
-                                  </>
-                                ) : (
-                                  <span className="uppercase tracking-wide">
-                                    {(!triggerStatus?.startsWith('Processando') && !triggerStatus?.startsWith('Inicializando') && triggerStatus) || (scheduleMode ? 'CONFIRMAR AGENDAMENTO 📅' : 'DISPARAR AGORA 🚀')}
-                                  </span>
-                                )}
+                                {triggerStatus || (scheduleMode ? 'AGENDAR' : 'DISPARAR AGORA')}
                               </button>
-                            </>
+                            </div>
                           )}
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
 
-          {currentView === 'history' && (
-            <div className="space-y-8">
-              <TriggerHistory refreshKey={triggerHistoryRefreshKey} />
+            {currentView === 'templates' && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <TemplateCreator onSuccess={() => {
+                  setCurrentView('bulk_sender');
+                  // Trigger a refresh of templates in other components if needed
+                }} />
+              </div>
+            )}
+
+            {currentView === 'history' && (
+              <div className="space-y-8">
+                <TriggerHistory refreshKey={triggerHistoryRefreshKey} />
+              </div>
+            )}
+
+            {currentView === 'incoming_webhooks' && (
+              <IncomingWebhooks />
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* MODAL DE PROGRESSO DE DISPARO */}
+      {progressModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 fade-in">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-700 text-center">
+              <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${progressModal.status === 'done' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600 animate-pulse'
+                }`}>
+                {progressModal.status === 'done' ? <FiCheck size={32} /> : <FiActivity size={32} />}
+              </div>
+              <h3 className="text-xl font-bold dark:text-white">
+                {progressModal.status === 'sending' ? 'Processando...' : (progressModal.isScheduled ? 'Agendamento Realizado!' : 'Disparo Concluído!')}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {progressModal.status === 'sending'
+                  ? 'Processando sua solicitação...'
+                  : (progressModal.isScheduled
+                    ? `${progressModal.contacts.length} contatos foram agendados para a data definida.`
+                    : `${progressModal.contacts.length} contatos foram adicionados à fila.`)}
+              </p>
             </div>
-          )}
+
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900/50">
+              <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 px-2">Destinatários</h4>
+              <div className="space-y-2">
+                {progressModal.contacts.map((c, i) => (
+                  <div key={i} className="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${progressModal.status === 'done' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      <div>
+                        <div className="font-medium text-sm text-gray-800 dark:text-gray-200">{c.contact_name || 'Sem Nome'}</div>
+                        <div className="text-xs text-gray-500 font-mono">{c.phone}</div>
+                      </div>
+                    </div>
+                    {progressModal.status === 'done' && (
+                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded">
+                        {progressModal.isScheduled ? 'AGENDADO' : 'NA FILA'}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 dark:border-gray-700">
+              <button
+                disabled={progressModal.status === 'sending'}
+                onClick={() => {
+                  setProgressModal({ isOpen: false, contacts: [], status: 'idle', isScheduled: false });
+                  setSelectedFunnel(null); // RESET OBRIGATÓRIO AQUI
+                  setSelectedConversations([]);
+                }}
+                className={`w-full py-3 rounded-xl font-bold text-white transition-all ${progressModal.status === 'sending'
+                  ? 'bg-gray-300 cursor-not-allowed'
+                  : 'bg-gray-900 hover:bg-black dark:bg-gray-700 dark:hover:bg-gray-600'
+                  }`}
+              >
+                {progressModal.status === 'sending' ? 'Aguarde...' : 'Sair e Voltar'}
+              </button>
+            </div>
+          </div>
         </div>
-      </main >
-    </div >
+      )}
+
+    </div>
   );
 }
 

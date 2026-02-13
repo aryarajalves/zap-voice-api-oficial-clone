@@ -1,0 +1,12 @@
+﻿ID    | Status       | Phone           | Funnel     | Node                
+--------------------------------------------------------------------------------
+185   | completed    | 558596123586    | 57         | START               
+184   | completed    | 558596123586    | 57         | START               
+183   | completed    | 558596123586    | 57         | START               
+182   | completed    | 558596123586    | 52         | node_1769833260874  
+181   | completed    | None            | None       | START               
+180   | completed    | None            | 54         | START               
+176   | completed    | None            | None       | START               
+175   | completed    | 558596123586    | 52         | node_1769833260874  
+174   | completed    | 558596123586    | 52         | node_1769833260874  
+173   | completed    | None            | None       | START               

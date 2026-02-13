@@ -10,7 +10,14 @@ def create_database_if_not_exists():
     """Cria o banco de dados 'zapvoice' se ele não existir"""
     
     # Pegar a DATABASE_URL do ambiente
-    database_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/zapvoice")
+    database_url = os.getenv("DATABASE_URL")
+    
+    if database_url:
+        database_url = database_url.strip('"').strip("'")
+    
+    if not database_url:
+        print("❌ ERROR: DATABASE_URL not found in environment variables!", flush=True)
+        return False
     
     # Extrair informações da connection string
     # Formato: postgresql://user:password@host:port/database

@@ -1,0 +1,443 @@
+﻿­ƒöº Gerando configura├º├úo din├ómica para o Frontend...
+  API_URL: http://localhost:8000/api
+  WS_URL: ws://localhost:8000/ws
+Ô£à Arquivo /app/static/dist/env-config.js gerado com sucesso!
+­ƒùä´©Å  Verificando/criando banco de dados PostgreSQL...
+­ƒöì Verificando se o banco de dados 'zapvoice' existe...
+Ô£à Banco de dados 'zapvoice' j├í existe!
+­ƒÅù´©Å  Aplicando migra├º├Áes de esquema...
+Connecting to postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice...
+Ôä╣´©Å Column current_node_id already exists.
+Ôä╣´©Å Column processed_contacts already exists.
+Ôä╣´©Å Column pending_contacts already exists.
+Ôä╣´©Å Column cost_per_unit already exists.
+Ôä╣´©Å Column total_cost already exists.
+Ôä╣´©Å Column total_delivered already exists.
+Ôä╣´©Å Column total_read already exists.
+Ôä╣´©Å Column total_interactions already exists.
+Ôä╣´©Å Column total_blocked already exists.
+Ôä╣´©Å Column updated_at already exists.
+Done!
+­ƒÜÇ Iniciando Backend...
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 11:54:25 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;196m2026-02-02 11:54:25 - rabbitmq_client - ERROR - Erro ao conectar no RabbitMQ: [Errno 111] Connect call failed ('172.22.0.7', 5672)[0m
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 11:54:25 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;196m2026-02-02 11:54:25 - rabbitmq_client - ERROR - Erro ao conectar no RabbitMQ: [Errno 111] Connect call failed ('172.22.0.7', 5672)[0m
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 11:54:25 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;196m2026-02-02 11:54:25 - rabbitmq_client - ERROR - Erro ao conectar no RabbitMQ: [Errno 111] Connect call failed ('172.22.0.7', 5672)[0m
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 11:54:25 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;196m2026-02-02 11:54:25 - rabbitmq_client - ERROR - Erro ao conectar no RabbitMQ: [Errno 111] Connect call failed ('172.22.0.7', 5672)[0m
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 11:54:25 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;196m2026-02-02 11:54:25 - rabbitmq_client - ERROR - Erro ao conectar no RabbitMQ: [Errno 111] Connect call failed ('172.22.0.7', 5672)[0m
+­ƒöº Gerando configura├º├úo din├ómica para o Frontend...
+  API_URL: http://localhost:8000/api
+  WS_URL: ws://localhost:8000/ws
+Ô£à Arquivo /app/static/dist/env-config.js gerado com sucesso!
+­ƒùä´©Å  Verificando/criando banco de dados PostgreSQL...
+­ƒöì Verificando se o banco de dados 'zapvoice' existe...
+Ô£à Banco de dados 'zapvoice' j├í existe!
+­ƒÅù´©Å  Aplicando migra├º├Áes de esquema...
+Connecting to postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice...
+Ôä╣´©Å Column current_node_id already exists.
+Ôä╣´©Å Column processed_contacts already exists.
+Ôä╣´©Å Column pending_contacts already exists.
+Ôä╣´©Å Column cost_per_unit already exists.
+Ôä╣´©Å Column total_cost already exists.
+Ôä╣´©Å Column total_delivered already exists.
+Ôä╣´©Å Column total_read already exists.
+Ôä╣´©Å Column total_interactions already exists.
+Ôä╣´©Å Column total_blocked already exists.
+Ôä╣´©Å Column updated_at already exists.
+Done!
+­ƒÜÇ Iniciando Backend...
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 13:00:52 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;39m2026-02-02 13:00:52 - rabbitmq_client - INFO - Conectado ao RabbitMQ com sucesso![0m
+[38;5;39m2026-02-02 13:00:52 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_bulk_sends (prefetch: 1)[0m
+Starting BULK SEND 177 | Contacts: 1 | Delay: 5s |  Concurrency: 5 | Lang: pt_BR
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+Bulk send 177 CANCELLED by user.
+[38;5;39m2026-02-02 13:00:52 - rabbitmq_client - INFO - Consumidor conectado na fila whatsapp_events (prefetch: 20)[0m
+[38;5;39m2026-02-02 13:00:52 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_funnel_executions (prefetch: 20)[0m
+[38;5;39m2026-02-02 13:00:52 - rabbitmq_client - INFO - Consumidor conectado na fila chatwoot_private_messages (prefetch: 1)[0m
+Starting BULK FUNNEL 180 | Funnel: 54 | Contacts: 1
+Processing funnel batch 0 to 2
+[38;5;226m2026-02-02 13:00:54 - services.bulk - WARNING - ÔÜá´©Å [BULK] Skipped contact with no phone: {'id': 2375, 'meta': {'sender': {'name': '558596123586', 'phone_number': '558596123586'}}, 'inbox_id': 1}[0m
+Bulk funnel 180 COMPLETED.
+Starting BULK SEND 181 | Contacts: 1 | Delay: 5s |  Concurrency: 5 | Lang: pt_BR
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+Processing batch 0 to 5
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: Received components from frontend: []
+================================================================================
+DEBUG: Sending WhatsApp Template 'mensagem_nova_2026' to 558596123586
+DEBUG: API URL: https://graph.facebook.com/v24.0/820516741152724/messages
+DEBUG: Full Payload:
+{
+  "messaging_product": "whatsapp",
+  "to": "558596123586",
+  "type": "template",
+  "template": {
+    "name": "mensagem_nova_2026",
+    "language": {
+      "code": "pt_BR"
+    }
+  }
+}
+================================================================================
+DEBUG: Response Status: 200
+DEBUG: Response Headers: {'content-type': 'application/json; charset=UTF-8', 'vary': 'Origin', 'x-fb-aed': '720', 'x-business-use-case-usage': '{"1946144149291660":[{"type":"whatsapp","call_count":0,"total_cputime":0,"total_time":0,"estimated_time_to_regain_access":0}]}', 'access-control-allow-origin': '*', 'facebook-api-version': 'v24.0', 'strict-transport-security': 'max-age=15552000; preload', 'pragma': 'no-cache', 'cache-control': 'private, no-cache, no-store, must-revalidate', 'expires': 'Sat, 01 Jan 2000 00:00:00 GMT', 'x-fb-request-id': 'AdbOzfZgkdIepIWYBx8Km1X', 'x-fb-trace-id': 'CTan4cKLZZW', 'x-fb-rev': '1032774174', 'x-fb-debug': '9A4ArHZZDpgC2WmPyzyFIRtI4yutvdyQxDh8mQW6o244/zKf+tGj8WqyctRUWt/+SRSImlgnjUJbExnSW++1LA==', 'x-fb-server-load': '13', 'date': 'Mon, 02 Feb 2026 13:15:04 GMT', 'x-fb-connection-quality': 'GOOD; q=0.7, rtt=55, rtx=0, c=10, mss=1392, tbw=3684, tp=-1, tpl=-1, uplat=1160, ullat=0', 'alt-svc': 'h3=":443"; ma=86400', 'connection': 'keep-alive', 'content-length': '206'}
+DEBUG: Response Body:
+{
+  "messaging_product": "whatsapp",
+  "contacts": [
+    {
+      "input": "558596123586",
+      "wa_id": "558596123586"
+    }
+  ],
+  "messages": [
+    {
+      "id": "wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSMUFBNjJDNDFBOTVBODcyRDc0AA==",
+      "message_status": "accepted"
+    }
+  ]
+}
+================================================================================
+SUCCESS: Template sent! WhatsApp accepted the request.
+­ƒôú Enqueueing private message for 558596123586 (Trigger: 181)
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 13:15:02 - rabbitmq_client - INFO - ­ƒôñ Mensagem enviada para fila: chatwoot_private_messages[0m
+Ô£à Private message enqueued successfully for 558596123586
+Bulk send 181 COMPLETED. Sent: 1, Failed: 0
+DEBUG: sending message to https://chatsarah.jords.site/api/v1/accounts/1/conversations/2375/messages
+­ƒöº Gerando configura├º├úo din├ómica para o Frontend...
+  API_URL: http://localhost:8000/api
+  WS_URL: ws://localhost:8000/ws
+Ô£à Arquivo /app/static/dist/env-config.js gerado com sucesso!
+­ƒùä´©Å  Verificando/criando banco de dados PostgreSQL...
+­ƒöì Verificando se o banco de dados 'zapvoice' existe...
+Ô£à Banco de dados 'zapvoice' j├í existe!
+­ƒÅù´©Å  Aplicando migra├º├Áes de esquema...
+Connecting to postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice...
+Ôä╣´©Å Column current_node_id already exists.
+Ôä╣´©Å Column processed_contacts already exists.
+Ôä╣´©Å Column pending_contacts already exists.
+Ôä╣´©Å Column cost_per_unit already exists.
+Ôä╣´©Å Column total_cost already exists.
+Ôä╣´©Å Column total_delivered already exists.
+Ôä╣´©Å Column total_read already exists.
+Ôä╣´©Å Column total_interactions already exists.
+Ôä╣´©Å Column total_blocked already exists.
+Ôä╣´©Å Column updated_at already exists.
+Done!
+­ƒÜÇ Iniciando Backend...
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 14:05:56 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;39m2026-02-02 14:05:56 - rabbitmq_client - INFO - Conectado ao RabbitMQ com sucesso![0m
+[38;5;39m2026-02-02 14:05:56 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_bulk_sends (prefetch: 1)[0m
+[38;5;39m2026-02-02 14:05:56 - rabbitmq_client - INFO - Consumidor conectado na fila whatsapp_events (prefetch: 20)[0m
+[38;5;39m2026-02-02 14:05:56 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_funnel_executions (prefetch: 20)[0m
+[38;5;39m2026-02-02 14:05:56 - rabbitmq_client - INFO - Consumidor conectado na fila chatwoot_private_messages (prefetch: 1)[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 15:10:59 - FunnelEngine - INFO - ÔÜÖ´©Å Starting funnel Novo Funil 31/01/2026 for conversation 2375 (Trigger 182)[0m
+ÔÜÖ´©Å [ENGINE] Starting funnel 52 (Name: Novo Funil 31/01/2026) | Trigger: 182 | Phone: 558596123586
+[38;5;39m2026-02-02 15:10:59 - FunnelEngine - INFO - Ôä╣´©Å Trigger 182 is processing (Scheduler handoff? Diff: 0.129272s). Proceeding...[0m
+[38;5;39m2026-02-02 15:10:59 - FunnelEngine - INFO - ­ƒò©´©Å Executing GRAPH Funnel[0m
+­ƒò©´©Å [ENGINE] Graph Funnel Execution Started for Trigger 182
+[38;5;39m2026-02-02 15:10:59 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=messageNode ID=start[0m
+­ƒôì [ENGINE] Processing Node: messageNode (start) for 558596123586
+[38;5;39m2026-02-02 15:10:59 - FunnelEngine - INFO - ­ƒô® Sending Message Node start. Content: 'Funil 05'[0m
+DEBUG: sending message to https://chatsarah.jords.site/api/v1/accounts/1/conversations/2375/messages
+[38;5;39m2026-02-02 15:11:00 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=delayNode ID=node_1769833250966[0m
+­ƒôì [ENGINE] Processing Node: delayNode (node_1769833250966) for 558596123586
+[38;5;39m2026-02-02 15:11:00 - FunnelEngine - INFO - ÔÅ▒´©Å Short delay (10s)...[0m
+[38;5;39m2026-02-02 15:11:10 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=mediaNode ID=node_1769833260874[0m
+­ƒôì [ENGINE] Processing Node: mediaNode (node_1769833260874) for 558596123586
+DEBUG: Resolving path for URL http://127.0.0.1:8000/static/uploads/20a78b18-5282-4c53-95c1-491182a0bbcc.jpeg -> /app/static/uploads/20a78b18-5282-4c53-95c1-491182a0bbcc.jpeg
+DEBUG: File exists: True
+[38;5;39m2026-02-02 15:11:11 - FunnelEngine - INFO - ­ƒÅü End of path reached.[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 15:35:17 - FunnelEngine - INFO - ÔÜÖ´©Å Starting funnel Funil - Template for conversation 2375 (Trigger 183)[0m
+ÔÜÖ´©Å [ENGINE] Starting funnel 57 (Name: Funil - Template) | Trigger: 183 | Phone: 558596123586
+[38;5;39m2026-02-02 15:35:17 - FunnelEngine - INFO - Ôä╣´©Å Trigger 183 is processing (Scheduler handoff? Diff: 0.048974s). Proceeding...[0m
+[38;5;39m2026-02-02 15:35:17 - FunnelEngine - INFO - ­ƒò©´©Å Executing GRAPH Funnel[0m
+­ƒò©´©Å [ENGINE] Graph Funnel Execution Started for Trigger 183
+[38;5;39m2026-02-02 15:35:17 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=templateNode ID=node_1770046047671[0m
+­ƒôì [ENGINE] Processing Node: templateNode (node_1770046047671) for 558596123586
+[38;5;39m2026-02-02 15:35:17 - FunnelEngine - INFO - ­ƒÅü End of path reached.[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 15:39:14 - FunnelEngine - INFO - ÔÜÖ´©Å Starting funnel Funil - Template for conversation 2375 (Trigger 184)[0m
+ÔÜÖ´©Å [ENGINE] Starting funnel 57 (Name: Funil - Template) | Trigger: 184 | Phone: 558596123586
+[38;5;39m2026-02-02 15:39:14 - FunnelEngine - INFO - Ôä╣´©Å Trigger 184 is processing (Scheduler handoff? Diff: 0.036366s). Proceeding...[0m
+[38;5;39m2026-02-02 15:39:14 - FunnelEngine - INFO - ­ƒò©´©Å Executing GRAPH Funnel[0m
+­ƒò©´©Å [ENGINE] Graph Funnel Execution Started for Trigger 184
+[38;5;39m2026-02-02 15:39:14 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=templateNode ID=node_1770046047671[0m
+­ƒôì [ENGINE] Processing Node: templateNode (node_1770046047671) for 558596123586
+[38;5;39m2026-02-02 15:39:14 - FunnelEngine - INFO - ­ƒÅü End of path reached.[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 15:40:09 - FunnelEngine - INFO - ÔÜÖ´©Å Starting funnel Funil - Template for conversation 2375 (Trigger 185)[0m
+ÔÜÖ´©Å [ENGINE] Starting funnel 57 (Name: Funil - Template) | Trigger: 185 | Phone: 558596123586
+[38;5;39m2026-02-02 15:40:09 - FunnelEngine - INFO - Ôä╣´©Å Trigger 185 is processing (Scheduler handoff? Diff: 0.034089s). Proceeding...[0m
+[38;5;39m2026-02-02 15:40:09 - FunnelEngine - INFO - ­ƒò©´©Å Executing GRAPH Funnel[0m
+­ƒò©´©Å [ENGINE] Graph Funnel Execution Started for Trigger 185
+[38;5;39m2026-02-02 15:40:09 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=templateNode ID=node_1770046047671[0m
+­ƒôì [ENGINE] Processing Node: templateNode (node_1770046047671) for 558596123586
+[38;5;39m2026-02-02 15:40:09 - FunnelEngine - INFO - ­ƒÅü End of path reached.[0m
+­ƒöº Gerando configura├º├úo din├ómica para o Frontend...
+  API_URL: http://localhost:8000/api
+  WS_URL: ws://localhost:8000/ws
+Ô£à Arquivo /app/static/dist/env-config.js gerado com sucesso!
+­ƒùä´©Å  Verificando/criando banco de dados PostgreSQL...
+­ƒöì Verificando se o banco de dados 'zapvoice' existe...
+Ô£à Banco de dados 'zapvoice' j├í existe!
+­ƒÅù´©Å  Aplicando migra├º├Áes de esquema...
+Connecting to postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice...
+Ôä╣´©Å Column current_node_id already exists.
+Ôä╣´©Å Column processed_contacts already exists.
+Ôä╣´©Å Column pending_contacts already exists.
+Ôä╣´©Å Column cost_per_unit already exists.
+Ôä╣´©Å Column total_cost already exists.
+Ôä╣´©Å Column total_delivered already exists.
+Ôä╣´©Å Column total_read already exists.
+Ôä╣´©Å Column total_interactions already exists.
+Ôä╣´©Å Column total_blocked already exists.
+Ôä╣´©Å Column updated_at already exists.
+Done!
+­ƒÜÇ Iniciando Backend...
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 17:09:36 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;39m2026-02-02 17:09:36 - rabbitmq_client - INFO - Conectado ao RabbitMQ com sucesso![0m
+[38;5;39m2026-02-02 17:09:36 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_bulk_sends (prefetch: 1)[0m
+[38;5;39m2026-02-02 17:09:36 - rabbitmq_client - INFO - Consumidor conectado na fila whatsapp_events (prefetch: 20)[0m
+[38;5;39m2026-02-02 17:09:36 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_funnel_executions (prefetch: 20)[0m
+[38;5;39m2026-02-02 17:09:36 - rabbitmq_client - INFO - Consumidor conectado na fila chatwoot_private_messages (prefetch: 1)[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 17:19:03 - FunnelEngine - INFO - ÔÜÖ´©Å Starting funnel Funil - Template for conversation 2375 (Trigger 186)[0m
+ÔÜÖ´©Å [ENGINE] Starting funnel 57 (Name: Funil - Template) | Trigger: 186 | Phone: 558596123586
+[38;5;39m2026-02-02 17:19:03 - FunnelEngine - INFO - Ôä╣´©Å Trigger 186 is processing (Scheduler handoff? Diff: 0.031799s). Proceeding...[0m
+[38;5;39m2026-02-02 17:19:03 - FunnelEngine - INFO - ­ƒò©´©Å Executing GRAPH Funnel[0m
+­ƒò©´©Å [ENGINE] Graph Funnel Execution Started for Trigger 186
+[38;5;39m2026-02-02 17:19:03 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=templateNode ID=node_1770046047671[0m
+­ƒôì [ENGINE] Processing Node: templateNode (node_1770046047671) for 558596123586
+[38;5;39m2026-02-02 17:19:03 - FunnelEngine - INFO - ­ƒôä Sending Template Node node_1770046047671. Template: 'mensagem_nova_2026' (Lang: pt_BR)[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: Received components from frontend: []
+================================================================================
+DEBUG: Sending WhatsApp Template 'mensagem_nova_2026' to 558596123586
+DEBUG: API URL: https://graph.facebook.com/v24.0/820516741152724/messages
+DEBUG: Full Payload:
+{
+  "messaging_product": "whatsapp",
+  "to": "558596123586",
+  "type": "template",
+  "template": {
+    "name": "mensagem_nova_2026",
+    "language": {
+      "code": "pt_BR"
+    }
+  }
+}
+================================================================================
+DEBUG: Response Status: 200
+DEBUG: Response Headers: {'content-type': 'application/json; charset=UTF-8', 'vary': 'Origin', 'x-fb-aed': '722', 'x-business-use-case-usage': '{"1946144149291660":[{"type":"whatsapp","call_count":0,"total_cputime":0,"total_time":0,"estimated_time_to_regain_access":0}]}', 'access-control-allow-origin': '*', 'facebook-api-version': 'v24.0', 'strict-transport-security': 'max-age=15552000; preload', 'pragma': 'no-cache', 'cache-control': 'private, no-cache, no-store, must-revalidate', 'expires': 'Sat, 01 Jan 2000 00:00:00 GMT', 'x-fb-request-id': 'AJSqmY01EqfYZG5HvgvBfOp', 'x-fb-trace-id': 'EAJcsBrR/iv', 'x-fb-rev': '1032778080', 'x-fb-debug': '8la0mf+dAGOJEM8MIKs0P/GJ3Nqab3yGX2w+3xJMkvHNsk3Zv3WxqoEBNQix541bFP3DKFHKHDTyLV8tQo6tmA==', 'x-fb-server-load': '5', 'date': 'Mon, 02 Feb 2026 17:19:06 GMT', 'x-fb-connection-quality': 'EXCELLENT; q=0.9, rtt=13, rtx=0, c=10, mss=1392, tbw=3685, tp=-1, tpl=-1, uplat=904, ullat=0', 'alt-svc': 'h3=":443"; ma=86400', 'connection': 'keep-alive', 'content-length': '206'}
+DEBUG: Response Body:
+{
+  "messaging_product": "whatsapp",
+  "contacts": [
+    {
+      "input": "558596123586",
+      "wa_id": "558596123586"
+    }
+  ],
+  "messages": [
+    {
+      "id": "wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSMzRCNUQwNjE4NjI0RUQ2MjNCAA==",
+      "message_status": "accepted"
+    }
+  ]
+}
+================================================================================
+SUCCESS: Template sent! WhatsApp accepted the request.
+[38;5;39m2026-02-02 17:19:04 - FunnelEngine - INFO - ­ƒÅü End of path reached.[0m
+­ƒöº Gerando configura├º├úo din├ómica para o Frontend...
+  API_URL: http://localhost:8000/api
+  WS_URL: ws://localhost:8000/ws
+Ô£à Arquivo /app/static/dist/env-config.js gerado com sucesso!
+­ƒùä´©Å  Verificando/criando banco de dados PostgreSQL...
+­ƒöì Verificando se o banco de dados 'zapvoice' existe...
+Ô£à Banco de dados 'zapvoice' j├í existe!
+­ƒÅù´©Å  Aplicando migra├º├Áes de esquema...
+Connecting to postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice...
+Ôä╣´©Å Column current_node_id already exists.
+Ôä╣´©Å Column processed_contacts already exists.
+Ôä╣´©Å Column pending_contacts already exists.
+Ôä╣´©Å Column cost_per_unit already exists.
+Ôä╣´©Å Column total_cost already exists.
+Ôä╣´©Å Column total_delivered already exists.
+Ôä╣´©Å Column total_read already exists.
+Ôä╣´©Å Column total_interactions already exists.
+Ôä╣´©Å Column total_blocked already exists.
+Ôä╣´©Å Column updated_at already exists.
+Done!
+­ƒÜÇ Iniciando Backend...
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for ALL/Default (no client_id)
+DEBUG: Found 12 config keys in DB for client_id=None: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 17:25:05 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...[0m
+[38;5;39m2026-02-02 17:25:05 - rabbitmq_client - INFO - Conectado ao RabbitMQ com sucesso![0m
+[38;5;39m2026-02-02 17:25:05 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_bulk_sends (prefetch: 1)[0m
+[38;5;39m2026-02-02 17:25:05 - rabbitmq_client - INFO - Consumidor conectado na fila whatsapp_events (prefetch: 20)[0m
+[38;5;39m2026-02-02 17:25:05 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_funnel_executions (prefetch: 20)[0m
+[38;5;39m2026-02-02 17:25:05 - rabbitmq_client - INFO - Consumidor conectado na fila chatwoot_private_messages (prefetch: 1)[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-02-02 17:25:44 - FunnelEngine - INFO - ÔÜÖ´©Å Starting funnel Funil - Template for conversation 2375 (Trigger 187)[0m
+ÔÜÖ´©Å [ENGINE] Starting funnel 57 (Name: Funil - Template) | Trigger: 187 | Phone: 558596123586
+[38;5;39m2026-02-02 17:25:44 - FunnelEngine - INFO - Ôä╣´©Å Trigger 187 is processing (Scheduler handoff? Diff: 0.026986s). Proceeding...[0m
+[38;5;39m2026-02-02 17:25:44 - FunnelEngine - INFO - ­ƒò©´©Å Executing GRAPH Funnel[0m
+­ƒò©´©Å [ENGINE] Graph Funnel Execution Started for Trigger 187
+[38;5;39m2026-02-02 17:25:44 - FunnelEngine - INFO - ­ƒôì PROCESSING NODE: Type=templateNode ID=node_1770046047671[0m
+­ƒôì [ENGINE] Processing Node: templateNode (node_1770046047671) for 558596123586
+[38;5;39m2026-02-02 17:25:44 - FunnelEngine - INFO - ­ƒôä Sending Template Node node_1770046047671. Template: 'mensagem_nova_2026' (Lang: pt_BR)[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: Received components from frontend: []
+================================================================================
+DEBUG: Sending WhatsApp Template 'mensagem_nova_2026' to 558596123586
+DEBUG: API URL: https://graph.facebook.com/v24.0/820516741152724/messages
+DEBUG: Full Payload:
+{
+  "messaging_product": "whatsapp",
+  "to": "558596123586",
+  "type": "template",
+  "template": {
+    "name": "mensagem_nova_2026",
+    "language": {
+      "code": "pt_BR"
+    }
+  }
+}
+================================================================================
+DEBUG: Response Status: 200
+DEBUG: Response Headers: {'content-type': 'application/json; charset=UTF-8', 'vary': 'Origin', 'x-fb-aed': '722', 'x-business-use-case-usage': '{"1946144149291660":[{"type":"whatsapp","call_count":1,"total_cputime":1,"total_time":1,"estimated_time_to_regain_access":0}]}', 'access-control-allow-origin': '*', 'facebook-api-version': 'v24.0', 'strict-transport-security': 'max-age=15552000; preload', 'pragma': 'no-cache', 'cache-control': 'private, no-cache, no-store, must-revalidate', 'expires': 'Sat, 01 Jan 2000 00:00:00 GMT', 'x-fb-request-id': 'AXC2hpAM7dYrnPzjfZw4nV5', 'x-fb-trace-id': 'GH9dO/7jLAL', 'x-fb-rev': '1032778756', 'x-fb-debug': 'uIa1aAUyu3G/NGWpUjsi+wvlHrZFS6wr/f3zuC5i67OkIib2wu/na5pqIQhN/bcm7ilaV73sjvTnvzsFtTm/cg==', 'x-fb-server-load': '7', 'date': 'Mon, 02 Feb 2026 17:25:47 GMT', 'x-fb-connection-quality': 'EXCELLENT; q=0.9, rtt=16, rtx=0, c=10, mss=1392, tbw=3684, tp=-1, tpl=-1, uplat=712, ullat=1', 'alt-svc': 'h3=":443"; ma=86400', 'connection': 'keep-alive', 'content-length': '206'}
+DEBUG: Response Body:
+{
+  "messaging_product": "whatsapp",
+  "contacts": [
+    {
+      "input": "558596123586",
+      "wa_id": "558596123586"
+    }
+  ],
+  "messages": [
+    {
+      "id": "wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSMzE1MzZDRUMyQUYzNTBBMjlBAA==",
+      "message_status": "accepted"
+    }
+  ]
+}
+================================================================================
+SUCCESS: Template sent! WhatsApp accepted the request.
+[38;5;39m2026-02-02 17:25:45 - FunnelEngine - INFO - Ô£à Template sent. Recorded wamid: wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSMzE1MzZDRUMyQUYzNTBBMjlBAA==[0m
+[38;5;39m2026-02-02 17:25:45 - FunnelEngine - INFO - ­ƒÅü End of path reached.[0m

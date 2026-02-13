@@ -56,6 +56,73 @@ async def list_templates(
         logger.error(f"Error listing templates: {e}")
         # Retornar lista vazia em vez de erro 500 para não quebrar frontend
         return []
+
+    return result
+
+@router.post("/templates")
+async def create_template(
+    payload: schemas.WhatsAppTemplateCreate,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    client = ChatwootClient(client_id=target_client_id)
+    
+    result = await client.create_whatsapp_template(payload.dict())
+    
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+        
+    return result
+
+    return result
+
+@router.put("/templates/{template_id}")
+async def update_template(
+    template_id: str,
+    payload: schemas.WhatsAppTemplateCreate,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    client = ChatwootClient(client_id=target_client_id)
+    
+    result = await client.edit_whatsapp_template(template_id, payload.dict())
+    
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+        
+    return result
+
+@router.delete("/templates/{template_name}")
+async def delete_template(
+    template_name: str,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    client = ChatwootClient(client_id=target_client_id)
+    
+    result = await client.delete_whatsapp_template(template_name)
+    
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+        
+    return result
+@router.post("/templates/{template_id}/status")
+async def update_template_status(
+    template_id: str,
+    status: str,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    client = ChatwootClient(client_id=target_client_id)
+    result = await client.update_template_status(template_id, status)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
 @router.post("/send-template", summary="Enviar Template WhatsApp")
 async def send_template(
     payload: schemas.WhatsAppTemplateRequest, 
@@ -83,6 +150,84 @@ async def send_template(
             logger.error(f"Failed to send template '{template}' to {phone} - Error: {err_detail}")
             raise HTTPException(status_code=500, detail=f"Erro Meta API: {err_detail}")
         
+        # ---------------------------------------------------------------------
+        # FIX: Save Message Status for Manual Sends to enable Button Tracking
+        # ---------------------------------------------------------------------
+        try:
+            # Extract Message ID
+            msg_id = None
+            if isinstance(result, dict):
+                messages = result.get("messages", [])
+                if messages:
+                    msg_id = messages[0].get("id")
+            
+            if msg_id:
+                from database import SessionLocal
+                from datetime import datetime, timezone
+                from sqlalchemy import cast, Date
+                
+                db_log = SessionLocal()
+                try:
+                    # 1. Find or Create Aggregator Trigger for Today's Manual Sends
+                    today = datetime.now(timezone.utc).date()
+                    agg_name = f"Envios Manuais: {template} [{today}]"
+                    
+                    aggregator = db_log.query(models.ScheduledTrigger).filter(
+                        models.ScheduledTrigger.client_id == target_client_id,
+                        models.ScheduledTrigger.template_name == agg_name,
+                        models.ScheduledTrigger.is_bulk == True,
+                        cast(models.ScheduledTrigger.created_at, Date) == today
+                    ).first()
+                    
+                    if not aggregator:
+                        aggregator = models.ScheduledTrigger(
+                            client_id=target_client_id,
+                            template_name=agg_name,
+                            is_bulk=True,
+                            status='processing', # Always active to collect
+                            scheduled_time=datetime.now(timezone.utc),
+                            contacts_list=[],
+                            processed_contacts=[],
+                            total_sent=0
+                        )
+                        db_log.add(aggregator)
+                        db_log.commit()
+                        db_log.refresh(aggregator)
+                    
+                    # 2. Update Aggregator Stats
+                    clean_phone = ''.join(filter(str.isdigit, phone))
+                    current_list = list(aggregator.contacts_list or [])
+                    if clean_phone not in current_list:
+                        current_list.append(clean_phone)
+                        aggregator.contacts_list = current_list
+                        
+                    aggregator.total_sent = (aggregator.total_sent or 0) + 1
+                    aggregator.updated_at = datetime.now(timezone.utc)
+                    
+                    # 3. Create Message Status Record
+                    msg_status = models.MessageStatus(
+                        trigger_id=aggregator.id,
+                        message_id=msg_id,
+                        phone_number=clean_phone,
+                        status='sent',
+                        updated_at=datetime.now(timezone.utc)
+                    )
+                    db_log.add(msg_status)
+                    
+                    db_log.commit()
+                    logger.info(f"✅ [MANUAL SEND] Message tracked! ID: {msg_id} -> Trigger: {aggregator.id}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Failed to save manual send status: {e}")
+                    db_log.rollback()
+                finally:
+                    db_log.close()
+            else:
+                logger.warning(f"⚠️ Manual send success but no ID found in result: {result}")
+
+        except Exception as e:
+            logger.error(f"❌ Error in manual send tracking block: {e}")
+            
         logger.info(f"Template sent successfully to {phone}. Response: {result}")
         return result
     except HTTPException:

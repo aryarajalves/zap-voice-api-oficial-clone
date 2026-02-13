@@ -12,11 +12,13 @@ router = APIRouter(prefix="/blocked", tags=["Blocked Contacts"])
 # Schemas
 class BlockedContactCreate(BaseModel):
     phone: str
+    name: Optional[str] = None
     reason: Optional[str] = None
 
 class BlockedContactResponse(BaseModel):
     id: int
     phone: str
+    name: Optional[str]
     reason: Optional[str]
     created_at: datetime
     
@@ -28,6 +30,12 @@ class BulkCheckRequest(BaseModel):
 
 class BulkCheckResponse(BaseModel):
     blocked_phones: List[str]
+
+class BulkUnblockRequest(BaseModel):
+    ids: List[int]
+
+class BulkBlockRequest(BaseModel):
+    contacts: List[BlockedContactCreate]
 
 @router.get("/", response_model=List[BlockedContactResponse])
 def list_blocked_contacts(
@@ -63,18 +71,22 @@ def block_contact(
     if not clean_phone:
          raise HTTPException(status_code=400, detail="Número processado é inválido/vazio.")
 
-    # Check if already blocked
+    # Check if already blocked (using suffix matching - last 8 digits)
+    # This prevents duplicates like 558586817644 and 86817644
+    suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+    
     exists = db.query(BlockedContact).filter(
         BlockedContact.client_id == client_id,
-        BlockedContact.phone == clean_phone
+        BlockedContact.phone.like(f"%{suffix}")
     ).first()
     
     if exists:
-        raise HTTPException(status_code=400, detail="Este número já está bloqueado.")
+        raise HTTPException(status_code=400, detail=f"Este número (ou final {suffix}) já está bloqueado.")
     
     new_block = BlockedContact(
         client_id=client_id,
         phone=clean_phone,
+        name=data.name,
         reason=data.reason or "Manual"
     )
     db.add(new_block)
@@ -144,3 +156,73 @@ def unblock_contact(
     db.delete(contact)
     db.commit()
     return None
+
+@router.post("/unblock_bulk")
+def unblock_bulk(
+    data: BulkUnblockRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+):
+    """
+    Unblock multiple contacts at once.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    
+    deleted_count = db.query(BlockedContact).filter(
+        BlockedContact.id.in_(data.ids),
+        BlockedContact.client_id == client_id
+    ).delete(synchronize_session=False)
+    
+    db.commit()
+    return {"deleted_count": deleted_count}
+
+@router.post("/block_bulk")
+def block_bulk(
+    data: BulkBlockRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+):
+    """
+    Block multiple contacts at once. Includes cleaning and suffix deduplication.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    
+    # Get current suffixes to prevent duplicates
+    existing = db.query(BlockedContact.phone).filter(BlockedContact.client_id == client_id).all()
+    existing_suffixes = {p.phone[-8:] for p in existing if len(p.phone) >= 8}
+    
+    success_count = 0
+    already_count = 0
+    
+    new_entries = []
+    seen_in_batch = set()
+    
+    for c in data.contacts:
+        clean_phone = "".join(filter(str.isdigit, c.phone))
+        if not clean_phone or len(clean_phone) < 8:
+            continue
+            
+        suffix = clean_phone[-8:]
+        if suffix in existing_suffixes or suffix in seen_in_batch:
+            already_count += 1
+            continue
+            
+        seen_in_batch.add(suffix)
+        new_entries.append(BlockedContact(
+            client_id=client_id,
+            phone=clean_phone,
+            name=c.name,
+            reason=c.reason or "Importação"
+        ))
+        success_count += 1
+        
+    if new_entries:
+        db.bulk_save_objects(new_entries)
+        db.commit()
+        
+    return {
+        "success_count": success_count,
+        "already_blocked_count": already_count
+    }

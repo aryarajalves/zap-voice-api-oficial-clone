@@ -53,8 +53,13 @@ def setup_logger(name: str = "zapvoice", level: str = "INFO") -> logging.Logger:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_handler.setFormatter(ColoredFormatter())
-    
     logger.addHandler(console_handler)
+    
+    # Handler para arquivo (Novo)
+    file_handler = logging.FileHandler("zapvoice_debug.log", encoding="utf-8")
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt='%Y-%m-%d %H:%M:%S'))
+    logger.addHandler(file_handler)
     
     return logger
 

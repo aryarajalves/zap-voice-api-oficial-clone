@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { API_URL } from '../config';
+import { API_URL, WS_URL } from '../config';
 import { fetchWithAuth } from '../AuthContext';
 import { toast } from 'react-hot-toast';
-import { FiUserPlus, FiTrash2, FiShield, FiUser, FiCheck, FiX, FiSearch, FiFilter, FiAlertTriangle, FiEdit2, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiUserPlus, FiTrash2, FiShield, FiUser, FiCheck, FiX, FiSearch, FiFilter, FiEdit2, FiEye, FiEyeOff } from 'react-icons/fi';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Users = () => {
     const [users, setUsers] = useState([]);
@@ -30,6 +31,49 @@ const Users = () => {
 
     useEffect(() => {
         fetchData();
+    }, []);
+
+    // WebSocket Realtime Sync para Usuários
+    useEffect(() => {
+        let ws;
+        try {
+            const wsFinalUrl = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+            ws = new WebSocket(wsFinalUrl);
+
+            ws.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(event.data);
+
+                    if (payload.event === "user_created") {
+                        setUsers(prev => {
+                            const exists = prev.find(u => u.id === payload.data.id);
+                            if (exists) return prev;
+                            const newList = [...prev, payload.data];
+                            return newList.sort((a, b) => {
+                                if (a.role === 'super_admin' && b.role !== 'super_admin') return -1;
+                                if (a.role !== 'super_admin' && b.role === 'super_admin') return 1;
+                                return (a.full_name || '').localeCompare(b.full_name || '');
+                            });
+                        });
+                    } else if (payload.event === "profile_updated") {
+                        setUsers(prev => prev.map(u => u.id === payload.data.id ? { ...u, ...payload.data } : u));
+                    } else if (payload.event === "user_deleted") {
+                        setUsers(prev => prev.filter(u => u.id !== payload.data.user_id));
+                    }
+                } catch (e) {
+                    console.error("Error parsing user WS message:", e);
+                }
+            };
+
+            ws.onerror = (e) => console.error("🔴 Users WS Error", e);
+
+        } catch (e) {
+            console.error("Failed to connect Users WebSocket", e);
+        }
+
+        return () => {
+            if (ws) ws.close();
+        };
     }, []);
 
     const fetchData = async () => {
@@ -216,6 +260,7 @@ const Users = () => {
                         <option value="all">Todos os Cargos</option>
                         <option value="super_admin">Super Admin</option>
                         <option value="admin">Administrador</option>
+                        <option value="premium">Usuário Premium</option>
                         <option value="user">Usuário Comum</option>
                     </select>
                 </div>
@@ -247,9 +292,10 @@ const Users = () => {
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${user.role === 'super_admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border border-purple-200 dark:border-purple-800' :
                                                 user.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800' :
-                                                    'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400 border border-gray-200 dark:border-gray-800'
+                                                    user.role === 'premium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800' :
+                                                        'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400 border border-gray-200 dark:border-gray-800'
                                                 }`}>
-                                                {user.role === 'super_admin' ? <FiShield size={12} /> : <FiUser size={12} />}
+                                                {user.role === 'super_admin' ? <FiShield size={12} /> : user.role === 'premium' ? <FiUserPlus size={12} /> : <FiUser size={12} />}
                                                 {user.role}
                                             </span>
                                         </td>
@@ -375,6 +421,7 @@ const Users = () => {
                                         <option value="super_admin">Super Admin</option>
                                     )}
                                     <option value="admin">Administrador (Configurações Totais)</option>
+                                    <option value="premium">Usuário Premium (Sem Configurações Avançadas)</option>
                                     <option value="user">Usuário (Histórico Apenas)</option>
                                 </select>
                             </div>
@@ -439,40 +486,18 @@ const Users = () => {
                 document.body
             )}
 
-            {/* Custom Delete Confirmation Modal */}
-            {isDeleteModalOpen && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
-                    <div className="bg-white dark:bg-gray-800 rounded-[2rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-300 border border-red-100 dark:border-red-900/30">
-                        <div className="p-8 text-center space-y-4">
-                            <div className="mx-auto w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 mb-6">
-                                <FiAlertTriangle size={40} className="animate-bounce" />
-                            </div>
-                            <h3 className="text-2xl font-black text-gray-900 dark:text-white">Confirma a exclusão?</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
-                                Você está prestes a remover <span className="font-bold text-gray-900 dark:text-white">"{userToDelete?.full_name || userToDelete?.email}"</span> do sistema. Esta ação é irreversível.
-                            </p>
-                        </div>
-                        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 flex flex-col gap-2">
-                            <button
-                                onClick={handleDeleteUser}
-                                className="w-full py-3.5 bg-red-600 text-white font-black rounded-2xl hover:bg-red-700 transition-all shadow-xl shadow-red-500/40 hover:-translate-y-1 active:scale-95"
-                            >
-                                SIM, EXCLUIR DEFINITIVAMENTE
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setIsDeleteModalOpen(false);
-                                    setUserToDelete(null);
-                                }}
-                                className="w-full py-3.5 text-gray-500 dark:text-gray-400 font-bold hover:bg-white dark:hover:bg-gray-800 rounded-2xl transition-all"
-                            >
-                                Não, cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            <ConfirmModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => {
+                    setIsDeleteModalOpen(false);
+                    setUserToDelete(null);
+                }}
+                onConfirm={handleDeleteUser}
+                title="Confirma a exclusão?"
+                message={`Você está prestes a remover "${userToDelete?.full_name || userToDelete?.email}" do sistema. Esta ação é irreversível.`}
+                confirmText="Sim, Excluir"
+                isDangerous={true}
+            />
         </div>
     );
 };

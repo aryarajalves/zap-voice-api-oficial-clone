@@ -20,58 +20,85 @@ class StorageClient:
         self.secret_key = get_setting("S3_SECRET_KEY")
         self.bucket_name = get_setting("S3_BUCKET_NAME") or "zapvoice-files"
         self.region = get_setting("S3_REGION") or "us-east-1"
+
+        # Limpar espaços e comentários residuais (segurança extra)
+        if self.endpoint_url: self.endpoint_url = self.endpoint_url.split('#')[0].strip().strip('"').strip("'")
+        if self.access_key: self.access_key = self.access_key.split('#')[0].strip().strip('"').strip("'")
+        if self.secret_key: self.secret_key = self.secret_key.split('#')[0].strip().strip('"').strip("'")
+        if self.bucket_name: self.bucket_name = self.bucket_name.split('#')[0].strip().strip('"').strip("'")
+        if self.region: self.region = self.region.split('#')[0].strip().strip('"').strip("'")
         
         # Só inicializa se tiver config
         if self.endpoint_url and self.access_key:
             try:
+                logger.info(f"Conectando ao S3: {self.endpoint_url} (Region: {self.region})")
+                from botocore.config import Config
+                
                 self.s3_client = boto3.client(
                     's3',
                     endpoint_url=self.endpoint_url,
                     aws_access_key_id=self.access_key,
                     aws_secret_access_key=self.secret_key,
-                    region_name=self.region
+                    region_name=self.region,
+                    config=Config(signature_version='s3v4')
                 )
                 self._ensure_bucket_exists()
             except Exception as e:
-                logger.error(f"Erro ao conectar S3: {e}. Usando armazenamento local.")
+                logger.error(f"Erro CRITICO ao inicializar S3: {str(e)}")
+                # Se falhar aqui, desativamos o S3 para forçar fallback local seguro
                 self.s3_client = None
+                logger.warning("S3 desativado devido a erro de configuracao. Usando modo Local.")
         else:
-            logger.warning("StorageClient: Configuracoes S3 nao encontradas. Usando armazenamento local.")
+            logger.warning("StorageClient: Configuracoes S3 incompletas. Usando armazenamento local.")
             self.s3_client = None
 
     def _ensure_bucket_exists(self):
         if not self.s3_client: return
         try:
+            # Tenta verificar se o bucket existe - Isso valida as credenciais
             self.s3_client.head_bucket(Bucket=self.bucket_name)
-        except ClientError:
-            logger.info(f"Bucket '{self.bucket_name}' nao existe. Criando...")
+        except Exception as e:
+            # Se for erro de credencial, vamos subir a exceção para desativar o S3 no __init__
+            if "InvalidAccessKeyId" in str(e) or "SignatureDoesNotMatch" in str(e) or "403" in str(e):
+                logger.error(f"Erro de Autenticacao S3: {e}")
+                raise e
+            
+            # Se for apenas 'Not Found', tenta criar
+            logger.info(f"Bucket '{self.bucket_name}' nao encontrado ou inacessivel. Tentando criar...")
             try:
                 self.s3_client.create_bucket(Bucket=self.bucket_name)
-                # Configurar policy para public-read (Opcional, mas útil para servir arquivos)
+                # Configurar policy para public-read (Opcional)
                 self._set_public_policy()
-            except Exception as e:
-                logger.error(f"Erro ao criar bucket: {e}")
+            except Exception as e2:
+                logger.error(f"Falha ao criar bucket: {e2}")
+                # Nao vamos subir erro aqui, pode ser que o bucket já exista mas head_bucket falhou por outro motivo
 
     def _set_public_policy(self):
         if not self.s3_client: return
-        import json
-        bucket_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Sid": "PublicReadGetObject",
-                    "Effect": "Allow",
-                    "Principal": "*",
-                    "Action": "s3:GetObject",
-                    "Resource": f"arn:aws:s3:::{self.bucket_name}/*"
-                }
-            ]
-        }
-        self.s3_client.put_bucket_policy(
-            Bucket=self.bucket_name,
-            Policy=json.dumps(bucket_policy)
-        )
-        logger.info("Bucket configurado como PUBLICO")
+        # Nota: Alguns provedores como Backblaze B2 não suportam put_bucket_policy via S3 API
+        # ou exigem permissões administrativas. Vamos tentar, mas se falhar, não trava o app.
+        try:
+            import json
+            bucket_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "PublicReadGetObject",
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "s3:GetObject",
+                        "Resource": f"arn:aws:s3:::{self.bucket_name}/*"
+                    }
+                ]
+            }
+            self.s3_client.put_bucket_policy(
+                Bucket=self.bucket_name,
+                Policy=json.dumps(bucket_policy)
+            )
+            logger.info(f"Bucket '{self.bucket_name}' configurado como PUBLICO")
+        except Exception as e:
+            logger.warning(f"Nao foi possivel configurar politica publica no bucket (comum em B2/MinIO): {e}")
+            logger.info("Certifique-se de que o bucket esta configurado como PUBLICO no painel do seu provedor S3.")
 
     def upload_file(self, file_obj, filename, content_type):
         if not self.s3_client:
@@ -91,8 +118,13 @@ class StorageClient:
                 logger.info(f"Arquivo salvo localmente: {file_path}")
                 
                 # Construct local URL
-                # Assuming backend is on port 8000. Ideally use a config, but hardcoding for local fix is acceptable.
-                base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+                # Se API_BASE_URL estiver definido (ex: https://zapvoice.aryaraj.shop), usa ele.
+                # Caso contrário, retorna um caminho relativo como /static/uploads/...
+                # Caminhos relativos são melhores para white label pois funcionam independente do domínio/ssl.
+                base_url = os.getenv("API_BASE_URL")
+                if not base_url:
+                    return f"/{upload_dir}/{filename}"
+                
                 return f"{base_url}/{upload_dir}/{filename}"
                 
             except Exception as e:

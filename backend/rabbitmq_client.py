@@ -41,12 +41,17 @@ class RabbitMQClient:
             logger.info(f"Tentando conectar ao RabbitMQ em {host}:{port} ({scheme})...")
             
             # ssl_context=None usa validação padrão segura se for amqps
-            self.connection = await aio_pika.connect_robust(dsn)
+            # Adicionado timeout para evitar hang infinito se host estiver inacessível
+            self.connection = await asyncio.wait_for(
+                aio_pika.connect_robust(dsn),
+                timeout=10.0
+            )
             self.channel = await self.connection.channel()
             
             # Declara as filas principais para garantir que existam
             await self.channel.declare_queue("zapvoice_bulk_sends", durable=True)
             await self.channel.declare_queue("zapvoice_funnel_executions", durable=True)
+            await self.channel.declare_queue("chatwoot_private_messages", durable=True)
             
             logger.info("Conectado ao RabbitMQ com sucesso!")
         except Exception as e:
@@ -55,9 +60,14 @@ class RabbitMQClient:
 
     async def publish(self, queue_name: str, message: dict):
         """Publica uma mensagem em uma fila específica"""
-        if not self.channel or self.connection.is_closed:
+        if not self.channel or self.connection is None or self.connection.is_closed:
             await self.connect()
         
+        # Se falhou ao conectar, tenta uma última vez forçada
+        if not self.channel:
+            logger.warning("Canal não disponível, tentando reconexão forçada...")
+            await self.connect()
+
         if self.channel:
             try:
                 await self.channel.default_exchange.publish(
@@ -67,7 +77,7 @@ class RabbitMQClient:
                     ),
                     routing_key=queue_name
                 )
-                logger.debug(f"Mensagem enviada para fila {queue_name}")
+                logger.info(f"📤 Mensagem enviada para fila: {queue_name}")
                 return True
             except Exception as e:
                 logger.error(f"Erro ao publicar mensagem na fila {queue_name}: {e}")

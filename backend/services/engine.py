@@ -2,18 +2,38 @@
 import asyncio
 import os
 import subprocess
-from datetime import datetime
+import random
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import models
 from chatwoot_client import ChatwootClient
 import logging
+import unicodedata
+import re
+import zoneinfo
 from core.logger import setup_logger
 from config_loader import get_setting
 
 logger = setup_logger("FunnelEngine")
 
+def normalize_text(text: str) -> str:
+    """
+    Normaliza texto para comparação (Tags): 
+    - Remove #
+    - Transforma em minúsculo
+    - Remove acentos e caracteres especiais (mantém apenas letras, números e espaços)
+    """
+    if not text: return ""
+    text = str(text).replace("#", "").lower()
+    # Decompor caracteres com acento e remover diacríticos
+    text = "".join(c for c in unicodedata.normalize('NFKD', text) if not unicodedata.combining(c))
+    # Manter apenas a-z, 0-9 e espaço
+    text = re.sub(r'[^a-z0-9 ]', '', text)
+    # Remover espaços extras e trim
+    text = ' '.join(text.split())
+    return text
+
 # Instância local para uso no engine
-# chatwoot = ChatwootClient() # Removed global instance
 UPLOAD_DIR = "static/uploads"
 
 async def execute_funnel(funnel_id: int, conversation_id: int, trigger_id: int, contact_phone: str, db: Session):
@@ -37,28 +57,22 @@ async def execute_funnel(funnel_id: int, conversation_id: int, trigger_id: int, 
     # Instantiate Client with Context
     chatwoot = ChatwootClient(client_id=trigger.client_id)
 
-    with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-        f.write(f"[{datetime.now()}] ⚙️ Starting funnel {funnel.name} for conversation {conversation_id} (Trigger {trigger_id})\n")
     logger.info(f"⚙️ Starting funnel {funnel.name} for conversation {conversation_id} (Trigger {trigger_id})")
+    print(f"⚙️ [ENGINE] Starting funnel {funnel_id} (Name: {funnel.name}) | Trigger: {trigger_id} | Phone: {contact_phone}")
     
-    # ✅ Resolve Conversation ID if missing (common in phone-only triggers)
+    # ✅ Resolve Conversation ID if missing
     if not conversation_id or int(conversation_id) == 0:
-        logger.info(f"🔎 Conversation ID missing. Attempting to resolve for {contact_phone}...")
-        # Get default inbox from env or first available
-        inbox_id = get_setting("CHATWOOT_SELECTED_INBOX_ID", "", client_id=trigger.client_id)
-        if not inbox_id:
-            # Fallback to fetching inboxes and picking first
-             pass # simplistic fallback handled in ensure_conversation logic or we fail
-             
-        # Normalize inbox_id
-        if inbox_id and ',' in inbox_id: inbox_id = inbox_id.split(',')[0]
-        
-        resolved_id = await chatwoot.ensure_conversation(contact_phone, "Novo Contato ZapVoice", int(inbox_id) if inbox_id else None)
-        
+        # Get Inbox ID from settings
+        inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
+        try:
+            inbox_id = int(inbox_id_str) if inbox_id_str else None
+        except ValueError:
+            inbox_id = None
+
+        logger.info(f"🔎 Conversation ID missing. Attempting to resolve for {contact_phone} using Inbox {inbox_id}...")
+        resolved_id = await chatwoot.ensure_conversation(contact_phone, "Novo Contato ZapVoice", inbox_id)
         if resolved_id:
             conversation_id = resolved_id
-            logger.info(f"✅ Resolved Conversation ID: {conversation_id}")
-            # Update trigger record with new conversation_id
             try:
                  db_trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id).first()
                  if db_trigger:
@@ -70,394 +84,615 @@ async def execute_funnel(funnel_id: int, conversation_id: int, trigger_id: int, 
             logger.error(f"❌ Failed to resolve/create conversation for {contact_phone}. Aborting Funnel.")
             return
 
-    # ✅ IDEMPOTENCY CHECK: Prevent duplicate execution
-    # trigger already fetched above
+    # Status check
+    if trigger.status == 'completed':
+        logger.warning(f"⚠️ Trigger {trigger_id} already completed. Skipping.")
+        return
     
-    if trigger:
-        # Already completed - skip execution
-        if trigger.status == 'completed':
-            logger.warning(f"⚠️ Trigger {trigger_id} already completed. Skipping duplicate execution.")
-            return
-        
-        # Still processing - Check if we should allow (e.g. just marked by scheduler)
-        if trigger.status == 'processing':
-            from datetime import timezone
-            if trigger.updated_at:
-                elapsed = (datetime.now(timezone.utc) - trigger.updated_at).total_seconds()
-                
-                # If it's very recent (e.g. < 30s), it's likely the scheduler just marked it
-                # and sent to us. We SHOULD proceed.
-                if elapsed < 30:
-                    logger.info(f"🔰 Trigger {trigger_id} was just dispatched (elapsed: {elapsed:.1f}s). Proceeding with execution.")
-                elif elapsed < 600:  # Less than 10 minutes - likely real concurrent execution
-                    logger.warning(f"⚠️ Trigger {trigger_id} is already being processed elsewhere ({elapsed:.0f}s ago). Skipping to avoid duplicates.")
-                    return
-                else:
-                    # Stale processing job (>10min) - probably died, allow retry
-                    logger.info(f"⚠️ Trigger {trigger_id} stale ({elapsed:.0f}s). Allowing retry.")
+    # FIX: Se for Bulk, ele já está as 'processing' controlado pelo loop do worker.
+    # Se for Single, o Scheduler pode já ter setado como 'processing' ao enviar para a fila para evitar duplicação.
+    # Portanto, se veio do Worker (que chama execute_funnel), devemos confiar.
+    # A verificação real de "stale" deve ser se timestamp update for MUITO velho.
+    if trigger.status == 'processing':
+        # Se for Bulk, ignoramos (já tratado)
+        if trigger.is_bulk:
+            pass 
+        else:
+            # Se for Single, só abortamos se parecer que é UMA OUTRA instância rodando (race condition)
+            # Mas como saber se sou EU que estou rodando ou outro?
+            # Assumimos que se chegou aqui, o Worker pegou a mensagem.
+            # O problema é se o Scheduler setou 'processing' e o Engine acha que isso é erro.
+            # Vamos RELAXAR a verificação: Se foi atualizado há menos de 10s, assumimos que é o Scheduler que acabou de mandar.
+            time_diff = (datetime.now(timezone.utc) - (trigger.updated_at or trigger.created_at)).total_seconds()
+            if time_diff < 30: # Janela de 30s de tolerância para o Scheduler -> Worker
+                 logger.info(f"ℹ️ Trigger {trigger_id} is processing (Scheduler handoff? Diff: {time_diff}s). Proceeding...")
+            elif time_diff > 600:
+                 # Stale job (10m) - Proceed (recovery)
+                 logger.warning(f"⚠️ Trigger {trigger_id} stale processing (>600s). Resetting/Proceeding.")
+            else:
+                 # Active processing between 30s and 600s - Likely Concurrent
+                 logger.warning(f"⚠️ Trigger {trigger_id} processing concurrently (Diff: {time_diff}s). Skipping.")
+                 return
 
-        # Mark as processing
+    if not trigger.is_bulk:
         trigger.status = 'processing'
         db.commit()
-        logger.info(f"🔄 Trigger {trigger_id} marked as processing.")
+
+    # DETECT FORMAT: Legacy List vs New Graph
+    steps_data = funnel.steps
+    is_legacy = isinstance(steps_data, list)
     
-    # 🚫 CONCURRENT FUNNEL CHECK: Only one funnel at a time per conversation
-    if conversation_id:
-        from datetime import timezone
-        active_funnel = db.query(models.ScheduledTrigger).filter(
-            models.ScheduledTrigger.conversation_id == conversation_id,
-            models.ScheduledTrigger.status == 'processing',
-            models.ScheduledTrigger.id != trigger_id  # Exclude current trigger
-        ).first()
+    try:
+        if is_legacy:
+            # ---------------------------------------------------------
+            # LEGACY LINEAR EXECUTION (Keep for safety/transition)
+            # ---------------------------------------------------------
+            logger.info("📺 Executing LEGACY (Linear) Funnel")
+            print(f"📺 [ENGINE] Legacy Funnel Execution Started for Trigger {trigger_id}")
+            await execute_legacy_funnel(trigger, steps_data, chatwoot, conversation_id, contact_phone, db)
+        else:
+            # ---------------------------------------------------------
+            # NEW GRAPH EXECUTION
+            # ---------------------------------------------------------
+            logger.info("🕸️ Executing GRAPH Funnel")
+            print(f"🕸️ [ENGINE] Graph Funnel Execution Started for Trigger {trigger_id}")
+            await execute_graph_funnel(trigger, steps_data, chatwoot, conversation_id, contact_phone, db)
+    except Exception as e:
+        logger.error(f"❌ CRITICAL ERROR in funnel execution for trigger {trigger_id}: {str(e)}")
+        # Record error and mark as failed
+        trigger.status = 'failed'
+        trigger.failure_reason = str(e)
+        db.commit()
+        raise e # Re-raise so worker knows it failed too if needed
+
+
+async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, contact_phone, db):
+    """
+    Executes the funnel based on Nodes and Edges.
+    graph_data: { "nodes": [...], "edges": [...] }
+    """
+    nodes = {n["id"]: n for n in graph_data.get("nodes", [])}
+    edges = graph_data.get("edges", [])
+    
+    # Identify Start Node (if not already running)
+    current_node_id = trigger.current_node_id
+    
+    if not current_node_id:
+        # New execution: find "start" node
+        start_node = next((n for n in nodes.values() if n.get("type") == "start"), None)
+        if not start_node:
+             # Fallback 1: Try to find node with data.isStart = True
+             start_node = next((n for n in nodes.values() if n.get("data", {}).get("isStart") is True), None)
+        if not start_node:
+             # Fallback 2: Try to find node with ID "start"
+             start_node = nodes.get("start")
         
-        if active_funnel:
-            # Check if it's really active or stale
-            if active_funnel.updated_at:
-                elapsed = (datetime.now(timezone.utc) - active_funnel.updated_at).total_seconds()
+        if not start_node:
+            logger.error("❌ No START node found in graph!")
+            trigger.status = 'failed'
+            db.commit()
+            return
+        
+        current_node_id = start_node["id"]
+        # Skip executing the 'start' node logic itself, just move to next
+        # Actually start node usually has no logic, just an output edge.
+    
+    # Execution Loop
+    while current_node_id:
+        node = nodes.get(current_node_id)
+        if not node:
+            logger.error(f"❌ Node {current_node_id} not found in graph.")
+            break
+            
+        node_type = node.get("type")
+        data = node.get("data", {})
+        
+        logger.info(f"📍 PROCESSING NODE: Type={node_type} ID={current_node_id}")
+        print(f"📍 [ENGINE] Processing Node: {node_type} ({current_node_id}) for {contact_phone}")
+        
+        # Default next handle (single output)
+        source_handle = None 
+        
+        # --- NODE LOGIC HANDLERS ---
+        
+        if node_type == "start":
+            pass # Just move on
+            
+        elif node_type in ["message", "messageNode"]:
+            content = data.get("content", "")
+            variations = data.get("variations", [])
+            logger.info(f"📩 Sending Message Node {current_node_id}. Content: '{content}'")
+            
+            # Pool de opções (principal + variações não vazias)
+            options = [content] if content else []
+            options.extend([v for v in variations if v.strip()])
+            
+            if options:
+                final_content = random.choice(options)
+                res = await chatwoot.send_message(conversation_id, final_content)
                 
-                if elapsed < 600:  # Less than 10 minutes = really active
-                    with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                        f.write(
-                            f"[{datetime.now()}] 🚫 BLOCKED: Funnel {active_funnel.funnel_id} (Trigger {active_funnel.id}) "
-                            f"is running for conversation {conversation_id}. New funnel blocked.\n"
-                        )
-                    logger.error(
-                        f"🚫 BLOCKED: Cannot start funnel {funnel_id}. "
-                        f"Funnel {active_funnel.funnel_id} still running for conversation {conversation_id}."
+                # NEW: Record and handle private note post-delivery
+                if res and isinstance(res, dict) and res.get("id"):
+                    msg_id = str(res.get("id"))
+                    new_ms = models.MessageStatus(
+                        trigger_id=trigger.id,
+                        message_id=msg_id,
+                        phone_number=contact_phone,
+                        status='sent'
                     )
+                    # Check for note
+                    if data.get("sendPrivateNote") and data.get("privateNoteContent"):
+                         new_ms.pending_private_note = data.get("privateNoteContent")
+                         logger.info(f"   ⏳ Private note stored for message {msg_id}, waiting for delivery.")
                     
-                    # Mark this trigger as cancelled
-                    if trigger:
-                        trigger.status = 'cancelled'
-                        db.commit()
-                    
-                    return
-                else:
-                    # Stale job (>10min) - mark as failed and allow new one
-                    print(f"⚠️ Previous funnel {active_funnel.id} is stale ({elapsed:.0f}s). Marking as failed.")
-                    active_funnel.status = 'failed'
+                    db.add(new_ms)
+                    db.commit()
+            else:
+                logger.warning(f"⚠️ Message Node {current_node_id} has empty content.")
+            
+        elif node_type in ["audioNode"]:
+             # Handle Audio explicitly via Official API
+             file_url = data.get("mediaUrl")
+             logger.info(f"🎤 Processing AudioNode {current_node_id}. URL: {file_url} | Data: {data}")
+             if file_url:
+                 # Call new method
+                 res = await chatwoot.send_audio_official(contact_phone, file_url)
+                 
+                 # NEW: Record and handle private note post-delivery
+                 if res and isinstance(res, dict):
+                     # Official API returns messages[0].id
+                     wamid = None
+                     if res.get("messages"): wamid = res["messages"][0].get("id")
+                     elif res.get("id"): wamid = str(res["id"])
+                     
+                     if wamid:
+                         new_ms = models.MessageStatus(
+                             trigger_id=trigger.id,
+                             message_id=wamid,
+                             phone_number=contact_phone,
+                             status='sent'
+                         )
+                         if data.get("sendPrivateNote") and data.get("privateNoteContent"):
+                             new_ms.pending_private_note = data.get("privateNoteContent")
+                             logger.info(f"   ⏳ Private note stored for audio {wamid}, waiting for delivery.")
+                         db.add(new_ms)
+                         db.commit()
+             else:
+                 logger.warning(f"⚠️ AudioNode {current_node_id} has no mediaUrl. Skipping.")
+                 
+        elif node_type in ["media", "mediaNode"]:
+             # Handle Image/Video/PDF/Audio
+             file_url = data.get("mediaUrl") or data.get("url")
+             media_type = data.get("mediaType", "image") # image, video, document, audio
+             caption = data.get("caption", "")
+             
+             if file_url:
+                 # Resolve local URLs to standard http if needed or pass as is
+                 res = await chatwoot.send_attachment(conversation_id, file_url, media_type, caption=caption)
+                 
+                 # NEW: Record and handle private note post-delivery
+                 if res and isinstance(res, dict) and res.get("id"):
+                    msg_id = str(res.get("id"))
+                    new_ms = models.MessageStatus(
+                        trigger_id=trigger.id,
+                        message_id=msg_id,
+                        phone_number=contact_phone,
+                        status='sent'
+                    )
+                    if data.get("sendPrivateNote") and data.get("privateNoteContent"):
+                         new_ms.pending_private_note = data.get("privateNoteContent")
+                    db.add(new_ms)
                     db.commit()
 
-    steps = funnel.steps or []
+        elif node_type in ["chatwoot_label", "labelNode"]:
+             label = data.get("label")
+             
+             if label:
+                 logger.info(f"🏷️ Adding Chatwoot Label: {label}")
+                 
+                 # 1. Add Label to Conversation (Visible in the Chatwoot interface / sidebar)
+                 if conversation_id and int(conversation_id) > 0:
+                     logger.info(f"   🔗 Adding Label to Conversation {conversation_id}...")
+                     await chatwoot.add_label_to_conversation(conversation_id, label)
+
+                 # 2. Add Label to Contact (For CRM / CRM Filtering)
+                 # Re-utilizamos a lógica robusta de busca do ensure_conversation
+                 clean_phone = ''.join(filter(str.isdigit, contact_phone))
+                 search_queries = [clean_phone, f"+{clean_phone}"]
+                 if len(clean_phone) >= 8:
+                     search_queries.append(clean_phone[-8:])
+                 
+                 contact_id = None
+                 for q in search_queries:
+                     contact_res = await chatwoot.search_contact(q)
+                     if contact_res and contact_res.get("payload"):
+                         contact_id = contact_res["payload"][0]["id"]
+                         break
+                 
+                 if contact_id:
+                     logger.info(f"   👤 Adding Label to Contact ID {contact_id}...")
+                     await chatwoot.add_label_to_contact(contact_id, label)
+                 else:
+                     logger.warning(f"⚠️ Could not find contact {contact_phone} in Chatwoot to add label '{label}' on profile.")
+             else:
+                 logger.warning(f"⚠️ Label Node {current_node_id} has no label defined.")
+                      
+        elif node_type in ["delay", "delayNode"]:
+            use_random = data.get("useRandom", False)
+            # Default to 10 if time/minTime is missing or 0
+            raw_time = data.get("time") or data.get("minTime") or 10
+            min_time = int(raw_time)
+            max_time = int(data.get("maxTime") or min_time)
+            
+            # Escolher tempo aleatório apenas se solicitado e houver range
+            if use_random and max_time > min_time:
+                delay_sec = random.randint(min_time, max_time)
+                logger.info(f"🎲 Smart Delay: Sorteado {delay_sec} unidades (Range: {min_time}-{max_time})")
+            else:
+                delay_sec = int(data.get("time") or min_time or 10)
+            
+            if data.get("unit") == "minutes": delay_sec *= 60
+            elif data.get("unit") == "hours": delay_sec *= 3600
+            elif data.get("unit") == "days": delay_sec *= 86400
+            
+            if delay_sec > 60:
+                # Long delay: Schedule future execution
+                resume_time = datetime.now(timezone.utc) + timedelta(seconds=delay_sec)
+                
+                # Determine Next Node ID BEFORE suspending
+                # Delays usually have one output
+                next_node_id = get_next_node(current_node_id, edges, None)
+                
+                if next_node_id:
+                    trigger.status = 'queued'
+                    trigger.scheduled_time = resume_time
+                    trigger.current_node_id = next_node_id
+                    db.commit()
+                    logger.info(f"⏳ Long delay ({delay_sec}s). Suspending until {resume_time}")
+                    return # STOP WORKER
+                else:
+                    logger.warning("Delay node has no output. Finishing.")
+                    break
+            else:
+                # Short delay
+                logger.info(f"⏱️ Short delay ({delay_sec}s)...")
+                await asyncio.sleep(delay_sec)
+
+        elif node_type in ["condition", "conditionNode"]:
+            condition_type = data.get("conditionType", "text")
+            source_handle = 'no' # Default
+            
+            if condition_type == "tag":
+                required_tag = normalize_text(data.get("tag", ""))
+                logger.info(f"🤔 Evaluating Tags Condition. Required: '{required_tag}'")
+                
+                # Search contact to get ID
+                clean_phone = ''.join(filter(str.isdigit, contact_phone))
+                contact_res = await chatwoot.search_contact(clean_phone)
+                contact_id = None
+                if contact_res and contact_res.get("payload"):
+                    contact_id = contact_res["payload"][0]["id"]
+                
+                if contact_id:
+                    contact_labels = await chatwoot.get_contact_labels(contact_id)
+                    normalized_contact_tags = [normalize_text(t) for t in contact_labels]
+                    logger.info(f"   Contact Tags: {contact_labels} -> Normalized: {normalized_contact_tags}")
+                    
+                    if required_tag in normalized_contact_tags:
+                        source_handle = 'yes'
+                else:
+                    logger.warning(f"⚠️ Contact {clean_phone} not found in Chatwoot.")
+
+            elif condition_type == "datetime_range":
+                tz = zoneinfo.ZoneInfo('America/Sao_Paulo')
+                now_dt = datetime.now(tz)
+                
+                start_str = data.get("startDateTime")
+                end_str = data.get("endDateTime")
+                
+                result = 'between'
+                try:
+                    if start_str and end_str:
+                        start_dt = datetime.fromisoformat(start_str).replace(tzinfo=tz)
+                        end_dt = datetime.fromisoformat(end_str).replace(tzinfo=tz)
+                        
+                        logger.info(f"🤔 Evaluating DateTime Range (BR). Now: {now_dt.strftime('%d/%m %H:%M')}, Range: {start_str} to {end_str}")
+                        
+                        if now_dt < start_dt: result = 'before'
+                        elif now_dt > end_dt: result = 'after'
+                        else: result = 'between'
+                        
+                        # --- ACTION LOGIC ---
+                        action = data.get(f"{result}Action", "follow")
+                        logger.info(f"   Result: {result.upper()}, Action: {action.upper()}")
+                        
+                        if action == "stop":
+                            logger.info("   🛑 Action STOP: Finishing funnel for this user.")
+                            break
+                        
+                        elif action == "wait":
+                            # Wait until next boundary
+                            wait_until = None
+                            if result == "before": 
+                                wait_until = start_dt
+                                next_handle = "between"
+                            elif result == "between": 
+                                wait_until = end_dt
+                                next_handle = "after"
+                            
+                            if wait_until:
+                                next_node_id = get_next_node(current_node_id, graph_data.get("edges", []), next_handle)
+                                if next_node_id:
+                                    trigger.status = 'queued'
+                                    trigger.scheduled_time = wait_until.astimezone(timezone.utc)
+                                    trigger.current_node_id = next_node_id
+                                    db.commit()
+                                    logger.info(f"   ⏳ Action WAIT: Suspending funnel until {wait_until} -> Next: {next_node_id}")
+                                    return # PAUSE WORKER
+                                else:
+                                    logger.warning(f"   ⚠️ Action WAIT selected but no node connected to path '{next_handle}'. Finishing.")
+                                    break
+                            else:
+                                logger.info("   ⚠️ Action WAIT is not possible for 'After' state. Finishing.")
+                                break
+                        
+                        else: # follow
+                            source_handle = result
+                    else:
+                        logger.warning("⚠️ Missing start or end datetime for range condition.")
+                except Exception as e:
+                    logger.error(f"Error parsing datetime range: {e}")
+
+            elif condition_type == "weekday":
+                # Dia da semana em Brasília
+                tz = zoneinfo.ZoneInfo('America/Sao_Paulo')
+                now_dt = datetime.now(tz)
+                # 0=Segunda, 6=Domingo
+                current_day = str(now_dt.weekday()) 
+                allowed_days = data.get("allowedDays", []) 
+                
+                day_names = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+                logger.info(f"🤔 Evaluating Weekday. Current (BR): {day_names[int(current_day)]}, Allowed: {allowed_days}")
+                
+                if current_day in allowed_days:
+                    source_handle = 'yes'
+            
+            else:
+                # Legado: Busca por texto (simples)
+                condition_text = data.get("condition", "").lower()
+                if not any(neg in condition_text for neg in ['não', 'nao', 'false', 'no', '0']):
+                    source_handle = 'yes'
+            
+            logger.info(f"   -> Result: {source_handle.upper()}")
+                
+        elif node_type in ["randomizer", "randomizerNode"]:
+            # A/B Testing logic
+            # data: { "percentA": 50 } (implies B is remainder)
+            percent_a = int(data.get("percentA", 50))
+            roll = random.randint(1, 100)
+            
+            if roll <= percent_a:
+                source_handle = "a" # Must match React Flow handle ID
+                logger.info(f"🎲 Randomizer: Path A ({roll} <= {percent_a})")
+            else:
+                source_handle = "b"
+                logger.info(f"🎲 Randomizer: Path B ({roll} > {percent_a})")
+                
+        elif node_type in ["link_funnel", "linkFunnelNode"]:
+            # Trigger another funnel
+            target_funnel_id = data.get("funnelId")
+            if target_funnel_id:
+                logger.info(f"🔗 Linking to Funnel ID {target_funnel_id}")
+                
+                new_trigger = models.ScheduledTrigger(
+                    client_id=trigger.client_id,
+                    funnel_id=target_funnel_id,
+                    conversation_id=conversation_id,
+                    contact_phone=contact_phone,
+                    status='queued',
+                    scheduled_time=datetime.now(timezone.utc),
+                    is_bulk=False,
+                    current_node_id=None # Start from beginning
+                )
+                db.add(new_trigger)
+                db.commit()
+                # Stop current funnel? User didn't specify, but usually "Link" implies handoff.
+                # If we continue, we might have parallel funnels. For now, let's allow continue if there is an output edge.
+            else:
+                logger.warning("🔗 Link Funnel node missing funnelId")
+
+        elif node_type in ["template", "templateNode"]:
+            template_name = data.get("templateName")
+            language = data.get("language", "pt_BR")
+            # components can be expanded later if needed
+            components = data.get("components", []) 
+            
+            # -----------------------------------------------------------------
+            # 24h Window Check Feature
+            # -----------------------------------------------------------------
+            window_open = False
+            check_window = data.get("check24hWindow", False)
+            fallback_msg = data.get("fallbackMessage")
+            fallback_sent = False
+
+            if check_window:
+                logger.info(f"🕒 Checking 24h Window for Node {current_node_id}...")
+                window_open = await chatwoot.is_within_24h_window(conversation_id)
+                
+                if window_open and fallback_msg and fallback_msg.strip():
+                    logger.info(f"✅ Window OPEN. Sending Fallback Message instead of Template.")
+                    try:
+                        # NEW: Support for Interactive Buttons in Fallback
+                        fallback_buttons = data.get("fallbackButtons") or []
+                        if fallback_buttons:
+                             logger.info(f"🔘 Sending Fallback Message WITH BUTTONS: {fallback_buttons}")
+                             await chatwoot.send_interactive_buttons(contact_phone, fallback_msg, fallback_buttons)
+                        else:
+                             # Send simple text message (Message Normal)
+                             await chatwoot.send_message(conversation_id, fallback_msg)
+                        
+                        # Mark as sent for funnel statistics
+                        trigger.total_sent += 1
+                        db.commit()
+                        
+                        fallback_sent = True
+                        template_name = None # Prevent template sending logic
+                    except Exception as fb_err:
+                        logger.error(f"❌ Failed to send fallback message: {fb_err}")
+                        trigger.status = 'failed'
+                        db.commit()
+                        return
+                else:
+                    if window_open:
+                        logger.info("ℹ️ Window OPEN but no fallback message configured. Sending Template normally.")
+                    else:
+                        logger.info("🔒 Window CLOSED. Sending Template normally.")
+
+            if fallback_sent:
+                logger.info(f"ℹ️ Node {current_node_id}: Fallback message sent. Skipping Template.")
+            
+            elif template_name:
+                logger.info(f"📄 Sending Template Node {current_node_id}. Template: '{template_name}' (Lang: {language})")
+                result = await chatwoot.send_template(contact_phone, template_name, language, components)
+                
+                # Check for errors
+                if isinstance(result, dict) and result.get("error"):
+                    logger.error(f"❌ Failed to send template in Node {current_node_id}: {result.get('detail')}")
+                    trigger.status = 'failed'
+                    db.commit()
+                    return # Stop funnel if main template fails
+                
+                # Record Message ID for status tracking and interactions
+                if isinstance(result, dict) and result.get("messages"):
+                    wamid = result["messages"][0].get("id")
+                    if wamid:
+                        new_ms = models.MessageStatus(
+                            trigger_id=trigger.id,
+                            message_id=wamid,
+                            phone_number=contact_phone,
+                            status='sent'
+                        )
+                        
+                        # NEW: Handle Private Message post-delivery
+                        if data.get("sendPrivateMessage") and data.get("privateMessage"):
+                            p_msg = data.get("privateMessage")
+                            final_p_msg = p_msg
+                            if fallback_sent:
+                                final_p_msg += "\n\n📢 [Sessão 24h] Enviado via Mensagem Direta (Grátis)."
+                            else:
+                                final_p_msg += f"\n\n📢 Enviado via Template: {template_name}"
+                            
+                            new_ms.pending_private_note = final_p_msg
+                            logger.info(f"   ⏳ Private note stored for template {wamid}, waiting for delivery.")
+                        
+                        db.add(new_ms)
+                        db.commit()
+                        logger.info(f"✅ Template sent. Recorded wamid: {wamid}")
+
+            elif not template_name and not fallback_sent:
+                logger.warning(f"⚠️ Template Node {current_node_id} has no templateName and no fallback sent.")
+            # Template nodes are terminal by design in the frontend.
+            # No next handle will be found, so it will break the loop.
+
+        elif node_type == "LEGACY_date_trigger":
+             # Wait until specific date
+             target_date_str = data.get("targetDate")
+             if target_date_str:
+                 target_date = datetime.fromisoformat(target_date_str.replace("Z", "+00:00"))
+                 now = datetime.now(timezone.utc)
+                 
+                 if target_date > now:
+                     wait_seconds = (target_date - now).total_seconds()
+                     
+                     next_node_id = get_next_node(current_node_id, edges, None)
+                     if next_node_id:
+                        trigger.status = 'queued'
+                        trigger.scheduled_time = target_date
+                        trigger.current_node_id = next_node_id
+                        db.commit()
+                        return # STOP WORKER
+                 else:
+                     logger.info("📅 Date already passed, proceeding.")
+
+        # --- TRAVERSAL ---
+        next_node_id = get_next_node(current_node_id, edges, source_handle)
+        
+        if next_node_id:
+            current_node_id = next_node_id
+            # Update state for crash recovery
+            trigger.current_node_id = current_node_id
+            db.commit()
+        else:
+            logger.info("🏁 End of path reached.")
+            break
+
+    # Finish
+    trigger.status = 'completed'
+    db.commit()
+
+
+def get_next_node(current_id, edges, source_handle=None):
+    for edge in edges:
+        if edge["source"] == current_id:
+            # If source_handle is required (e.g. Randomizer A/B), check it
+            if source_handle:
+                if edge.get("sourceHandle") == source_handle:
+                    return edge["target"]
+            else:
+                # If no specific handle required, take the first outgoing edge
+                # (Standard nodes usually have one output)
+                return edge["target"]
+    return None
+
+
+async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, contact_phone, db):
+    """
+    Maintains compatibility with linear steps list based funnels.
+    """
     total_steps = len(steps)
-    
-    # 📋 Determine current progress
     if trigger.current_step_index is None:
         trigger.current_step_index = 0
         db.commit()
-
-    logger.info(f"📋 Funnel {funnel.name} is at step {trigger.current_step_index}/{total_steps}.")
 
     while trigger.current_step_index < total_steps:
         step_index = trigger.current_step_index
         step = steps[step_index]
         
-        # Check cancellation status
-        crt_trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id).first()
-        if not crt_trigger or crt_trigger.status == 'cancelled':
-            logger.warning(f"🛑 Trigger {trigger_id} cancelled or missing. Stopping execution.")
-            return
+        # Check cancellation
+        db.refresh(trigger)
+        if trigger.status == 'cancelled': return
 
-        # Step structure assumption: {"type": "message", "content": "hello", "delay": 5}
         step_type = step.get("type")
         content = step.get("content")
+        
+        # Logging
+        logger.info(f"Processing Legacy Step {step_index}: {step_type}")
 
-        with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-             f.write(f"[{datetime.now()}] Processing step {step_index}: {step_type} -> Content: {content}\n")
-        print(f"Processing step: {step_type}") 
-        
-        # Simulate Typing/Recording if configured
-        if step.get("simulate_typing"):
-            try:
-                typing_time = int(step.get("typing_time", 3))
-                if typing_time > 0:
-                    action = 'recording' if step_type == 'audio' else 'typing'
-                    print(f"Simulating {action} for {typing_time}s...")
-                    await chatwoot.toggle_typing(conversation_id, 'on') # Chatwoot JS API uses same toggle
-                    await asyncio.sleep(typing_time)
-                    await chatwoot.toggle_typing(conversation_id, 'off')
-            except Exception as e:
-                print(f"Error simulating typing: {e}")
-        
         if step_type == "message":
-            if step.get("interactive") and step.get("buttons"):
-                # Handle Interactive Buttons
-                buttons_clean = [b for b in step.get("buttons") if b and b.strip()]
-                if buttons_clean:
-                    logger.info(f"🔘 Sending Interactive Buttons to {contact_phone}: {buttons_clean}")
-                    res = await chatwoot.send_interactive_buttons(contact_phone, content, buttons_clean)
-                    
-                    if res:
-                        with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                             f.write(f"[{datetime.now()}] ✅ Botões enviados com sucesso via Meta!\n")
-
-                        # Handle Private Note for Buttons
-                        if step.get('privateMessageEnabled') and step.get('privateMessageContent'):
-                            try:
-                                note_content = step.get('privateMessageContent')
-                                # Append visual indicator
-                                note_content = f"🔘 [Botões Enviados via ZapVoice]\nMsg: {content}\nBtns: {buttons_clean}\n\n{note_content}"
-                                await chatwoot.send_message(conversation_id, note_content, private=True)
-                                with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                    f.write(f"[{datetime.now()}] 📝 Nota interna de botões criada no Chatwoot.\n")
-                            except Exception as e:
-                                with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                    f.write(f"[{datetime.now()}] ❌ Failed to create private note for buttons: {e}\n")
-                    else:
-                        with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                            f.write(f"[{datetime.now()}] ⚠️ Falha ao enviar botões interativos. Tentando fallback texto simples.\n")
-                        # Fallback to simple text if interactive fails
-                        await chatwoot.send_message(conversation_id, content) 
-                else:
-                     # Interactive checked but no buttons text provided
-                     await chatwoot.send_message(conversation_id, content)   
+            buttons = step.get("buttons")
+            if buttons:
+                await chatwoot.send_interactive_buttons(contact_phone, content, buttons)
             else:
-                # Standard Text Message
                 await chatwoot.send_message(conversation_id, content)
-            
-            print(f"Sent message: {content}")
 
-        elif step_type == "audio":
-             # Try to send Official Audio (PTT) via Meta ID
-             
-             # Robust Absolute Path Resolution
-             BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # services/.. -> backend
-             ABS_UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
-             
-             local_path = None
-             if content:
-                 try:
-                     filename = content.split("/")[-1]
-                     if "?" in filename: filename = filename.split("?")[0] # Remove query params if any
-                     potential_path = os.path.join(ABS_UPLOAD_DIR, filename)
-                     if os.path.exists(potential_path):
-                         local_path = potential_path
-                 except Exception as e:
-                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                         f.write(f"[{datetime.now()}] ❌ Erro ao resolver caminho de áudio: {e}\n")
+        elif step_type in ["image", "video", "audio", "document"]:
+             # Simple media handler
+             await chatwoot.send_attachment(conversation_id, content, step_type)
 
-             sent_via_meta = False
-             
-             with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                 f.write(f"[{datetime.now()}] 🎙️ Processando Áudio PTT. Phone: {contact_phone}, LocalPath: {local_path}\n")
-
-             if contact_phone and local_path:
-                 # Force conversion to standardized PTT format (OPUS Mono 16k)
-                 temp_ptt = f"temp_ptt_{int(datetime.now().timestamp())}_{funnel_id}.opus"
-                 temp_ptt_path = os.path.join(ABS_UPLOAD_DIR, temp_ptt)
-                 
-                 try:
-                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                         f.write(f"[{datetime.now()}] 🔄 Iniciando conversão FFmpeg para PTT: {temp_ptt_path}\n")
-                         
-                     cmd = [
-                         'ffmpeg', '-i', local_path, 
-                         '-c:a', 'libopus', '-b:a', '16k', '-ac', '1', '-ar', '16000',
-                         '-vbr', 'on', '-y', temp_ptt_path
-                     ]
-                     
-                     # 1. Run conversion
-                     process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                     if process.returncode != 0:
-                         err_msg = f"FFmpeg failed: {process.stderr.decode()}"
-                         with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                             f.write(f"[{datetime.now()}] ❌ {err_msg}\n")
-                         raise Exception(err_msg)
-                     
-                     # 2. Upload to Meta
-                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                         f.write(f"[{datetime.now()}] ☁️ Uploading PTT to Meta...\n")
-                         
-                     media_id = await chatwoot.upload_media_to_meta(temp_ptt_path, mime_type='audio/ogg')
-                     
-                     # Clean up temp file
-                     try:
-                         if os.path.exists(temp_ptt_path):
-                            os.remove(temp_ptt_path)
-                     except:
-                         pass
-
-                     if media_id:
-                         with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                             f.write(f"[{datetime.now()}] ✅ Upload Meta Sucesso ID: {media_id}. Enviando Mensagem de Voz...\n")
-                         
-                         res = await chatwoot.send_official_audio(contact_phone, media_id)
-                         if res:
-                             try:
-                                 with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                     f.write(f"[{datetime.now()}] 🚀 Áudio PTT Enviado com Sucesso via Meta!\n")
-
-                                 sent_via_meta = True
-                                 
-                                 # DEBUG: Check step dict
-                                 is_private_enabled = step.get('privateMessageEnabled')
-                                 
-                                 with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                     f.write(f"[{datetime.now()}] 🔍 Checking Private Note. Enabled: {is_private_enabled}\n")
-
-                                 # Check for Private Message (Note) Requirement
-                                 if is_private_enabled and step.get('privateMessageContent'):
-                                     note_content = step.get('privateMessageContent')
-                                     # Append visual indicator
-                                     note_content = f"🎤 [Áudio Enviado via ZapVoice]\n{note_content}"
-                                     
-                                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                         f.write(f"[{datetime.now()}] 📝 Attempting to send private note...\n")
-
-                                     await chatwoot.send_message(conversation_id, note_content, private=True)
-                                     
-                                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                         f.write(f"[{datetime.now()}] 📝 Nota interna criada no Chatwoot.\n")
-                                 else:
-                                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                         f.write(f"[{datetime.now()}] ℹ️ Nota interna NÃO ativada ou sem conteúdo.\n")
-                             except Exception as inner_e:
-                                 import traceback
-                                 tb = traceback.format_exc()
-                                 with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                     f.write(f"[{datetime.now()}] 💣 CRITIAL ERROR inside Audio Success Block: {inner_e}\n{tb}\n")
-
-                         else:
-                             with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                 f.write(f"[{datetime.now()}] ⚠️ Falha no envio da mensagem de voz (send_official_audio)\n")
-                     else:
-                         with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                             f.write(f"[{datetime.now()}] ⚠️ Falha no Upload para Meta (media_id nulo)\n")
-
-                 except Exception as e:
-                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                         f.write(f"[{datetime.now()}] ❌ Exceção no processo PTT: {e}. Tentando fallback...\n")
-
-             if not sent_via_meta:
-                # Fallback to Chatwoot Attachment
-                with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                    f.write(f"[{datetime.now()}] ⚠️ Usando Fallback (Chatwoot Attachment) para áudio.\n")
-                
-                await chatwoot.send_attachment(conversation_id, content, 'audio', custom_filename=step.get('fileName'))
-
-        elif step_type in ["image", "video", "document"]:
-             # Lógica simplificada de anexo
-             final_content = content
-             
-             # Automatic Video Compression for WhatsApp (Limit ~16MB)
-             if step_type == "video" and content and ("localhost" in content or "127.0.0.1" in content):
-                 try:
-                     # 1. Resolve local path
-                     filename = content.split("/")[-1]
-                     local_path = os.path.join(UPLOAD_DIR, filename)
-                     
-                     if os.path.exists(local_path):
-                         file_size_mb = os.path.getsize(local_path) / (1024 * 1024)
-                         
-                         log_msg_orig = f"🎥 Vídeo Original: {filename} | Tamanho: {file_size_mb:.2f} MB"
-                         print(f"DEBUG: {log_msg_orig}")
-                         with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                             f.write(f"[{datetime.now()}] {log_msg_orig}\n")
-                         
-                         if file_size_mb > 15: # Safety margin for 16MB limit
-                             print(f"DEBUG: Video > 15MB. Compressing...")
-                             with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                 f.write(f"[{datetime.now()}] ⚠️ Vídeo excede 15MB. Iniciando compressão (ffmpeg)...\n")
-                                 
-                             compressed_filename = f"compressed_{filename}"
-                             compressed_path = os.path.join(UPLOAD_DIR, compressed_filename)
-                             
-                             # FFmpeg command: Compress video (CRF 28 usually yields good WhatsApp quality < 15MB for short clips)
-                             # We preserve original audio
-                             cmd = [
-                                 'ffmpeg', '-i', local_path,
-                                 '-vcodec', 'libx264', '-crf', '30', '-preset', 'faster',
-                                 '-acodec', 'aac', '-b:a', '64k', # Ensure audio is also compressed
-                                 '-y', compressed_path
-                             ]
-                             
-                             process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                             
-                             if process.returncode == 0 and os.path.exists(compressed_path):
-                                 new_size = os.path.getsize(compressed_path) / (1024 * 1024)
-                                 
-                                 log_msg_comp = f"✅ Compressão concluída! Novo tamanho: {new_size:.2f} MB (Redução de {(1 - new_size/file_size_mb)*100:.1f}%)"
-                                 print(f"DEBUG: {log_msg_comp}")
-                                 with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                     f.write(f"[{datetime.now()}] {log_msg_comp}\n")
-                                 
-                                 # Update content URL to point to compressed file (Mock URL, Client resolves by filename)
-                                 # We keep the same protocol/host to assume it's local
-                                 base_url = content.rsplit('/', 1)[0]
-                                 final_content = f"{base_url}/{compressed_filename}"
-                             else:
-                                 err_msg = f"❌ Falha na compressão: {process.stderr.decode()[:200]}"
-                                 print(f"WARNING: {err_msg}")
-                                 with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                     f.write(f"[{datetime.now()}] {err_msg}\n")
-                         else:
-                             with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                                 f.write(f"[{datetime.now()}] ✅ Vídeo dentro do limite do WhatsApp (<15MB). Enviando original.\n")
-                                 
-                 except Exception as e:
-                     print(f"Error checking/compressing video: {e}")
-                     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                         f.write(f"[{datetime.now()}] ❌ Erro inesperado ao processar vídeo: {e}\n")
-
-             # Transform localhost URLs to publicly accessible URLs
-             if final_content and ("localhost" in final_content or "127.0.0.1" in final_content or "minio" in final_content or "zapvoice-minio" in final_content):
-                 s3_public_url = get_setting("S3_PUBLIC_URL", "", client_id=trigger.client_id)
-                 if s3_public_url:
-                     # Use S3_PUBLIC_URL if configured (production)
-                     final_content = final_content.replace("http://localhost:9000", s3_public_url.rstrip('/'))
-                     final_content = final_content.replace("http://127.0.0.1:9000", s3_public_url.rstrip('/'))
-                     final_content = final_content.replace("http://minio:9000", s3_public_url.rstrip('/'))
-                     final_content = final_content.replace("http://zapvoice-minio:9000", s3_public_url.rstrip('/'))
-                 else:
-                     # Fallback for local development (replace internal Docker hostnames)
-                     final_content = final_content.replace("//minio:", "//localhost:")
-                     final_content = final_content.replace("//zapvoice-minio:", "//localhost:")
-             
-             print(f"DEBUG: Sending {step_type} with content: '{final_content}'")
-             await chatwoot.send_attachment(conversation_id, final_content, step_type, custom_filename=step.get('fileName'))
-
-        # Calculate delay logic
+        # Delay Logic
         raw_delay = int(step.get("delay", 0))
-        time_unit = step.get("timeUnit", "seconds")
-        
-        multiplier = 1
-        if time_unit == "minutes": multiplier = 60
-        elif time_unit == "hours": multiplier = 3600
-        elif time_unit == "days": multiplier = 86400
-        
-        total_delay_seconds = raw_delay * multiplier
-        
-        # Progress tracking
-        next_step_index = step_index + 1
-        
-        if next_step_index < total_steps:
-            # There are more steps - handle delay
-            if total_delay_seconds > 60:
-                # LONG DELAY: Release worker and re-queue for later
-                from datetime import timedelta
-                trigger.status = 'queued'
-                trigger.scheduled_time = datetime.now() + timedelta(seconds=total_delay_seconds)
-                trigger.current_step_index = next_step_index
-                db.commit()
-                
-                logger.info(f"⏳ Released worker. Next step {next_step_index} scheduled for {trigger.scheduled_time}")
-                with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-                    f.write(f"[{datetime.now()}] ⏳ Long delay ({total_delay_seconds}s). Re-queueing next step.\n")
-                return # RELEASE WORKER SLOT
+        if raw_delay > 0:
+            if raw_delay > 60:
+                 trigger.status = 'queued'
+                 trigger.scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=raw_delay)
+                 trigger.current_step_index = step_index + 1
+                 db.commit()
+                 return
             else:
-                # SHORT DELAY: Keep worker and wait
-                if total_delay_seconds > 0:
-                    logger.info(f"⏱️ Short delay of {total_delay_seconds}s before next step.")
-                    await asyncio.sleep(total_delay_seconds)
-                
-                # Update progress in DB but continue loop
-                trigger.current_step_index = next_step_index
-                db.commit()
-                # DO NOT RETURN - let the loop continue to next_step_index
-        else:
-            # LAST STEP: Mark as completed
-            trigger.status = 'completed'
-            trigger.current_step_index = next_step_index # total_steps
-            db.commit()
-            logger.info(f"✅ Funnel execution completed for Trigger {trigger_id}")
-            return
+                await asyncio.sleep(raw_delay)
+
+        trigger.current_step_index = step_index + 1
+        db.commit()
+
+    trigger.status = 'completed'
+    db.commit()

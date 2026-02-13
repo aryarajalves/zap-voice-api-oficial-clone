@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
-import { fetchWithAuth } from '../AuthContext';
+import { fetchWithAuth, useAuth } from '../AuthContext';
 import { useClient } from '../contexts/ClientContext';
 import { FiCheckCircle, FiXCircle, FiLoader, FiServer, FiMessageSquare, FiDatabase, FiCloud } from 'react-icons/fi';
 
 const ConnectionStatus = ({ refreshKey }) => {
     const { activeClient } = useClient();
+    const { user } = useAuth();
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -15,7 +16,7 @@ const ConnectionStatus = ({ refreshKey }) => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetchWithAuth(`${API_URL}/api/health/`, {}, activeClient.id);
+            const res = await fetchWithAuth(`${API_URL}/health/`, {}, activeClient.id);
             if (res.ok) {
                 const data = await res.json();
                 setStatus(data);
@@ -39,7 +40,7 @@ const ConnectionStatus = ({ refreshKey }) => {
         checkHealth();
     }, [activeClient, refreshKey]);
 
-    if (!activeClient) return null;
+    if (!activeClient || user?.role === 'user' || user?.role === 'premium') return null;
 
     const StatusIcon = ({ state }) => {
         if (state === 'online') return <FiCheckCircle className="text-green-500" />;
@@ -63,7 +64,6 @@ const ConnectionStatus = ({ refreshKey }) => {
             <ServiceItem icon={FiMessageSquare} label="WhatsApp" state={status?.whatsapp || (error ? 'offline' : null)} />
             <ServiceItem icon={FiServer} label="Chatwoot" state={status?.chatwoot || (error ? 'offline' : null)} />
             <ServiceItem icon={FiDatabase} label="RabbitMQ" state={status?.rabbitmq || (error ? 'offline' : null)} />
-            <ServiceItem icon={FiCloud} label="MinIO/S3" state={status?.storage || (error ? 'offline' : null)} />
 
             <button
                 onClick={checkHealth}

@@ -29,7 +29,7 @@ class FunnelBase(BaseModel):
     description: Optional[str] = Field(None, description="Descrição opcional para uso interno")
     trigger_phrase: Optional[str] = Field(None, description="Frase exata que dispara este funil (Match exato)", example="#start")
     allowed_phone: Optional[str] = Field(None, description="Se preenchido, apenas este número pode disparar o funil (ex: testes)", example="5511999999999")
-    steps: List[FunnelStep] = Field(..., description="Lista sequencial de passos a serem executados")
+    steps: Union[List[Any], dict] = Field(..., description="Lista sequencial de passos ou Grafo do Flow Builder")
 
 class FunnelCreate(FunnelBase):
     pass
@@ -39,6 +39,9 @@ class Funnel(FunnelBase):
 
     class Config:
         from_attributes = True
+
+class FunnelBulkDelete(BaseModel):
+    funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para excluir")
 
 # --- Trigger Schemas ---
 
@@ -58,9 +61,12 @@ class ScheduledTrigger(ScheduledTriggerBase):
     # Bulk send fields
     is_bulk: bool = Field(False, description="Indica se faz parte de um envio em massa")
     template_name: Optional[str] = Field(None, description="Nome do template WhatsApp (se aplicável)")
+    private_message: Optional[str] = Field(None, description="Mensagem privada para o Chatwoot")
+    private_message_delay: int = 5
+    private_message_concurrency: int = 1
     total_sent: int = 0
     total_failed: int = 0
-    contacts_list: Optional[List[dict]] = Field(None, description="Lista de contatos alvo (para validação)")
+    contacts_list: Optional[List[Union[dict, str]]] = Field(None, description="Lista de contatos alvo (para validação)")
     delay_seconds: int = Field(5, description="Intervalo entre envios (bulk)")
     concurrency_limit: int = 1
     cost_per_unit: float = 0.0
@@ -72,6 +78,11 @@ class ScheduledTrigger(ScheduledTriggerBase):
     
     # New Field
     current_step_index: Optional[int] = Field(0, description="Índice do último passo executado no funil")
+    current_node_id: Optional[str] = Field(None, description="ID do nó atual no grafo")
+    processed_contacts: Optional[List[str]] = []
+    pending_contacts: Optional[List[str]] = []
+    failure_reason: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -99,3 +110,13 @@ class WhatsAppTemplateRequest(BaseModel):
             }
         ]
     )
+class WhatsAppTemplateCreate(BaseModel):
+    name: str = Field(..., description="Nome do template (apenas letras minúsculas e underscores)", example="boas_vindas_campanha")
+    category: str = Field("MARKETING", description="Categoria (MARKETING ou UTILITY)", example="MARKETING")
+    language: str = Field("pt_BR", description="Idioma do template", example="pt_BR")
+    header_type: Optional[str] = Field("NONE", description="Tipo de cabeçalho: NONE, TEXT, IMAGE, VIDEO, DOCUMENT")
+    header_text: Optional[str] = Field(None, description="Texto do cabeçalho (se header_type=TEXT)")
+    header_media_url: Optional[str] = Field(None, description="Link de exemplo para mídia (IMAGE, VIDEO, DOCUMENT)")
+    body_text: str = Field(..., description="Texto do corpo da mensagem (suporta variáveis {{1}}, {{2}}...)")
+    footer_text: Optional[str] = Field(None, description="Texto do rodapé")
+    buttons: Optional[List[dict]] = Field(default=[], description="Lista de botões [{type: 'QUICK_REPLY', text: 'Sim'}]")

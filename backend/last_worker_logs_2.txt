@@ -1,0 +1,100 @@
+﻿      "code": "en_US"
+    }
+  }
+}
+================================================================================
+DEBUG: Response Status: 200
+DEBUG: Response Headers: {'content-type': 'application/json; charset=UTF-8', 'vary': 'Origin', 'x-fb-aed': '720', 'x-business-use-case-usage': '{"1946144149291660":[{"type":"whatsapp","call_count":1,"total_cputime":1,"total_time":1,"estimated_time_to_regain_access":0}]}', 'access-control-allow-origin': '*', 'facebook-api-version': 'v24.0', 'strict-transport-security': 'max-age=15552000; preload', 'pragma': 'no-cache', 'cache-control': 'private, no-cache, no-store, must-revalidate', 'expires': 'Sat, 01 Jan 2000 00:00:00 GMT', 'x-fb-request-id': 'AKjqkF3jquGsuPrt7ifJcy_', 'x-fb-trace-id': 'D6LPDhwX1HB', 'x-fb-rev': '1032748014', 'x-fb-debug': 'AgJNIQPKiI6ZxOPYyotLMxblZ1IuLCk8uiJx0Gl4qqCbbue6LFDt0YVB0FXeAr+E5PIQH2/qpZbLDlCvgnkNYA==', 'x-fb-server-load': '7', 'date': 'Sat, 31 Jan 2026 15:10:46 GMT', 'x-fb-connection-quality': 'EXCELLENT; q=0.9, rtt=13, rtx=0, c=10, mss=1392, tbw=3687, tp=-1, tpl=-1, uplat=584, ullat=0', 'alt-svc': 'h3=":443"; ma=86400', 'connection': 'keep-alive', 'content-length': '206'}
+DEBUG: Response Body:
+{
+  "messaging_product": "whatsapp",
+  "contacts": [
+    {
+      "input": "558596123586",
+      "wa_id": "558596123586"
+    }
+  ],
+  "messages": [
+    {
+      "id": "wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSOTgyN0I4RDBENjMzNDM2QTM1AA==",
+      "message_status": "accepted"
+    }
+  ]
+}
+================================================================================
+SUCCESS: Template sent! WhatsApp accepted the request.
+­ƒôú Enqueueing private message for 558596123586 (Trigger: 167)
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+[38;5;39m2026-01-31 15:10:45 - rabbitmq_client - INFO - ­ƒôñ Mensagem enviada para fila: chatwoot_private_messages[0m
+Ô£à Private message enqueued successfully for 558596123586
+Bulk send 167 COMPLETED. Sent: 1, Failed: 0
+Error creating conversation: Client error '404 Not Found' for url 'https://chatsarah.jords.site/api/v1/accounts/1/conversations'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-01-31 15:10:45,152 - Worker - INFO - 
+ƒÆ¼ [PRIVATE_NOTE] Starting for 
+558596123586 (Trigger: 167, Client: 1)
+2026-01-31 15:10:45,187 - Worker - INFO - 
+Ô£à Job de Bulk Send 167 conclu├¡do com 
+sucesso!
+2026-01-31 15:10:45,187 - Worker - INFO - 
+ÔÅ│ Aguardando 2.0s antes de liberar slot...
+2026-01-31 15:10:45,691 - httpx - INFO - 
+HTTP Request: GET https://chatsarah.jords.si
+te/api/v1/accounts/1/inboxes "HTTP/1.1 200 
+OK"
+2026-01-31 15:10:46,250 - httpx - INFO - 
+HTTP Request: GET https://chatsarah.jords.si
+te/api/v1/accounts/1/contacts/search?q=55859
+6123586 "HTTP/1.1 200 OK"
+2026-01-31 15:10:46,594 - Worker - INFO - 
+ƒöì [DEBUG] Processing Status Update: msg_id
+=wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSOTgyN0I4R
+DBENjMzNDM2QTM1AA==, status=sent, 
+recipient=558596123586
+2026-01-31 15:10:46,598 - Worker - INFO - 
+Ô£à [DEBUG] MessageStatus FOUND. Current 
+Status: sent -> New: sent
+2026-01-31 15:10:46,730 - httpx - INFO - 
+HTTP Request: GET https://chatsarah.jords.si
+te/api/v1/accounts/1/contacts/2370/conversat
+ions "HTTP/1.1 200 OK"
+2026-01-31 15:10:46,779 - Worker - INFO - 
+ƒöì [DEBUG] Processing Status Update: msg_id
+=wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSOTgyN0I4R
+DBENjMzNDM2QTM1AA==, status=delivered, 
+recipient=558596123586
+2026-01-31 15:10:46,780 - Worker - INFO - 
+Ô£à [DEBUG] MessageStatus FOUND. Current 
+Status: sent -> New: delivered
+2026-01-31 15:10:46,782 - Worker - INFO - 
+ƒöù [DEBUG] Updating Parent Trigger 167 
+(Sent: 1, Delivered: 0)
+2026-01-31 15:10:46,789 - Worker - INFO - 
+ƒôè Status Meta: wamid.HBgMNTU4NTk2MTIzNTg2F
+QIAERgSOTgyN0I4RDBENjMzNDM2QTM1AA== 
+(delivered)
+2026-01-31 15:10:47,169 - httpx - INFO - 
+HTTP Request: POST https://chatsarah.jords.s
+ite/api/v1/accounts/1/conversations 
+"HTTP/1.1 404 Not Found"
+2026-01-31 15:10:47,174 - Worker - ERROR - 
+ÔØî Falha ao garantir conversa para 
+558596123586
+2026-01-31 15:10:47,174 - Worker - INFO - 
+ÔÅ│ Aguardando 5s para o pr├│ximo item da 
+fila de notas privadas...
+2026-01-31 15:11:08,952 - Worker - INFO - 
+ƒöì [DEBUG] Processing Status Update: msg_id
+=wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSOTgyN0I4R
+DBENjMzNDM2QTM1AA==, status=read, 
+recipient=558596123586
+2026-01-31 15:11:08,953 - Worker - INFO - 
+Ô£à [DEBUG] MessageStatus FOUND. Current 
+Status: delivered -> New: read
+2026-01-31 15:11:08,955 - Worker - INFO - 
+ƒöù [DEBUG] Updating Parent Trigger 167 
+(Sent: 1, Delivered: 1)
+2026-01-31 15:11:08,965 - Worker - INFO - 
+ƒôè Status Meta: wamid.HBgMNTU4NTk2MTIzNTg2F
+QIAERgSOTgyN0I4RDBENjMzNDM2QTM1AA== (read)

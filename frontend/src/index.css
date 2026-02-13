@@ -30,3 +30,93 @@
         @apply scale-[1.01] ring-2 ring-blue-500/40 shadow-md outline-none;
     }
 }
+
+/* React Flow Connection Styles */
+.react-flow__handle {
+    width: 14px !important;
+    height: 14px !important;
+    @apply border-2 border-white dark:border-gray-900 shadow-md transition-all duration-200 !important;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.react-flow__handle:hover {
+    @apply scale-150 !important;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+}
+
+/* Feedback de quando está tentando conectar */
+.react-flow__handle-connecting {
+    @apply bg-blue-500 scale-150 ring-4 ring-blue-500/30 animate-pulse !important;
+}
+
+/* Feedback de conexão válida */
+.react-flow__handle-valid {
+    @apply bg-green-500 scale-[2] ring-4 ring-green-500/40 !important;
+}
+
+/* Linha de conexão durante o arraste */
+.react-flow__connection-path {
+    @apply stroke-blue-500 stroke-[3] !important;
+    stroke-dasharray: 5;
+    animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+    from {
+        stroke-dashoffset: 10;
+    }
+
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.react-flow__edge-path {
+    @apply stroke-blue-400 stroke-[2.5];
+}
+
+/* Custom Colors for Handles to pop more */
+.react-flow__handle.bg-blue-500 {
+    background-color: #3b82f6 !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+}
+
+.react-flow__handle.bg-pink-500 {
+    background-color: #ec4899 !important;
+    box-shadow: 0 0 8px rgba(236, 72, 153, 0.6);
+}
+
+.react-flow__handle.bg-yellow-500 {
+    background-color: #eab308 !important;
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.6);
+}
+
+.react-flow__handle.bg-purple-500 {
+    background-color: #a855f7 !important;
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
+}
+
+.react-flow__handle.bg-indigo-500 {
+    background-color: #6366f1 !important;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+}
+
+.react-flow__handle.bg-orange-500 {
+    background-color: #f97316 !important;
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.6);
+}
+
+.react-flow__handle.bg-cyan-500 {
+    background-color: #06b6d4 !important;
+    box-shadow: 0 0 8px rgba(6, 182, 212, 0.6);
+}
+
+.react-flow__handle.bg-green-500 {
+    background-color: #22c55e !important;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.react-flow__handle.bg-red-500 {
+    background-color: #ef4444 !important;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}

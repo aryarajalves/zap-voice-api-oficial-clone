@@ -41,4 +41,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         logger.error(f"User not found for email: {email}")
         raise credentials_exception
+    
+    if not user.is_active:
+        logger.warning(f"Inactive user attempt: {email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sua conta foi desativada pelo administrador.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
     return user

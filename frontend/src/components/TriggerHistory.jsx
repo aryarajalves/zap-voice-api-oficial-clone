@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { API_URL, WS_URL } from '../config';
 import { toast } from 'react-hot-toast';
-import { fetchWithAuth } from '../AuthContext';
+import { fetchWithAuth, useAuth } from '../AuthContext';
 import { useClient } from '../contexts/ClientContext';
 import ConfirmModal from './ConfirmModal';
 import useScrollLock from '../hooks/useScrollLock';
 
 const TriggerHistory = ({ refreshKey }) => {
     const { activeClient } = useClient();
+    const { user } = useAuth();
     const [triggers, setTriggers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modalConfig, setModalConfig] = useState({
@@ -25,7 +26,8 @@ const TriggerHistory = ({ refreshKey }) => {
         isOpen: false,
         title: '',
         triggerId: null,
-        contacts: []
+        contacts: [],
+        counts: {}
     });
     const [contactsFilter, setContactsFilter] = useState('all');
     const [loadingContacts, setLoadingContacts] = useState(false);
@@ -39,6 +41,33 @@ const TriggerHistory = ({ refreshKey }) => {
         contacts: [],
         scheduledTime: ''
     });
+
+    // Error Report Modal State
+    const [errorModal, setErrorModal] = useState({
+        isOpen: false,
+        triggerId: null,
+        errors: [],
+        isLoading: false
+    });
+
+    const fetchErrors = async (triggerId) => {
+        setErrorModal({ isOpen: true, triggerId, errors: [], isLoading: true });
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${triggerId}/failures`, {}, activeClient?.id);
+            if (res.ok) {
+                const data = await res.json();
+                setErrorModal(prev => ({ ...prev, errors: data, isLoading: false }));
+            } else {
+                toast.error("Erro ao buscar relatório de falhas");
+                setErrorModal(prev => ({ ...prev, isLoading: false }));
+            }
+        } catch (e) {
+            console.error(e);
+            toast.error("Erro de conexão");
+            setErrorModal(prev => ({ ...prev, isLoading: false }));
+        }
+    };
+
 
     // Apply scroll lock when either modal is open
     useScrollLock(contactsModal.isOpen || editParamsModal.isOpen);
@@ -158,7 +187,11 @@ const TriggerHistory = ({ refreshKey }) => {
             const res = await fetchWithAuth(url, {}, activeClient?.id);
             if (res.ok) {
                 const data = await res.json();
-                setContactsModal(prev => ({ ...prev, contacts: data }));
+                setContactsModal(prev => ({
+                    ...prev,
+                    contacts: data.items || [],
+                    counts: data.counts || {}
+                }));
             }
         } catch (e) {
             console.error(e);
@@ -170,15 +203,17 @@ const TriggerHistory = ({ refreshKey }) => {
 
     useEffect(() => {
         console.log("DEBUG: fetchHistory called. Active Client:", activeClient);
+        console.log("DEBUG: Current User Role:", user?.role, "| User:", user);
         fetchHistory();
-    }, [refreshKey, fetchHistory]);
+    }, [refreshKey, fetchHistory, user]);
 
     // WebSocket Realtime Updates
     useEffect(() => {
         let ws;
-        console.log("🔌 Tentando conectar WebSocket em", WS_URL);
+        const wsFinalUrl = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+        console.log("🔌 Tentando conectar WebSocket em", wsFinalUrl);
         try {
-            ws = new WebSocket(`${WS_URL}/ws`);
+            ws = new WebSocket(wsFinalUrl);
 
             ws.onopen = () => console.log("🟢 WebSocket Conectado!");
 
@@ -204,6 +239,21 @@ const TriggerHistory = ({ refreshKey }) => {
                             }
                             return t;
                         }));
+                    } else if (payload.event === "trigger_deleted") {
+                        // Verifica se o trigger pertence ao cliente ativo
+                        if (payload.data.client_id === activeClient?.id) {
+                            setTriggers(prev => prev.filter(t => t.id !== payload.data.trigger_id));
+                        }
+                    } else if (payload.event === "trigger_updated") {
+                        // Verifica se o trigger pertence ao cliente ativo
+                        if (payload.data.client_id === activeClient?.id) {
+                            setTriggers(prev => prev.map(t => {
+                                if (t.id === payload.data.trigger_id) {
+                                    return { ...t, status: payload.data.status };
+                                }
+                                return t;
+                            }));
+                        }
                     }
                 } catch (e) {
                     console.error("WS Parse Error", e);
@@ -224,7 +274,7 @@ const TriggerHistory = ({ refreshKey }) => {
             if (ws) ws.close();
             clearInterval(interval);
         };
-    }, [fetchHistory]);
+    }, [fetchHistory, activeClient?.id]);
 
     const handleDelete = (id) => {
         setModalConfig({
@@ -266,6 +316,22 @@ const TriggerHistory = ({ refreshKey }) => {
         });
     };
 
+    const handleRetry = async (id) => {
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${id}/retry`, { method: 'POST' }, activeClient?.id);
+            if (res.ok) {
+                toast.success("Reencontro iniciado com sucesso!");
+                fetchHistory();
+            } else {
+                const data = await res.json();
+                toast.error(data.detail || "Erro ao tentar reenviar");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.error("Erro de conexão ao tentar reenviar");
+        }
+    };
+
     // View Contacts Handler
     const handleViewContacts = (trigger) => {
         setContactsFilter('all');
@@ -273,7 +339,9 @@ const TriggerHistory = ({ refreshKey }) => {
             isOpen: true,
             title: `Contatos - ${trigger.funnel?.name || 'Envio em Massa'}`,
             triggerId: trigger.id,
-            contacts: [] // will fetch
+            isTemplate: !!trigger.template_name, // Only templates have detailed tracking
+            contacts: [], // will fetch
+            counts: {}
         });
     };
 
@@ -544,29 +612,42 @@ const TriggerHistory = ({ refreshKey }) => {
                             <button onClick={() => setContactsModal({ ...contactsModal, isOpen: false })} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                         </div>
 
-                        {/* Filters */}
-                        <div className="px-4 pt-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex gap-2 overflow-x-auto no-scrollbar">
-                            {[
-                                { id: 'all', label: 'Todos', icon: '📋' },
-                                { id: 'delivered', label: 'Recebidas', icon: '📬' }, // Delivered+Read
-                                { id: 'read', label: 'Viram', icon: '👀' },
-                                { id: 'interaction', label: 'Interagiram', icon: '👆' },
-                                { id: 'blocked', label: 'Bloquearam', icon: '🚫' },
-                                { id: 'failed', label: 'Falharam', icon: '❌' },
-                            ].map(tab => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setContactsFilter(tab.id)}
-                                    className={`pb-2 px-3 text-sm font-medium border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${contactsFilter === tab.id
-                                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                                        }`}
-                                >
-                                    <span>{tab.icon}</span>
-                                    <span>{tab.label}</span>
-                                </button>
-                            ))}
-                        </div>
+                        {/* Filters - Only show for Template sends */}
+                        {contactsModal.isTemplate && (
+                            <div className="px-4 pt-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex gap-2 overflow-x-auto no-scrollbar">
+                                {[
+                                    { id: 'all', label: 'Todos', icon: '📋' },
+                                    { id: 'free', label: 'Gratuita', icon: '🆓' },
+                                    { id: 'template', label: 'Template', icon: '📝' },
+                                    { id: 'delivered', label: 'Recebidas', icon: '📬' }, // Delivered+Read
+                                    { id: 'read', label: 'Viram', icon: '👀' },
+                                    { id: 'interaction', label: 'Interagiram', icon: '👆' },
+                                    { id: 'blocked', label: 'Bloquearam', icon: '🚫' },
+                                    { id: 'failed', label: 'Falharam', icon: '❌' },
+                                ].map(tab => {
+                                    const count = contactsModal.counts?.[tab.id] || 0;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setContactsFilter(tab.id)}
+                                            className={`pb-2 px-3 text-sm font-medium border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${contactsFilter === tab.id
+                                                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                                }`}
+                                        >
+                                            <span>{tab.icon}</span>
+                                            <span>{tab.label}</span>
+                                            {count > 0 && (
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${contactsFilter === tab.id ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                                                    {count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
 
                         <div className="p-0 overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-900/30 min-h-[300px]">
                             {loadingContacts ? (
@@ -586,8 +667,15 @@ const TriggerHistory = ({ refreshKey }) => {
                                                                     contact.is_interaction ? 'bg-purple-500' : 'bg-gray-300'
                                                     }`} title={contact.status === 'sent' ? 'Enviado ao WhatsApp (Aguardando Retorno)' : contact.status} />
                                                 <div>
-                                                    <div className="text-sm font-medium text-gray-900 dark:text-white font-mono">
-                                                        {contact.phone_number || contact.phone || 'Desconhecido'}
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-sm font-medium text-gray-900 dark:text-white font-mono">
+                                                            {contact.phone_number || contact.phone || 'Desconhecido'}
+                                                        </div>
+                                                        {contact.message_type === 'DIRECT_MESSAGE' ? (
+                                                            <span className="text-[9px] font-black uppercase tracking-tighter bg-blue-50 dark:bg-blue-900/20 text-blue-500 px-1 rounded border border-blue-500/10">Livre</span>
+                                                        ) : (
+                                                            <span className="text-[9px] font-black uppercase tracking-tighter bg-purple-50 dark:bg-purple-900/20 text-purple-500 px-1 rounded border border-purple-500/10">Template</span>
+                                                        )}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                         {new Date(contact.updated_at || contact.timestamp).toLocaleString()}
@@ -634,6 +722,60 @@ const TriggerHistory = ({ refreshKey }) => {
                 </div>
             )}
 
+            {/* Error Report Modal */}
+            {errorModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm animated-fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[85vh]">
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-red-50 dark:bg-red-900/30">
+                            <h3 className="font-bold text-red-800 dark:text-red-300 text-lg flex items-center gap-2">
+                                ❌ Relatório de Falhas
+                            </h3>
+                            <button onClick={() => setErrorModal({ ...errorModal, isOpen: false })} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        </div>
+
+                        <div className="p-0 overflow-y-auto flex-1 bg-white dark:bg-gray-800 min-h-[300px]">
+                            {errorModal.isLoading ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                                    {errorModal.errors.map((err, i) => (
+                                        <div key={i} className="p-3 hover:bg-red-50 dark:hover:bg-red-900/10 transition">
+                                            <div className="flex justify-between items-start">
+                                                <div className="font-mono text-sm font-bold text-gray-800 dark:text-gray-200">
+                                                    {err.phone}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    {new Date(err.time).toLocaleString()}
+                                                </div>
+                                            </div>
+                                            <div className="mt-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900/50">
+                                                {err.reason}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {errorModal.errors.length === 0 && (
+                                        <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                                            <p className="text-sm">Nenhuma falha registrada.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-end gap-3">
+                            <button onClick={() => {
+                                const text = errorModal.errors.map(e => `${e.phone};${e.reason};${e.time}`).join('\n');
+                                navigator.clipboard.writeText(text);
+                                toast.success('Relatório copiado!');
+                            }} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition font-medium text-xs">Copiar Tudo</button>
+                            <button onClick={() => setErrorModal({ ...errorModal, isOpen: false })} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col gap-4">
                 <div className="flex justify-between items-center">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
@@ -643,7 +785,7 @@ const TriggerHistory = ({ refreshKey }) => {
                         Histórico de Disparos
                     </h2>
 
-                    {selectedIds.length > 0 && (
+                    {selectedIds.length > 0 && user?.role === 'super_admin' && (
                         <button
                             onClick={confirmBulkDelete}
                             className="flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 transition shadow-sm"
@@ -759,54 +901,47 @@ const TriggerHistory = ({ refreshKey }) => {
                                             {trigger.is_bulk ? (
                                                 <div>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-blue-600 dark:text-blue-400">📤 {trigger.template_name || trigger.funnel?.name || 'Disparo em Massa'}</span>
+                                                        <span className="text-blue-600 dark:text-blue-400">📤 {trigger.template_name?.split('|').pop() || trigger.funnel?.name || 'Disparo em Massa'}</span>
                                                         <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">Bulk</span>
                                                     </div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                        ✅ {trigger.total_sent} enviados •
-                                                        {trigger.total_delivered > 0 && <span className="text-green-600 font-semibold" title="Entregues"> 📬 {trigger.total_delivered} •</span>}
-                                                        {trigger.total_read > 0 && <span className="text-blue-500 font-semibold" title="Lidos"> 👀 {trigger.total_read} •</span>}
-                                                        {trigger.total_interactions > 0 && <span className="text-purple-600 font-bold" title="Cliques em Botão"> 👆 {trigger.total_interactions} •</span>}
-                                                        {trigger.total_blocked > 0 && <span className="text-orange-600 font-bold" title="Bloqueios (Sair/Bloquear)"> 🚫 {trigger.total_blocked} •</span>}
-                                                        {trigger.total_failed > 0 && <span className="text-red-500 font-semibold" title="Falhas"> ❌ {trigger.total_failed} •</span>}
-                                                        <span className="text-gray-500 dark:text-gray-400"> ⏳ Faltam: {Math.max(0, (trigger.contacts_list?.length || 0) - (trigger.total_sent + trigger.total_failed))}</span>
-                                                    </div>
+                                                    {(trigger.template_name) && (
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                            ✅ {trigger.total_sent} enviados •
+                                                            {trigger.total_delivered > 0 && <span className="text-green-600 font-semibold" title="Entregues"> 📬 {trigger.total_delivered} •</span>}
+                                                            {trigger.total_read > 0 && <span className="text-blue-500 font-semibold" title="Lidos"> 👀 {trigger.total_read} •</span>}
+                                                            {trigger.total_interactions > 0 && <span className="text-purple-600 font-bold" title="Cliques em Botão"> 👆 {trigger.total_interactions} •</span>}
+                                                            {trigger.total_blocked > 0 && <span className="text-orange-600 font-bold" title="Bloqueios (Sair/Bloquear)"> 🚫 {trigger.total_blocked} •</span>}
+                                                            {trigger.total_failed > 0 && <span className="text-red-500 font-semibold" title="Falhas"> ❌ {trigger.total_failed} •</span>}
+                                                            <span className="text-gray-500 dark:text-gray-400"> ⏳ Faltam: {Math.max(0, (trigger.contacts_list?.length || 0) - (trigger.total_sent + trigger.total_failed))}</span>
+                                                        </div>
+                                                    )}
                                                     {trigger.total_failed > 0 && (
                                                         <button
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const res = await fetchWithAuth(`${API_URL}/triggers/${trigger.id}/failures-csv`, {}, activeClient?.id);
-                                                                    if (res.ok) {
-                                                                        const blob = await res.blob();
-                                                                        const url = window.URL.createObjectURL(blob);
-                                                                        const a = document.createElement('a');
-                                                                        a.href = url;
-                                                                        a.download = `falhas_disparo_${trigger.id}.csv`;
-                                                                        document.body.appendChild(a);
-                                                                        a.click();
-                                                                        a.remove();
-                                                                    } else {
-                                                                        toast.error("Erro ao baixar relatório");
-                                                                    }
-                                                                } catch (e) {
-                                                                    toast.error("Erro na conexão");
-                                                                }
-                                                            }}
-                                                            className="text-[10px] sm:text-xs mt-1 text-red-600 dark:text-red-400 font-medium hover:underline flex items-center gap-1"
+                                                            onClick={() => fetchErrors(trigger.id)}
+                                                            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 mt-1 font-semibold"
                                                         >
-                                                            📥 Baixar Relatório de Falhas ({trigger.total_failed})
+                                                            📋 Ver Relatório de Falhas ({trigger.total_failed})
                                                         </button>
                                                     )}
-                                                    {trigger.total_delivered > 0 && trigger.total_cost > 0 && (
-                                                        <div className="text-xs text-green-600 dark:text-green-400 font-semibold mt-1">
-                                                            💰 R$ {trigger.total_cost.toFixed(2)} ({trigger.total_delivered} entregues)
+                                                    {trigger.total_delivered > 0 && (
+                                                        <div className={`text-xs font-semibold mt-1 ${trigger.total_cost > 0 ? 'text-green-600 dark:text-green-400' : 'text-blue-500'}`}>
+                                                            {trigger.total_cost > 0 ? `💰 R$ ${trigger.total_cost.toFixed(2)}` : '🆓 Custo Zero'}
+                                                            <span className="opacity-60 ml-1">({trigger.total_delivered} entregues)</span>
                                                         </div>
                                                     )}
                                                 </div>
-                                            ) : trigger.funnel ? (
-                                                trigger.funnel.name
                                             ) : (
-                                                <span className="text-gray-400 italic">Funil Apagado (ID: {trigger.funnel_id})</span>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        {trigger.funnel?.name || <span className="text-gray-400 italic">Funil Apagado (ID: {trigger.funnel_id})</span>}
+                                                        {trigger.template_name && <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded uppercase font-bold">Template</span>}
+                                                    </div>
+                                                    {trigger.total_delivered > 0 && (
+                                                        <div className={`text-[10px] font-bold mt-0.5 ${trigger.total_cost > 0 ? 'text-green-600 dark:text-green-400' : 'text-blue-500'}`}>
+                                                            {trigger.total_cost > 0 ? `💰 R$ ${trigger.total_cost.toFixed(2)}` : '🆓 Custo Zero'}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             )}
                                         </td>
                                         <td className="p-4 text-sm text-gray-600 dark:text-gray-300">
@@ -836,6 +971,11 @@ const TriggerHistory = ({ refreshKey }) => {
                                         </td>
                                         <td className="p-4 text-center">
                                             {getStatusBadge(trigger.status)}
+                                            {!trigger.is_bulk && trigger.status === 'failed' && trigger.failure_reason && (
+                                                <div className="text-[10px] text-red-500 mt-1 leading-tight max-w-[120px] mx-auto break-words italic">
+                                                    {trigger.failure_reason}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="p-4 text-right flex justify-end gap-2">
                                             {(trigger.status === 'pending' || trigger.status === 'processing') ? (
@@ -845,7 +985,26 @@ const TriggerHistory = ({ refreshKey }) => {
                                                     <button onClick={() => handleCancel(trigger.id)} className="p-1 text-red-500 hover:bg-red-50 rounded" title="Cancelar Envio"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                                                 </>
                                             ) : (
-                                                <button onClick={() => handleDelete(trigger.id)} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded" title="Excluir Histórico"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                                <div className="flex items-center gap-2">
+                                                    {trigger.status === 'failed' && (
+                                                        <button
+                                                            onClick={() => handleRetry(trigger.id)}
+                                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                                            title="Tentar Novamente (Reenviar)"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                    {user?.role === 'super_admin' && (
+                                                        <button onClick={() => handleDelete(trigger.id)} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded" title="Excluir Histórico">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </td>
                                     </tr>

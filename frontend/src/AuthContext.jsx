@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { API_URL } from './config';
+import { API_URL, WS_URL } from './config';
 
 const AuthContext = createContext(null);
 
@@ -17,6 +17,56 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
         }
     }, []);
+
+    // WebSocket Realtime Sync para Perfil
+    useEffect(() => {
+        if (!user) return;
+
+        let ws;
+        const wsFinalUrl = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+        console.log("🔌 [AuthContext] Tentando conectar WebSocket em", wsFinalUrl);
+        try {
+            ws = new WebSocket(wsFinalUrl);
+
+            ws.onopen = () => console.log("🟢 [AuthContext] WebSocket Conectado!");
+
+            ws.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    console.log("📩 [AuthContext] Mensagem Recebida:", payload.event, payload);
+
+                    if (payload.event === "profile_updated" && String(payload.user_id) === String(user.id)) {
+                        console.info("👤 [AuthContext] Perfil atualizado detectado:", payload.data);
+
+                        // Verificar se a conta foi desativada
+                        if (payload.data.is_active === false) {
+                            console.warn("🚫 [AuthContext] Conta desativada pelo administrador. Deslogando...");
+                            alert("Sua conta foi desativada pelo administrador.");
+                            logout();
+                            return;
+                        }
+
+                        setUser(prev => ({ ...prev, ...payload.data }));
+                    }
+                } catch (e) {
+                    console.error("❌ [AuthContext] Error parsing profile WS message:", e);
+                }
+            };
+
+            ws.onerror = (e) => console.error("🔴 [AuthContext] Auth WS Error", e);
+            ws.onclose = (e) => {
+                console.log("🔌 [AuthContext] Auth WebSocket fechado. Code:", e.code, "Reason:", e.reason);
+                // Opcional: Re-conectar em alguns segundos se não foi fechado propositalmente
+            };
+
+        } catch (e) {
+            console.error("❌ [AuthContext] Failed to connect Auth WebSocket", e);
+        }
+
+        return () => {
+            if (ws) ws.close();
+        };
+    }, [user?.id]);
 
     const fetchCurrentUser = async (token) => {
         try {
@@ -146,10 +196,26 @@ export const fetchWithAuth = async (url, options = {}, clientId = null) => {
 
     // Se receber 401, fazer logout (ProtectedRoute vai exibir tela de login)
     if (response.status === 401) {
+        // Ignorar 401 e não deslogar se for a rota de login, ou tentativa de login
+        if (url.includes('/auth/token')) {
+            // Se for login e deu 401, apenas retornamos a resposta para o componente tratar
+            return response;
+        }
+
+        let errorMessage = 'Sessão expirada. Faça login novamente.';
+        try {
+            const errorData = await response.clone().json();
+            if (errorData.detail) errorMessage = errorData.detail;
+        } catch (e) { /* ignore parse error */ }
+
         localStorage.removeItem('token');
-        // Recarregar a página para forçar re-render do ProtectedRoute
+        if (errorMessage.includes('desativada')) {
+            alert(errorMessage);
+        }
+
+        // Recarregar a página para forçar re-render do ProtectedRoute (que limpa o state do user)
         window.location.reload();
-        throw new Error('Sessão expirada. Faça login novamente.');
+        throw new Error(errorMessage);
     }
 
     return response;

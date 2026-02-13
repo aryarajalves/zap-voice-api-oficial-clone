@@ -1,0 +1,100 @@
+﻿INFO:     172.22.0.1:54130 - "GET /api/funnels/54 HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:26:18 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/funnels/54[0m
+INFO:     172.22.0.1:54128 - "GET /api/funnels/54 HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:28 - zapvoice - INFO - ­ƒöì [REQUEST] OPTIONS /api/auth/me[0m
+[38;5;39m2026-02-02 17:27:28 - zapvoice - INFO - ­ƒöì [REQUEST] OPTIONS /api/auth/me[0m
+INFO:     172.22.0.1:36814 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     172.22.0.1:36816 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/auth/me[0m
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/auth/me[0m
+­ƒæñ READ_ME: Found user aryarajmarketing@gmail.com (ID: 36)
+­ƒæñ READ_ME: Found user aryarajmarketing@gmail.com (ID: 36)
+INFO:     172.22.0.1:36814 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     172.22.0.1:36816 - "GET /api/auth/me HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/clients/[0m
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöî Tentativa de conex├úo WS de origin: http://localhost:5173[0m
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöî WebSocket conectado. Total: 1[0m
+INFO:     172.22.0.1:36816 - "GET /api/clients/ HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] OPTIONS /api/health/[0m
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/whatsapp/templates[0m
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] OPTIONS /api/health/[0m
+INFO:     172.22.0.1:36816 - "OPTIONS /api/health/ HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/settings/[0m
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/funnels[0m
+INFO:     172.22.0.1:36820 - "OPTIONS /api/health/ HTTP/1.1" 200 OK
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: Fetching templates from: https://graph.facebook.com/v24.0/1946144149291660/message_templates?limit=250
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/health/[0m
+[SETTINGS] GET /settings called by user: aryarajmarketing@gmail.com, client_id: 1
+[SETTINGS] Retrieved 12 settings from DB for client 1
+[SETTINGS] Returning masked settings: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+INFO:     172.22.0.1:36828 - "GET /api/settings/ HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/settings/[0m
+INFO:     172.22.0.1:36840 - "GET /api/funnels HTTP/1.1" 200 OK
+[SETTINGS] GET /settings called by user: aryarajmarketing@gmail.com, client_id: 1
+[SETTINGS] Retrieved 12 settings from DB for client 1
+[SETTINGS] Returning masked settings: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+INFO:     172.22.0.1:36862 - "GET /api/settings/ HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/settings/[0m
+[SETTINGS] GET /settings called by user: aryarajmarketing@gmail.com, client_id: 1
+[SETTINGS] Retrieved 12 settings from DB for client 1
+[SETTINGS] Returning masked settings: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+INFO:     172.22.0.1:36840 - "GET /api/settings/ HTTP/1.1" 200 OK
+DEBUG: Fetched 14 templates from Meta API.
+DEBUG: Template found: mensagem_nova_2026 | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_sarah | Status: APPROVED | Lang: en
+DEBUG: Template found: lancamento_sarah | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_lancamento | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: compra | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: carrinho_abandonado | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_oferta | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_live_20_00 | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: cartao_recusado | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: pix_gerado | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: modelo_novo | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_teste | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_grupo | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: hello_world | Status: APPROVED | Lang: en_US
+[38;5;39m2026-02-02 17:27:29 - ChatwootClient - INFO - DEBUG: Returning 14 templates.[0m
+INFO:     172.22.0.1:36814 - "GET /api/whatsapp/templates HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:29 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/whatsapp/templates[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: Fetching templates from: https://graph.facebook.com/v24.0/1946144149291660/message_templates?limit=250
+DEBUG Health: S3 Check Failed -> An error occurred (InvalidAccessKeyId) when calling the PutObject operation: The key '0047daba280ace4000000000f' is not valid
+DEBUG Health: WA=online, CW=online, S3=error, Rabbit=online (Client=1)
+INFO:     172.22.0.1:36852 - "GET /api/health/ HTTP/1.1" 200 OK
+[38;5;39m2026-02-02 17:27:30 - zapvoice - INFO - ­ƒöì [REQUEST] GET /api/health/[0m
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 12 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'DEBUG_META_LAST']
+DEBUG: Fetched 14 templates from Meta API.
+DEBUG: Template found: mensagem_nova_2026 | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_sarah | Status: APPROVED | Lang: en
+DEBUG: Template found: lancamento_sarah | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_lancamento | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: compra | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: carrinho_abandonado | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_oferta | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_live_20_00 | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: cartao_recusado | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: pix_gerado | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: modelo_novo | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_teste | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: mensagem_grupo | Status: APPROVED | Lang: pt_BR
+DEBUG: Template found: hello_world | Status: APPROVED | Lang: en_US
+[38;5;39m2026-02-02 17:27:30 - ChatwootClient - INFO - DEBUG: Returning 14 templates.[0m
+INFO:     172.22.0.1:36840 - "GET /api/whatsapp/templates HTTP/1.1" 200 OK
+DEBUG Health: S3 Check Failed -> An error occurred (InvalidAccessKeyId) when calling the PutObject operation: The key '0047daba280ace4000000000f' is not valid
+DEBUG Health: WA=online, CW=online, S3=error, Rabbit=online (Client=1)
+INFO:     172.22.0.1:36814 - "GET /api/health/ HTTP/1.1" 200 OK

@@ -8,9 +8,15 @@ import csv
 import io
 import json
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from services.engine import execute_funnel
 from core.deps import get_current_user, get_db
+from websocket_manager import manager
+from rabbitmq_client import rabbitmq
+from chatwoot_client import ChatwootClient
+
+import logging
+logger = logging.getLogger("TriggersRouter")
 
 router = APIRouter()
 
@@ -47,7 +53,10 @@ def list_triggers(
     if funnel_name:
         query = query.join(models.Funnel).filter(models.Funnel.name.ilike(f"%{funnel_name}%"))
     if status:
-        query = query.filter(models.ScheduledTrigger.status == status)
+        if status == 'pending':
+            query = query.filter(models.ScheduledTrigger.status.in_(['pending', 'queued', 'Queued']))
+        else:
+            query = query.filter(models.ScheduledTrigger.status == status)
     if start_date:
         query = query.filter(models.ScheduledTrigger.created_at >= start_date)
     if end_date:
@@ -60,7 +69,9 @@ def list_triggers(
             query = query.filter(models.ScheduledTrigger.is_bulk == False)
 
     triggers = query.order_by(models.ScheduledTrigger.created_at.desc()).offset(skip).limit(limit).all()
-    return triggers
+    
+    # Filtrar registros internos no Python para evitar problemas com NULL no SQL
+    return [t for t in triggers if t.template_name != "HIDDEN_CHILD"]
 
 @router.get("/triggers/{trigger_id}/failures-csv", summary="Exportar Falhas CSV")
 def export_failures_csv(
@@ -102,11 +113,37 @@ def export_failures_csv(
         headers={"Content-Disposition": f"attachment; filename=falhas_disparo_{trigger_id}.csv"}
     )
 
+@router.get("/triggers/{trigger_id}/failures", summary="Listar Falhas JSON")
+def list_failures_json(
+    trigger_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Retorna a lista de contatos que falharam e os motivos em formato JSON.
+    """
+    failures = db.query(models.MessageStatus).filter(
+        models.MessageStatus.trigger_id == trigger_id,
+        models.MessageStatus.status == 'failed'
+    ).all()
+    
+    return [
+        {
+            "phone": f.phone_number,
+            "reason": f.failure_reason or "Erro desconhecido",
+            "time": f.updated_at
+        } 
+        for f in failures
+    ]
+
 @router.delete("/triggers/{trigger_id}", summary="Excluir Registro de Disparo")
-def delete_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def delete_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     """
     Remove permanentemente o histórico de um disparo.
     """
+    if current_user.role != 'super_admin':
+        raise HTTPException(status_code=403, detail="Apenas Super Admin pode excluir históricos")
+
     trigger = db.query(models.ScheduledTrigger).get(trigger_id)
     if not trigger:
         raise HTTPException(status_code=404, detail="Trigger not found")
@@ -114,7 +151,17 @@ def delete_trigger(trigger_id: int, db: Session = Depends(get_db), current_user:
     # Se estiver rodando, tentar cancelar primeiro?
     db.delete(trigger)
     db.commit()
+    
+    # Notificar via RabbitMQ para sincronização global
+    await rabbitmq.publish_event("trigger_deleted", {
+        "trigger_id": trigger_id,
+        "client_id": current_user.client_id
+    })
+    
     return {"message": "Historic record deleted"}
+
+
+
 
 
 
@@ -193,7 +240,7 @@ def cancel_trigger_with_report(
 
 # Keep simple cancel for backward compatibility
 @router.post("/triggers/{trigger_id}/cancel", summary="Cancelar Disparo Simples")
-def cancel_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def cancel_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     """
     Cancela um disparo agendado ou em progresso sem retornar relatório.
     """
@@ -206,7 +253,130 @@ def cancel_trigger(trigger_id: int, db: Session = Depends(get_db), current_user:
          
     trigger.status = "cancelled"
     db.commit()
+    
+    # Notificar via RabbitMQ para sincronização global
+    await rabbitmq.publish_event("trigger_updated", {
+        "trigger_id": trigger_id,
+        "status": "cancelled",
+        "client_id": current_user.client_id
+    })
+    
     return {"message": "Trigger cancelled successfully"}
+
+@router.post("/triggers/{trigger_id}/pause", summary="Pausar Disparo")
+async def pause_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Pausa um disparo em andamento."""
+    trigger = db.query(models.ScheduledTrigger).get(trigger_id)
+    if not trigger: raise HTTPException(status_code=404, detail="Trigger not found")
+    if trigger.status != 'processing': raise HTTPException(status_code=400, detail="Somente disparos em processamento podem ser pausados")
+    
+    trigger.status = "paused"
+    db.commit()
+    await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "paused", "client_id": trigger.client_id})
+    return {"message": "Trigger paused"}
+
+@router.post("/triggers/{trigger_id}/resume", summary="Retomar Disparo")
+async def resume_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Retoma um disparo pausado."""
+    trigger = db.query(models.ScheduledTrigger).get(trigger_id)
+    if not trigger: raise HTTPException(status_code=404, detail="Trigger not found")
+    if trigger.status != 'paused': raise HTTPException(status_code=400, detail="Trigger não está pausado")
+    
+    trigger.status = "processing"
+    db.commit()
+    await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "processing", "client_id": trigger.client_id})
+    return {"message": "Trigger resumed"}
+
+@router.post("/triggers/{trigger_id}/retry", summary="Repetir Disparo (Individual ou Falhas de Bulk)")
+async def retry_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """
+    Reinicia o disparo. 
+    - Se for Bulk: Reinicia apenas para os contatos que falharam.
+    - Se for Single: Reinicia a execução do funil do zero para o contato.
+    """
+    trigger = db.query(models.ScheduledTrigger).get(trigger_id)
+    if not trigger: raise HTTPException(status_code=404, detail="Trigger not found")
+
+    # CASE 1: INDIVIDUAL TRIGGER
+    if not trigger.is_bulk:
+        logger.info(f"🔄 Retrying SINGLE trigger {trigger_id} for {trigger.contact_phone}")
+        trigger.status = "queued"
+        trigger.failure_reason = None
+        trigger.current_node_id = None # Reset to start
+        trigger.current_step_index = 0
+        trigger.scheduled_time = datetime.now(timezone.utc)
+        db.commit()
+
+        # Publish to queue
+        await rabbitmq.publish("zapvoice_funnel_executions", {
+            "trigger_id": trigger.id,
+            "funnel_id": trigger.funnel_id,
+            "conversation_id": trigger.conversation_id,
+            "contact_phone": trigger.contact_phone,
+            "contact_name": trigger.contact_name
+        })
+        return {"message": "Reenvio individual iniciado"}
+    
+    # CASE 2: BULK TRIGGER (Existing logic)
+    # ... rest of logic stays same or similar
+    
+    # 1. Buscar falhas
+    failed_contacts = db.query(models.MessageStatus).filter(
+        models.MessageStatus.trigger_id == trigger_id,
+        models.MessageStatus.status == 'failed'
+    ).all()
+    
+    if not failed_contacts:
+        raise HTTPException(status_code=404, detail="Nenhuma falha encontrada para repetir")
+
+    # 2. Reconstituir lista de pendentes
+    failed_phones = [m.phone_number for m in failed_contacts]
+    
+    # 3. Limpar falhas do banco para não duplicar no relatório
+    db.query(models.MessageStatus).filter(
+        models.MessageStatus.trigger_id == trigger_id,
+        models.MessageStatus.status == 'failed'
+    ).delete()
+    
+    # 4. Resetar trigger
+    trigger.status = "queued"
+    trigger.pending_contacts = failed_phones
+    trigger.total_failed = 0
+    # Mantém o processed_contacts original para histórico se quiser, ou reseta. 
+    # Melhor resetar os que vamos tentar de novo do processed_contacts se estiverem lá
+    if trigger.processed_contacts:
+        trigger.processed_contacts = [p for p in trigger.processed_contacts if p not in failed_phones]
+    
+    db.commit()
+    
+    # 5. Notificar RabbitMQ
+    if trigger.funnel_id:
+        # Funnel Bulk
+        await rabbitmq.publish("zapvoice_funnel_executions", {
+            "trigger_id": trigger.id,
+            "funnel_id": trigger.funnel_id,
+            "contacts": [{"phone": p} for p in failed_phones],
+            "delay": trigger.delay_seconds,
+            "concurrency": trigger.concurrency_limit,
+            "type": "funnel_bulk"
+        })
+    else:
+        # Template Bulk
+        await rabbitmq.publish("zapvoice_bulk_sends", {
+            "trigger_id": trigger.id,
+            "template_name": trigger.template_name,
+            "contacts": failed_phones,
+            "delay": trigger.delay_seconds,
+            "concurrency": trigger.concurrency_limit,
+            "language": trigger.template_language,
+            "components": trigger.template_components,
+            "private_message_delay": trigger.private_message_delay,
+            "private_message_concurrency": trigger.private_message_concurrency
+        })
+
+    return {"message": f"Retry iniciado para {len(failed_phones)} contatos"}
+
+
 
 @router.post("/trigger-bulk", summary="Novo Disparo em Massa (CSV)")
 async def trigger_bulk_send(
@@ -216,6 +386,7 @@ async def trigger_bulk_send(
     delay: int = Form(5),
     concurrency: int = Form(1),
     template_language: str = Form("pt_BR"),
+    private_message: Optional[str] = Form(None),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -267,7 +438,8 @@ async def trigger_bulk_send(
         is_bulk=True,
 
         contacts_list=contacts, # JSONB
-        # total_recipients removed as it is not in the model
+        cost_per_unit=payload.get("cost_per_unit", 0.0) if 'payload' in locals() else 0.0,
+        private_message=private_message,
         scheduled_time=datetime.now(timezone.utc) # Run NOW
     )
     
@@ -294,7 +466,7 @@ async def trigger_funnel_single(
         raise HTTPException(status_code=400, detail="X-Client-ID header is required")
 
     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
-        f.write(f"[{datetime.now()}] 🚀 Trigger Single: Funnel {funnel_id}, Conv {conversation_id}, Name {contact_name}\n")
+        f.write(f"[{datetime.now(timezone.utc)}] 🚀 Trigger Single: Funnel {funnel_id}, Conv {conversation_id}, Name {contact_name}\n")
     print(f"🚀 Trigger Single: Funnel {funnel_id}, Conv {conversation_id}, Name {contact_name}")
     # Verify funnel exists
     funnel = db.query(models.Funnel).get(funnel_id)
@@ -323,6 +495,11 @@ async def trigger_funnel_single(
     db.add(trigger)
     db.commit()
     db.refresh(trigger)
+    
+    print(f"✅ Trigger created ID: {trigger.id} | Status: {trigger.status} | Phone: {contact_phone}")
+    with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
+        f.write(f"[{datetime.now(timezone.utc)}] ✅ Trigger created ID: {trigger.id} | Status: {trigger.status}\n")
+
     return trigger
 
 @router.post("/funnels/{funnel_id}/trigger-bulk", summary="Disparar Funil em Massa (JSON)")
@@ -382,6 +559,11 @@ async def trigger_funnel_bulk_json(
     db.add(trigger)
     db.commit()
     db.refresh(trigger)
+    
+    print(f"🚀 Trigger Bulk Created ID: {trigger.id} | Conversations: {len(contacts_data)}")
+    with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
+        f.write(f"[{datetime.now(timezone.utc)}] 🚀 Trigger Bulk Created ID: {trigger.id} | Count: {len(contacts_data)}\n")
+
     return trigger
 
 @router.post("/bulk-send/register", summary="Registrar Envio (Histórico)")
@@ -528,6 +710,9 @@ async def reserve_bulk_send(
             pending_contacts=pending_numbers,
             processed_contacts=[],
             cost_per_unit=payload.get("cost_per_unit", 0.0),
+            private_message=payload.get("private_message"),
+            private_message_delay=payload.get("private_message_delay", 5),
+            private_message_concurrency=payload.get("private_message_concurrency", 1),
             scheduled_time=datetime.now(timezone.utc),
             funnel_id=None
         )
@@ -535,6 +720,8 @@ async def reserve_bulk_send(
         db.add(trigger)
         db.commit()
         db.refresh(trigger)
+        
+        print(f"🚀 Bulk Trigger RESERVED ID: {trigger.id} | Total: {len(formatted_contacts)}")
         return trigger
     except Exception as e:
         db.rollback()
@@ -559,6 +746,9 @@ async def schedule_bulk_send(
     schedule_at_str = payload.get("schedule_at")
     delay_seconds = payload.get("delay_seconds", 5)
     concurrency_limit = payload.get("concurrency_limit", 1)
+    private_message = payload.get("private_message")
+    private_message_delay = payload.get("private_message_delay", 5)
+    private_message_concurrency = payload.get("private_message_concurrency", 1)
 
     if not schedule_at_str:
         raise HTTPException(status_code=400, detail="Schedule time is required")
@@ -568,6 +758,81 @@ async def schedule_bulk_send(
     except ValueError:
          raise HTTPException(status_code=400, detail="Invalid date format")
 
+    # Support for A/B Testing (Variations)
+    variations = payload.get("variations") # List of {template_name, weight, components, language}
+    
+    if variations and len(variations) > 0:
+        import random
+        # 1. Prepare Contacts
+        formatted_contacts = []
+        for c in contacts_list:
+            if isinstance(c, str):
+                formatted_contacts.append({"phone": c})
+            else:
+                formatted_contacts.append(c)
+        
+        # Shuffle for random distribution
+        random.shuffle(formatted_contacts)
+        total_contacts = len(formatted_contacts)
+        current_index = 0
+        created_triggers = []
+        
+        # 2. Iterate and Create Triggers
+        for i, var in enumerate(variations):
+            weight = float(var.get("weight", 0))
+            if weight <= 0: continue
+            
+            # Calculate slice
+            if i == len(variations) - 1:
+                # Last batch gets the rest
+                batch_contacts = formatted_contacts[current_index:]
+            else:
+                count = int(total_contacts * (weight / 100))
+                batch_contacts = formatted_contacts[current_index : current_index + count]
+                current_index += count
+            
+            if not batch_contacts:
+                continue
+
+            t_name = var.get("template_name")
+            display_name = f"{t_name}|{t_name} [Teste {weight}%]"
+            
+            trigger = models.ScheduledTrigger(
+                client_id=x_client_id,
+                template_name=display_name,
+                template_language=var.get("language", "pt_BR"),
+                status='queued',
+                is_bulk=True,
+                contacts_list=batch_contacts,
+                scheduled_time=scheduled_time,
+                delay_seconds=delay_seconds,
+                concurrency_limit=concurrency_limit,
+                cost_per_unit=var.get("cost_per_unit"),
+                template_components=var.get("components"),
+                
+                # Direct Message
+                direct_message=var.get("direct_message"),
+                direct_message_params=var.get("direct_message_params"),
+                
+                private_message=var.get("private_message"),
+                private_message_delay=private_message_delay,
+                private_message_concurrency=private_message_concurrency
+            )
+            db.add(trigger)
+            created_triggers.append(trigger)
+        
+        if not created_triggers:
+             raise HTTPException(status_code=400, detail="No contacts distributed. Check weights.")
+
+        db.commit()
+        for t in created_triggers:
+            db.refresh(t)
+            print(f"🚀 [A/B Test] Created Trigger ID: {t.id} ({t.template_name}) - {len(t.contacts_list or [])} contacts")
+
+        # Return the first one for frontend tracking compatibility
+        return created_triggers[0]
+
+    # Standard Single Template Logic
     formatted_contacts = []
     for c in contacts_list:
         if isinstance(c, str):
@@ -586,7 +851,16 @@ async def schedule_bulk_send(
         scheduled_time=scheduled_time,
         delay_seconds=delay_seconds,
         concurrency_limit=concurrency_limit,
-        template_components=payload.get("components")
+        template_components=payload.get("components"),
+        
+        # Direct Message
+        direct_message=payload.get("direct_message"),
+        direct_message_params=payload.get("direct_message_params"),
+        cost_per_unit=payload.get("cost_per_unit", 0.0),
+        
+        private_message=private_message,
+        private_message_delay=private_message_delay,
+        private_message_concurrency=private_message_concurrency
     )
     db.add(trigger)
     db.commit()
@@ -615,17 +889,38 @@ def get_trigger_messages(
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo não encontrado")
         
-    query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
+    # Base query for all messages related to this trigger
+    base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
     
+    # Calculate counts for all tabs
+    total_count = base_query.count()
+    delivered_count = base_query.filter(models.MessageStatus.status.in_(['delivered', 'read'])).count()
+    read_count = base_query.filter(models.MessageStatus.status == 'read').count()
+    failed_count = base_query.filter(models.MessageStatus.status == 'failed').count()
+    blocked_count = base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count()
+    free_count = base_query.filter(models.MessageStatus.message_type == 'DIRECT_MESSAGE').count()
+    template_count = base_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count()
+    
+    # Special interaction count logic
+    interaction_count = base_query.filter(
+        models.MessageStatus.is_interaction == True,
+        or_(
+            models.MessageStatus.failure_reason == None,
+            models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'
+        )
+    ).count()
+
+    # Apply the current filter for the items to return
+    items_query = base_query
     if status_filter:
         if status_filter == 'delivered':
-            query = query.filter(models.MessageStatus.status.in_(['delivered', 'read']))
+            items_query = items_query.filter(models.MessageStatus.status.in_(['delivered', 'read']))
         elif status_filter == 'read':
-            query = query.filter(models.MessageStatus.status == 'read')
+            items_query = items_query.filter(models.MessageStatus.status == 'read')
         elif status_filter == 'failed':
-            query = query.filter(models.MessageStatus.status == 'failed')
+            items_query = items_query.filter(models.MessageStatus.status == 'failed')
         elif status_filter == 'interaction':
-            query = query.filter(
+            items_query = items_query.filter(
                 models.MessageStatus.is_interaction == True,
                 or_(
                     models.MessageStatus.failure_reason == None,
@@ -633,6 +928,52 @@ def get_trigger_messages(
                 )
             )
         elif status_filter == 'blocked':
-            query = query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
+            items_query = items_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
+        elif status_filter == 'free':
+            items_query = items_query.filter(models.MessageStatus.message_type == 'DIRECT_MESSAGE')
+        elif status_filter == 'template':
+            items_query = items_query.filter(models.MessageStatus.message_type == 'TEMPLATE')
             
-    return query.order_by(models.MessageStatus.updated_at.desc()).all()
+    return {
+        "items": items_query.order_by(models.MessageStatus.updated_at.desc()).all(),
+        "counts": {
+            "all": total_count,
+            "delivered": delivered_count,
+            "read": read_count,
+            "interaction": interaction_count,
+            "blocked": blocked_count,
+            "failed": failed_count,
+            "free": free_count,
+            "template": template_count
+        }
+    }
+
+@router.get("/triggers/{aggregator_id}/details", summary="Detalhes do Agregador (Fila)")
+def get_aggregator_details(
+    aggregator_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Retorna os gatilhos 'filhos' (Hidden Childs) associados a um Agregador.
+    Isso permite ver o status individual de cada contato na fila.
+    """
+    # 1. Verificar se é agregador ou trigger simples
+    aggregator = db.query(models.ScheduledTrigger).get(aggregator_id)
+    if not aggregator:
+        raise HTTPException(status_code=404, detail="Agregador não encontrado")
+    
+    # Se NÃO for bulk (ou seja, é um trigger individual visível), retorna a si mesmo
+    if not aggregator.is_bulk:
+        return [aggregator]
+
+    # 2. Buscar filhos (Lógica legacy para Agregadores Antigos)
+    # A lógica de associação é pelo template_name que usamos como chave de agrupamento
+    # OU se tivermos um parent_id implementado futuramente.
+    children = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.client_id == aggregator.client_id,
+        models.ScheduledTrigger.template_name == "HIDDEN_CHILD",
+        models.ScheduledTrigger.funnel_id == aggregator.funnel_id
+    ).order_by(models.ScheduledTrigger.updated_at.desc()).limit(200).all()
+    
+    return children

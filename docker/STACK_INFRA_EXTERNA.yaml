@@ -1,31 +1,41 @@
 version: "3.8"
 
 services:
+  # =========================================
+  # 1. APLICAÇÃO PRINCIPAL (API)
+  # =========================================
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.2
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
     volumes:
       - zapvoice_uploads:/app/static/uploads
     environment:
-      # === Configuração Base e Segurança ===
       - PORT=8000
-      - DATABASE_URL=postgres://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
+      
+      # === ⚠️ CONFIGURE AQUI SEUS SERVIÇOS EXTERNOS ⚠️ ===
+      # Substitua 'NOME_DO_SEU_POSTGRES' pelo nome do seu container/serviço no Portainer
+      # Substitua 'NOME_DO_SEU_RABBIT' pelo nome do seu container/serviço no Portainer
+      
+      # Exemplo: postgresql://postgres:senha@postgres-global:5432/zapvoice
+      - DATABASE_URL=postgresql://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@NOME_DO_SEU_POSTGRES:5432/zapvoice
+      
+      - RABBITMQ_HOST=NOME_DO_SEU_RABBIT
+      - RABBITMQ_PORT=5672
+      
+      # MinIO Externo (Opcional - Se não usar, o sistema salva localmente)
+      # - S3_ENDPOINT_URL=http://nome-do-minio:9000
+      
       - SECRET_KEY=changeme_secret_key_12345
       - CORS_ORIGINS=*
-
-      # === Acesso Inicial (Super Admin) ===
+      
+      # Acesso Inicial
       - SUPER_ADMIN_EMAIL=aryarajmarketing@gmail.com
       - SUPER_ADMIN_PASSWORD=HareHare03
-
-      # === Configuração de Registro ===
       - REGISTER_API_KEY=238734873487389
 
-      # === Frontend Runtime Config ===
+      # Frontend Config
       - VITE_API_URL=http://zapvoice.jords.site
       - VITE_WS_URL=ws://zapvoice.jords.site/ws
 
@@ -42,17 +52,22 @@ services:
         - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
         - traefik.http.services.zapvoice.loadbalancer.server.port=8000
 
+  # =========================================
+  # 2. WORKER (Deve ter as mesmas variáveis)
+  # =========================================
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.2
     command: python worker.py
     networks:
       - network_swarm_public
     volumes:
       - zapvoice_uploads:/app/static/uploads
     environment:
-      # FIX: As variáveis DEVEM ser coladas aqui novamente ou declaradas no Portainer
-      - DATABASE_URL=postgres://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
+      # FIX: Variáveis repetidas apontando para infra externa
+      - DATABASE_URL=postgresql://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@NOME_DO_SEU_POSTGRES:5432/zapvoice
       - SECRET_KEY=changeme_secret_key_12345
+      - RABBITMQ_HOST=NOME_DO_SEU_RABBIT
+      - RABBITMQ_PORT=5672
 
     deploy:
       mode: replicated

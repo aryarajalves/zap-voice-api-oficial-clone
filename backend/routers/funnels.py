@@ -72,10 +72,27 @@ def create_funnel(
     if not x_client_id:
         raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
     
+    # Check for duplicate name for this client
+    existing = db.query(models.Funnel).filter(
+        models.Funnel.name == funnel.name,
+        models.Funnel.client_id == x_client_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Já existe um funil com este nome.")
+    
+    # Prepare steps payload
+    steps_data = funnel.steps
+    if isinstance(steps_data, list):
+        # Legacy: Convert list of Pydantic models to list of dicts
+        steps_payload = [s.dict() if hasattr(s, 'dict') else s for s in steps_data]
+    else:
+        # Graph: Already a dict (JSON)
+        steps_payload = steps_data
+
     db_funnel = models.Funnel(
         name=funnel.name, 
         description=funnel.description, 
-        steps=[s.dict() for s in funnel.steps], # Convert Pydantic models to dict for JSON storage
+        steps=steps_payload,
         trigger_phrase=funnel.trigger_phrase,
         allowed_phone=funnel.allowed_phone,
         client_id=x_client_id
@@ -106,14 +123,73 @@ def update_funnel(
     if not db_funnel:
         raise HTTPException(status_code=404, detail="Funnel not found")
     
+    # Check for duplicate name for this client (ignoring self)
+    existing = db.query(models.Funnel).filter(
+        models.Funnel.name == funnel_update.name,
+        models.Funnel.client_id == x_client_id,
+        models.Funnel.id != funnel_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Já existe um funil com este nome.")
+    
     db_funnel.name = funnel_update.name
     db_funnel.description = funnel_update.description
     db_funnel.trigger_phrase = funnel_update.trigger_phrase
     db_funnel.allowed_phone = funnel_update.allowed_phone
-    db_funnel.steps = [s.dict() for s in funnel_update.steps]
+    db_funnel.allowed_phone = funnel_update.allowed_phone
+    
+    steps_data = funnel_update.steps
+    if isinstance(steps_data, list):
+        db_funnel.steps = [s.dict() if hasattr(s, 'dict') else s for s in steps_data]
+    else:
+        db_funnel.steps = steps_data
+        
     db.commit()
     db.refresh(db_funnel)
     return db_funnel
+
+@router.delete("/funnels/bulk", summary="Excluir múltiplos funis")
+def delete_funnels_bulk(
+    payload: schemas.FunnelBulkDelete,
+    x_client_id: Optional[int] = Header(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Remove permanentemente múltiplos funis do sistema de uma vez.
+    """
+    if not x_client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
+    
+    # Busca todos os funis que pertencem ao cliente e estão na lista de IDs
+    query = db.query(models.Funnel).filter(
+        models.Funnel.id.in_(payload.funnel_ids),
+        models.Funnel.client_id == x_client_id
+    )
+    
+    funnels_to_delete = query.all()
+    count = len(funnels_to_delete)
+    
+    if count == 0:
+        return {"message": "Nenhum funil encontrado para excluir", "deleted_count": 0}
+    
+    funnel_ids = [f.id for f in funnels_to_delete]
+
+    # 1. Update Triggers (History)
+    db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.funnel_id.in_(funnel_ids)
+    ).update({models.ScheduledTrigger.funnel_id: None}, synchronize_session=False)
+
+    # 2. Delete Webhooks
+    db.query(models.WebhookConfig).filter(
+        models.WebhookConfig.funnel_id.in_(funnel_ids)
+    ).delete(synchronize_session=False)
+
+    for f in funnels_to_delete:
+        db.delete(f)
+    
+    db.commit()
+    return {"message": f"{count} funis excluídos com sucesso", "deleted_count": count}
 
 @router.delete("/funnels/{funnel_id}", summary="Excluir funil")
 def delete_funnel(
@@ -135,6 +211,18 @@ def delete_funnel(
     if not db_funnel:
         raise HTTPException(status_code=404, detail="Funnel not found")
     
+    # 1. Handle ScheduledTriggers (History)
+    # Set funnel_id to NULL to preserve history involved in this funnel
+    db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.funnel_id == funnel_id
+    ).update({models.ScheduledTrigger.funnel_id: None}, synchronize_session=False)
+
+    # 2. Handle WebhookConfigs
+    # Delete webhooks associated with this funnel as they cannot exist without it
+    db.query(models.WebhookConfig).filter(
+        models.WebhookConfig.funnel_id == funnel_id
+    ).delete(synchronize_session=False)
+
     db.delete(db_funnel)
     db.commit()
     return {"message": "Funnel deleted successfully"}

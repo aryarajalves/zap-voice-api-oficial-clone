@@ -2,18 +2,15 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from database import SessionLocal
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
+
 from models import User, Client
 from core.security import verify_password, get_password_hash, create_access_token
-from core.deps import get_current_user
+from core.deps import get_current_user, get_db
 from core.permissions import require_super_admin
+from core.logger import logger
+from websocket_manager import manager
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -29,6 +26,11 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = "user"
     client_ids: Optional[List[int]] = []
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
 
 @router.post("/token", response_model=Token, summary="Login e Obtenção de Token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -54,6 +56,14 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not user.is_active:
+        print(f"❌ Inactive user: {user.email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sua conta foi desativada pelo administrador.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -95,17 +105,69 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 #     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/me", summary="Dados do Usuário Atual")
+@router.get("/me", summary="Obter Meu Perfil")
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """
     Retorna informações detalhadas (ID, email, nome) do usuário autenticado atualmente.
     """
+    print(f"👤 READ_ME: Found user {current_user.email} (ID: {current_user.id})")
     return {
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
         "role": current_user.role
     }
+
+@router.put("/me", summary="Atualizar Meu Perfil")
+async def update_my_profile(
+    profile_in: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Permite que o usuário logado atualize seu próprio nome, email e senha.
+    """
+    ""
+    # Fix: Ensure user is attached to the current session by reloading it
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        # Should not happen if current_user is valid, but safe to check
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    if profile_in.full_name is not None:
+        user.full_name = profile_in.full_name
+    
+    if profile_in.email is not None and profile_in.email != user.email:
+        # Verificar se email já existe
+        existing = db.query(User).filter(User.email == profile_in.email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Este email já está em uso por outro usuário")
+        user.email = profile_in.email
+    
+    if profile_in.password:
+        user.hashed_password = get_password_hash(profile_in.password)
+        
+    try:
+        db.commit()
+        db.refresh(user)
+        
+        # Notificar via WebSocket
+        user_data = {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role
+        }
+        await manager.broadcast({
+            "event": "profile_updated",
+            "user_id": user.id,
+            "data": user_data
+        })
+        
+        return {"message": "Perfil atualizado com sucesso", "user": user_data}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar perfil: {str(e)}")
 
 from fastapi import Header
 
@@ -127,8 +189,15 @@ async def register(
         print("🔍 Checking if user exists...")
         db_user = db.query(User).filter(User.email == user.email).first()
         if db_user:
-            print("❌ Email already registered")
-            raise HTTPException(status_code=400, detail="Este email já está cadastrado")
+            # Se o usuário já existe, vamos verificar se a senha que ele enviou bate
+            print("🔍 User exists. Checking if password matches...")
+            # IMPORTANTE: Use verify_password para comparar a senha enviada com a hash salva
+            if verify_password(user.password, db_user.hashed_password):
+                print("✅ Password matches existing user. Allowing 're-registration' (no-op).")
+                return {"message": "User already registered and verified", "user_id": db_user.id}
+            else:
+                print("❌ Email already registered and password does not match")
+                raise HTTPException(status_code=400, detail="Este email já está cadastrado com outra senha")
         
         # Hash password
         print("🔐 Hashing password...")
@@ -153,6 +222,19 @@ async def register(
         db.commit()
         db.refresh(new_user)
         print(f"✅ User created successfully: {new_user.id}")
+        
+        # Notificar via WebSocket
+        await manager.broadcast({
+            "event": "user_created",
+            "data": {
+                "id": new_user.id,
+                "email": new_user.email,
+                "full_name": new_user.full_name,
+                "role": new_user.role,
+                "is_active": new_user.is_active,
+                "client_ids": [c.id for c in new_user.accessible_clients]
+            }
+        })
         
         return {"message": "User created successfully", "user_id": new_user.id}
     except Exception as e:
@@ -317,6 +399,13 @@ async def delete_user(
         db.delete(user_to_delete)
         db.commit()
         print(f"✅ User ID {user_id} ({user_to_delete.email}) deleted successfully.")
+        
+        # Notificar via WebSocket
+        await manager.broadcast({
+            "event": "user_deleted",
+            "data": {"user_id": user_id}
+        })
+        
         return None # 204 No Content
     except Exception as e:
         print(f"🔥 Error deleting user: {e}")
@@ -383,6 +472,23 @@ async def update_user(
     try:
         db.commit()
         db.refresh(user)
+        
+        # Notificar via WebSocket
+        user_data = {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "is_active": user.is_active,
+            "client_ids": [c.id for c in user.accessible_clients]
+        }
+        logger.info(f"👤 Enviando broadcast de atualização de perfil para o usuário {user.id} ({user.email})")
+        await manager.broadcast({
+            "event": "profile_updated",
+            "user_id": user.id,
+            "data": user_data
+        })
+        
         return {"message": "Usuário atualizado com sucesso", "user_id": user.id}
     except Exception as e:
         db.rollback()

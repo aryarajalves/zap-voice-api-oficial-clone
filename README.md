@@ -85,6 +85,20 @@ docker-compose -f docker/docker-compose.local.yml up -d --build
 docker-compose -f docker/docker-compose.yml up -d --build
 ```
 
+### **Docker Build & Push (Deploy)**
+Para gerar a imagem de produção e enviar para o Docker Hub:
+
+**1. Build da Imagem:**
+```bash
+docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:1.4.1 -f docker/Dockerfile .
+```
+
+**2. Push da Imagem:**
+```bash
+docker push aryarajalves/zap-voice-funil-api-oficial-zap:1.4.1
+```
+*(Troque `1.4.1` pela versão desejada)*
+
 ---
 
 ## 🏆 Marco v1.0

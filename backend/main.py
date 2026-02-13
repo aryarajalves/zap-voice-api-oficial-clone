@@ -35,7 +35,7 @@ models.Base.metadata.create_all(bind=engine) # Ensure tables exist
 app = FastAPI(
     title="ZapVoice API - Automação Chatwoot",
     description="""
-## 🚀 ZapVoice API v1.6.5
+## 🚀 ZapVoice API v1.7.0 (Monitoring Active)
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
@@ -162,6 +162,9 @@ async def startup_event():
 
     # Inicia Listener de Eventos (Para WebSocket)
     asyncio.create_task(event_listener())
+    
+    # Inicia Monitoramento de Sistema
+    asyncio.create_task(system_monitor_task())
 
 def seed_super_admin():
     """Garante que o Super Admin exista conforme o .env"""
@@ -221,6 +224,28 @@ def seed_super_admin():
         db.rollback()
     finally:
         db.close()
+
+async def system_monitor_task():
+    """Coleta e envia estatísticas de sistema via WebSocket a cada 5 segundos"""
+    from services.monitor import SystemMonitor
+    
+    # Primeira chamada para inicializar o psutil.cpu_percent
+    SystemMonitor.get_cpu_usage()
+    
+    await asyncio.sleep(10) # Aguarda o sistema estabilizar
+    
+    while True:
+        try:
+            stats = await SystemMonitor.collect_all()
+            # Envia diretamente via WebSocket Manager
+            await manager.broadcast({
+                "event": "system_stats",
+                "data": stats
+            })
+        except Exception as e:
+            logger.error(f"Erro na tarefa de monitoramento: {e}")
+        
+        await asyncio.sleep(5) # Intervalo de atualização
 
 async def event_listener():
     """Conecta ao RabbitMQ para ouvir eventos de progresso e repassar ao Frontend"""
@@ -288,7 +313,7 @@ async def read_root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "1.6.5 (Auth Fix V2)",
+        "version": "1.7.0 (Monitoring Dash Active)",
         "mode": "development (frontend not built)"
     }
 

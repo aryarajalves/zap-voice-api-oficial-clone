@@ -1,0 +1,20 @@
+﻿DEBUG: Response Body:
+{
+  "messaging_product": "whatsapp",
+  "contacts": [
+    {
+      "input": "558596123586",
+      "wa_id": "558596123586"
+    }
+  ],
+  "messages": [
+    {
+      "id": "wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSMzE1MzZDRUMyQUYzNTBBMjlBAA==",
+      "message_status": "accepted"
+    }
+  ]
+}
+================================================================================
+SUCCESS: Template sent! WhatsApp accepted the request.
+[38;5;39m2026-02-02 17:25:45 - FunnelEngine - INFO - Ô£à Template sent. Recorded wamid: wamid.HBgMNTU4NTk2MTIzNTg2FQIAERgSMzE1MzZDRUMyQUYzNTBBMjlBAA==[0m
+[38;5;39m2026-02-02 17:25:45 - FunnelEngine - INFO - ­ƒÅü End of path reached.[0m

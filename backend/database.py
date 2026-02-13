@@ -5,6 +5,8 @@ from sqlalchemy.orm import sessionmaker
 
 # ⚠️ DATABASE_URL é OBRIGATÓRIO - Não usa SQLite como fallback
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+if SQLALCHEMY_DATABASE_URL:
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.strip('"').strip("'")
 
 if not SQLALCHEMY_DATABASE_URL:
     raise ValueError(
@@ -36,5 +38,5 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # Log para garantir que está usando PostgreSQL
-print(f"[OK] Database conectado: PostgreSQL @ {SQLALCHEMY_DATABASE_URL.split('@')[1] if '@' in SQLALCHEMY_DATABASE_URL else 'unknown'}")
+# print(f"[OK] Database conectado: PostgreSQL @ {SQLALCHEMY_DATABASE_URL.split('@')[1] if '@' in SQLALCHEMY_DATABASE_URL else 'unknown'}")
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from core.deps import get_db, get_current_user
+from core.permissions import require_super_admin
 from models import Client, User
 from pydantic import BaseModel
 from typing import List, Optional
@@ -46,7 +47,7 @@ def list_clients(
 @router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
 def create_client(
     client_data: ClientCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_super_admin),
     db: Session = Depends(get_db)
 ):
     """
@@ -88,7 +89,7 @@ def create_client(
 def update_client(
     client_id: int,
     client_data: ClientUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_super_admin),
     db: Session = Depends(get_db)
 ):
     """
@@ -121,7 +122,7 @@ def update_client(
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_client(
     client_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_super_admin),
     db: Session = Depends(get_db)
 ):
     """

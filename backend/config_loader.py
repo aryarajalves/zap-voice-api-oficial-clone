@@ -21,7 +21,13 @@ def get_settings(client_id: int = None):
         "CHATWOOT_ACCOUNT_ID",
         "CHATWOOT_SELECTED_INBOX_ID",
         "CLIENT_NAME",
-        # S3 e RabbitMQ removidos para forçar uso via ENV (Segurança/Infra)
+        "APP_NAME",
+        "APP_LOGO",
+        "APP_LOGO_SIZE",
+        # Infra keys para que o health check consiga lê-las via ENV fallback
+        "RABBITMQ_HOST", "RABBITMQ_PORT", "RABBITMQ_USER", "RABBITMQ_PASSWORD",
+        "S3_ENDPOINT_URL", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET_NAME", "S3_REGION",
+        "AUTO_BLOCK_KEYWORDS", "SYNC_CONTACTS_TABLE"
     ]
     
     db: Session = SessionLocal()
@@ -47,6 +53,9 @@ def get_settings(client_id: int = None):
             if not value:
                  value = os.getenv(key, "")
             
+            if isinstance(value, str):
+                value = value.strip('"').strip("'")
+            
             settings[key] = value
             
     except Exception as e:
@@ -64,6 +73,10 @@ def get_setting(key: str, default: str = "", client_id: int = None):
     """Busca uma única configuração, opcionalmente por client_id"""
     settings = get_settings(client_id)
     val = settings.get(key)
+    if not val:
+        # Fallback para variável de ambiente se não encontrado no dicionário (ex: chaves de infra)
+        val = os.getenv(key)
+    
     if not val:
         return default
     return val

@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { FiChevronDown, FiPlus, FiTrash2 } from 'react-icons/fi';
 import { useClient } from '../contexts/ClientContext';
+import { useAuth } from '../AuthContext';
+import ConfirmModal from './ConfirmModal';
 
 export default function ClientSelector({ onCreateClick }) {
     const { clients, activeClient, switchClient, deleteClient, loading } = useClient();
+    const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [clientToConfirm, setClientToConfirm] = useState(null);
 
     if (loading) {
         return (
@@ -16,6 +21,29 @@ export default function ClientSelector({ onCreateClick }) {
             </div>
         );
     }
+
+    const handleDeleteClick = (e, client) => {
+        e.stopPropagation();
+        setClientToConfirm(client);
+        setIsConfirmModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!clientToConfirm) return;
+
+        setDeletingId(clientToConfirm.id);
+        try {
+            await deleteClient(clientToConfirm.id);
+            if (activeClient?.id === clientToConfirm.id) {
+                setIsOpen(false);
+            }
+        } catch (err) {
+            // Error already handled by deleteClient
+        } finally {
+            setDeletingId(null);
+            setClientToConfirm(null);
+        }
+    };
 
     return (
         <div className="relative px-4 py-3 border-b border-gray-100 dark:border-gray-700">
@@ -58,22 +86,9 @@ export default function ClientSelector({ onCreateClick }) {
                                         {client.name}
                                     </button>
 
-                                    {clients.length > 1 && (
+                                    {clients.length > 1 && user?.role === 'super_admin' && (
                                         <button
-                                            onClick={async (e) => {
-                                                e.stopPropagation();
-                                                if (window.confirm(`Tem certeza que deseja excluir "${client.name}"?`)) {
-                                                    setDeletingId(client.id);
-                                                    try {
-                                                        await deleteClient(client.id);
-                                                        setIsOpen(false);
-                                                    } catch (err) {
-                                                        // Error already handled by deleteClient
-                                                    } finally {
-                                                        setDeletingId(null);
-                                                    }
-                                                }
-                                            }}
+                                            onClick={(e) => handleDeleteClick(e, client)}
                                             disabled={deletingId === client.id}
                                             className="ml-2 p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors disabled:opacity-50"
                                             title="Excluir cliente"
@@ -86,19 +101,32 @@ export default function ClientSelector({ onCreateClick }) {
                         </div>
 
                         {/* Create New Client Button */}
-                        <button
-                            onClick={() => {
-                                setIsOpen(false);
-                                onCreateClick();
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-3 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors border-t border-gray-200 dark:border-gray-700 font-medium"
-                        >
-                            <FiPlus size={18} />
-                            Criar Novo Cliente
-                        </button>
+                        {user?.role === 'super_admin' && (
+                            <button
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    onCreateClick();
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-3 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors border-t border-gray-200 dark:border-gray-700 font-medium"
+                            >
+                                <FiPlus size={18} />
+                                Criar Novo Cliente
+                            </button>
+                        )}
                     </div>
                 </>
             )}
+
+            <ConfirmModal
+                isOpen={isConfirmModalOpen}
+                onClose={() => setIsConfirmModalOpen(false)}
+                onConfirm={handleConfirmDelete}
+                title="Excluir Cliente"
+                message={`Tem certeza que deseja excluir o cliente "${clientToConfirm?.name}"? Esta ação removerá todos os dados associados a este cliente e não poderá ser desfeita.`}
+                confirmText="Excluir"
+                isDangerous={true}
+            />
         </div>
     );
 }
+

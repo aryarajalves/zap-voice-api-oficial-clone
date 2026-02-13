@@ -7,21 +7,55 @@ const Login = () => {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(''); // Estado para o erro
+    const [error, setError] = useState('');
+    const [branding, setBranding] = useState({ APP_NAME: 'ZapVoice', APP_LOGO: null });
     const { login } = useAuth();
+
+    React.useEffect(() => {
+        fetchBranding();
+    }, []);
+
+    const fetchBranding = async () => {
+        try {
+            const res = await fetch(`${API_URL}/settings/branding`);
+            if (res.ok) {
+                const data = await res.json();
+                setBranding(data);
+            }
+        } catch (err) {
+            console.error("Erro ao carregar branding:", err);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setError(''); // Limpa erro anterior
+        setError('');
+
+        console.log("🚀 Iniciando processo de login...");
+        console.log(`📧 Email: ${email}`);
 
         try {
             await login(email, password);
+            console.log("✅ Login bem-sucedido!");
             toast.success('Login realizado com sucesso!');
             window.location.href = '/';
         } catch (error) {
-            console.error(error);
-            const msg = error.response?.data?.detail || "Erro ao fazer login. Verifique suas credenciais.";
+            console.error("❌ Erro no login (Catch):", error);
+
+            // Tenta extrair a mensagem de erro mais detalhada possível
+            let msg = "Erro desconhecido ao fazer login.";
+
+            if (error.message) {
+                msg = error.message;
+            } else if (error.response) {
+                // Se for um erro vindo da resposta da API (axios style, embora estejamos usando fetch, o AuthContext pode ter tratado)
+                msg = error.response.data?.detail || JSON.stringify(error.response.data) || "Erro no servidor";
+            } else if (typeof error === 'string') {
+                msg = error;
+            }
+
+            console.error("⚠️ Mensagem de erro final para o usuário:", msg);
             setError(msg);
             toast.error(msg);
         } finally {
@@ -34,9 +68,20 @@ const Login = () => {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
                 {/* Logo/Header */}
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                        ZapVoice <span className="text-blue-600">Funnels</span>
-                    </h1>
+                    <div className="flex flex-col items-center gap-4 mb-4">
+                        {branding.APP_LOGO ? (
+                            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg border-4 border-white">
+                                <img src={branding.APP_LOGO} alt={branding.APP_NAME} className="w-full h-full object-cover" />
+                            </div>
+                        ) : (
+                            <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold text-4xl shadow-xl border-4 border-white">
+                                {branding.APP_NAME[0]}
+                            </div>
+                        )}
+                        <h1 className="text-3xl font-bold text-gray-800">
+                            {branding.APP_NAME} <span className="text-blue-600">Funnels</span>
+                        </h1>
+                    </div>
                     <p className="text-gray-600">Entre na sua conta</p>
                 </div>
 
@@ -132,7 +177,7 @@ const Login = () => {
 
                 {/* Footer */}
                 <div className="mt-8 pt-6 border-t border-gray-200 text-center text-xs text-gray-500">
-                    <p>ZapVoice Funnels © 2026</p>
+                    <p>{branding.APP_NAME} Funnels © 2026</p>
                     <p className="mt-1">Gerencie suas sequências de mensagens WhatsApp</p>
                 </div>
             </div>

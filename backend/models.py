@@ -26,6 +26,61 @@ class Client(Base):
     triggers = relationship("ScheduledTrigger", back_populates="client")
     configs = relationship("AppConfig", back_populates="client")
     blocked_contacts = relationship("BlockedContact", back_populates="client")
+    webhooks = relationship("WebhookConfig", back_populates="client")
+    # New relationship for contact windows
+    contact_windows = relationship("ContactWindow", back_populates="client")
+
+
+class WebhookConfig(Base):
+    __tablename__ = "webhook_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    funnel_id = Column(Integer, ForeignKey("funnels.id"), nullable=False)
+    
+    name = Column(String, nullable=False) # Ex: Hotmart Vendas
+    slug = Column(String, unique=True, index=True, nullable=False) # Token único da URL
+    
+    # Configuração de Mapeamento (JSON)
+    # Ex: { "phone_field": "buyer.checkout_phone", "name_field": "buyer.full_name" }
+    field_mapping = Column(JSON, default={}) 
+    
+    # URL para onde encaminhar a requisição (ex: n8n, make)
+    forward_url = Column(String, nullable=True)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    total_received = Column(Integer, default=0)
+    total_processed = Column(Integer, default=0)
+    total_errors = Column(Integer, default=0)
+    last_payload = Column(JSON, nullable=True) # Guarda o último payload recebido para debug/exemplo
+    last_triggered_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # NOVOS CAMPOS: Delay de Disparo
+    delay_amount = Column(Integer, default=0) # Valor do delay (ex: 5)
+    delay_unit = Column(String, default="seconds") # Unidade (seconds, minutes, hours)
+
+    # Relacionamentos
+    client = relationship("Client", back_populates="webhooks")
+    funnel = relationship("Funnel")
+    events = relationship("WebhookEvent", back_populates="webhook", cascade="all, delete-orphan")
+
+
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    webhook_id = Column(Integer, ForeignKey("webhook_configs.id"), nullable=False, index=True)
+    payload = Column(JSON, nullable=False)
+    headers = Column(JSON, nullable=True)
+    status = Column(String, default="pending")  # pending, processed, failed
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+    retry_count = Column(Integer, default=0)
+    processed_data = Column(JSON, nullable=True) # Dados extraídos (phone, name, vars)
+
+    webhook = relationship("WebhookConfig", back_populates="events")
 
 
 class Funnel(Base):
@@ -65,6 +120,13 @@ class ScheduledTrigger(Base):
     concurrency_limit = Column(Integer, default=1)
     template_language = Column(String, default="pt_BR")
     template_components = Column(JSON, nullable=True) # Dynamic variables for template
+    private_message = Column(String, nullable=True) # Private message to be sent after template
+    private_message_delay = Column(Integer, default=5)
+    private_message_concurrency = Column(Integer, default=1)
+    
+    # Direct Message Configuration (24h Window Open)
+    direct_message = Column(String, nullable=True) 
+    direct_message_params = Column(JSON, nullable=True)
     
     
     # Cost tracking
@@ -78,7 +140,9 @@ class ScheduledTrigger(Base):
     # Contact tracking for cancellation
     processed_contacts = Column(JSON, default=list)  # List of phone numbers already processed
     pending_contacts = Column(JSON, default=list)    # List of phone numbers still to process
-    current_step_index = Column(Integer, default=0)  # Next step to execute
+    current_step_index = Column(Integer, default=0)  # Legacy Step Index
+    current_node_id = Column(String, nullable=True)  # Graph Node ID
+    failure_reason = Column(String, nullable=True)  # Detailed reason if status is 'failed'
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     client = relationship("Client", back_populates="triggers")
@@ -96,6 +160,9 @@ class MessageStatus(Base):
     status = Column(String, default="sent")  # sent, delivered, read, failed, interaction
     failure_reason = Column(String, nullable=True) # Detailed error message from Meta
     is_interaction = Column(Boolean, default=False) # True if it was a button click
+    message_type = Column(String, nullable=True)   # TEMPLATE or DIRECT_MESSAGE
+    pending_private_note = Column(String, nullable=True) # Note to be sent upon 'delivered' status
+    private_note_posted = Column(Boolean, default=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -111,7 +178,7 @@ class User(Base):
     role = Column(String, default="user") # super_admin, admin, user
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    client_id = Column(Integer, ForeignKey("clients.id"), default=1)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
 
     accessible_clients = relationship("Client", secondary=user_clients, backref="users_with_access")
     client = relationship("Client", backref="users_in_this_client")
@@ -137,7 +204,29 @@ class BlockedContact(Base):
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
     phone = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=True)
     reason = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     client = relationship("Client", back_populates="blocked_contacts")
+
+
+class ContactWindow(Base):
+    """
+    Cache das interações de 24h para evitar consultas excessivas ao Chatwoot.
+    """
+    __tablename__ = "contact_windows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    
+    phone = Column(String, index=True, nullable=False) # Número do cliente (normalizado)
+    chatwoot_contact_name = Column(String, nullable=True)
+    chatwoot_conversation_id = Column(Integer, nullable=True)
+    chatwoot_inbox_id = Column(Integer, nullable=True) # Importante: uma mesma pessoa pode estar em diferentes inboxes
+    
+    last_interaction_at = Column(DateTime(timezone=True), nullable=False) # Data da última msg INCOMING
+    
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+    client = relationship("Client", back_populates="contact_windows")

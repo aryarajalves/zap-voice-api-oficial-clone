@@ -5,12 +5,16 @@ services:
   # 1. APLICAÇÃO PRINCIPAL (API)
   # =========================================
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.5.0
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
     volumes:
       - zapvoice_uploads:/app/static/uploads
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    command: sh -c "pip install pytz psycopg2-binary && /app/docker_entrypoint.sh uvicorn main:app --host 0.0.0.0 --port 8000"
     environment:
       - PORT=8000
       # FIX: Mudamos de postgres:// para postgresql://
@@ -18,16 +22,20 @@ services:
       - SECRET_KEY=changeme_secret_key_12345
       - RABBITMQ_HOST=zapvoice-rabbit
       - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=zapvoice
+      - RABBITMQ_PASSWORD=zapvoice_pass
+      - RABBITMQ_VHOST=/
       - CORS_ORIGINS=*
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN}
       
       # Acesso Inicial
       - SUPER_ADMIN_EMAIL=aryarajmarketing@gmail.com
-      - SUPER_ADMIN_PASSWORD=HareHare03
+      - SUPER_ADMIN_PASSWORD=123456
       - REGISTER_API_KEY=238734873487389
 
       # Frontend Config
-      - VITE_API_URL=http://zapvoice.jords.site
-      - VITE_WS_URL=ws://zapvoice.jords.site/ws
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000/ws
 
     deploy:
       mode: replicated
@@ -46,7 +54,7 @@ services:
   # 2. WORKER (PROCESSAMENTO EM SEGUNDO PLANO)
   # =========================================
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.1
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.5.0
     command: python worker.py
     networks:
       - network_swarm_public
@@ -58,6 +66,9 @@ services:
       - SECRET_KEY=changeme_secret_key_12345
       - RABBITMQ_HOST=zapvoice-rabbit
       - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=zapvoice
+      - RABBITMQ_PASSWORD=zapvoice_pass
+      - RABBITMQ_VHOST=/
 
     deploy:
       mode: replicated
@@ -89,8 +100,9 @@ services:
     networks:
       - network_swarm_public
     environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_DEFAULT_USER=zapvoice
+      - RABBITMQ_DEFAULT_PASS=zapvoice_pass
+      - RABBITMQ_DEFAULT_VHOST=/
     deploy:
       mode: replicated
       replicas: 1
@@ -108,9 +120,52 @@ services:
       - network_swarm_public
     volumes:
       - zapvoice_minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  # =========================================
+  # 6. ACESSO EXTERNO (NGROK)
+  # =========================================
+  zapvoice_ngrok:
+    image: ngrok/ngrok:latest
+    networks:
+      - network_swarm_public
+    ports:
+      - "4040:4040"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      # Aponta para o serviço da API na porta interna 8000
+      - "zapvoice_app:8000"
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  # =========================================
+  # 7. FRONTEND (DEV MODE - Para manter localhost:5173)
+  # =========================================
+  zapvoice_frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - network_swarm_public
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
     deploy:
       mode: replicated
       replicas: 1

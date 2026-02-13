@@ -3,17 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
-    const [theme, setTheme] = useState(() => {
-        // 1. Check local storage
-        const savedTheme = localStorage.getItem('zapvoice_theme');
-        if (savedTheme) return savedTheme;
-
-        // 2. Check system preference
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            return 'dark';
-        }
-        return 'light';
-    });
+    const [theme, setTheme] = useState('dark'); // Always dark
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -27,9 +17,7 @@ export function ThemeProvider({ children }) {
         localStorage.setItem('zapvoice_theme', theme);
     }, [theme]);
 
-    const toggleTheme = () => {
-        setTheme(prev => prev === 'light' ? 'dark' : 'light');
-    };
+    const toggleTheme = () => { }; // Disabled
 
     return (
         <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>

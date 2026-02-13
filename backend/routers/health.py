@@ -2,11 +2,13 @@ from fastapi import APIRouter, Header, Depends
 from sqlalchemy.orm import Session
 from core.deps import get_db, get_current_user
 from models import User, AppConfig
+from config_loader import get_settings
 import httpx
 import boto3
 import asyncio
 from typing import Dict, Optional
 from rabbitmq_client import rabbitmq
+from botocore.config import Config
 
 # Definindo o roteador com prefixo claro
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -45,12 +47,14 @@ async def check_chatwoot(cw_url, cw_token):
         return "timeout"
 
 async def check_storage(s):
-    s3_url = s.get("S3_ENDPOINT_URL")
-    s3_key = s.get("S3_ACCESS_KEY")
-    s3_secret = s.get("S3_SECRET_KEY")
-    s3_bucket = s.get("S3_BUCKET_NAME")
+    s3_url = s.get("S3_ENDPOINT_URL", "").split('#')[0].strip()
+    s3_key = s.get("S3_ACCESS_KEY", "").split('#')[0].strip()
+    s3_secret = s.get("S3_SECRET_KEY", "").split('#')[0].strip()
+    s3_bucket = s.get("S3_BUCKET_NAME", "").split('#')[0].strip()
+    s3_region = s.get("S3_REGION", "us-east-1").split('#')[0].strip()
 
     if not (s3_url and s3_key and s3_secret and s3_bucket):
+        print("DEBUG Health: S3 config incomplete")
         return "offline"
     
     try:
@@ -60,15 +64,18 @@ async def check_storage(s):
                 endpoint_url=s3_url,
                 aws_access_key_id=s3_key,
                 aws_secret_access_key=s3_secret,
-                config=boto3.session.Config(signature_version='s3v4', connect_timeout=2, retries={'max_attempts': 0}),
-                region_name=s.get("S3_REGION", "us-east-1")
+                config=Config(signature_version='s3v4', connect_timeout=5, retries={'max_attempts': 0}),
+                region_name=s3_region
             )
-            s3.list_objects_v2(Bucket=s3_bucket, MaxKeys=1)
+            # Validação Real: Tenta fazer Upload de um arquivo teste (Permissão de Escrita)
+            # Isso confirma que o sistema pode salvar arquivos, que é o objetivo principal
+            s3.put_object(Bucket=s3_bucket, Key='health_probe.txt', Body=b'ok')
             return "online"
         
         return await asyncio.to_thread(_check)
-    except:
-        return "error"
+    except Exception as e:
+        print(f"DEBUG Health: S3 Check Failed -> {str(e)}")
+        return f"error"
 
 @router.get("/")
 async def get_health_status(
@@ -82,9 +89,8 @@ async def get_health_status(
     if not x_client_id:
         return {"error": "Client ID required"}
 
-    # Busca configurações EXCLUSIVAS do cliente selecionado
-    configs = db.query(AppConfig).filter(AppConfig.client_id == x_client_id).all()
-    s = {c.key: c.value for c in configs}
+    # Busca configurações do cliente (Banco + ENV Fallback)
+    s = get_settings(client_id=x_client_id)
 
     # Dispara as verificações em paralelo para performance
     wa_task = check_whatsapp(s.get("WA_PHONE_NUMBER_ID"), s.get("WA_ACCESS_TOKEN"))
@@ -94,6 +100,14 @@ async def get_health_status(
     # Status do RabbitMQ (Global do sistema, mas essencial)
     rabbit_status = "offline"
     try:
+        # Se estiver desconectado, tenta reconectar agora (Verificação Ativa)
+        if not rabbitmq.channel or rabbitmq.channel.is_closed:
+            # Tenta conectar (com timeout interno do client)
+            try:
+                await rabbitmq.connect()
+            except:
+                pass # Se falhar, continua offline
+        
         if rabbitmq.channel and not rabbitmq.channel.is_closed:
             rabbit_status = "online"
     except:

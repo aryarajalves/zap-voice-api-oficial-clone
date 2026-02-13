@@ -1,72 +1,94 @@
-
-from fastapi import APIRouter, File, UploadFile, HTTPException
-import magic
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header
+from typing import Optional
+import shutil
 import os
 import uuid
-import shutil
-from storage import storage
+from datetime import datetime
+from database import SessionLocal
 import models
-from fastapi import Depends
 from core.deps import get_current_user
-from core.logger import setup_logger
-
-logger = setup_logger(__name__) 
 
 router = APIRouter()
 
-@router.post("/upload")
-async def upload_file(file: UploadFile = File(...), current_user: models.User = Depends(get_current_user)):
-    # 1. Validação de Extensão (Fail Fast)
-    filename = file.filename.lower()
-    forbidden_extensions = ['.exe', '.sh', '.bat', '.py', '.php', '.js', '.dll']
-    if any(filename.endswith(ext) for ext in forbidden_extensions):
-        raise HTTPException(status_code=400, detail="Esse tipo de arquivo não é permitido por segurança.")
-    
-    logger.info(f"Fazendo upload de arquivo: {filename}")
-    
-    # 2. Validação de Conteúdo (Magic Numbers)
-    try:
-        header = await file.read(2048)
-        mime_type = magic.from_buffer(header, mime=True)
-        await file.seek(0)
-    except Exception as e:
-        logger.error(f"Erro magic: {e}")
-        raise HTTPException(status_code=400, detail=f"Erro ao validar arquivo: {str(e)}")
-        
-    logger.info(f"Uploaded File MIME: {mime_type}")
+UPLOAD_DIR = "static/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    allowed_mimes = [
-        'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-        'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/x-wav', 'audio/x-m4a',
-        'video/mp4', 'video/mpeg', 'video/quicktime',
-        'application/pdf',
-        'text/csv', 'text/plain', 'application/vnd.ms-excel'
-    ]
-    
-    if 'csv' in mime_type or 'spreadsheet' in mime_type or 'excel' in mime_type:
-         pass # Ok
-    elif mime_type == 'application/octet-stream':
-         logger.warning(f"Aviso: Arquivo detectado como octet-stream. Continuando...")
-         pass # Permitir octet-stream como fallback
-    elif mime_type not in allowed_mimes:
-         logger.error(f"Tipo bloqueado: {mime_type}")
-         raise HTTPException(status_code=400, detail=f"Tipo de arquivo não suportado ({mime_type}).")
+print("LOADING UPLOADS ROUTER...")
 
-    # 3. Upload para S3 (MinIO)
-    file_extension = os.path.splitext(file.filename)[1]
-    # Sanitizar extensão
-    if len(file_extension) > 10: file_extension = ".bin"
+@router.get("/upload-probe")
+def probe():
+    return {"status": "ok", "module": "uploads"}
+
+@router.post("/upload", summary="Upload de arquivo (Imagem, Vídeo, PDF, Áudio)")
+async def upload_file(
+    file: UploadFile = File(...),
+    x_client_id: Optional[str] = Header(None),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Realiza o upload de um arquivo para o servidor e retorna a URL pública.
+    Suporta imagens, vídeos, PDFs e áudios.
+    """
+    print(f"DEBUG: upload_file received x_client_id: {x_client_id}")
     
-    new_filename = f"{uuid.uuid4()}{file_extension}"
+    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
+        raise HTTPException(status_code=400, detail="Client ID não fornecido ou inválido")
     
     try:
-        # Envia para o S3
-        file_url = storage.upload_file(file.file, new_filename, mime_type)
-        logger.info(f"Arquivo enviado para S3: {file_url}")
+        x_client_id = int(x_client_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Client ID inválido: {x_client_id}")
+
+    # Validar extensão
+    allowed_extensions = {
+        # Imagens
+        '.jpg', '.jpeg', '.png',
+        # Vídeos
+        '.mp4',
+        # Documentos
+        '.pdf',
+        # Áudios
+        '.mp3', '.ogg', '.wav', '.aac'
+    }
+    
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Extensão '{ext}' não permitida. Aceitamos apenas: PNG, JPG, JPEG, PDF e MP4."
+        )
+
+    # Validar Tamanho (Máximo 16MB para WhatsApp)
+    MAX_SIZE = 16 * 1024 * 1024 # 16MB
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    
+    if file_size > MAX_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Arquivo muito grande ({file_size / 1024 / 1024:.2f}MB). O limite do WhatsApp é de 16MB."
+        )
+
+    # Gerar nome único
+    unique_name = f"{uuid.uuid4()}{ext}"
+
+    try:
+        # Importar Storage (lazy import para evitar ciclos se houver, mas aqui é seguro)
+        # Assumindo que backend está no path
+        from storage import storage
         
-        return {"url": file_url, "mime": mime_type}
+        # Realizar Upload (Local ou MinIO conforme ENV)
+        file_url = storage.upload_file(file.file, unique_name, file.content_type)
+        
+        return {
+            "filename": unique_name,
+            "url": file_url,
+            "type": file.content_type,
+            "size": 0 # Storage nao retorna size facilmente, mas ok
+        }
         
     except Exception as e:
-        logger.error(f"Erro upload S3: {e}")
-        # Falha
-        raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo (Storage): {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar arquivo: {str(e)}")

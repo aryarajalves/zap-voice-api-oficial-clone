@@ -1,0 +1,12 @@
+﻿----- ANALISANDO CONVERSAS PARA 558596123586 -----
+DEBUG: get_settings loading for client_id=1
+DEBUG: Found 16 config keys in DB for client_id=1: ['CLIENT_NAME', 'META_RETURN_CONFIG', 'CHATWOOT_API_URL', 'CHATWOOT_ACCOUNT_ID', 'CHATWOOT_SELECTED_INBOX_ID', 'CHATWOOT_API_TOKEN', 'WA_PHONE_NUMBER_ID', 'WA_BUSINESS_ACCOUNT_ID', 'WA_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'DEBUG_LAST_WEBHOOK', 'APP_NAME', 'APP_LOGO_SIZE', 'DEBUG_META_LAST', 'APP_LOGO', 'AUTO_BLOCK_KEYWORDS']
+Ô£à Contato: 558596123586 (ID: 2459)
+Total de conversas: 2
+
+--- Conversa 2466 | Inbox 1 | Last Activity: 2026-02-07 15:53:11+00:00 ---
+   ├Ültima msg do CLIENTE: 2026-02-07 14:52:31+00:00 | Texto: .
+   Resultado Janela: ABERTA Ô£à (Diff: 3:13:20.124699)
+
+--- Conversa 2464 | Inbox 1 | Last Activity: 2026-02-06 12:45:47+00:00 ---
+   Resultado Janela: FECHADA ­ƒöÆ (Nenhuma mensagem do cliente)

@@ -1,0 +1,28 @@
+﻿Funnel 57 Name: Funil - Template
+Steps Graph:
+{
+  "nodes": [
+    {
+      "id": "node_1770046047671",
+      "type": "templateNode",
+      "position": {
+        "x": 699.79288411468,
+        "y": 167.70708989522043
+      },
+      "data": {
+        "isStart": true,
+        "templateName": "mensagem_nova_2026",
+        "language": "pt_BR"
+      },
+      "width": 320,
+      "height": 410,
+      "selected": true,
+      "positionAbsolute": {
+        "x": 699.79288411468,
+        "y": 167.70708989522043
+      },
+      "dragging": false
+    }
+  ],
+  "edges": []
+}
