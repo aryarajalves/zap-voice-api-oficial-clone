@@ -11,21 +11,37 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 # Auth Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "changeme_secret_key_12345")
+if SECRET_KEY:
+    SECRET_KEY = SECRET_KEY.strip('"').strip("'")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30 # 30 days
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password, hashed_password):
     """Verifica senha com suporte a bcrypt e SHA256 fallback"""
+    
+    # Debug: Print hashes for comparison
+    import hashlib
+    sha256_hash = hashlib.sha256(plain_password.encode()).hexdigest()
     try:
-        # Tentar bcrypt primeiro
-        return pwd_context.verify(plain_password, hashed_password)
-    except Exception as e:
-        # Fallback para SHA256 (usado quando bcrypt falha)
-        import hashlib
-        sha256_hash = hashlib.sha256(plain_password.encode()).hexdigest()
-        return sha256_hash == hashed_password
+        bcrypt_match = pwd_context.verify(plain_password, hashed_password)
+    except:
+        bcrypt_match = False
+
+    sha256_match = (sha256_hash == hashed_password)
+    
+    # print(f"DEBUG: Verifying Password")
+    # print(f"   Input Plain: {plain_password}")
+    # print(f"   Stored Hash: {hashed_password}")
+    # print(f"   Generated SHA256: {sha256_hash}")
+    # print(f"   Bcrypt Match: {bcrypt_match}")
+    # print(f"   SHA256 Match: {sha256_match}")
+    
+    if bcrypt_match: return True
+    if sha256_match: return True
+    
+    return False
 
 def get_password_hash(password):
     """Gera hash com bcrypt ou SHA256 fallback"""
