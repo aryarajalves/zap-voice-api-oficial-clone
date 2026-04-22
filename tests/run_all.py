@@ -46,7 +46,7 @@ def main():
     print(f"\n{'='*50}")
     print(f"RESUMO DOS TESTES: {success_count}/{len(scripts)} scripts executados com sucesso.")
     if failed_scripts:
-        print(f"❌ Scripts que falharam: {', '.join(failed_scripts)}")
+        print(f"FAILED Scripts que falharam: {', '.join(failed_scripts)}")
         sys.exit(1)
     print(f"{'='*50}")
 

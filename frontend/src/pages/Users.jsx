@@ -37,7 +37,9 @@ const Users = () => {
     useEffect(() => {
         let ws;
         try {
-            const wsFinalUrl = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+            const wsBase = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+            const wsToken = localStorage.getItem('token');
+            const wsFinalUrl = wsToken ? `${wsBase}?token=${wsToken}` : wsBase;
             ws = new WebSocket(wsFinalUrl);
 
             ws.onmessage = (event) => {

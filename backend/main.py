@@ -13,10 +13,9 @@ from datetime import datetime, timezone
 from database import engine, auto_migrate
 import models
 
-# Routers
 from routers import (
     auth, funnels, triggers, schedules, settings, chatwoot, whatsapp, webhooks, blocked, clients, uploads,
-    global_vars, health, webhooks_integrations, webhooks_public
+    global_vars, health, webhooks_integrations, webhooks_public, leads, financial
 )
 
 # Services / Utils
@@ -34,26 +33,24 @@ load_dotenv()
 
 # Create database tables
 # Conexão com banco de dados (Postgres ou SQLite)
-models.Base.metadata.create_all(bind=engine) # Ensure tables exist
-auto_migrate(engine) # Ensure new columns exist
+# models.Base.metadata.create_all(bind=engine) # Movido para run_migrations() para evitar deadlock
+# auto_migrate(engine) # Movido para run_migrations() para evitar deadlock
 
 app = FastAPI(
-    title="ZapVoice API - Automação Chatwoot",
+    title="ZapVoice API Oficial",
+    version="3.0.11",
     description="""
-## 🚀 ZapVoice API v2.0.17 (Monitoring Active)
+## 🚀 ZapVoice API v3.0.11
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
 ### Funcionalidades
-* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios e vídeos.
-* **Disparos em Massa:** Envie templates aprovados para milhares de contatos.
-* **Webhooks:** Integração bidirecional com Chatwoot e n8n.
+* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.0.11** do **ZapVoice**!
 * **Agendamento Inteligente:** Otimização de filas e prevenção de bloqueios.
 
 ### Autenticação
 Use o endpoint `/auth/token` para obter seu `access_token`.
     """,
-    version="2.0.0",
     contact={
         "name": "Documentação Oficial",
         "url": "http://localhost:8000/docs",
@@ -70,13 +67,13 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Mount static files
-# Mount static files
-os.makedirs("static/uploads", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+os.makedirs(os.path.join(_BASE_DIR, "static", "uploads"), exist_ok=True)
+app.mount("/static", StaticFiles(directory=os.path.join(_BASE_DIR, "static")), name="static")
 
 # Mount Vite Assets (Production/Docker)
-if os.path.exists("static/dist/assets"):
-    app.mount("/assets", StaticFiles(directory="static/dist/assets"), name="assets")
+if os.path.exists(os.path.join(_BASE_DIR, "static", "dist", "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(_BASE_DIR, "static", "dist", "assets")), name="assets")
 
 # Configuração CORS
 default_origins = [
@@ -114,7 +111,6 @@ async def add_security_headers(request: Request, call_next):
 app.include_router(funnels.router, prefix="/api", tags=["Funnels"])
 app.include_router(schedules.router, prefix="/api", tags=["Schedules"])
 app.include_router(triggers.router, prefix="/api", tags=["Triggers"])
-app.include_router(webhooks.router, prefix="/api", tags=["Webhooks"])
 app.include_router(uploads.router, prefix="/api", tags=["Uploads"])
 app.include_router(chatwoot.router, prefix="/api", tags=["Chatwoot"])
 app.include_router(auth.router, prefix="/api", tags=["Auth"])
@@ -124,8 +120,21 @@ app.include_router(settings.router, prefix="/api", tags=["Settings"])
 app.include_router(blocked.router, prefix="/api", tags=["Blocked"])
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(global_vars.router, prefix="/api")
+
+# --- Webhooks & Integrations Routers ---
+# 1. Rotas públicas do Meta (verificação de webhook) - DEVE vir antes do router de integrações
+# pois /webhooks/{integration_id} capturaria "meta" como parâmetro e exigiria auth.
+app.include_router(webhooks.router, prefix="/api", tags=["Webhooks"])
+
+# 2. Gerenciamento de Integrações (Dashboard)
 app.include_router(webhooks_integrations.router, prefix="/api", tags=["Webhooks Integrations"])
+
+# 3. Endpoints Públicos de Recebimento (WordPress, Elementor, Hotmart, etc.)
 app.include_router(webhooks_public.router, prefix="/api", tags=["Webhooks Public"])
+# --- End Routers ---
+
+app.include_router(leads.router, prefix="/api", tags=["Leads"])
+app.include_router(financial.router, prefix="/api", tags=["Financial"])
 
 # Startup Events
 @app.middleware("http")
@@ -150,15 +159,20 @@ async def log_requests(request: Request, call_next):
                 logger.error(f"Erro ao logar corpo do webhook: {e}")
             
     response = await call_next(request)
+    if not any(x in request.url.path for x in ["/static", "/assets", "/docs", "/openapi.json", "/favicon.ico"]):
+        logger.info(f"✅ [RESPONSE] {request.method} {request.url.path} - Status: {response.status_code}")
     return response
 
 @app.on_event("startup")
 async def startup_event():
     logger.info("🚀 Iniciando ZapVoice API...")
     
-    # Seed Super Admin
-    seed_super_admin()
-    
+    # Seed Super Admin (Com Retry para aguardar o banco se necessário)
+    try:
+        seed_super_admin()
+    except Exception as e:
+        logger.error(f"❌ Falha crítica ao realizar seed do admin: {e}")
+        
     # Executa migrações críticas de banco
     run_migrations()
     
@@ -168,13 +182,20 @@ async def startup_event():
     # Inicia Consumers (Worker Interno)
     # Isso garante que o processamento ocorra mesmo sem um container de worker separado
     try:
-        from worker import handle_bulk_send, handle_whatsapp_event, handle_funnel_execution, handle_chatwoot_private_message
+        from worker import (
+            handle_bulk_send, handle_whatsapp_event, handle_funnel_execution, 
+            handle_chatwoot_private_message, handle_agent_memory_webhook
+        )
         logger.info("🔧 Iniciando Workers Internos (Consumers)...")
         await rabbitmq.connect()
         await rabbitmq.consume("zapvoice_bulk_sends", handle_bulk_send, prefetch_count=1)
         await rabbitmq.consume("whatsapp_events", handle_whatsapp_event, prefetch_count=20)
         await rabbitmq.consume("zapvoice_funnel_executions", handle_funnel_execution, prefetch_count=5)
-        await rabbitmq.consume("chatwoot_private_messages", handle_chatwoot_private_message, prefetch_count=50)
+        await rabbitmq.consume("chatwoot_private_messages", handle_chatwoot_private_message, prefetch_count=50, requeue_on_error=True)
+        
+        # Webhook de Memória (Agente de IA) - Sequencial 1 a 1
+        await rabbitmq.consume("agent_memory_webhook_queue", handle_agent_memory_webhook, prefetch_count=1)
+        
         logger.info("✅ Workers Internos Iniciados!")
     except Exception as e:
         logger.error(f"❌ Falha ao iniciar workers internos: {e}")
@@ -186,10 +207,11 @@ async def startup_event():
     asyncio.create_task(system_monitor_task())
 
 def seed_super_admin():
-    """Garante que o Super Admin exista conforme o .env"""
+    """Garante que o Super Admin exista conforme o .env com lógica de retry"""
     from database import SessionLocal
     from models import User
     from core.security import get_password_hash, verify_password
+    from sqlalchemy.exc import OperationalError
     
     email = os.getenv("SUPER_ADMIN_EMAIL")
     password = os.getenv("SUPER_ADMIN_PASSWORD")
@@ -201,136 +223,86 @@ def seed_super_admin():
     if not email or not password:
         logger.warning("⚠️ SUPER_ADMIN_EMAIL ou SUPER_ADMIN_PASSWORD não configurados no .env")
         return
-        
-    db = SessionLocal()
-    try:
-        # 1. Remover o admin antigo se ele não for o atual configurado
-        if email != "admin@admin.com":
-            old_admin = db.query(User).filter(User.email == "admin@admin.com").first()
-            if old_admin:
-                logger.info("🗑️ Removendo admin legado (admin@admin.com)")
-                db.delete(old_admin)
-                db.commit()
 
-        # 2. Garantir o admin atual e forçar sincronização de senha se necessário
-        user = db.query(User).filter(User.email == email).first()
-        
-        if user:
-            # Verifica se a senha atual do banco bate com a do ENV (com aspas e espaços limpos)
-            if not verify_password(password, user.hashed_password):
-                logger.info(f"🔑 Senha do Super Admin ({email}) desalinhada com o ENV. Forçando atualização para garantir acesso...")
-                user.hashed_password = get_password_hash(password)
+    logger.info(f"🔑 Verificando configuração de Super Admin para: {email}")
+    
+    max_retries = 5
+    retry_delay = 5
+    
+    for attempt in range(max_retries):
+        db = SessionLocal()
+        try:
+            # 1. Remover o admin antigo se ele não for o atual configurado
+            if email != "admin@admin.com":
+                old_admin = db.query(User).filter(User.email == "admin@admin.com").first()
+                if old_admin:
+                    logger.info("🗑️ Removendo admin legado (admin@admin.com)")
+                    db.delete(old_admin)
+                    db.commit()
+
+            # 2. Garantir o admin atual e forçar sincronização de senha se necessário
+            user = db.query(User).filter(User.email == email).first()
+            
+            if user:
+                # Verifica se a senha atual do banco bate com a do ENV
+                if not verify_password(password, user.hashed_password):
+                    logger.info(f"🔑 Senha do Super Admin ({email}) desalinhada com o ENV. Atualizando...")
+                    user.hashed_password = get_password_hash(password)
+                else:
+                    logger.info(f"✨ Super Admin {email} já está com a senha correta no banco.")
+                
+                user.role = "super_admin"
+                user.is_active = True
+                user.full_name = "Super Admin"
             else:
-                logger.info(f"✨ Super Admin {email} já está com a senha correta.")
+                logger.info(f"🚀 Criando novo Super Admin: {email}")
+                hashed_password = get_password_hash(password)
+                new_user = User(
+                    email=email,
+                    hashed_password=hashed_password,
+                    role="super_admin",
+                    full_name="Super Admin",
+                    is_active=True
+                )
+                db.add(new_user)
+                
+            db.commit()
+            logger.info(f"✅ Sincronização de Super Admin ({email}) concluída com sucesso!")
+            break # Sucesso, sai do loop de retry
             
-            user.role = "super_admin"
-            user.is_active = True
-        else:
-            logger.info(f"🚀 Criando novo Super Admin: {email}")
-            hashed_password = get_password_hash(password)
-            new_user = User(
-                email=email,
-                hashed_password=hashed_password,
-                role="super_admin",
-                full_name="Super Admin",
-                is_active=True
-            )
-            db.add(new_user)
-            
-        db.commit()
-    except Exception as e:
-        logger.error(f"❌ Erro ao realizar seed do Super Admin: {e}")
-        db.rollback()
-    finally:
-        db.close()
+        except OperationalError as e:
+            logger.warning(f"⏳ Banco de dados ainda não está pronto (Tentativa {attempt + 1}/{max_retries}). Aguardando {retry_delay}s...")
+            if attempt == max_retries - 1:
+                logger.error(f"❌ Não foi possível conectar ao banco após {max_retries} tentativas: {e}")
+                raise
+            asyncio.run(asyncio.sleep(retry_delay))
+        except Exception as e:
+            logger.error(f"❌ Erro inesperado ao realizar seed do Super Admin: {e}")
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
 def run_migrations():
     """Garante que todas as tabelas e colunas necessárias existam no banco."""
+    # O auto_migrate agora é dinâmico e resolve tudo baseado no models.py
+    # Ele já chama Base.metadata.create_all(bind=engine) internamente
+    auto_migrate(engine)
+
     from database import SessionLocal
-    from sqlalchemy import text
-    
     db = SessionLocal()
     try:
-        # 1. status_info table and columns
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS status_info (
-                id SERIAL PRIMARY KEY,
-                client_id INTEGER NOT NULL,
-                webhook_id INTEGER,
-                phone VARCHAR NOT NULL,
-                name VARCHAR,
-                product_name VARCHAR,
-                status VARCHAR,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        """))
-        db.execute(text("ALTER TABLE status_info ADD COLUMN IF NOT EXISTS trigger_id INTEGER"))
-        
-        # 2. scheduled_triggers columns
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS product_name VARCHAR"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS label_added BOOLEAN DEFAULT FALSE"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS publish_external_event BOOLEAN DEFAULT FALSE"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS chatwoot_label VARCHAR"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS event_type VARCHAR"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS integration_id UUID"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS is_free_message BOOLEAN DEFAULT FALSE"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE"))
-        
-        db.execute(text("ALTER TABLE webhook_event_mappings ADD COLUMN IF NOT EXISTS publish_external_event BOOLEAN DEFAULT FALSE"))
-        db.execute(text("ALTER TABLE webhook_event_mappings ADD COLUMN IF NOT EXISTS send_as_free_message BOOLEAN DEFAULT FALSE"))
-        
-        # 3. webhook_configs columns
-        db.execute(text("ALTER TABLE webhook_configs ADD COLUMN IF NOT EXISTS delay_amount INTEGER DEFAULT 0"))
-        db.execute(text("ALTER TABLE webhook_configs ADD COLUMN IF NOT EXISTS delay_unit VARCHAR DEFAULT 'seconds'"))
-        db.execute(text("ALTER TABLE webhook_configs ADD COLUMN IF NOT EXISTS approved_delay_amount INTEGER DEFAULT 0"))
-        db.execute(text("ALTER TABLE webhook_configs ADD COLUMN IF NOT EXISTS approved_delay_unit VARCHAR DEFAULT 'seconds'"))
-        
-        # 4. product_status table
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS product_status (
-                id SERIAL PRIMARY KEY,
-                client_id INTEGER NOT NULL,
-                phone VARCHAR NOT NULL,
-                customer_name VARCHAR,
-                product_name VARCHAR NOT NULL,
-                status VARCHAR NOT NULL,
-                last_payload JSON,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        """))
-        
-        db.execute(text("ALTER TABLE funnels ADD COLUMN IF NOT EXISTS allowed_phones JSON"))
-        db.execute(text("ALTER TABLE funnels ADD COLUMN IF NOT EXISTS blocked_phones JSON"))
-        db.execute(text("ALTER TABLE scheduled_triggers ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR"))
-        
-        # 7. whatsapp_template_cache columns
-        db.execute(text("ALTER TABLE whatsapp_template_cache ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"))
-        db.execute(text("ALTER TABLE whatsapp_template_cache ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"))
-        
-        # 6. global_variables table
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS global_variables (
-                id SERIAL PRIMARY KEY,
-                client_id INTEGER NOT NULL REFERENCES clients(id),
-                name VARCHAR NOT NULL,
-                value TEXT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        """))
-        db.execute(text("CREATE INDEX IF NOT EXISTS ix_global_variables_id ON global_variables (id)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS ix_global_variables_client_id ON global_variables (client_id)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS ix_global_variables_name ON global_variables (name)"))
-
-        db.commit()
-        logger.info("✅ Migrações de banco de dados concluídas!")
-    except Exception as e:
-        logger.error(f"❌ Erro nas migrações: {e}")
-        db.rollback()
+        # Diagnostic Log
+        from models import WebhookIntegration, WebhookConfig, WebhookEventMapping
+        count_new = db.query(WebhookIntegration).count()
+        count_old = db.query(WebhookConfig).count()
+        count_mappings = db.query(WebhookEventMapping).count()
+        logger.info(f"📊 [DATABASE] Webhooks encontrados: {count_new} (Novos), {count_old} (Antigos), {count_mappings} (Mapeamentos).")
+    except Exception as diag_err:
+        logger.warning(f"⚠️ [DATABASE] Não foi possível contar registros: {diag_err}")
     finally:
         db.close()
+
 
 async def system_monitor_task():
     """Coleta e envia estatísticas de sistema via WebSocket a cada 5 segundos"""
@@ -428,7 +400,7 @@ def get_index_with_cache_busting():
     para garantir que os navegadores não usem cache antigo.
     """
     import time
-    index_path = "static/dist/index.html"
+    index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "dist", "index.html")
     if not os.path.exists(index_path):
         return None
     
@@ -449,7 +421,7 @@ def get_index_with_cache_busting():
         return None
 
 @app.get("/")
-async def read_root():
+async def root():
     # Serve React App com Cache Busting Dinâmico
     content = get_index_with_cache_busting()
     if content:
@@ -465,14 +437,14 @@ async def read_root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "2.0.17 (Monitoring Dash Active)",
-        "mode": "development (frontend not built)"
+        "version": "3.0.9",
+        "mode": "production"
     }
 
 # Serve env-config.js with no-cache headers
 @app.get("/env-config.js")
 async def serve_env_config():
-    config_path = "static/dist/env-config.js"
+    config_path = os.path.join(_BASE_DIR, "static", "dist", "env-config.js")
     if os.path.exists(config_path):
         from fastapi.responses import FileResponse
         response = FileResponse(config_path, media_type="application/javascript")

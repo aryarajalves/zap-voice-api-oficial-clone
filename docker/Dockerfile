@@ -1,11 +1,11 @@
 # ========== ESTÁGIO 1: Build do Frontend (React/Vite) ==========
-FROM node:18-alpine as frontend-build
+FROM node:20-alpine as frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
 # Ignorar erro de lint no build se houver, para garantir que não pare
-RUN npm run build || true
+RUN npm run build
 
 # ========== ESTÁGIO 2: Builder Python (Compilação) ==========
 FROM python:3.11-slim as backend-builder

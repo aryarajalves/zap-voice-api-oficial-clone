@@ -10,7 +10,7 @@ import json
 import json
 from datetime import datetime, timezone, timedelta
 from services.engine import execute_funnel
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
 from websocket_manager import manager
 from rabbitmq_client import rabbitmq
 from chatwoot_client import ChatwootClient
@@ -25,7 +25,29 @@ def get_db():
     try: yield db
     finally: db.close()
 
-@router.get("/triggers", response_model=List[schemas.ScheduledTrigger], summary="Listar Disparos e Agendamentos")
+@router.get("/triggers/{trigger_id}", response_model=schemas.ScheduledTrigger, summary="Obter detalhes de um disparo específico")
+def get_trigger(
+    trigger_id: int,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Retorna os detalhes de um disparo específico, incluindo seu histórico de execução em tempo real.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    trigger = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.id == trigger_id,
+        models.ScheduledTrigger.client_id == client_id
+    ).first()
+    
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo não encontrado ou sem permissão.")
+        
+    return trigger
+
+@router.get("/triggers", response_model=schemas.TriggerListResponse, summary="Listar Disparos e Agendamentos")
+
 def list_triggers(
     skip: int = 0, 
     limit: int = 100, 
@@ -34,21 +56,40 @@ def list_triggers(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     trigger_type: Optional[str] = None,
+    exclude_webhooks: bool = True,
+    show_technical: bool = False,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Retorna lista de disparos (triggers).
-    
-    - **Filtros:** Nome do funil, status, data de criação.
-    - **Tipos:** Bulk (em massa) ou Single (individual).
+    Retorna lista de disparos (triggers) paginada.
     """
     query = db.query(models.ScheduledTrigger)
     
     # Filter by client_id if provided
     client_id = x_client_id if x_client_id else current_user.client_id
     query = query.filter(models.ScheduledTrigger.client_id == client_id)
+    
+    # Excluir webhooks do histórico global se solicitado (padrão sim)
+    if exclude_webhooks:
+        query = query.filter(models.ScheduledTrigger.integration_id == None)
+    
+    # Filtrar registros internos para evitar problemas com NULL e lixo no histórico
+    if not show_technical:
+        query = query.filter(or_(
+            models.ScheduledTrigger.template_name != "HIDDEN_CHILD",
+            models.ScheduledTrigger.template_name == None
+        ))
+        query = query.filter(or_(
+            models.ScheduledTrigger.product_name != "HIDDEN_CHILD",
+            models.ScheduledTrigger.product_name == None
+        ))
+    
+    # Nested Funnels support: Hide children triggers from main list
+    # but allow them if show_technical is true
+    if not show_technical:
+        query = query.filter(models.ScheduledTrigger.parent_id == None)
     
     if funnel_name:
         query = query.join(models.Funnel).filter(models.Funnel.name.ilike(f"%{funnel_name}%"))
@@ -68,10 +109,56 @@ def list_triggers(
         elif trigger_type == 'single':
             query = query.filter(models.ScheduledTrigger.is_bulk == False)
 
+    total = query.count()
     triggers = query.order_by(models.ScheduledTrigger.created_at.desc()).offset(skip).limit(limit).all()
-    
-    # Filtrar registros internos no Python para evitar problemas com NULL no SQL
-    return [t for t in triggers if t.template_name != "HIDDEN_CHILD"]
+
+    # Backfill info for display
+    for trigger in triggers:
+        # sent_as for billing info
+        if trigger.sent_as is None and trigger.messages:
+            first_msg = min(trigger.messages, key=lambda m: m.id)
+            if first_msg.message_type:
+                trigger.sent_as = first_msg.message_type
+        
+        # child_count for nested funnels
+        trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
+
+    return {
+        "items": triggers,
+        "total": total
+    }
+
+@router.post("/triggers/backfill-sent-as", summary="Preencher sent_as histórico a partir do MessageStatus")
+def backfill_sent_as(
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Percorre todos os ScheduledTriggers sem sent_as e preenche com o message_type
+    do primeiro MessageStatus associado. Roda uma vez para dados históricos.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    triggers = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.client_id == client_id,
+        models.ScheduledTrigger.sent_as == None
+    ).all()
+
+    updated = 0
+    for trigger in triggers:
+        if trigger.messages:
+            first_msg = min(trigger.messages, key=lambda m: m.id)
+            if first_msg.message_type:
+                trigger.sent_as = first_msg.message_type
+                updated += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "updated": updated,
+        "message": f"{updated} disparo(s) histórico(s) preenchidos com informação de cobrança."
+    }
+
 
 @router.get("/triggers/{trigger_id}/failures-csv", summary="Exportar Falhas CSV")
 def export_failures_csv(
@@ -141,12 +228,19 @@ async def delete_trigger(trigger_id: int, db: Session = Depends(get_db), current
     """
     Remove permanentemente o histórico de um disparo.
     """
-    if current_user.role != 'super_admin':
-        raise HTTPException(status_code=403, detail="Apenas Super Admin pode excluir históricos")
+    if current_user.role not in ['super_admin', 'admin']:
+        raise HTTPException(status_code=403, detail="Apenas administradores podem excluir históricos")
 
-    trigger = db.query(models.ScheduledTrigger).get(trigger_id)
+    trigger = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.id == trigger_id
+    ).first()
+    
     if not trigger:
         raise HTTPException(status_code=404, detail="Trigger not found")
+
+    # Segurança: admin só deleta do seu próprio client
+    if current_user.role == 'admin' and trigger.client_id != current_user.client_id:
+        raise HTTPException(status_code=403, detail="Acesso negado: Este registro pertence a outro cliente")
     
     # Se estiver rodando, tentar cancelar primeiro?
     db.delete(trigger)
@@ -387,18 +481,16 @@ async def trigger_bulk_send(
     concurrency: int = Form(1),
     template_language: str = Form("pt_BR"),
     private_message: Optional[str] = Form(None),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Cria um agendamento de disparo em massa a partir de um arquivo CSV.
-    
+
     - O CSV deve conter uma coluna `phone` ou `telefone`.
     - O disparo é enfileirado imediatamente.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="X-Client-ID header is required")
 
     # 1. Parse CSV
     contacts = []
@@ -455,15 +547,13 @@ async def trigger_funnel_single(
     conversation_id: str = None, # Changed to str to avoid validation errors
     contact_name: str = "",
     contact_phone: str = "",
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Inicia a execução imediata de um funil para um único contato.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="X-Client-ID header is required")
 
     with open("zapvoice_debug.log", "a", encoding="utf-8") as f:
         f.write(f"[{datetime.now(timezone.utc)}] 🚀 Trigger Single: Funnel {funnel_id}, Conv {conversation_id}, Name {contact_name}\n")
@@ -506,15 +596,13 @@ async def trigger_funnel_single(
 async def trigger_funnel_bulk_json(
     funnel_id: int,
     payload: dict = Body(...),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Inicia um funil para múltiplos contatos recebidos via JSON (usado pelo seletor do Frontend).
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="X-Client-ID header is required")
 
     funnel = db.query(models.Funnel).get(funnel_id)
     if not funnel:
@@ -569,15 +657,13 @@ async def trigger_funnel_bulk_json(
 @router.post("/bulk-send/register", summary="Registrar Envio (Histórico)")
 async def register_bulk_send(
     payload: dict = Body(...),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Registra um envio em massa JÁ REALIZADO (imediato) no histórico para fins de relatório.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="X-Client-ID header is required")
 
     template_name = payload.get("template_name")
     total_sent = payload.get("total_sent", 0)
@@ -677,7 +763,7 @@ async def register_bulk_send(
 @router.post("/bulk-send/reserve", summary="Reservar ID para Envio")
 async def reserve_bulk_send(
     payload: dict = Body(...),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -685,8 +771,6 @@ async def reserve_bulk_send(
     Cria um registro com status 'processing' ANTES de iniciar o envio.
     Garante que exista um ID para permitir cancelamento durante o processo.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="X-Client-ID header is required")
 
     template_name = payload.get("template_name")
     contacts_list = payload.get("contacts_list", []) # List of numbers
@@ -730,15 +814,13 @@ async def reserve_bulk_send(
 @router.post("/bulk-send/schedule", summary="Agendar Envio Futuro")
 async def schedule_bulk_send(
     payload: dict = Body(...),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Agenda um envio em massa para uma data/hora futura.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="X-Client-ID header is required")
 
     template_name = payload.get("template_name")
     language = payload.get("language", "pt_BR")
@@ -871,6 +953,7 @@ async def schedule_bulk_send(
 def get_trigger_messages(
     trigger_id: int,
     status_filter: Optional[str] = None,
+    message_type: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -892,60 +975,94 @@ def get_trigger_messages(
     # Base query for all messages related to this trigger
     base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
     
-    # Calculate counts for all tabs
-    total_count = base_query.count()
-    delivered_count = base_query.filter(models.MessageStatus.status.in_(['delivered', 'read'])).count()
-    read_count = base_query.filter(models.MessageStatus.status == 'read').count()
-    failed_count = base_query.filter(models.MessageStatus.status == 'failed').count()
-    blocked_count = base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count()
-    free_count = base_query.filter(models.MessageStatus.message_type == 'DIRECT_MESSAGE').count()
-    template_count = base_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count()
-    
-    # Special interaction count logic
-    interaction_count = base_query.filter(
-        models.MessageStatus.is_interaction == True,
-        or_(
-            models.MessageStatus.failure_reason == None,
-            models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'
-        )
-    ).count()
-
-    # Apply the current filter for the items to return
-    items_query = base_query
+    # Apply status filter if provided
     if status_filter:
         if status_filter == 'delivered':
-            items_query = items_query.filter(models.MessageStatus.status.in_(['delivered', 'read']))
+            base_query = base_query.filter(models.MessageStatus.status.in_(['delivered', 'read', 'interaction']))
         elif status_filter == 'read':
-            items_query = items_query.filter(models.MessageStatus.status == 'read')
+            base_query = base_query.filter(models.MessageStatus.status.in_(['read', 'interaction']))
         elif status_filter == 'failed':
-            items_query = items_query.filter(models.MessageStatus.status == 'failed')
-        elif status_filter == 'interaction':
-            items_query = items_query.filter(
+            base_query = base_query.filter(models.MessageStatus.status == 'failed')
+        elif status_filter == 'sent':
+            # 'Sent' means successfully dispatched from our system, which includes delivered and read
+            base_query = base_query.filter(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']))
+        elif status_filter == 'blocked':
+            base_query = base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
+        elif status_filter in ('interaction', 'interactions'):
+            from sqlalchemy import or_
+            base_query = base_query.filter(
                 models.MessageStatus.is_interaction == True,
                 or_(
                     models.MessageStatus.failure_reason == None,
                     models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'
                 )
             )
-        elif status_filter == 'blocked':
-            items_query = items_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
-        elif status_filter == 'free':
-            items_query = items_query.filter(models.MessageStatus.message_type == 'DIRECT_MESSAGE')
-        elif status_filter == 'template':
-            items_query = items_query.filter(models.MessageStatus.message_type == 'TEMPLATE')
-            
+        elif status_filter == 'private_note':
+            base_query = base_query.filter(models.MessageStatus.private_note_posted == True)
+
+    # Apply message type filter if provided
+    if message_type:
+        if message_type == 'template':
+            base_query = base_query.filter(models.MessageStatus.message_type == 'TEMPLATE')
+        elif message_type == 'free':
+            base_query = base_query.filter(models.MessageStatus.message_type == 'FREE_MESSAGE')
+
+    items = base_query.order_by(models.MessageStatus.updated_at.desc()).all()
+    
+    # Dynamic Redirection Logic
+    from config_loader import get_setting
+    base_url = get_setting("CHATWOOT_URL", "https://app.chatwoot.com", client_id=trigger.client_id)
+    if base_url.endswith("/"): base_url = base_url[:-1]
+
+    # Cache contacts list for faster lookup if it's bulk
+    contacts_map = {}
+    if trigger.is_bulk and trigger.contacts_list:
+        for c in trigger.contacts_list:
+            if isinstance(c, dict):
+                p = c.get('phone') or c.get('telefone') or c.get('whatsapp') or ''
+                if p:
+                    clean_p = "".join(filter(str.isdigit, str(p)))
+                    name = (
+                        c.get('{{1}}') or c.get('1') or c.get('nome') or 
+                        c.get('name') or c.get('full_name') or c.get('contact_name') or ""
+                    )
+                    if clean_p:
+                        contacts_map[clean_p] = name
+
+    for item in items:
+        # Resolve Name
+        clean_item_p = "".join(filter(str.isdigit, str(item.phone_number)))
+        # setattr is safer for SQLAlchemy objects when adding dynamic fields
+        item.contact_name = contacts_map.get(clean_item_p) or trigger.contact_name
+        
+        # Prioritize values directly in MessageStatus, fallback to Trigger if it's a single trigger
+        convo_id = item.chatwoot_conversation_id or (trigger.conversation_id if not trigger.is_bulk else None)
+        account_id = item.chatwoot_account_id or trigger.chatwoot_account_id
+        
+        if convo_id and account_id:
+            item.chatwoot_url = f"{base_url}/app/accounts/{account_id}/conversations/{convo_id}"
+        else:
+            item.chatwoot_url = None
+
+    # Recalculate counts for consistency (Full counts for the modal tabs)
+    full_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
+    
+    counts = {
+        "all": full_query.count(),
+        "sent": full_query.filter(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction'])).count(),
+        "delivered": full_query.filter(models.MessageStatus.status.in_(['delivered', 'read', 'interaction'])).count(),
+        "read": full_query.filter(models.MessageStatus.status.in_(['read', 'interaction'])).count(),
+        "failed": full_query.filter(models.MessageStatus.status == 'failed').count(),
+        "free": full_query.filter(models.MessageStatus.message_type == 'FREE_MESSAGE').count(),
+        "template": full_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
+        "blocked": full_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count(),
+        "interaction": full_query.filter(models.MessageStatus.is_interaction == True).count(),
+        "private_note": full_query.filter(models.MessageStatus.private_note_posted == True).count()
+    }
+
     return {
-        "items": items_query.order_by(models.MessageStatus.updated_at.desc()).all(),
-        "counts": {
-            "all": total_count,
-            "delivered": delivered_count,
-            "read": read_count,
-            "interaction": interaction_count,
-            "blocked": blocked_count,
-            "failed": failed_count,
-            "free": free_count,
-            "template": template_count
-        }
+        "items": items,
+        "counts": counts
     }
 
 @router.get("/triggers/{aggregator_id}/details", summary="Detalhes do Agregador (Fila)")
@@ -976,4 +1093,43 @@ def get_aggregator_details(
         models.ScheduledTrigger.funnel_id == aggregator.funnel_id
     ).order_by(models.ScheduledTrigger.updated_at.desc()).limit(200).all()
     
+    return children
+
+@router.get("/triggers/{trigger_id}/children", response_model=List[schemas.ScheduledTrigger], summary="Listar Funis Filhos")
+def list_trigger_children(
+    trigger_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Retorna os funis que foram iniciados a partir deste disparo (Interações).
+    """
+    # Visibility fix: Super Admins can see any trigger. Others follow client_id/X-Client-ID.
+    query = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id)
+    
+    if current_user.role != 'super_admin':
+        client_id_to_check = current_user.client_id
+        # Optional: respect X-Client-ID if provided as header (matching list_triggers logic)
+        # For now, current_user.client_id is safe for non-admins.
+        query = query.filter(models.ScheduledTrigger.client_id == client_id_to_check)
+    
+    trigger = query.first()
+    
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo não encontrado.")
+    
+    # We look for children specifically using parent_id
+    children = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.parent_id == trigger_id
+    ).order_by(models.ScheduledTrigger.created_at.desc()).all()
+    
+    # Backfill info for children
+    for child in children:
+        if child.sent_as is None and child.messages:
+            first_msg = min(child.messages, key=lambda m: m.id)
+            if first_msg.message_type:
+                child.sent_as = first_msg.message_type
+        # Let's count grandchildren just in case, though unlikely
+        child.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == child.id).count()
+
     return children

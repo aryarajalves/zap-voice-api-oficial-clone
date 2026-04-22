@@ -23,8 +23,9 @@ export const AuthProvider = ({ children }) => {
         if (!user) return;
 
         let ws;
-        const wsFinalUrl = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
-        console.log("🔌 [AuthContext] Tentando conectar WebSocket em", wsFinalUrl);
+        const wsBase = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+        const wsToken = localStorage.getItem('token');
+        const wsFinalUrl = wsToken ? `${wsBase}?token=${wsToken}` : wsBase;
         try {
             ws = new WebSocket(wsFinalUrl);
 
@@ -96,28 +97,44 @@ export const AuthProvider = ({ children }) => {
         formData.append('username', email);
         formData.append('password', password);
 
-        // Fetch API automatically sets Content-Type to application/x-www-form-urlencoded
-        // when body is URLSearchParams
-        const response = await fetch(`${API_URL}/auth/token`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+        let lastError;
+        const maxRetries = 3;
+        
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(`${API_URL}/auth/token`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Erro ao fazer login');
+                }
+
+                const data = await response.json();
+                localStorage.setItem('token', data.access_token);
+
+                // Buscar dados do usuário
+                await fetchCurrentUser(data.access_token);
+                return data;
+
+            } catch (error) {
+                lastError = error;
+                // Se for um erro de rede (Failed to fetch) e não for a última tentativa, aguarda e tenta de novo
+                const isNetworkError = error instanceof TypeError || error.message === 'Failed to fetch';
+                if (isNetworkError && i < maxRetries - 1) {
+                    console.warn(`⚠️ [AuthContext] Falha na conexão (Backend subindo?). Tentativa ${i+1}/${maxRetries} em 1.5s...`);
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    continue;
+                }
+                throw error;
             }
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Erro ao fazer login');
         }
-
-        const data = await response.json();
-        localStorage.setItem('token', data.access_token);
-
-        // Buscar dados do usuário
-        await fetchCurrentUser(data.access_token);
-
-        return data;
+        throw lastError;
     };
 
     const register = async (email, password, fullName) => {
@@ -147,14 +164,14 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     };
 
-    const value = {
+    const value = React.useMemo(() => ({
         user,
         loading,
         login,
         register,
         logout,
         isAuthenticated: !!user
-    };
+    }), [user, loading]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

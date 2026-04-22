@@ -49,7 +49,9 @@ const ScheduleCalendar = ({ refreshKey }) => {
         if (!activeClient?.id) return;
 
         let ws;
-        const wsFinalUrl = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+        const wsBase = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+        const wsToken = localStorage.getItem('token');
+        const wsFinalUrl = wsToken ? `${wsBase}?token=${wsToken}` : wsBase;
 
         try {
             ws = new WebSocket(wsFinalUrl);
@@ -359,12 +361,36 @@ const ScheduleCalendar = ({ refreshKey }) => {
 
                                     <div className="flex gap-2 pt-2">
                                         {['pending', 'queued', 'Queued'].includes(selectedEvent.status) && (
-                                            <button
-                                                onClick={() => setIsEditing(true)}
-                                                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/50 transition-colors font-bold text-xs"
-                                            >
-                                                <FiEdit2 size={14} /> Editar
-                                            </button>
+                                            <>
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetchWithAuth(`${API_URL}/schedules/${selectedEvent.id}/dispatch`, {
+                                                                method: 'POST'
+                                                            }, activeClient.id);
+                                                            if (res.ok) {
+                                                                toast.success("🚀 Disparo iniciado! Processando em instantes...");
+                                                                setEvents(prev => prev.filter(e => e.id !== selectedEvent.id));
+                                                                setSelectedEvent(null);
+                                                            } else {
+                                                                const err = await res.json();
+                                                                toast.error(err.detail || "Erro ao disparar");
+                                                            }
+                                                        } catch (e) {
+                                                            toast.error("Erro de conexão");
+                                                        }
+                                                    }}
+                                                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50 transition-colors font-bold text-xs"
+                                                >
+                                                    <FiZap size={14} /> Disparar Agora
+                                                </button>
+                                                <button
+                                                    onClick={() => setIsEditing(true)}
+                                                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/50 transition-colors font-bold text-xs"
+                                                >
+                                                    <FiEdit2 size={14} /> Editar
+                                                </button>
+                                            </>
                                         )}
 
                                         {selectedEvent.status !== 'processing' && (

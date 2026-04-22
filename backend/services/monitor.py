@@ -3,6 +3,7 @@ import psutil
 import asyncio
 from core.logger import setup_logger
 from rabbitmq_client import rabbitmq
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from database import SessionLocal
 import models
@@ -11,6 +12,8 @@ from datetime import datetime, timezone
 logger = setup_logger(__name__)
 
 class SystemMonitor:
+    _last_stats = None
+    _last_collect_time = 0
     @staticmethod
     def get_cpu_usage():
         """Retorna a porcentagem de uso da CPU"""
@@ -60,14 +63,18 @@ class SystemMonitor:
                 await rabbitmq.connect()
             
             if rabbitmq.channel:
-                for q_name in queues:
+                async def get_q_count(q_name):
                     try:
-                        # Declara como passivo apenas para pegar o count
-                        q = await rabbitmq.channel.declare_queue(q_name, passive=True)
-                        total_messages += q.declaration_result.message_count
+                        q = await asyncio.wait_for(
+                            rabbitmq.channel.declare_queue(q_name, passive=True),
+                            timeout=1.0
+                        )
+                        return q.declaration_result.message_count
                     except Exception:
-                        # Se a fila não existir ainda, apenas ignora
-                        continue
+                        return 0
+                
+                counts = await asyncio.gather(*(get_q_count(q) for q in queues))
+                total_messages = sum(counts)
             
             return total_messages
         except Exception as e:
@@ -75,23 +82,27 @@ class SystemMonitor:
             return 0
 
     @staticmethod
+    def _check_db_sync():
+        db = SessionLocal()
+        try:
+            db.execute(text("SELECT 1"))
+            return "online"
+        except Exception:
+            return "offline"
+        finally:
+            db.close()
+
+    @staticmethod
     async def get_service_status():
         """Verifica se os serviços essenciais estão online"""
         status = {
             "database": "offline",
             "rabbitmq": "offline",
-            "worker": "online" # Assume online se o backend está rodando? Podemos melhorar depois.
+            "worker": "online"
         }
         
-        # Test Database
-        db = SessionLocal()
-        try:
-            db.execute(models.text("SELECT 1"))
-            status["database"] = "online"
-        except Exception:
-            status["database"] = "offline"
-        finally:
-            db.close()
+        # Test Database via thread
+        status["database"] = await asyncio.to_thread(SystemMonitor._check_db_sync)
             
         # Test RabbitMQ
         if rabbitmq.connection and not rabbitmq.connection.is_closed:
@@ -101,18 +112,67 @@ class SystemMonitor:
             
         return status
 
+    @staticmethod
+    def _get_client_stats_sync(client_id: int):
+        db = SessionLocal()
+        try:
+            # Count triggers that are pending or queued
+            scheduled = db.query(models.ScheduledTrigger).filter(
+                models.ScheduledTrigger.client_id == client_id,
+                models.ScheduledTrigger.status.in_(['pending', 'queued'])
+            ).count()
+
+            # Count triggers processed today
+            from sqlalchemy import func
+            today = datetime.now().date()
+            
+            # Garantir que usamos as colunas corretas: status e updated_at
+            sent_today = db.query(models.ScheduledTrigger).filter(
+                models.ScheduledTrigger.client_id == client_id,
+                models.ScheduledTrigger.status.in_(['completed', 'processed', 'sent']),
+                func.date(models.ScheduledTrigger.updated_at) == today
+            ).count()
+
+            return {
+                "scheduled_count": scheduled,
+                "sent_today": sent_today
+            }
+        except Exception as e:
+            logger.error(f"Erro ao obter estatísticas do cliente {client_id}: {str(e)}")
+            return {"scheduled_count": 0, "sent_today": 0}
+        finally:
+            db.close()
+
     @classmethod
-    async def collect_all(cls):
-        """Coleta todos os dados de uma vez"""
+    async def get_client_stats(cls, client_id: int):
+        """Coleta estatísticas específicas de um cliente único (Async Wrapper)"""
+        # Execute in thread pool to avoid blocking async loop
+        return await asyncio.to_thread(cls._get_client_stats_sync, client_id)
+
+    @classmethod
+    async def collect_all(cls, client_id: int = None, force_refresh: bool = False):
+        """Coleta apenas CPU e RAM para máxima velocidade em produção"""
+        import time
+        now = time.time()
+        
+        # Cache de 1 segundo para não sobrecarregar
+        if not force_refresh and cls._last_stats and (now - cls._last_collect_time < 1):
+            return cls._last_stats
+
+        # CPU e RAM são rápidos
         cpu = cls.get_cpu_usage()
         ram = cls.get_ram_usage()
-        queue = await cls.get_queue_stats()
-        services = await cls.get_service_status()
         
-        return {
+        data = {
             "cpu": cpu,
             "ram": ram,
-            "queue_size": queue,
-            "services": services,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            # Placeholders para compatibilidade com o frontend (enquanto não atualizado)
+            "queue_size": 0,
+            "services": {"database": "online", "rabbitmq": "online", "worker": "online"},
+            "client_stats": {"scheduled_count": 0, "sent_today": 0}
         }
+
+        cls._last_stats = data
+        cls._last_collect_time = now
+        return data

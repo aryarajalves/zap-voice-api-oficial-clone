@@ -121,11 +121,7 @@ class StorageClient:
                 # Se API_BASE_URL estiver definido (ex: https://zapvoice.aryaraj.shop), usa ele.
                 # Caso contrário, retorna um caminho relativo como /static/uploads/...
                 # Caminhos relativos são melhores para white label pois funcionam independente do domínio/ssl.
-                base_url = os.getenv("API_BASE_URL")
-                if not base_url:
-                    return f"/{upload_dir}/{filename}"
-                
-                return f"{base_url}/{upload_dir}/{filename}"
+                return f"/{upload_dir}/{filename}"
                 
             except Exception as e:
                 logger.error(f"Erro upload Local: {e}")

@@ -599,11 +599,13 @@ const SortableStep = ({ step, index, steps, updateStep, removeStep, templates, e
                         >
                             <option value="">Selecione um template...</option>
                             {templates && templates.length > 0 ? (
-                                templates.map((t) => (
-                                    <option key={t.id || t.name} value={t.name}>
-                                        {t.name} ({t.language})
-                                    </option>
-                                ))
+                                templates
+                                    .filter(t => ['APPROVED', 'ACTIVE'].includes(t.status))
+                                    .map((t) => (
+                                        <option key={t.id || t.name} value={t.name}>
+                                            {t.name} ({t.language})
+                                        </option>
+                                    ))
                             ) : (
                                 <option value="" disabled>Carregando templates...</option>
                             )}

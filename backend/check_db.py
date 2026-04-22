@@ -1,21 +1,32 @@
-from database import SessionLocal
-import models
 
-db = SessionLocal()
-try:
-    print("--- Funnels ---")
-    funnels = db.query(models.Funnel).all()
-    for f in funnels:
-        print(f"ID: {f.id}, Name: {f.name}, Trigger: '{f.trigger_phrase}'")
-    
-    print("\n--- Scheduled Triggers ---")
-    triggers = db.query(models.ScheduledTrigger).all()
-    for t in triggers:
-        print(f"ID: {t.id}, Template: {t.template_name}, Sent: {t.total_sent}, DL: {t.total_delivered}, Read: {t.total_read}, Inter: {t.total_interactions}")
-    
-    print("\n--- Message Statuses ---")
-    messages = db.query(models.MessageStatus).all()
-    for m in messages:
-        print(f"ID: {m.id}, TrigID: {m.trigger_id}, Status: {m.status}, Interaction: {m.is_interaction}")
-finally:
-    db.close()
+import sys
+import os
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+# Database URL - adjust if needed
+DATABASE_URL = "postgresql://postgres:postgres@localhost:5435/zapvoice"
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def check_memory_status():
+    db = SessionLocal()
+    try:
+        sql = text("""
+            SELECT id, phone_number, status, memory_webhook_status 
+            FROM message_status 
+            ORDER BY id DESC 
+            LIMIT 10
+        """)
+        result = db.execute(sql)
+        print("ID | Phone | Status | Memory Webhook Status")
+        print("-" * 50)
+        for row in result:
+            print(f"{row[0]} | {row[1]} | {row[2]} | {row[3]}")
+            
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    check_memory_status()

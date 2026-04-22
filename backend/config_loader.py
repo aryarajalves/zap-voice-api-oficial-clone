@@ -1,7 +1,10 @@
 import os
+import logging
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import AppConfig
+
+logger = logging.getLogger("config_loader")
 
 def get_settings(client_id: int = None):
     """
@@ -27,7 +30,8 @@ def get_settings(client_id: int = None):
         # Infra keys para que o health check consiga lê-las via ENV fallback
         "RABBITMQ_HOST", "RABBITMQ_PORT", "RABBITMQ_USER", "RABBITMQ_PASSWORD",
         "S3_ENDPOINT_URL", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET_NAME", "S3_REGION",
-        "AUTO_BLOCK_KEYWORDS", "SYNC_CONTACTS_TABLE"
+        "AUTO_BLOCK_KEYWORDS", "SYNC_CONTACTS_TABLE", "MANYCHAT_API_KEY",
+        "AI_MEMORY_ENABLED", "AGENT_MEMORY_WEBHOOK_URL", "AGENT_MEMORY_ENVIAR_TEXTO"
     ]
     
     db: Session = SessionLocal()
@@ -35,17 +39,10 @@ def get_settings(client_id: int = None):
         # Carregar do banco
         query = db.query(AppConfig)
         if client_id:
-            print(f"DEBUG: get_settings loading for client_id={client_id}")
             query = query.filter(AppConfig.client_id == client_id)
-        else:
-            print("DEBUG: get_settings loading for ALL/Default (no client_id)")
-            
+
         db_configs = query.all()
-        # Se client_id for fornecido, assumimos que as configs são específicas daquele cliente
-        # Se não, pode pegar de todos, mas o ideal é sempre passar client_id no contexto atual
         db_map = {cfg.key: cfg.value for cfg in db_configs}
-        
-        print(f"DEBUG: Found {len(db_map)} config keys in DB for client_id={client_id}: {list(db_map.keys())}")
         
         for key in keys:
             # Prioridade: Banco > Variável de Ambiente > String Vazia
@@ -54,12 +51,12 @@ def get_settings(client_id: int = None):
                  value = os.getenv(key, "")
             
             if isinstance(value, str):
-                value = value.strip('"').strip("'")
+                value = value.strip().strip('"').strip("'")
             
             settings[key] = value
             
     except Exception as e:
-        print(f"Erro ao carregar configurações do banco: {e}")
+        logger.error(f"Erro ao carregar configurações do banco: {e}")
         # Fallback para env vars em caso de erro no DB
         for key in keys:
             settings[key] = os.getenv(key, "")

@@ -10,7 +10,7 @@
 version: "3.7"
 services:
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.0.23
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.9.2
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
@@ -83,7 +83,7 @@ services:
         - traefik.http.services.zapvoice.loadbalancer.passHostHeader=1
 
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.0.23
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.9.2
     command: python worker.py
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:

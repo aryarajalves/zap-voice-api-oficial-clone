@@ -19,10 +19,10 @@ const ConfirmModal = ({
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 sm:p-6">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-gray-900/60 dark:bg-black/70 backdrop-blur-md animate-in fade-in duration-300"
+                className="absolute inset-0 bg-black/85 backdrop-blur-md animate-in fade-in duration-300"
                 onClick={onClose}
             />
 

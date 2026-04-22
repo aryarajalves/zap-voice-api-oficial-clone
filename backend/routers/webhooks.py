@@ -1,23 +1,42 @@
 from fastapi import APIRouter, Request, Body, BackgroundTasks, Depends, HTTPException
+from utils import normalize_phone
 from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import SessionLocal
 from core.security import limiter
-from services.engine import execute_funnel
+from services.engine import execute_funnel, log_node_execution
 import models
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import os
+import hmac
+import hashlib
 from core.logger import setup_logger
 from rabbitmq_client import rabbitmq
 from chatwoot_client import ChatwootClient
-from config_loader import get_setting
-from .incoming_webhooks import extract_value_by_path, format_phone, find_phone_in_payload, find_name_in_payload
+from core.utils import get_nested, extract_value_by_path, format_phone, find_phone_in_payload, find_name_in_payload
 
 logger = setup_logger(__name__)
 
 router = APIRouter()
+
+
+def _check_hmac_signature(body: bytes, secret: str, signature_header: str) -> bool:
+    """
+    Valida assinatura HMAC-SHA256.
+    Retorna True se válida, ou True se o segredo não estiver configurado (modo permissivo).
+    Formato esperado do header: 'sha256=<hex_digest>'
+    """
+    if not secret:
+        return True  # Sem segredo configurado, pula a validação
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    if not signature_header:
+        return False
+    received = signature_header[7:] if signature_header.startswith("sha256=") else signature_header
+    if not received:
+        return False
+    return hmac.compare_digest(expected, received)
 
 def get_db():
     db = SessionLocal()
@@ -35,9 +54,24 @@ async def catch_webhook_deprecated(slug: str, request: Request, payload: dict = 
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
     
+    # 0. Idempotency Check
+    import hashlib
+    payload_str = json.dumps(payload, sort_keys=True)
+    external_id = payload.get("id") or payload.get("event_id") or hashlib.md5(payload_str.encode()).hexdigest()
+    
+    existing = db.query(models.WebhookEvent).filter(
+        models.WebhookEvent.webhook_id == webhook.id,
+        models.WebhookEvent.external_id == str(external_id)
+    ).first()
+    
+    if existing:
+        logger.info(f"♻️ Webhook already processed (external_id={external_id}). Skipping.")
+        return {"status": "ignored", "message": "Duplicate event"}
+
     # 1. Registrar Evento (Log)
     event = models.WebhookEvent(
         webhook_id=webhook.id,
+        external_id=str(external_id),
         payload=payload,
         headers=dict(request.headers),
         status="processing"
@@ -78,16 +112,7 @@ async def catch_webhook_deprecated(slug: str, request: Request, payload: dict = 
         name_path = mapping.get("name_field")
         
         # Helper para extrair do JSON (suporta notação ponto: buyer.phone)
-        def get_nested(data, path):
-            if not path: return None
-            parts = path.split('.')
-            curr = data
-            for p in parts:
-                if isinstance(curr, dict):
-                    curr = curr.get(p)
-                else:
-                    return None
-            return curr
+        # Replaced local get_nested with import from core.utils
 
         phone = get_nested(payload, phone_path)
         name = get_nested(payload, name_path)
@@ -104,14 +129,40 @@ async def catch_webhook_deprecated(slug: str, request: Request, payload: dict = 
         # Limpeza telefone
         clean_phone = ''.join(filter(str.isdigit, str(phone)))
         
-        # 3. Disparar Funil
+        # 3. Detectar Status e Calcular Delay
+        status_path = mapping.get("status_field")
+        raw_status = get_nested(payload, status_path) if status_path else (payload.get("status") or payload.get("Status"))
+        status_str = str(raw_status).lower() if raw_status else ""
+        
+        is_approved = any(x in status_str for x in ["aprovada", "approved", "complete", "paid", "pago"])
+        
+        delay_sec = 0
+        if is_approved and webhook.approved_delay_amount:
+            amount = webhook.approved_delay_amount
+            unit = (webhook.approved_delay_unit or "seconds").lower()
+            if "minute" in unit: delay_sec = amount * 60
+            elif "hour" in unit: delay_sec = amount * 3600
+            else: delay_sec = amount
+        elif webhook.delay_amount:
+            amount = webhook.delay_amount
+            unit = (webhook.delay_unit or "seconds").lower()
+            if "minute" in unit: delay_sec = amount * 60
+            elif "hour" in unit: delay_sec = amount * 3600
+            else: delay_sec = amount
+
+        scheduled_time = datetime.now(timezone.utc)
+        if delay_sec > 0:
+            scheduled_time = scheduled_time + timedelta(seconds=delay_sec)
+            logger.info(f"⏳ [WEBHOOK OLD] Delay aplicado: {delay_sec}s para status '{status_str}' (Aprovada: {is_approved})")
+
+        # 4. Disparar Funil
         trigger = models.ScheduledTrigger(
             client_id=webhook.client_id,
             funnel_id=webhook.funnel_id,
             contact_phone=clean_phone,
             contact_name=str(name) if name else None,
-            status='queued',
-            scheduled_time=datetime.now(timezone.utc)
+            status='queued' if delay_sec > 0 else 'queued', # Status remains queued, scheduler will pick it up
+            scheduled_time=scheduled_time
         )
         db.add(trigger)
         
@@ -126,7 +177,7 @@ async def catch_webhook_deprecated(slug: str, request: Request, payload: dict = 
             # TODO: Async fire and forget
             pass
 
-        return {"status": "success", "trigger_id": trigger.id}
+        return {"status": "success", "trigger_id": trigger.id, "scheduled_at": scheduled_time.isoformat()}
 
     except Exception as e:
         db.rollback()
@@ -138,13 +189,14 @@ async def catch_webhook_deprecated(slug: str, request: Request, payload: dict = 
         return {"status": "error", "message": str(e)}
 
 @router.get("/webhooks/{webhook_id}/events")
-async def list_webhook_events(webhook_id: int, db: Session = Depends(get_db)):
+@router.get("/webhooks/{webhook_id}/events/")
+async def list_webhook_events(webhook_id: str, db: Session = Depends(get_db)):
     events = db.query(models.WebhookEvent).filter(
         models.WebhookEvent.webhook_id == webhook_id
     ).order_by(models.WebhookEvent.created_at.desc()).limit(50).all()
     return events
 
-from .incoming_webhooks import extract_value_by_path, find_phone_in_payload, format_phone
+# Mapeamento do incoming_webhooks substituído por core.utils
 
 @router.post("/webhooks/events/{event_id}/retry")
 async def retry_webhook_event(event_id: int, db: Session = Depends(get_db)):
@@ -214,7 +266,8 @@ async def retry_webhook_event(event_id: int, db: Session = Depends(get_db)):
         
         # 4. Assegurar conversa no Chatwoot (Importante para o envio)
         chatwoot = ChatwootClient(client_id=webhook.client_id)
-        convo_id = await chatwoot.ensure_conversation(clean_phone, name)
+        conv_res = await chatwoot.ensure_conversation(clean_phone, name)
+        convo_id = conv_res.get("conversation_id") if conv_res else None
 
         # --- LÓGICA DE ROTEAMENTO CONDICIONAL ---
         final_funnel_id = webhook.funnel_id
@@ -223,8 +276,34 @@ async def retry_webhook_event(event_id: int, db: Session = Depends(get_db)):
         
         if conditional and conditional.get("field_path") and conditional.get("rules"):
             check_path = conditional["field_path"]
-            check_value_raw, check_path_matched = extract_value_by_path(payload, check_path)
-            check_value = str(check_value_raw or "").strip()
+            
+            # 1. Prioridade: Verificar se o campo é uma variável já mapeada e traduzida
+            if check_path in custom_vars:
+                check_value = str(custom_vars[check_path]).strip()
+                check_path_matched = f"variable:{check_path}"
+            elif check_path == "phone":
+                check_value = str(clean_phone).strip()
+                check_path_matched = "variable:phone"
+            elif check_path == "name":
+                check_value = str(name).strip()
+                check_path_matched = "variable:name"
+            else:
+                # 2. Fallback: Extrair diretamente do JSON (JSON Path)
+                check_value_raw, check_path_matched = extract_value_by_path(payload, check_path)
+                check_value = str(check_value_raw or "").strip()
+                
+                # Tentar aplicar tradução se o path coincidir com alguma custom_variable
+                if mapping.get("custom_variables"):
+                    for var_name, json_path in mapping["custom_variables"].items():
+                        if json_path == check_path:
+                             if var_name in translations:
+                                 field_trans = translations[var_name]
+                                 if check_value in field_trans:
+                                     check_value = field_trans[check_value]
+                                 elif check_value.upper() in field_trans:
+                                     check_value = field_trans[check_value.upper()]
+                             break
+
             for rule in conditional["rules"]:
                 rule_val = str(rule.get("value") or "").strip()
                 if rule_val.lower() == check_value.lower():
@@ -275,6 +354,121 @@ async def retry_webhook_event(event_id: int, db: Session = Depends(get_db)):
             
         event.processed_data = processed_data_builder
         db.add(event)
+        
+        # === SALVAR NO STATUS_INFO (RETRY TAMBÉM ATUALIZA) ===
+        product_name_path = mapping.get("product_name_field")
+        p_name = None
+        if product_name_path:
+            p_name_raw, _ = extract_value_by_path(payload, product_name_path)
+            if p_name_raw:
+                p_name = str(p_name_raw).strip()
+        
+        if not p_name:
+            p_name = custom_vars.get("product_name") or custom_vars.get("produto")
+        
+        p_status = custom_vars.get("status") or custom_vars.get("Status")
+
+        if clean_phone:
+            try:
+                # 1. Garantir colunas dinâmicas
+                existing_cols_result = db.execute(text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = 'status_info'"
+                ))
+                existing_cols = {row[0] for row in existing_cols_result}
+                
+                for var_key in custom_vars.keys():
+                    safe_col = ''.join(c for c in var_key.lower().replace(' ', '_') if c.isalnum() or c == '_')
+                    if safe_col and safe_col not in existing_cols:
+                        try:
+                            db.execute(text(f'ALTER TABLE status_info ADD COLUMN "{safe_col}" VARCHAR'))
+                            db.commit()
+                            existing_cols.add(safe_col)
+                            logger.info(f"📊 [STATUS_INFO RETRY] Coluna '{safe_col}' criada")
+                        except Exception as col_err:
+                            db.rollback()
+                            logger.warning(f"⚠️ [STATUS_INFO RETRY] Coluna já existe: {col_err}")
+                
+                # 2. Upsert
+                if p_name and p_status:
+                    check_query = text("""
+                        SELECT id FROM status_info 
+                        WHERE client_id = :client_id AND phone = :phone 
+                        AND product_name = :product_name AND status = :status
+                        LIMIT 1
+                    """)
+                    existing = db.execute(check_query, {
+                        "client_id": webhook.client_id,
+                        "phone": clean_phone,
+                        "product_name": p_name,
+                        "status": p_status
+                    }).fetchone()
+                    
+                    if existing:
+                        # UPDATE
+                        update_parts = ["updated_at = NOW()", "name = :name"]
+                        update_params = {
+                            "name": name,
+                            "row_id": existing[0]
+                        }
+                        for var_key, var_val in custom_vars.items():
+                            safe_col = ''.join(c for c in var_key.lower().replace(' ', '_') if c.isalnum() or c == '_')
+                            if safe_col in existing_cols and safe_col not in ('status', 'phone', 'name', 'product_name'):
+                                update_parts.append(f'"{safe_col}" = :{safe_col}')
+                                update_params[safe_col] = str(var_val)
+                        
+                        update_sql = f"UPDATE status_info SET {', '.join(update_parts)} WHERE id = :row_id"
+                        db.execute(text(update_sql), update_params)
+                        logger.info(f"🔄 [STATUS_INFO RETRY] Atualizado: {clean_phone} -> {p_name} ({p_status})")
+                    else:
+                        # INSERT
+                        col_names = ["client_id", "webhook_id", "phone", "name", "product_name", "status"]
+                        col_values = [":client_id", ":webhook_id", ":phone", ":name", ":product_name", ":status"]
+                        insert_params = {
+                            "client_id": webhook.client_id,
+                            "webhook_id": webhook.id,
+                            "phone": clean_phone,
+                            "name": name,
+                            "product_name": p_name,
+                            "status": p_status
+                        }
+                        for var_key, var_val in custom_vars.items():
+                            safe_col = ''.join(c for c in var_key.lower().replace(' ', '_') if c.isalnum() or c == '_')
+                            if safe_col in existing_cols and safe_col not in ('status', 'phone', 'name', 'product_name'):
+                                col_names.append(f'"{safe_col}"')
+                                col_values.append(f":{safe_col}")
+                                insert_params[safe_col] = str(var_val)
+                        
+                        insert_sql = f"INSERT INTO status_info ({', '.join(col_names)}) VALUES ({', '.join(col_values)})"
+                        db.execute(text(insert_sql), insert_params)
+                        logger.info(f"✨ [STATUS_INFO RETRY] Novo registro: {clean_phone} -> {p_name} ({p_status})")
+                elif p_name or p_status:
+                    # Registro parcial
+                    col_names = ["client_id", "webhook_id", "phone", "name", "product_name", "status"]
+                    col_values = [":client_id", ":webhook_id", ":phone", ":name", ":product_name", ":status"]
+                    insert_params = {
+                        "client_id": webhook.client_id,
+                        "webhook_id": webhook.id,
+                        "phone": clean_phone,
+                        "name": name,
+                        "product_name": p_name or "",
+                        "status": p_status or ""
+                    }
+                    for var_key, var_val in custom_vars.items():
+                        safe_col = ''.join(c for c in var_key.lower().replace(' ', '_') if c.isalnum() or c == '_')
+                        if safe_col in existing_cols and safe_col not in ('status', 'phone', 'name', 'product_name'):
+                            col_names.append(f'"{safe_col}"')
+                            col_values.append(f":{safe_col}")
+                            insert_params[safe_col] = str(var_val)
+                    
+                    insert_sql = f"INSERT INTO status_info ({', '.join(col_names)}) VALUES ({', '.join(col_values)})"
+                    db.execute(text(insert_sql), insert_params)
+                    logger.info(f"✨ [STATUS_INFO RETRY] Parcial: {clean_phone} -> {p_name or 'N/A'} ({p_status or 'N/A'})")
+                    
+            except Exception as status_err:
+                logger.error(f"❌ [STATUS_INFO RETRY] Erro: {status_err}")
+                db.rollback()
+        # === FIM STATUS_INFO ===
+        
         db.commit()
         
         return {"status": "retried", "trigger_id": trigger.id}
@@ -282,7 +476,7 @@ async def retry_webhook_event(event_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         return {"status": "failed", "error": str(e)}
 
-def recalculate_webhook_stats(webhook_id: int, db: Session):
+def recalculate_webhook_stats(webhook_id: str, db: Session):
     """
     Recalcula as estatísticas (received, processed, errors) de um webhook
     baseado nos eventos existentes no banco de dados.
@@ -403,10 +597,13 @@ async def n8n_trigger_webhook(
             
             # Criar trigger
             trigger = models.ScheduledTrigger(
-                funnel_id=funnel.id,
                 contact_phone=clean_phone,
+                client_id=funnel.client_id,
+                parent_id=payload.get("parent_id"), # Support for linkage
+                product_name="HIDDEN_CHILD" if payload.get("parent_id") else payload.get("product_name"),
                 status='queued',
-                scheduled_time=datetime.now(timezone.utc)
+                scheduled_time=datetime.now(timezone.utc),
+                is_bulk=False
             )
             db.add(trigger)
             triggered_count += 1
@@ -429,8 +626,12 @@ async def n8n_trigger_webhook(
                 trigger = models.ScheduledTrigger(
                     funnel_id=matched_funnel.id,
                     contact_phone=clean_phone,
+                    client_id=matched_funnel.client_id,
                     status='queued',
-                    scheduled_time=datetime.now(timezone.utc)
+                    scheduled_time=datetime.now(timezone.utc),
+                    parent_id=payload.get("parent_id"), # Link to parent if provided
+                    product_name="HIDDEN_CHILD" if payload.get("parent_id") else f"Gatilho: {button_context}",
+                    is_bulk=False
                 )
                 db.add(trigger)
                 triggered_count += 1
@@ -504,12 +705,22 @@ async def button_click_webhook(
 
 
 @router.get("/webhooks/ping")
+@router.get("/webhooks/ping/")
 async def ping_webhook():
     return {"status": "ok", "version": "1.2.0-robust-match", "timestamp": datetime.now(timezone.utc)}
 
 @router.post("/webhooks/chatwoot")
+@router.post("/webhooks/chatwoot_events")
 @limiter.limit("5000/minute")
 async def chatwoot_webhook(request: Request, payload: dict = Body(...), db: Session = Depends(get_db)):
+    chatwoot_secret = os.getenv("CHATWOOT_WEBHOOK_SECRET", "")
+    if chatwoot_secret:
+        body = await request.body()
+        signature = request.headers.get("X-Chatwoot-Signature", "")
+        if not _check_hmac_signature(body, chatwoot_secret, signature):
+            logger.warning("❌ Chatwoot webhook: assinatura HMAC inválida — requisição rejeitada")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     event_type = payload.get("event")
     # Log IMEDIATO com timestamp preciso
     log_msg = f"📥 [CHATWOOT] {datetime.now(timezone.utc)} | Event: {event_type}"
@@ -538,185 +749,147 @@ async def chatwoot_webhook(request: Request, payload: dict = Body(...), db: Sess
     if event_type == "message_created":
         msg_type = payload.get("message_type") # incoming / outgoing
 
-        # --- SYNC CONTACT LOGIC (Ported) ---
-        # Sincroniza tanto para Incoming quanto Outgoing
+        # --- SYNC / CACHE / TRIGGER ---
         if msg_type in ["incoming", "outgoing", 0, 1]:
             try:
-                # Extrair dados básicos para Sync
+                # 1. Resolução Robusta de Telefone e Nome
                 account_id = payload.get("account", {}).get("id")
                 inbox_id = payload.get("inbox", {}).get("id")
                 conversation = payload.get("conversation", {})
+                sender = payload.get("sender", {})
                 
-                # Tenta extrair telefone e nome
-                phone_number = None
-                display_name = None
+                phone_number = sender.get("phone_number")
+                display_name = sender.get("name")
                 
-                # Para Incoming: Sender é o contato
-                if msg_type in ["incoming", 0]:
-                    sender = payload.get("sender", {})
-                    phone_number = sender.get("phone_number")
-                    display_name = sender.get("name")
-                
-                # Para ambos (fallback ou Outgoing): Pega do sender da meta ou contact_inbox
                 if not phone_number:
-                    contact_inbox = conversation.get("contact_inbox", {})
-                    source_id = contact_inbox.get("source_id")
-                    if source_id and (source_id.isdigit() or source_id.startswith('+')):
-                         phone_number = source_id
-                    
-                    sender_meta = conversation.get("meta", {}).get("sender", {})
-                    if not display_name:
-                        display_name = sender_meta.get("name")
-
+                    # Fallback meta sender
+                    phone_number = conversation.get("meta", {}).get("sender", {}).get("phone_number")
+                if not phone_number:
+                    # Fallback contact_inbox
+                    phone_number = conversation.get("contact_inbox", {}).get("source_id")
+                
                 if phone_number:
                     clean_phone = "".join(filter(str.isdigit, str(phone_number)))
                     
-                    # Identificar Client ID (Simplificado: 1 ou busca por account_id)
+                    # 2. Resolução de Client ID
                     client_id = 1 
-                    if account_id:
-                        config = db.query(models.AppConfig).filter(
-                             models.AppConfig.key == 'CHATWOOT_ACCOUNT_ID', 
-                             models.AppConfig.value == str(account_id)
-                        ).first()
-                        if config: client_id = config.client_id
-                    
-                    # Define timestamp de interação (apenas se for Incoming)
-                    interaction_time = datetime.now() if msg_type in ["incoming", 0] else None
-                    
-                    sync_table = get_setting("SYNC_CONTACTS_TABLE", "", client_id=client_id)
-                    if sync_table:
-                        safe_table = "".join(c for c in sync_table if c.isalnum() or c == '_')
-                        if safe_table:
-                             create_sql = f"""
-                                CREATE TABLE IF NOT EXISTS {safe_table} (
-                                    phone VARCHAR PRIMARY KEY,
-                                    name VARCHAR,
-                                    inbox_id INTEGER,
-                                    last_interaction_at TIMESTAMP WITH TIME ZONE
-                                );
-                             """
-                             upsert_sql = f"""
-                                INSERT INTO {safe_table} (phone, name, inbox_id, last_interaction_at)
-                                VALUES (:phone, :name, :inbox_id, :last_interaction_at)
-                                ON CONFLICT (phone) DO UPDATE SET
-                                    name = COALESCE(EXCLUDED.name, {safe_table}.name),
-                                    inbox_id = COALESCE(EXCLUDED.inbox_id, {safe_table}.inbox_id),
-                                    last_interaction_at = COALESCE(EXCLUDED.last_interaction_at, {safe_table}.last_interaction_at);
-                             """
-                             db.execute(text(create_sql))
-                             db.execute(text(upsert_sql), {
-                                 "phone": clean_phone,
-                                 "name": display_name,
-                                 "inbox_id": inbox_id,
-                                 "last_interaction_at": interaction_time
-                             })
-                             db.commit()
-                             log_action = "WINDOW UPDATED" if interaction_time else "CONTACT SYNCED"
-                             logger.info(f"✅ [SYNC] {log_action} - {clean_phone} -> {safe_table}")
-
-            except Exception as e:
-                logger.error(f"❌ Error syncing contact {phone_number if 'phone_number' in locals() else 'unknown'}: {e}")
-        
-        # --- UPDATE INTERNAL CACHE (ContactWindow) ---
-        # Ensures that validate-contacts works even without custom SYNC_CONTACTS_TABLE
-        if msg_type in ["incoming", 0] and phone_number:
-            try:
-                clean_phone = "".join(filter(str.isdigit, str(phone_number)))
-                
-                # Resolve Client ID (reusing logic from above)
-                client_id = 1 
-                if account_id and 'client_id' not in locals(): # if not resolved above
                     config = db.query(models.AppConfig).filter(
                             models.AppConfig.key == 'CHATWOOT_ACCOUNT_ID', 
                             models.AppConfig.value == str(account_id)
                     ).first()
                     if config: client_id = config.client_id
-                
-                # Check existance
-                window_record = db.query(models.ContactWindow).filter(
-                    models.ContactWindow.phone == clean_phone,
-                    models.ContactWindow.client_id == client_id
-                ).first()
-                
-                now_utc = datetime.now(timezone.utc)
-                
-                if window_record:
-                    window_record.last_interaction_at = now_utc
-                    if display_name: window_record.chatwoot_contact_name = display_name
-                    if conversation.get("id"): window_record.chatwoot_conversation_id = conversation.get("id")
-                    if inbox_id: window_record.chatwoot_inbox_id = inbox_id
-                else:
-                    new_window = models.ContactWindow(
-                        client_id=client_id,
-                        phone=clean_phone,
-                        chatwoot_contact_name=display_name,
-                        chatwoot_conversation_id=conversation.get("id"),
-                        chatwoot_inbox_id=inbox_id,
-                        last_interaction_at=now_utc
-                    )
-                    db.add(new_window)
-                
-                db.commit()
-                logger.info(f"✅ [CACHE] Updated 24h window for {clean_phone}")
+                    
+                    # 3. Sincronização de Janela 24h (Cache Interno)
+                    if msg_type in ["incoming", 0]:
+                        now_utc = datetime.now(timezone.utc)
+                        window = db.query(models.ContactWindow).filter(
+                            models.ContactWindow.phone == clean_phone,
+                            models.ContactWindow.client_id == client_id,
+                            models.ContactWindow.chatwoot_inbox_id == inbox_id
+                        ).first()
+                        
+                        if window:
+                            window.last_interaction_at = now_utc
+                            window.chatwoot_conversation_id = conversation.get("id")
+                        else:
+                            db.add(models.ContactWindow(
+                                client_id=client_id, phone=clean_phone,
+                                chatwoot_inbox_id=inbox_id, last_interaction_at=now_utc,
+                                chatwoot_conversation_id=conversation.get("id")
+                            ))
+                        db.commit()
+                        logger.info(f"✅ [CACHE] Janela 24h sincronizada para {clean_phone}")
+
+                    # 4. GATILHO DE FUNIL (Apenas para Incoming)
+                    if msg_type in ["incoming", 0]:
+                        content = payload.get("content", "").strip()
+                        search_content = content.lower().strip()
+                        clean_search = search_content.replace('!', '').replace('?', '').replace('.', '')
+                        
+                        # Busca funis candidatos
+                        candidates = db.query(models.Funnel).filter(
+                            models.Funnel.trigger_phrase.ilike(f"%{search_content}%")
+                        ).all()
+
+                        for funnel in candidates:
+                            if not funnel.trigger_phrase: continue
+                            triggers = [t.strip().lower() for t in funnel.trigger_phrase.split(",")]
+                            
+                            is_trigger = search_content in triggers
+                            if not is_trigger:
+                                clean_triggers = [t.replace('!', '').replace('?', '').replace('.', '') for t in triggers]
+                                is_trigger = clean_search in clean_triggers
+                                
+                            if is_trigger:
+                                logger.info(f"🎯 Funnel encontrado: {funnel.name} para {clean_phone}")
+                                
+                                # Atomic Lock
+                                import zlib
+                                norm_phone = normalize_phone(clean_phone)
+                                lock_key = f"lock_{funnel.client_id}_{norm_phone}_{funnel.id}"
+                                lock_id = zlib.adler32(lock_key.encode()) & 0x7FFFFFFF
+                                db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": lock_id})
+
+                                # Idempotency check 30s
+                                time_limit = datetime.now(timezone.utc) - timedelta(seconds=30)
+                                existing = db.query(models.ScheduledTrigger).filter(
+                                    models.ScheduledTrigger.client_id == funnel.client_id,
+                                    models.ScheduledTrigger.funnel_id == funnel.id,
+                                    models.ScheduledTrigger.contact_phone.in_([clean_phone, norm_phone]),
+                                    models.ScheduledTrigger.created_at >= time_limit
+                                ).first()
+
+                                # Parent Discovery: Get the last trigger for this contact to link as child
+                                parent_candidate = db.query(models.ScheduledTrigger).filter(
+                                    models.ScheduledTrigger.client_id == funnel.client_id,
+                                    models.ScheduledTrigger.contact_phone.in_([clean_phone, norm_phone]),
+                                    models.ScheduledTrigger.id != (existing.id if existing else None),
+                                    models.ScheduledTrigger.parent_id == None # Must be a root trigger
+                                ).order_by(models.ScheduledTrigger.created_at.desc()).first()
+
+                                if not existing:
+                                    trigger = models.ScheduledTrigger(
+                                        client_id=funnel.client_id,
+                                        funnel_id=funnel.id,
+                                        parent_id=parent_candidate.id if parent_candidate else None,
+                                        product_name="HIDDEN_CHILD" if parent_candidate else f"CHAT: {funnel.name}",
+                                        conversation_id=conversation.get("id"),
+                                        chatwoot_contact_id=sender.get("id"),
+                                        chatwoot_account_id=account_id,
+                                        chatwoot_inbox_id=inbox_id,
+                                        contact_phone=clean_phone,
+                                        status='queued',
+                                        is_interaction=True,
+                                        scheduled_time=datetime.now(timezone.utc)
+                                    )
+                                    db.add(trigger)
+                                    db.commit()
+                                    logger.info(f"✅ Trigger {trigger.id} criado (Fone: {clean_phone})")
+                                else:
+                                    # Trigger já criado pelo Meta webhook (que chega antes do Chatwoot).
+                                    # Atualiza com os IDs corretos do Chatwoot que só chegam aqui.
+                                    updated = False
+                                    cw_conv_id = conversation.get("id")
+                                    cw_contact_id = sender.get("id")
+                                    if cw_conv_id and existing.conversation_id != cw_conv_id:
+                                        existing.conversation_id = cw_conv_id
+                                        updated = True
+                                    if cw_contact_id and not existing.chatwoot_contact_id:
+                                        existing.chatwoot_contact_id = cw_contact_id
+                                        existing.chatwoot_account_id = account_id
+                                        existing.chatwoot_inbox_id = inbox_id
+                                        updated = True
+                                    if updated:
+                                        db.commit()
+                                        logger.info(f"✅ Trigger {existing.id} atualizado com IDs do Chatwoot (conv={cw_conv_id}, contact={cw_contact_id})")
+                        
+                        return {"status": "processed"}
+
             except Exception as e:
-                logger.error(f"❌ Error updating ContactWindow cache: {e}")
-        # --- END SYNC ---
+                logger.error(f"❌ Erro no processamento de webhook message_created: {e}")
+                db.rollback()
 
-        if msg_type == "incoming":
-             # Lógica de Trigger Phrase
-             content = payload.get("content", "").strip()
-             sender_phone = payload.get("sender", {}).get("phone_number", "")
-             conversation_id = payload.get("conversation", {}).get("id")
-             
-             if not sender_phone:
-                 logger.warning(f"⚠️ Webhook ignored: No sender phone number. Content: {content}")
-                 return {"status": "ignored", "reason": "no_phone"}
-
-             # Check Funnels - Procura por frase exata ou dentro de lista separada por vírgula (Case Insensitive + Trim)
-             # Melhoria: Busca ampla no banco + Validação estrita no Python para suportar "A, B, C" com espaços
-             candidates = db.query(models.Funnel).filter(
-                 models.Funnel.trigger_phrase.ilike(f"%{search_content}%")
-             ).all()
-
-             matched_funnels = []
-             for funnel in candidates:
-                 if not funnel.trigger_phrase:
-                     continue
-                     
-                 # Normaliza as frases do funil (split por vírgula e remove espaços)
-                 triggers = [t.strip().lower() for t in funnel.trigger_phrase.split(",")]
-                 
-                 # 1. Tenta Match Exato
-                 if search_content in triggers:
-                     matched_funnels.append(funnel)
-                     continue
-                 
-                 # 2. Tenta Match Limpo (sem pontuação)
-                 # Ex: Usuário mandou "Ola!" e gatilho é "ola"
-                 clean_triggers = [t.replace('!', '').replace('?', '').replace('.', '') for t in triggers]
-                 if clean_search in clean_triggers:
-                     matched_funnels.append(funnel)
-                     continue
-
-             if not matched_funnels:
-                 logger.warning(f"  No funnel matched for content: '{content}' (Clean: '{clean_search}')")
-             
-             for funnel in matched_funnels:
-                 logger.info(f"🎯 Funnel matched: {funnel.name} for {sender_phone} (Phrase matched in: {funnel.trigger_phrase})")
-                 # Cria Trigger
-                 trigger = models.ScheduledTrigger(
-                     client_id=funnel.client_id,
-                     funnel_id=funnel.id,
-                     conversation_id=conversation_id,
-                     contact_phone=sender_phone,
-                     status='queued',
-                     scheduled_time=datetime.now(timezone.utc) 
-                 )
-                 db.add(trigger)
-                 db.commit() # O Scheduler vai pegar
-                 logger.info(f"✅ Trigger {trigger.id} criado para o funil {funnel.id}")
-             
-             return {"status": "processed", "matches": len(matched_funnels)}
+        return {"status": "ok"}
 
     # 2. Mensagem Atualizada (Status de Entrega - Sent/Delivered/Read/Failed)
     elif event_type == "message_updated":
@@ -740,34 +913,13 @@ async def chatwoot_webhook(request: Request, payload: dict = Body(...), db: Sess
             if message_record:
                 old_status = message_record.status
 
-                async def check_and_post_private_note(record, current_status):
-                    if current_status in ['delivered', 'read'] and record.pending_private_note and not record.private_note_posted:
-                        logger.info(f"📣 Message delivered ({current_status})! Enqueueing pending private note for {record.phone_number}")
-                        t = record.trigger
-                        success = await rabbitmq.publish("chatwoot_private_messages", {
-                            "client_id": t.client_id,
-                            "phone": record.phone_number,
-                            "message": record.pending_private_note,
-                            "trigger_id": t.id,
-                            "delay": t.private_message_delay or 5,
-                            "concurrency": t.private_message_concurrency or 1
-                        })
-                        if success:
-                            record.private_note_posted = True
-                            db.commit()
-                            logger.info(f"✅ Private note enqueued for {record.phone_number}")
-
                 # Se status mudou, atualiza
                 if old_status != status:
                     message_record.status = status
                     message_record.updated_at = datetime.now(timezone.utc)
-                    
-                    # Check private note delivery
-                    await check_and_post_private_note(message_record, status)
 
-                    # Nota: Contadores de trigger_delivered/read foram removidos daqui
-                    # para evitar contagem duplicada com o webhook direto da Meta,
-                    # que é processado pelo Worker. O Chatwoot é apenas um espelho.
+                    # Nota: Contadores e notas privadas são gerenciados pelo Worker via fila whatsapp_events.
+                    # O Chatwoot é apenas um espelho — não disparar nota privada aqui para evitar duplicatas.
                     
                     db.commit()
                     logger.info(f"Status atualizado: msg_id={msg_id}, {old_status} -> {status}")
@@ -821,37 +973,22 @@ async def whatsapp_status_webhook_legacy(request: Request, payload: dict = Body(
                     
                     logger.info(f"Meta webhook: msg_id={msg_id}, status={status}, recipient={recipient}")
                     
+                    # Limpar ID da mensagem (Meta costuma enviar com prefixo 'wamid.')
+                    clean_msg_id = msg_id.replace("wamid.", "") if msg_id else msg_id
+
                     # Buscar mensagem rastreada com LOCK
                     message_record = db.query(models.MessageStatus).filter(
-                        models.MessageStatus.message_id == msg_id
+                        (models.MessageStatus.message_id == msg_id) |
+                        (models.MessageStatus.message_id == clean_msg_id)
                     ).with_for_update().first()
                     
                     if message_record:
                         old_status = message_record.status
 
-                        async def check_and_post_private_note(record, current_status):
-                            if current_status in ['delivered', 'read'] and record.pending_private_note and not record.private_note_posted:
-                                logger.info(f"📣 (Meta) Message delivered ({current_status})! Enqueueing pending private note for {record.phone_number}")
-                                t = record.trigger
-                                success = await rabbitmq.publish("chatwoot_private_messages", {
-                                    "client_id": t.client_id,
-                                    "phone": record.phone_number,
-                                    "message": record.pending_private_note,
-                                    "trigger_id": t.id,
-                                    "delay": t.private_message_delay or 5,
-                                    "concurrency": t.private_message_concurrency or 1
-                                })
-                                if success:
-                                    record.private_note_posted = True
-                                    db.commit()
-                                    logger.info(f"✅ Private note enqueued for {record.phone_number}")
-                        
                         if old_status != status:
                             message_record.status = status
                             message_record.updated_at = datetime.now(timezone.utc)
-                            
-                            # Check private note delivery
-                            await check_and_post_private_note(message_record, status)
+                            # Notas privadas são gerenciadas pelo Worker via fila whatsapp_events — não disparar aqui.
 
                             # Atualizar trigger pai
                             trigger = message_record.trigger
@@ -860,17 +997,54 @@ async def whatsapp_status_webhook_legacy(request: Request, payload: dict = Body(
                                 was_delivered_before = old_status in ['delivered', 'read']
                                 
                                 if is_delivered_now and not was_delivered_before:
-                                    trigger.total_delivered = (trigger.total_delivered or 0) + 1
-                                    # Custo incremental só para TEMPLATES
-                                    if trigger.cost_per_unit and message_record.message_type != 'DIRECT_MESSAGE':
-                                        trigger.total_cost = (trigger.total_cost or 0.0) + trigger.cost_per_unit
+                                    # --- REACTIVATION LOGIC ---
+                                    # 1. Log de Conclusão do Passo 2 (Independente do status do worker)
+                                    log_node_execution(
+                                        db, trigger, 
+                                        node_id='DELIVERY', 
+                                        status="completed", 
+                                        details="WhatsApp: Entrega confirmada!"
+                                    )
+
+                                    # 2. Log de Início do Passo 3 (Estabilização) e Reativação se necessário
+                                    resume_at = datetime.now(timezone.utc) + timedelta(seconds=10)
+                                    target_time_iso = resume_at.isoformat()
+                                    
+                                    log_node_execution(
+                                        db, trigger, 
+                                        node_id='STABILIZATION', 
+                                        status="processing", 
+                                        details="Estabilizando conexão (10s)...",
+                                        extra_data={
+                                            "resumed_at": datetime.now(timezone.utc).isoformat(),
+                                            "target_time": target_time_iso
+                                        }
+                                    )
+
+                                    # 3. Se estava pausado, retomar agendamento
+                                    if trigger.status == 'paused_waiting_delivery':
+                                        logger.info(f"✨ [REACTIVATOR] Retomando trigger {trigger.id} pausado após entrega.")
+                                        trigger.status = 'queued'
+                                        trigger.scheduled_time = resume_at
+
+                                    if not message_record.delivered_counted:
+                                        from services.triggers_service import increment_delivery_stats
+                                        
+                                        # Determine cost if template
+                                        cost_to_apply = 0.0
+                                        if trigger.cost_per_unit and message_record.message_type != 'FREE_MESSAGE':
+                                            cost_to_apply = trigger.cost_per_unit
+                                            
+                                        increment_delivery_stats(db, trigger, message_record, cost_to_apply)
+                                    else:
+                                        logger.info(f"♻️ Delivery already counted for {msg_id}. Skipping increment.")
                                 
                                 if status == 'failed' and old_status != 'failed':
                                     trigger.total_failed = (trigger.total_failed or 0) + 1
                                     if was_delivered_before:
                                         trigger.total_delivered = max(0, (trigger.total_delivered or 0) - 1)
                                         # Estornar custo se for template
-                                        if trigger.cost_per_unit and message_record.message_type != 'DIRECT_MESSAGE':
+                                        if trigger.cost_per_unit and message_record.message_type != 'FREE_MESSAGE':
                                             trigger.total_cost = max(0.0, (trigger.total_cost or 0.0) - trigger.cost_per_unit)
                             
                             db.commit()
@@ -918,12 +1092,20 @@ async def meta_verification(
 async def meta_event_ingestion(
     request: Request,
     payload: dict = Body(...),
-    db: Session = Depends(get_db) # Adicionado DB para log
+    db: Session = Depends(get_db)
 ):
     """
     Recebe eventos da Meta e publica IMEDIATAMENTE no RabbitMQ.
     Latência mínima.
     """
+    meta_secret = os.getenv("META_APP_SECRET", "")
+    if meta_secret:
+        body = await request.body()
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        if not _check_hmac_signature(body, meta_secret, signature):
+            logger.warning("❌ Meta webhook: assinatura HMAC inválida — requisição rejeitada")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     logger.info(f"📥 [META] Webhook Recebido")
     
     # Salva no arquivo

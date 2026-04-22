@@ -5,7 +5,7 @@ services:
   # 1. APLICAÇÃO PRINCIPAL (API)
   # =========================================
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.5.0
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:2.0.0
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
@@ -19,7 +19,7 @@ services:
       - PORT=8000
       # FIX: Mudamos de postgres:// para postgresql://
       - DATABASE_URL=postgresql://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
-      - SECRET_KEY=changeme_secret_key_12345
+      - SECRET_KEY=zapvoice_long_secret_key_for_production_validation_min_32_chars
       - RABBITMQ_HOST=zapvoice-rabbit
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=zapvoice
@@ -34,8 +34,8 @@ services:
       - REGISTER_API_KEY=238734873487389
 
       # Frontend Config
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000/ws
+      - VITE_API_URL=https://zapvoicesst.aryaraj.shop
+      - VITE_WS_URL=wss://zapvoicesst.aryaraj.shop/ws
 
     deploy:
       mode: replicated
@@ -45,7 +45,7 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=1
-        - traefik.http.routers.zapvoice.rule=Host(`zapvoice.jords.site`)
+        - traefik.http.routers.zapvoice.rule=Host(`zapvoicesst.aryaraj.shop`)
         - traefik.http.routers.zapvoice.entrypoints=websecure
         - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
         - traefik.http.services.zapvoice.loadbalancer.server.port=8000
@@ -54,7 +54,7 @@ services:
   # 2. WORKER (PROCESSAMENTO EM SEGUNDO PLANO)
   # =========================================
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.5.0
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:2.0.0
     command: python worker.py
     networks:
       - network_swarm_public
@@ -63,7 +63,7 @@ services:
     environment:
       # FIX: Variáveis repetidas aqui para garantir acesso
       - DATABASE_URL=postgresql://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@zapvoice-postgres:5432/zapvoice
-      - SECRET_KEY=changeme_secret_key_12345
+      - SECRET_KEY=zapvoice_long_secret_key_for_production_validation_min_32_chars
       - RABBITMQ_HOST=zapvoice-rabbit
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=zapvoice

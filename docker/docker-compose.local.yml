@@ -12,20 +12,26 @@ services:
     volumes:
       - zapvoice_uploads:/app/static/uploads
       - ../backend:/app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude "tests_unit/*" --reload-exclude "*.log" --reload-exclude "*.txt"
     env_file:
       - ../backend/.env
     environment:
       - PORT=8000
       - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
-      - REGISTER_API_KEY=${REGISTER_API_KEY}
+      # Carregado via env_file (backend/.env)
+      # - REGISTER_API_KEY=${REGISTER_API_KEY}
 
       # === INFRA LOCAL CONFIG (FROM .env) ===
       - RABBITMQ_HOST=${RABBITMQ_HOST:-zapvoice-rabbit}
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
-
+      # Token da API do ManyChat — necessário para sincronizar contatos e tags via integração
+      - MANYCHAT_API_KEY=
+      # Dias para manter o histórico de webhooks no banco (0 = desabilitado, nunca apaga)
+      - HISTORY_RETENTION_DAYS=${HISTORY_RETENTION_DAYS:-30}
+      # Dias para manter as linhas do arquivo de log do container (0 = desabilitado)
+      - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-7}
       # S3 Configs will be loaded from .env automatically via env_file
 
   zapvoice_worker:
@@ -43,7 +49,7 @@ services:
       - ../backend/.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
-      - SECRET_KEY=${SECRET_KEY:-changeme_secret_key_12345}
+      - SECRET_KEY=${SECRET_KEY:-zapvoice_long_secret_key_for_production_validation_min_32_chars}
 
       # === INFRA LOCAL CONFIG (FROM .env) ===
       - RABBITMQ_HOST=${RABBITMQ_HOST:-zapvoice-rabbit}
@@ -59,7 +65,7 @@ services:
       - ../frontend:/app
       - /app/node_modules
     ports:
-      - "5173:5173" # Restaurado para porta padrão 5173
+      - "5176:5173" # Alterado para 5176 para evitar conflitos
     command: sh -c "npm install && npm run dev"
     networks:
       - zapvoice_net
@@ -72,7 +78,7 @@ services:
     image: postgres:15-alpine
     container_name: zapvoice-postgres
     ports:
-      - "5432:5432"
+      - "5435:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -86,47 +92,27 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: zapvoice-rabbit
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5679:5672"
+      - "15679:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
     networks:
       - zapvoice_net
 
-  zapvoice-minio:
-    image: minio/minio
-    container_name: zapvoice-minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-    command: server /data --console-address ":9001"
-    volumes:
-      - zapvoice_minio_data:/data
-    networks:
-      - zapvoice_net
-
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: zapvoice_ngrok
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: zapvoice_cloudflare
     restart: unless-stopped
-    command:
-      - "http"
-      - "zapvoice_app:8000"
-    ports:
-      - "4040:4040"
-    networks:
-      - zapvoice_net
+    command: tunnel run
     env_file:
       - ../backend/.env
+    networks:
+      - zapvoice_net
 
 volumes:
   zapvoice_uploads:
   zapvoice_db_data:
-  zapvoice_minio_data:
 
 
 networks:

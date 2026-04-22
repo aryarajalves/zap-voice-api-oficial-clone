@@ -51,3 +51,31 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         )
         
     return user
+
+
+from fastapi import Header
+from typing import Optional
+
+async def get_validated_client_id(
+    x_client_id: Optional[int] = Header(None),
+    current_user: User = Depends(get_current_user),
+) -> int:
+    """
+    Validates that the X-Client-ID header is accessible to the current user.
+    super_admin can access any client. Other roles can only access their assigned clients.
+    Raises 400 if header is missing, 403 if user is not authorized for that client.
+    """
+    if x_client_id is None:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
+
+    if current_user.role == "super_admin":
+        return x_client_id
+
+    allowed_ids = {c.id for c in current_user.accessible_clients}
+    if x_client_id not in allowed_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado ao cliente solicitado."
+        )
+
+    return x_client_id

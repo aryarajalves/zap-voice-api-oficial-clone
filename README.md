@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.0 Official)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v2.8.5)
 
-Bem-vindo à versão **1.0 oficial** do **ZapVoice**! Este é um sistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **2.8.5** do **ZapVoice**! Este é um sistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -59,6 +59,45 @@ Toda a conectividade é configurada no menu **Configurações**:
 *   **Infraestrutura**: Endereços do RabbitMQ e S3/MinIO.
 *   **Chatwoot (Opcional)**: Conecte sua instância para centralizar o atendimento.
 
+## 🗄️ Estrutura de Banco de Dados (PostgreSQL)
+
+Quase todos os dados do sistema são armazenados em tabelas no PostgreSQL. Abaixo estão as principais tabelas e suas finalidades:
+
+### **1. Estrutura de Negócio**
+*   **`clients`**: Tabela mestre para multi-tenancy (isolamento de empresas/clientes).
+*   **`users`**: Cadastro de usuários com níveis de acesso (Super Admin, Admin, User).
+*   **`app_config`**: Guarda chaves de APIs, tokens e configurações alteradas via painel.
+
+### **2. Funis e Campanhas**
+*   **`funnels`**: Estrutura dos funis de mensagens e frases de gatilho.
+*   **`global_variables`**: Variáveis para substituição dinâmica em mensagens (ex: `{{link}}`).
+*   **`webhooks_configs`**: Configurações de URLs de entrada para integrações externas (Hotmart, etc).
+*   **`webhooks_events`**: Log histórico de todos os eventos recebidos via webhook.
+
+### **3. Histórico e Monitoramento**
+*   **`scheduled_triggers`**: **Tabela principal de histórico.** Registra cada disparo (massa ou individual) e seu status.
+*   **`message_status`**: Detalhamento em tempo real (Enviado, Lido, Clicado) de cada mensagem via API oficial.
+*   **`product_status`**: Rastreia a jornada de compra do lead/cliente.
+
+### **4. Controle e Compliance**
+*   **`blocked_contacts`**: Lista negra de números que não devem receber automações.
+*   **`contact_windows`**: Cache de interações de 24h para gerenciar o envio de mensagens diretas conforme as regras da Meta.
+*   **`contatos_monitorados`**: Tabela que armazena automaticamente os dados de contatos que interagiram (Nome, Número, Inbox e Data).
+
+clients,
+users,
+app_config,
+funnels,
+global_variables,
+webhooks_configs,
+webhooks_events,
+scheduled_triggers,
+message_status,
+product_status,
+blocked_contacts,
+contact_windows,
+contatos_monitorados
+
 ---
 
 ## 🏗️ Estrutura do Projeto
@@ -80,6 +119,11 @@ Toda a conectividade é configurada no menu **Configurações**:
 docker-compose -f docker/docker-compose.local.yml up -d --build
 ```
 
+docker restart zapvoice_app zapvoice_worker
+
+docker compose -f docker/docker-compose.local.yml up --build -d zapvoice_app
+
+
 **Produção (App Only):**
 ```bash
 docker-compose -f docker/docker-compose.yml up -d --build
@@ -88,16 +132,16 @@ docker-compose -f docker/docker-compose.yml up -d --build
 ### **Docker Build & Push (Deploy)**
 Para gerar a imagem de produção e enviar para o Docker Hub:
 
-**1. Build da Imagem:**
+3. Build da Imagem:
 ```bash
-docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:1.4.1 -f docker/Dockerfile .
+docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:3.1.1 -f docker/Dockerfile .
 ```
 
-**2. Push da Imagem:**
+4. Push da Imagem:
 ```bash
-docker push aryarajalves/zap-voice-funil-api-oficial-zap:1.4.1
+docker push aryarajalves/zap-voice-funil-api-oficial-zap:3.1.1
 ```
-*(Troque `1.4.1` pela versão desejada)*
+*(Versão atual: 3.1.1 - Label Application & Stability)*
 
 ---
 

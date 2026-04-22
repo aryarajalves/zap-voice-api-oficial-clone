@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, UploadFile, File
 from typing import Optional
 from chatwoot_client import ChatwootClient
 import models
@@ -6,6 +6,8 @@ import schemas
 from fastapi import Depends
 from core.deps import get_current_user
 from core.logger import setup_logger
+from config_loader import get_setting
+import httpx
 
 logger = setup_logger(__name__)
 
@@ -57,7 +59,77 @@ async def list_templates(
         # Retornar lista vazia em vez de erro 500 para não quebrar frontend
         return []
 
+@router.get("/labels")
+async def list_labels(
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        target_client_id = x_client_id if x_client_id else current_user.client_id
+        client = ChatwootClient(client_id=target_client_id)
+        labels = await client.get_labels()
+        return labels or []
+    except Exception as e:
+        logger.error(f"Error listing labels: {e}")
+        return []
+
     return result
+
+@router.post("/upload-template-media", summary="Upload de mídia para cabeçalho de template")
+async def upload_template_media(
+    file: UploadFile = File(...),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Faz upload de imagem/vídeo/documento para a Meta Resumable Upload API
+    e retorna o header_handle a ser usado na criação de templates.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
+    if not wa_token:
+        raise HTTPException(status_code=400, detail="WA_ACCESS_TOKEN não configurado.")
+
+    file_bytes = await file.read()
+    file_length = len(file_bytes)
+    mime_type = file.content_type or "application/octet-stream"
+
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        # Step 1: create upload session
+        session_res = await http.post(
+            "https://graph.facebook.com/v25.0/app/uploads",
+            params={
+                "file_length": file_length,
+                "file_type": mime_type,
+                "access_token": wa_token,
+            }
+        )
+        if session_res.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Erro ao criar sessão de upload na Meta: {session_res.text}")
+
+        upload_session_id = session_res.json().get("id")
+        if not upload_session_id:
+            raise HTTPException(status_code=400, detail="Sessão de upload inválida retornada pela Meta.")
+
+        # Step 2: upload the file
+        upload_res = await http.post(
+            f"https://graph.facebook.com/v25.0/{upload_session_id}",
+            headers={
+                "Authorization": f"OAuth {wa_token}",
+                "file_offset": "0",
+                "Content-Type": mime_type,
+            },
+            content=file_bytes,
+        )
+        if upload_res.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Erro ao fazer upload na Meta: {upload_res.text}")
+
+        handle = upload_res.json().get("h")
+        if not handle:
+            raise HTTPException(status_code=400, detail="Handle não retornado pela Meta após upload.")
+
+        return {"handle": handle, "filename": file.filename, "mime_type": mime_type}
+
 
 @router.post("/templates")
 async def create_template(
@@ -235,4 +307,143 @@ async def send_template(
     except Exception as e:
         logger.error(f"Unexpected error sending template: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+@router.get("/profile", summary="Busca o perfil do WhatsApp Business")
+async def get_whatsapp_profile(
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
+    wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
+
+    if not wa_token or not wa_phone_id:
+        return {"error": "Configurações do WhatsApp incompletas."}
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        # Busca detalhes do perfil
+        res = await http.get(
+            f"https://graph.facebook.com/v25.0/{wa_phone_id}/whatsapp_business_profile",
+            params={
+                "fields": "about,address,description,email,profile_picture_url,websites,vertical",
+                "access_token": wa_token
+            }
+        )
+        
+        profile_data = res.json().get("data", [{}])[0]
+        
+        # Busca detalhes do número (para pegar display_phone_number)
+        num_res = await http.get(
+            f"https://graph.facebook.com/v25.0/{wa_phone_id}",
+            params={"access_token": wa_token}
+        )
+        if num_res.status_code == 200:
+            profile_data["display_phone_number"] = num_res.json().get("display_phone_number", "")
+            
+        return profile_data
+
+
+@router.post("/profile-picture", summary="Atualiza a foto de perfil do WhatsApp Business")
+async def update_profile_picture(
+    file: UploadFile = File(...),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
+    wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
+
+    if not wa_token or not wa_phone_id:
+        raise HTTPException(status_code=400, detail="Configurações do WhatsApp incompletas.")
+
+    file_bytes = await file.read()
+    file_length = len(file_bytes)
+    mime_type = file.content_type or "image/jpeg"
+
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        # Step 1: Request Upload Session
+        session_res = await http.post(
+            "https://graph.facebook.com/v25.0/app/uploads",
+            params={
+                "file_length": file_length,
+                "file_type": mime_type,
+                "access_token": wa_token,
+            }
+        )
+        if session_res.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Erro ao criar sessão de upload: {session_res.text}")
+
+        upload_session_id = session_res.json().get("id")
+
+        # Step 2: Upload the file
+        upload_res = await http.post(
+            f"https://graph.facebook.com/v25.0/{upload_session_id}",
+            headers={
+                "Authorization": f"OAuth {wa_token}",
+                "file_offset": "0",
+                "Content-Type": mime_type,
+            },
+            content=file_bytes,
+        )
+        if upload_res.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Erro no upload da imagem: {upload_res.text}")
+
+        handle = upload_res.json().get("h")
+        logger.info(f"Upload concluído na Meta. Handle: {handle}")
+        if not handle:
+            raise HTTPException(status_code=400, detail="Handle não retornado pela Meta.")
+
+        # Step 3: Update Profile
+        logger.info(f"Tentando atualizar perfil do WhatsApp {wa_phone_id} na v25.0...")
+        update_res = await http.post(
+            f"https://graph.facebook.com/v25.0/{wa_phone_id}/whatsapp_business_profile",
+            headers={"Authorization": f"OAuth {wa_token}"},
+            json={
+                "messaging_product": "whatsapp",
+                "profile_picture_handle": handle
+            }
+        )
+        
+        if update_res.status_code != 200:
+            logger.error(f"Erro ao salvar perfil WhatsApp: {update_res.text}")
+            raise HTTPException(status_code=400, detail=f"Erro ao salvar perfil: {update_res.text}")
+
+        logger.info("✅ Foto de perfil do WhatsApp atualizada com sucesso.")
+        return {"success": True, "message": "Foto de perfil atualizada com sucesso!"}
+
+
+@router.post("/profile", summary="Atualiza campos do perfil comercial do WhatsApp")
+async def update_whatsapp_profile(
+    payload: dict,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
+    wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
+
+    if not wa_token or not wa_phone_id:
+        raise HTTPException(status_code=400, detail="Configurações do WhatsApp incompletas.")
+
+    # Filter only allowed fields to avoid errors
+    allowed_fields = {"about", "address", "description", "email", "websites", "vertical"}
+    filtered_payload = {k: v for k, v in payload.items() if k in allowed_fields}
+    filtered_payload["messaging_product"] = "whatsapp"
+    
+    if not filtered_payload:
+        raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar.")
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        res = await http.post(
+            f"https://graph.facebook.com/v25.0/{wa_phone_id}/whatsapp_business_profile",
+            headers={"Authorization": f"OAuth {wa_token}"},
+            json=filtered_payload
+        )
+        
+        if res.status_code != 200:
+            logger.error(f"Erro ao atualizar perfil WhatsApp: {res.text}")
+            raise HTTPException(status_code=400, detail=f"Erro Meta API: {res.text}")
+
+        return {"success": True, "message": "Perfil atualizado com sucesso!"}
 

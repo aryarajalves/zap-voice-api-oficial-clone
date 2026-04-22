@@ -2,33 +2,52 @@ version: "3.8"
 
 services:
   zapvoice_app:
-    image: ${IMAGE_NAME:-aryarajalves/zap-voice-funil-api-oficial-zap:1.6.0}
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:3.1.1
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
+      - docker_zapvoice_net
     volumes:
+      - ../backend:/app
       - zapvoice_uploads:/app/static/uploads
     environment:
       # === Configuração Base e Segurança ===
-      - PORT=${PORT:-8000}
-      - DATABASE_URL=${DATABASE_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-
-      # === Acesso Inicial (Super Admin) ===
-      # Use estes dados para seu primeiro login no sistema
-      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL}
-      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD}
-
-      # === Configuração de Registro ===
-      - REGISTER_API_KEY=${REGISTER_API_KEY}
+      - PORT=8000
+      - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
+      - SECRET_KEY=KKCtvi5fDYitIQJlsmiiRDGaQucfiTMQD4Tu4BIp0y0DtYYk55s8ao1TQCeXneVI
+      - CORS_ORIGINS=https://zapjordsandrieli.aryaraj.shop
 
       # === Frontend Runtime Config ===
-      - VITE_API_URL=${VITE_API_URL}
-      - VITE_WS_URL=${VITE_WS_URL}
+      - VITE_API_URL=https://zapjordsandrieli.aryaraj.shop/api
+      - VITE_WS_URL=wss://zapjordsandrieli.aryaraj.shop/ws
+      - WHATSAPP_VERIFY_TOKEN=zapvoice_webhook_2026
+      # Token da API do ManyChat — necessário para sincronizar contatos e tags via integração
+      - MANYCHAT_API_KEY=
+      # Dias para manter o histórico de webhooks recebidos (0 = desabilitado, nunca apaga)
+      - HISTORY_RETENTION_DAYS=${HISTORY_RETENTION_DAYS:-30}
+
+      # === RabbitMQ ===
+      - RABBITMQ_HOST=zapvoice-rabbit
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - RABBITMQ_VHOST=/
+      - RABBITMQ_PREFETCH_COUNT=100
+      - RABBITMQ_MESSAGE_DELAY=10
+
+      # === Storage (S3 / Backblaze) ===
+      - S3_ENDPOINT_URL=https://s3.us-east-005.backblazeb2.com
+      - S3_ACCESS_KEY=0047daba280ace4000000000f
+      - S3_SECRET_KEY=K004zPzo6KfHLNGAKb1vo/CUQOTOMcU
+      - S3_BUCKET_NAME=zap-voice
+      - S3_REGION=us-east-005
+      - S3_PUBLIC_URL=https://s3.us-east-005.backblazeb2.com
+
+      # === Autenticação e Registro ===
+      - USER_TABLE_NAME=users
+      - REGISTER_API_KEY=123456
+      - SUPER_ADMIN_EMAIL=aryarajmarketing@gmail.com
+      - SUPER_ADMIN_PASSWORD=861fc135-1392-4eb9-81e6-d47a8d2521d9
 
     deploy:
       mode: replicated
@@ -37,22 +56,56 @@ services:
         constraints:
           - node.role == manager
       labels:
-        - traefik.enable=1
-        - traefik.http.routers.zapvoice.rule=Host(`${DOMAIN:-seu-dominio.com}`)
-        - traefik.http.routers.zapvoice.entrypoints=websecure
-        - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
-        - traefik.http.services.zapvoice.loadbalancer.server.port=8000
+        # Configura o Roteamento do Traefik
+        - traefik.enable=true
+        - traefik.docker.network=network_swarm_public
+        
+        # Configura o Roteamento para o ZapVoice
+        - traefik.http.routers.zapvoice_andrieli.rule=Host(`zapjordsandrieli.aryaraj.shop`)
+        - traefik.http.routers.zapvoice_andrieli.entrypoints=websecure
+        - traefik.http.routers.zapvoice_andrieli.tls.certresolver=letsencryptresolver
+        
+        # Define o serviço e porta
+        - traefik.http.routers.zapvoice_andrieli.service=zapvoice_andrieli
+        - traefik.http.services.zapvoice_andrieli.loadbalancer.server.port=8000
+        - traefik.http.services.zapvoice_andrieli.loadbalancer.passhostheader=true
+        
+        # Configura Headers de SSL (Baseado no seu Chatwoot funcional)
+        - traefik.http.middlewares.zapvoice_sslheader.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.routers.zapvoice_andrieli.middlewares=zapvoice_sslheader@docker
 
   zapvoice_worker:
-    image: ${IMAGE_NAME:-aryarajalves/zap-voice-funil-api-oficial-zap:1.5.0}
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:3.1.1
     command: python worker.py
     networks:
       - network_swarm_public
+      - docker_zapvoice_net
     volumes:
+      - ../backend:/app
       - zapvoice_uploads:/app/static/uploads
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - SECRET_KEY=${SECRET_KEY}
+      # === Configuração Base e Segurança ===
+      - PORT=8000
+      - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
+      - SECRET_KEY=KKCtvi5fDYitIQJlsmiiRDGaQucfiTMQD4Tu4BIp0y0DtYYk55s8ao1TQCeXneVI
+      - CORS_ORIGINS=https://zapjordsandrieli.aryaraj.shop
+
+      # === RabbitMQ ===
+      - RABBITMQ_HOST=zapvoice-rabbit
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - RABBITMQ_VHOST=/
+      - RABBITMQ_PREFETCH_COUNT=100
+      - RABBITMQ_MESSAGE_DELAY=10
+
+      # === Storage (S3 / Backblaze) ===
+      - S3_ENDPOINT_URL=https://s3.us-east-005.backblazeb2.com
+      - S3_ACCESS_KEY=0047daba280ace4000000000f
+      - S3_SECRET_KEY=K004zPzo6KfHLNGAKb1vo/CUQOTOMcU
+      - S3_BUCKET_NAME=zap-voice
+      - S3_REGION=us-east-005
+      - S3_PUBLIC_URL=https://s3.us-east-005.backblazeb2.com
 
     deploy:
       mode: replicated
@@ -65,5 +118,6 @@ volumes:
 
 networks:
   network_swarm_public:
-    name: network_swarm_public
+    external: true
+  docker_zapvoice_net:
     external: true

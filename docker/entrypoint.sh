@@ -35,8 +35,8 @@ EOF
 
 echo "✅ Arquivo $CONFIG_FILE gerado com sucesso!"
 
-# Criar banco de dados se não existir (somente se DATABASE_URL estiver definido)
-if [ -n "$DATABASE_URL" ]; then
+# Criar banco de dados se não existir (somente se DATABASE_URL estiver definido e for o App principal)
+if [ -n "$DATABASE_URL" ] && [ "$1" = "uvicorn" ]; then
     echo "🗄️  Verificando/criando banco de dados PostgreSQL..."
     python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
     echo "🏗️  Aplicando migrações de esquema..."

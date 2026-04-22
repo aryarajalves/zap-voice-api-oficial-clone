@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { toast } from 'react-hot-toast';
+import { API_URL } from '../config';
+import { FiGlobe } from 'react-icons/fi';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -8,24 +10,7 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [branding, setBranding] = useState({ APP_NAME: 'ZapVoice', APP_LOGO: null });
     const { login } = useAuth();
-
-    React.useEffect(() => {
-        fetchBranding();
-    }, []);
-
-    const fetchBranding = async () => {
-        try {
-            const res = await fetch(`${API_URL}/settings/branding`);
-            if (res.ok) {
-                const data = await res.json();
-                setBranding(data);
-            }
-        } catch (err) {
-            console.error("Erro ao carregar branding:", err);
-        }
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -64,25 +49,19 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
+            <div className="bg-[#1e293b] rounded-2xl shadow-2xl w-full max-w-md p-8 border border-gray-700">
                 {/* Logo/Header */}
                 <div className="text-center mb-8">
                     <div className="flex flex-col items-center gap-4 mb-4">
-                        {branding.APP_LOGO ? (
-                            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg border-4 border-white">
-                                <img src={branding.APP_LOGO} alt={branding.APP_NAME} className="w-full h-full object-cover" />
-                            </div>
-                        ) : (
-                            <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold text-4xl shadow-xl border-4 border-white">
-                                {branding.APP_NAME[0]}
-                            </div>
-                        )}
-                        <h1 className="text-3xl font-bold text-gray-800">
-                            {branding.APP_NAME} <span className="text-blue-600">Funnels</span>
+                        <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg border-t border-blue-400">
+                            <span className="text-white text-5xl font-bold font-sans">Z</span>
+                        </div>
+                        <h1 className="text-3xl font-bold text-white">
+                            ZapVoice <span className="text-blue-500">Funnels</span>
                         </h1>
                     </div>
-                    <p className="text-gray-600">Entre na sua conta</p>
+                    <p className="text-gray-400">Entre na sua conta</p>
                 </div>
 
                 {/* Form */}
@@ -90,7 +69,7 @@ const Login = () => {
 
                     {/* Alerta de Erro */}
                     {error && (
-                        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md">
+                        <div className="bg-red-900/30 border-l-4 border-red-500 p-4 rounded-md">
                             <div className="flex">
                                 <div className="flex-shrink-0">
                                     <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -98,7 +77,7 @@ const Login = () => {
                                     </svg>
                                 </div>
                                 <div className="ml-3">
-                                    <p className="text-sm text-red-700 font-medium">
+                                    <p className="text-sm text-red-300 font-medium">
                                         {error}
                                     </p>
                                 </div>
@@ -107,7 +86,7 @@ const Login = () => {
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
                             Email
                         </label>
                         <input
@@ -115,14 +94,14 @@ const Login = () => {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                            className="w-full px-4 py-3 bg-[#0f172a] border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition placeholder-gray-500"
                             placeholder="seu@email.com"
                             autoComplete="email"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
                             Senha
                         </label>
                         <div className="relative">
@@ -131,14 +110,14 @@ const Login = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
-                                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                className="w-full px-4 py-3 pr-12 bg-[#0f172a] border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition placeholder-gray-500"
                                 placeholder="••••••••"
                                 autoComplete="current-password"
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 focus:outline-none"
                                 title={showPassword ? "Ocultar senha" : "Mostrar senha"}
                             >
                                 {showPassword ? (
@@ -176,8 +155,8 @@ const Login = () => {
                 </form>
 
                 {/* Footer */}
-                <div className="mt-8 pt-6 border-t border-gray-200 text-center text-xs text-gray-500">
-                    <p>{branding.APP_NAME} Funnels © 2026</p>
+                <div className="mt-8 pt-6 border-t border-gray-700 text-center text-xs text-gray-500">
+                    <p>ZapVoice Funnels © 2026</p>
                     <p className="mt-1">Gerencie suas sequências de mensagens WhatsApp</p>
                 </div>
             </div>

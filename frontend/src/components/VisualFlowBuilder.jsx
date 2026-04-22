@@ -12,7 +12,7 @@ import ReactFlow, {
     useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { FiMessageSquare, FiClock, FiCpu, FiImage, FiShuffle, FiLink, FiCalendar, FiSave, FiTrash2, FiUploadCloud, FiMaximize, FiMinimize, FiPlus, FiPlay, FiFlag, FiArrowLeft, FiFileText, FiTag, FiMic, FiInfo } from 'react-icons/fi';
+import { FiMessageSquare, FiClock, FiCpu, FiImage, FiShuffle, FiLink, FiCalendar, FiSave, FiTrash2, FiUploadCloud, FiMaximize, FiMinimize, FiPlus, FiPlay, FiFlag, FiArrowLeft, FiFileText, FiTag, FiMic, FiInfo, FiGlobe, FiSearch, FiUser, FiChevronUp, FiChevronDown, FiX } from 'react-icons/fi';
 import { useClient } from '../contexts/ClientContext';
 import { fetchWithAuth } from '../AuthContext';
 import { API_URL } from '../config';
@@ -20,8 +20,111 @@ import { toast } from 'react-hot-toast';
 import ConfirmModal from './ConfirmModal';
 
 export const PortalContext = React.createContext(null);
+export const GlobalVarsContext = React.createContext([]);
+
+const resolveUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    // Pega a URL base da API (remove /api do final)
+    const baseUrl = API_URL.replace(/\/api\/*$/, '');
+    return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 // --- Shared Components ---
+
+const VariableSelector = ({ onSelect }) => {
+    const vars = React.useContext(GlobalVarsContext);
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const CONTACT_VARS = [
+        { id: 'cv-nome', name: 'nome', label: 'Nome do Contato' },
+        { id: 'cv-tel', name: 'telefone', label: 'Telefone' },
+        { id: 'cv-prod', name: 'produto', label: 'Nome do Produto' },
+    ];
+
+    const allVars = [
+        ...CONTACT_VARS.map(cv => ({ ...cv, isContact: true })),
+        ...(vars || []).map(v => ({ ...v, isGlobal: true }))
+    ];
+
+    const filteredVars = allVars.filter(v =>
+        v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.label && v.label.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (v.value && v.value.toString().toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    return (
+        <div className="relative inline-block ml-1">
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setIsOpen(!isOpen);
+                    setSearchTerm('');
+                }}
+                className="p-1 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-md transition-all group relative border border-transparent hover:border-blue-200 dark:hover:border-blue-800 shadow-sm"
+                title="Inserir Variável"
+            >
+                <FiGlobe size={14} />
+            </button>
+            {isOpen && (
+                <div className="absolute z-[110] top-full right-0 mt-1 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 nodrag">
+                    {/* Search Bar */}
+                    <div className="p-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                        <div className="relative">
+                            <input
+                                type="text"
+                                autoFocus
+                                placeholder="Procurar variável..."
+                                className="w-full text-xs p-2 pl-7 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                            <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={12} />
+                        </div>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700">
+                        {filteredVars.length > 0 ? (
+                            filteredVars.map(v => (
+                                <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onSelect(`{{${v.name}}}`);
+                                        setIsOpen(false);
+                                    }}
+                                    className="w-full text-left px-3 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all border-b border-gray-50 dark:border-gray-700/50 last:border-0 group/item"
+                                >
+                                    <div className="font-bold text-blue-600 dark:text-blue-400 text-xs flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            {v.isContact ? <FiUser size={10} className="text-gray-400" /> : <FiGlobe size={10} className="text-gray-300" />}
+                                            <span>{"{{"}{v.name}{"}}"}</span>
+                                        </div>
+                                        <span className="opacity-0 group-hover/item:opacity-100 text-[9px] bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300 font-black uppercase">Inserir</span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 truncate mt-0.5 font-medium">{v.label || v.value}</div>
+                                </button>
+                            ))
+                        ) : (
+                            <div className="p-4 text-center text-xs text-gray-500 italic">
+                                Nenhuma variável encontrada.
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-center">
+                        <p className="text-[9px] text-gray-400 font-medium italic">Selecione uma variável para inserir</p>
+                    </div>
+                </div>
+            )}
+            {isOpen && <div className="fixed inset-0 z-[100]" onClick={(e) => { e.stopPropagation(); setIsOpen(false); }} />}
+        </div>
+    );
+};
 
 const NodeHeader = ({ label, icon: Icon, colorClass, onDelete, isStart, onSetStart }) => (
     <div className={`flex items-center justify-between gap-2 mb-2 border-b border-gray-100 dark:border-gray-700 pb-2`}>
@@ -117,7 +220,10 @@ const MessageNode = ({ id, data }) => {
 
             <div className="space-y-3">
                 <div className="relative">
-                    <span className="text-[10px] font-bold text-blue-500 uppercase mb-1 block">Versão 1 (Principal)</span>
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-blue-500 uppercase">Versão 1 (Principal)</span>
+                        <VariableSelector onSelect={(v) => data.onChange(id, { content: (data.content || '') + v })} />
+                    </div>
                     <textarea
                         className="nodrag nopan w-full text-base p-3 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[80px]"
                         placeholder="Digite a mensagem..."
@@ -129,7 +235,10 @@ const MessageNode = ({ id, data }) => {
                 {variations.map((v, idx) => (
                     <div key={idx} className="relative animate-fade-in group">
                         <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase">Versão {idx + 2}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">Versão {idx + 2}</span>
+                                <VariableSelector onSelect={(v) => handleVariationChange(idx, (variations[idx] || '') + v)} />
+                            </div>
                             <button
                                 onClick={() => handleRemoveVariation(idx)}
                                 className="text-gray-400 hover:text-red-500 transition nodrag"
@@ -155,6 +264,40 @@ const MessageNode = ({ id, data }) => {
                         <FiPlus /> Adicionar Versão A/B
                     </button>
                 )}
+
+                <div className="pt-2 mt-1 border-t border-gray-100 dark:border-gray-700 space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
+                        <div className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={data.publishExternalEvent || false}
+                                onChange={(e) => data.onChange(id, { publishExternalEvent: e.target.checked })}
+                            />
+                            <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <FiCpu size={10} className="text-blue-500 opacity-70" />
+                            <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-blue-600 transition-colors">Enviar para Memória?</span>
+                        </div>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
+                        <div className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={data.onlyBusinessHours || false}
+                                onChange={(e) => data.onChange(id, { onlyBusinessHours: e.target.checked })}
+                            />
+                            <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <FiClock size={10} className="text-blue-500 opacity-70" />
+                            <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-blue-600 transition-colors">Apenas Horário Comercial?</span>
+                        </div>
+                    </label>
+                </div>
             </div>
 
             <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-blue-500" />
@@ -235,9 +378,9 @@ const MediaNode = ({ id, data }) => {
             {data.mediaUrl ? (
                 <div className="mb-2 relative group">
                     {data.mediaType === 'image' ? (
-                        <img src={data.mediaUrl} alt="Preview" className="w-full h-40 object-cover rounded-lg shadow-sm" />
+                        <img src={resolveUrl(data.mediaUrl)} alt="Preview" className="w-full h-40 object-cover rounded-lg shadow-sm" />
                     ) : data.mediaType === 'video' ? (
-                        <video src={data.mediaUrl} className="w-full h-40 object-cover rounded-lg shadow-sm" controls />
+                        <video src={resolveUrl(data.mediaUrl)} className="w-full h-40 object-cover rounded-lg shadow-sm" controls />
                     ) : (
                         <div className="p-4 bg-gray-100 dark:bg-gray-900 rounded-lg text-center text-sm break-all">{data.fileName}</div>
                     )}
@@ -248,13 +391,19 @@ const MediaNode = ({ id, data }) => {
                     >
                         <FiTrash2 size={14} />
                     </button>
-                    <input
-                        type="text"
-                        placeholder="Legenda (opcional)"
-                        className="nodrag nopan w-full mt-2 text-xs p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                        value={data.caption || ''}
-                        onChange={(e) => data.onChange(id, { caption: e.target.value })}
-                    />
+                    <div className="mt-2 relative">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-[9px] font-bold text-gray-400 uppercase">Legenda (Opcional)</span>
+                            <VariableSelector onSelect={(v) => data.onChange(id, { caption: (data.caption || '') + v })} />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Legenda (opcional)"
+                            className="nodrag nopan w-full text-xs p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            value={data.caption || ''}
+                            onChange={(e) => data.onChange(id, { caption: e.target.value })}
+                        />
+                    </div>
                 </div>
             ) : (
                 <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition group">
@@ -264,6 +413,26 @@ const MediaNode = ({ id, data }) => {
                     <input type="file" className="hidden nodrag" onChange={handleUpload} disabled={uploading} accept=".png,.jpg,.jpeg,.pdf,.mp4" />
                 </label>
             )}
+
+            <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-700 space-y-2">
+
+                <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
+                    <div className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={data.onlyBusinessHours || false}
+                            onChange={(e) => data.onChange(id, { onlyBusinessHours: e.target.checked })}
+                        />
+                        <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-pink-600"></div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <FiClock size={10} className="text-pink-500 opacity-70" />
+                        <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-pink-600 transition-colors">Apenas Horário Comercial?</span>
+                    </div>
+                </label>
+            </div>
+
             <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-pink-500" />
 
             <ConfirmModal
@@ -355,7 +524,7 @@ const AudioNode = ({ id, data }) => {
             {data.mediaUrl ? (
                 <div className="mb-2 relative group flex flex-col items-center">
                     <div className="w-full bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 flex flex-col items-center gap-1 overflow-hidden">
-                        <audio src={data.mediaUrl} controls className="w-full h-8" style={{ minWidth: '200px' }} />
+                        <audio src={resolveUrl(data.mediaUrl)} controls className="w-full h-8" style={{ minWidth: '200px' }} />
                         <div className="text-[10px] text-gray-500 truncate w-full text-center">{data.fileName}</div>
                     </div>
 
@@ -368,27 +537,52 @@ const AudioNode = ({ id, data }) => {
                     </button>
 
                     <div className="mt-2 w-full flex flex-col gap-2">
-                        <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <div className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    className="sr-only peer"
-                                    checked={data.sendPrivateNote || false}
-                                    onChange={(e) => data.onChange(id, { ...data, sendPrivateNote: e.target.checked })}
-                                />
-                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-cyan-600"></div>
-                            </div>
-                            <span className="text-xs text-gray-600 dark:text-gray-300">Enviar Nota Privada?</span>
-                        </label>
+                        <div className="flex flex-col gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
+                                <div className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={data.sendPrivateNote || false}
+                                        onChange={(e) => data.onChange(id, { ...data, sendPrivateNote: e.target.checked })}
+                                    />
+                                    <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-cyan-600"></div>
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-cyan-600 transition-colors">Enviar Nota Privada?</span>
+                            </label>
+
+
+                            <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
+                                <div className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={data.onlyBusinessHours || false}
+                                        onChange={(e) => data.onChange(id, { onlyBusinessHours: e.target.checked })}
+                                    />
+                                    <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-cyan-600"></div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <FiClock size={10} className="text-cyan-500 opacity-70" />
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-cyan-600 transition-colors">Apenas Horário Comercial?</span>
+                                </div>
+                            </label>
+                        </div>
 
                         {data.sendPrivateNote && (
-                            <textarea
-                                className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-none nodrag"
-                                rows={3}
-                                placeholder="Conteúdo da nota privada..."
-                                value={data.privateNoteContent || ''}
-                                onChange={(e) => data.onChange(id, { ...data, privateNoteContent: e.target.value })}
-                            />
+                            <div className="mt-1">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Nota Privada</span>
+                                    <VariableSelector onSelect={(v) => data.onChange(id, { ...data, privateNoteContent: (data.privateNoteContent || '') + v })} />
+                                </div>
+                                <textarea
+                                    className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 resize-none nodrag"
+                                    rows={3}
+                                    placeholder="Conteúdo da nota privada..."
+                                    value={data.privateNoteContent || ''}
+                                    onChange={(e) => data.onChange(id, { ...data, privateNoteContent: e.target.value })}
+                                />
+                            </div>
                         )}
                     </div>
                 </div>
@@ -539,7 +733,7 @@ const LinkFunnelNode = ({ id, data }) => {
             .then(res => res.json())
             .then(setFunnels)
             .catch(console.error);
-    }, [activeClient]);
+    }, [activeClient, data.refreshKey]);
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-orange-500 min-w-[240px]">
@@ -580,7 +774,7 @@ const TemplateNode = ({ id, data }) => {
             .then(setTemplates)
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [activeClient]);
+    }, [activeClient, data.refreshKey]);
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-emerald-500 min-w-[280px] max-w-[320px] transition-all hover:shadow-2xl hover:border-emerald-400">
@@ -621,9 +815,11 @@ const TemplateNode = ({ id, data }) => {
                         ) : (
                             <>
                                 <option value="">Selecione um Template...</option>
-                                {Array.isArray(templates) && templates.map(t => (
-                                    <option key={t.id || t.name} value={t.name}>{t.name} ({t.language})</option>
-                                ))}
+                                {Array.isArray(templates) && templates
+                                    .filter(t => ['APPROVED', 'ACTIVE'].includes(t.status))
+                                    .map(t => (
+                                        <option key={t.id || t.name} value={t.name}>{t.name} ({t.language})</option>
+                                    ))}
                             </>
                         )}
                     </select>
@@ -714,6 +910,10 @@ const TemplateNode = ({ id, data }) => {
                             </div>
 
                             <div className="relative group/fb">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Mensagem Alternativa</span>
+                                    <VariableSelector onSelect={(v) => data.onChange(id, { fallbackMessage: (data.fallbackMessage || '') + v })} />
+                                </div>
                                 <textarea
                                     className="nodrag nopan w-full text-xs p-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded border border-purple-200 dark:border-purple-700 focus:ring-1 focus:ring-purple-500 outline-none resize-none min-h-[80px]"
                                     placeholder="Mensagem alternativa (Opcional). Se vazio, envia o template mesmo com janela aberta."
@@ -722,7 +922,7 @@ const TemplateNode = ({ id, data }) => {
                                 />
                                 <button
                                     onClick={() => data.onChange(id, { isFallbackExpanded: true })}
-                                    className="absolute top-1 right-1 p-1 text-gray-400 hover:text-purple-500 bg-white/50 dark:bg-black/20 rounded opacity-0 group-hover/fb:opacity-100 transition"
+                                    className="absolute top-8 right-1 p-1 text-gray-400 hover:text-purple-500 bg-white/50 dark:bg-black/20 rounded opacity-0 group-hover/fb:opacity-100 transition"
                                     title="Maximizar"
                                 >
                                     <FiMaximize size={12} />
@@ -784,9 +984,13 @@ const TemplateNode = ({ id, data }) => {
                                                 <FiMinimize size={18} />
                                             </button>
                                         </div>
-                                        <div className="p-4 flex-1">
+                                        <div className="p-4 flex-1 flex flex-col">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-sm font-medium text-gray-500">Escreva sua mensagem:</span>
+                                                <VariableSelector onSelect={(v) => data.onChange(id, { fallbackMessage: (data.fallbackMessage || '') + v })} />
+                                            </div>
                                             <textarea
-                                                className="w-full h-[60vh] text-base p-4 bg-purple-50 dark:bg-purple-900/10 text-gray-800 dark:text-gray-200 rounded-lg border border-purple-200 dark:border-purple-800 focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                                                className="w-full h-full text-base p-4 bg-purple-50 dark:bg-purple-900/10 text-gray-800 dark:text-gray-200 rounded-lg border border-purple-200 dark:border-purple-800 focus:ring-2 focus:ring-purple-500 outline-none resize-none"
                                                 value={data.fallbackMessage || ''}
                                                 onChange={(e) => data.onChange(id, { fallbackMessage: e.target.value })}
                                                 placeholder="Escreva a mensagem alternativa..."
@@ -907,10 +1111,72 @@ const TemplateNode = ({ id, data }) => {
 };
 
 
+const UpdateContactNode = ({ id, data }) => {
+    const nameType = data.nameType || 'fixed';
+
+    return (
+        <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-orange-500 min-w-[280px]">
+            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-orange-500" />
+            <NodeHeader
+                label="Atualizar Contato no Chatwoot"
+                icon={FiUser}
+                colorClass="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400"
+                onDelete={() => data.onDelete(id)}
+                isStart={data.isStart}
+                onSetStart={() => data.onSetStart(id, 'updateContactNode')}
+            />
+
+            <div className="space-y-4">
+                <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Origem do Nome</label>
+                    <select
+                        className="nodrag nopan w-full text-sm border rounded p-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-semibold focus:ring-2 focus:ring-orange-500 outline-none"
+                        value={nameType}
+                        onChange={(e) => data.onChange(id, { nameType: e.target.value })}
+                    >
+                        <option value="fixed">Nome Fixo / Manual</option>
+                        <option value="official">Nome da API Oficial (Push Name)</option>
+                    </select>
+                </div>
+
+                {nameType === 'fixed' && (
+                    <div className="animate-fade-in">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Novo Nome</label>
+                        <input
+                            type="text"
+                            placeholder="Ex: João da Silva"
+                            className="nodrag nopan w-full text-sm p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm"
+                            value={data.newName || ''}
+                            onChange={(e) => data.onChange(id, { newName: e.target.value })}
+                        />
+                        <div className="mt-2">
+                            <VariableSelector onSelect={(v) => data.onChange(id, { newName: (data.newName || '') + v })} />
+                        </div>
+                    </div>
+                )}
+
+                {nameType === 'official' && (
+                    <p className="text-[10px] text-gray-400 italic bg-gray-50 dark:bg-gray-900/50 p-2 rounded border border-dashed border-gray-200 dark:border-gray-700">
+                        O sistema usará o nome identificado pelo WhatsApp no momento da interação.
+                    </p>
+                )}
+            </div>
+
+            <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-orange-500" />
+        </div>
+    );
+};
+
 const ChatwootLabelNode = ({ id, data }) => {
     const { activeClient } = useClient();
     const [labels, setLabels] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // Get selected labels from data.label (comma separated)
+    const selectedLabels = useMemo(() => {
+        if (!data.label) return [];
+        return data.label.split(',').map(l => l.trim()).filter(l => l);
+    }, [data.label]);
 
     useEffect(() => {
         if (!activeClient) return;
@@ -922,8 +1188,18 @@ const ChatwootLabelNode = ({ id, data }) => {
             .finally(() => setLoading(false));
     }, [activeClient]);
 
+    const toggleLabel = (labelTitle) => {
+        let newList;
+        if (selectedLabels.includes(labelTitle)) {
+            newList = selectedLabels.filter(l => l !== labelTitle);
+        } else {
+            newList = [...selectedLabels, labelTitle];
+        }
+        data.onChange(id, { label: newList.join(',') });
+    };
+
     return (
-        <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-slate-600 min-w-[240px] transition-all hover:shadow-2xl hover:border-slate-400">
+        <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-slate-600 min-w-[260px] transition-all hover:shadow-2xl hover:border-slate-400">
             <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-600" />
             <NodeHeader
                 label="Etiquetar Chatwoot"
@@ -933,25 +1209,43 @@ const ChatwootLabelNode = ({ id, data }) => {
                 isStart={data.isStart}
             />
 
-            <div className="space-y-3">
+            <div className="space-y-4">
+                {/* Selected Labels Chips */}
+                {selectedLabels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                        {selectedLabels.map(l => (
+                            <div key={l} className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2 py-0.5 rounded-full text-[10px] font-bold border border-slate-200 dark:border-slate-600 group">
+                                {l}
+                                <button
+                                    onClick={() => toggleLabel(l)}
+                                    className="text-slate-400 hover:text-red-500 transition"
+                                >
+                                    <FiX size={10} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Etiqueta (Chatwoot)</label>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">
+                        {selectedLabels.length > 0 ? 'Adicionar mais etiquetas' : 'Etiqueta (Chatwoot)'}
+                    </label>
                     <select
                         className={`nodrag nopan w-full text-sm p-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-gray-200 outline-none ${loading ? 'opacity-50 cursor-wait' : ''}`}
-                        value={data.label || ''}
-                        onChange={(e) => data.onChange(id, { label: e.target.value })}
+                        value=""
+                        onChange={(e) => {
+                            if (e.target.value) toggleLabel(e.target.value);
+                        }}
                         disabled={loading}
                     >
-                        {loading ? (
-                            <option value="">🔄 Carregando etiquetas...</option>
-                        ) : (
-                            <>
-                                <option value="">Selecione uma Etiqueta...</option>
-                                {Array.isArray(labels) && labels.map(l => (
-                                    <option key={l.id} value={l.title}>{l.title}</option>
-                                ))}
-                            </>
-                        )}
+                        <option value="">{loading ? '🔄 Carregando...' : 'Selecione para adicionar...'}</option>
+                        {Array.isArray(labels) && labels
+                            .filter(l => !selectedLabels.includes(l.title))
+                            .map(l => (
+                                <option key={l.id} value={l.title}>{l.title}</option>
+                            ))
+                        }
                     </select>
                 </div>
             </div>
@@ -1271,14 +1565,14 @@ const ContextMenu = ({ top, left, onClose, onAddNode }) => {
                 <button onClick={() => onAddNode('randomizerNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 rounded-md transition text-left group">
                     <div className="bg-indigo-100 dark:bg-indigo-900/50 p-1 rounded group-hover:bg-indigo-200 transition"><FiShuffle className="text-indigo-500" /></div> Teste A/B
                 </button>
-                <button onClick={() => onAddNode('templateNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 rounded-md transition text-left group">
-                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-1 rounded group-hover:bg-emerald-200 transition"><FiFileText className="text-emerald-500" /></div> Template WhatsApp
-                </button>
                 <button onClick={() => onAddNode('linkFunnelNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 rounded-md transition text-left group">
                     <div className="bg-orange-100 dark:bg-orange-900/50 p-1 rounded group-hover:bg-orange-200 transition"><FiLink className="text-orange-500" /></div> Conectar Funil
                 </button>
                 <button onClick={() => onAddNode('chatwoot_label')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-slate-100 dark:hover:bg-slate-900/30 hover:text-slate-600 rounded-md transition text-left group">
                     <div className="bg-slate-200 dark:bg-slate-800 p-1 rounded group-hover:bg-slate-300 transition"><FiTag className="text-slate-500" /></div> Etiquetar Chatwoot
+                </button>
+                <button onClick={() => onAddNode('updateContactNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 rounded-md transition text-left group">
+                    <div className="bg-orange-100 dark:bg-orange-900/50 p-1 rounded group-hover:bg-orange-200 transition"><FiUser className="text-orange-500" /></div> Atualizar Contato no Chatwoot
                 </button>
             </div>
         </div>
@@ -1294,23 +1588,42 @@ const nodeTypes = {
     conditionNode: ConditionNode,
     randomizerNode: RandomizerNode,
     linkFunnelNode: LinkFunnelNode,
-    templateNode: TemplateNode,
     chatwoot_label: ChatwootLabelNode,
+    updateContactNode: UpdateContactNode,
     dateNode: LegacyDateNode
 };
 
 // --- Editor Logic ---
-const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave }) => {
+const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, refreshKey }) => {
     const { activeClient } = useClient();
     const portalContainer = React.useContext(PortalContext);
     const [nodes, setNodes] = useState([]);
     const [edges, setEdges] = useState([]);
     const [saving, setSaving] = useState(false);
     const [currentFunnelId, setCurrentFunnelId] = useState(funnelId);
+    const [globalVars, setGlobalVars] = useState([]);
+
+    useEffect(() => {
+        if (activeClient) {
+            fetchWithAuth(`${API_URL}/globals`, {}, activeClient.id)
+                .then(res => res.json())
+                .then(setGlobalVars)
+                .catch(err => console.error("Error fetching globals:", err));
+        }
+    }, [activeClient]);
 
     // Funnel Metadata State
     const [funnelName, setFunnelName] = useState('');
     const [triggerPhrase, setTriggerPhrase] = useState('');
+    const [allowedPhones, setAllowedPhones] = useState('');
+    const [blockedPhones, setBlockedPhones] = useState('');
+    const [showRestrictions, setShowRestrictions] = useState(false);
+    
+    // Business Hours State
+    const [businessHoursStart, setBusinessHoursStart] = useState('08:00');
+    const [businessHoursEnd, setBusinessHoursEnd] = useState('18:00');
+    const [businessHoursDays, setBusinessHoursDays] = useState([0, 1, 2, 3, 4]);
+    const [showBusinessHours, setShowBusinessHours] = useState(false);
 
     // Context Menu State
     const [menu, setMenu] = useState(null);
@@ -1323,6 +1636,14 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave }
     const connectingHandleId = useRef(null);
 
     // Stable Handlers
+    // Sincronizar refreshKey com os dados dos nós para disparar re-fetches internos
+    useEffect(() => {
+        setNodes((nds) => nds.map(node => ({
+            ...node,
+            data: { ...node.data, refreshKey }
+        })));
+    }, [refreshKey]);
+
     const updateNodeData = useCallback((id, newData) => {
         setNodes((nds) => nds.map((node) => {
             if (node.id === id) {
@@ -1350,9 +1671,9 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave }
     }, []);
 
     const setStartNode = useCallback((id, type) => {
-        // Validation: Only messageNode, mediaNode, audioNode or templateNode allowed
-        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode') {
-            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio' ou 'Template' podem ser o nó inicial! 🚫");
+        // Validation: Only messageNode, mediaNode or audioNode allowed
+        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode') {
+            toast.error("Apenas 'Mensagem', 'Mídia' ou 'Áudio' podem ser o nó inicial! 🚫");
             return;
         }
 
@@ -1506,6 +1827,11 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave }
                 // Set Metadata
                 setFunnelName(data.name || '');
                 setTriggerPhrase(data.trigger_phrase || '');
+                setAllowedPhones(Array.isArray(data.allowed_phones) ? data.allowed_phones.join(', ') : (data.allowed_phone || ''));
+                setBlockedPhones(Array.isArray(data.blocked_phones) ? data.blocked_phones.join(', ') : '');
+                setBusinessHoursStart(data.business_hours_start || '08:00');
+                setBusinessHoursEnd(data.business_hours_end || '18:00');
+                setBusinessHoursDays(data.business_hours_days || [0, 1, 2, 3, 4]);
 
                 if (data.steps && data.steps.nodes && data.steps.nodes.length > 0) {
                     const loadedNodes = data.steps.nodes.map(n => ({
@@ -1616,7 +1942,12 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave }
                 name: funnelName, // Use state value
                 description: currentFunnel.description,
                 trigger_phrase: triggerPhrase, // Use state value
-                allowed_phone: currentFunnel.allowed_phone,
+                allowed_phones: allowedPhones.split(',').map(p => p.trim()).filter(p => p),
+                blocked_phones: blockedPhones.split(',').map(p => p.trim()).filter(p => p),
+                allowed_phone: null, // Clear legacy single field
+                business_hours_start: businessHoursStart,
+                business_hours_end: businessHoursEnd,
+                business_hours_days: businessHoursDays,
                 steps: stepsPayload
             };
 
@@ -1659,95 +1990,208 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave }
     };
 
     return (
-        <div className="flex h-full w-full" ref={reactFlowWrapper}>
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                onConnectStart={onConnectStart}
-                onConnectEnd={onConnectEnd}
-                nodeTypes={nodeTypes}
-                onPaneContextMenu={onPaneContextMenu}
-                onPaneClick={onPaneClick}
-                defaultEdgeOptions={{ animated: true, style: { strokeWidth: 2 } }}
-                connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 3 }}
-                proOptions={{ hideAttribution: true }}
-                fitView
-                fitViewOptions={{ padding: 0.2, includeHiddenNodes: true }}
-                minZoom={0.1}
-            >
-                <Background color="#aaa" gap={20} />
-                <Controls fitViewOptions={{ padding: 0.2, includeHiddenNodes: true }} />
+        <GlobalVarsContext.Provider value={globalVars}>
+            <div className="flex h-full w-full" ref={reactFlowWrapper}>
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    onConnectStart={onConnectStart}
+                    onConnectEnd={onConnectEnd}
+                    nodeTypes={nodeTypes}
+                    onPaneContextMenu={onPaneContextMenu}
+                    onPaneClick={onPaneClick}
+                    defaultEdgeOptions={{ animated: true, style: { strokeWidth: 2 } }}
+                    connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 3 }}
+                    proOptions={{ hideAttribution: true }}
+                    fitView
+                    fitViewOptions={{ padding: 0.2, includeHiddenNodes: true }}
+                    minZoom={0.1}
+                >
+                    <Background color="#aaa" gap={20} />
+                    <Controls fitViewOptions={{ padding: 0.2, includeHiddenNodes: true }} />
 
-                {/* Top Left: Metadata Inputs */}
-                <Panel position="top-left" className="flex flex-col gap-2 p-3 bg-white/90 dark:bg-gray-800/90 backdrop-blur rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 w-72">
-                    <div>
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nome do Funil</label>
-                        <input
-                            type="text"
-                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm font-semibold text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
-                            value={funnelName}
-                            onChange={(e) => setFunnelName(e.target.value)}
-                            placeholder="Ex: Funil de Boas Vindas"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block flex items-center gap-1">
-                            Palavra-Chave (Gatilho) <FiFlag size={10} />
-                        </label>
-                        <input
-                            type="text"
-                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm font-mono text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                            value={triggerPhrase}
-                            onChange={(e) => setTriggerPhrase(e.target.value)}
-                            placeholder="Ex: #promo2024"
-                        />
-                        <span className="text-[9px] text-gray-400 mt-0.5 block">Digite a palavra exata para iniciar este fluxo.</span>
-                    </div>
-                </Panel>
+                    {/* Top Left: Metadata Inputs */}
+                    <Panel position="top-left" className="flex flex-col gap-2 p-3 bg-white/90 dark:bg-gray-800/90 backdrop-blur rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 w-72">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nome do Funil</label>
+                            <input
+                                type="text"
+                                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm font-semibold text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={funnelName}
+                                onChange={(e) => setFunnelName(e.target.value)}
+                                placeholder="Ex: Funil de Boas Vindas"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block flex items-center gap-1">
+                                Palavra-Chave (Gatilho) <FiFlag size={10} />
+                            </label>
+                            <input
+                                type="text"
+                                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm font-mono text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={triggerPhrase}
+                                onChange={(e) => setTriggerPhrase(e.target.value)}
+                                placeholder="Ex: #promo2024"
+                            />
+                            <span className="text-[9px] text-gray-400 mt-0.5 block">Digite a palavra exata para iniciar este fluxo.</span>
+                        </div>
 
-                <Panel position="top-right" className="flex gap-2">
-                    {onBack && !isFullScreen && (
-                        <button onClick={onBack} className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg shadow border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium">
-                            <FiArrowLeft /> Voltar para Lista
+                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700 mt-1">
+                            {/* Restrições de Contato */}
+                            <button
+                                onClick={() => setShowRestrictions(!showRestrictions)}
+                                className={`w-full flex items-center justify-between text-[10px] font-bold uppercase transition mb-1 ${showRestrictions ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
+                            >
+                                <span className="flex items-center gap-1.5 align-middle"><FiUser size={12} /> Restrições de Contato</span>
+                                {showRestrictions ? <FiChevronUp /> : <FiChevronDown />}
+                            </button>
+
+                            {showRestrictions && (
+                                <div className="mt-2 mb-4 space-y-3 animate-fade-in bg-gray-50/50 dark:bg-gray-900/30 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
+                                    <div>
+                                        <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Lista de Permissão (Whitelist)</label>
+                                        <textarea
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 outline-none min-h-[50px]"
+                                            value={allowedPhones}
+                                            onChange={(e) => setAllowedPhones(e.target.value)}
+                                            placeholder="55859..., 55119..."
+                                        />
+                                        <span className="text-[8px] text-gray-400 block mt-0.5">Apenas estes números receberão (se vazio, todos recebem).</span>
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Lista de Bloqueio (Blacklist)</label>
+                                        <textarea
+                                            className="w-full bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900/30 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-100 focus:ring-1 focus:ring-red-500 outline-none min-h-[50px]"
+                                            value={blockedPhones}
+                                            onChange={(e) => setBlockedPhones(e.target.value)}
+                                            placeholder="55859..., 55119..."
+                                        />
+                                        <span className="text-[8px] text-gray-400 block mt-0.5 font-medium">Estes números NUNCA receberão este funil.</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Horário Comercial */}
+                            <button
+                                onClick={() => setShowBusinessHours(!showBusinessHours)}
+                                className={`w-full flex items-center justify-between text-[10px] font-bold uppercase transition ${showBusinessHours ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
+                            >
+                                <span className="flex items-center gap-1.5"><FiCalendar size={12} /> Horário Comercial</span>
+                                {showBusinessHours ? <FiChevronUp /> : <FiChevronDown />}
+                            </button>
+
+                            {showBusinessHours && (
+                                <div className="mt-2 space-y-3 animate-fade-in bg-gray-50/50 dark:bg-gray-900/30 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[8px] font-black text-gray-400 uppercase mb-1 block">Início</label>
+                                            <input
+                                                type="time"
+                                                className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-xs font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                                                value={businessHoursStart}
+                                                onChange={(e) => setBusinessHoursStart(e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[8px] font-black text-gray-400 uppercase mb-1 block">Fim</label>
+                                            <input
+                                                type="time"
+                                                className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-xs font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                                                value={businessHoursEnd}
+                                                onChange={(e) => setBusinessHoursEnd(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[8px] font-black text-gray-400 uppercase mb-1 block">Dias da Semana</label>
+                                        <div className="flex flex-wrap gap-1">
+                                            {[
+                                                { id: 0, label: 'S' },
+                                                { id: 1, label: 'T' },
+                                                { id: 2, label: 'Q' },
+                                                { id: 3, label: 'Q' },
+                                                { id: 4, label: 'S' },
+                                                { id: 5, label: 'S' },
+                                                { id: 6, label: 'D' }
+                                            ].map((day) => {
+                                                const isActive = businessHoursDays.includes(day.id);
+                                                return (
+                                                    <button
+                                                        key={day.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isActive) {
+                                                                setBusinessHoursDays(businessHoursDays.filter(d => d !== day.id));
+                                                            } else {
+                                                                setBusinessHoursDays([...businessHoursDays, day.id].sort());
+                                                            }
+                                                        }}
+                                                        className={`w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold transition-all ${
+                                                            isActive 
+                                                            ? 'bg-blue-500 text-white shadow-sm' 
+                                                            : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700 hover:border-blue-200'
+                                                        }`}
+                                                    >
+                                                        {day.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="text-[8px] text-gray-400 italic leading-snug">
+                                        Filtro aplicado nos nós com "Apenas Horário Comercial" ativado. Mensagens fora deste período serão puladas.
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Panel>
+
+                    <Panel position="top-right" className="flex gap-2">
+                        {onBack && !isFullScreen && (
+                            <button onClick={onBack} className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg shadow border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium">
+                                <FiArrowLeft /> Voltar para Lista
+                            </button>
+                        )}
+                        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition font-bold">
+                            <FiSave /> {saving ? 'Salvando...' : 'Salvar Fluxo'}
                         </button>
-                    )}
-                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition font-bold">
-                        <FiSave /> {saving ? 'Salvando...' : 'Salvar Fluxo'}
-                    </button>
-                    <button onClick={toggleFullScreen} className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg shadow hover:bg-gray-200 transition">
-                        {isFullScreen ? <FiMinimize /> : <FiMaximize />}
-                    </button>
-                </Panel>
+                        <button onClick={toggleFullScreen} className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg shadow hover:bg-gray-200 transition">
+                            {isFullScreen ? <FiMinimize /> : <FiMaximize />}
+                        </button>
+                    </Panel>
 
-                {menu && <ContextMenu top={menu.top} left={menu.left} onClose={() => setMenu(null)} onAddNode={handleAddNode} />}
+                    {menu && <ContextMenu top={menu.top} left={menu.left} onClose={() => setMenu(null)} onAddNode={handleAddNode} />}
 
-                <Panel position="bottom-center" className="bg-white/80 dark:bg-gray-800/80 backdrop-blur px-4 py-2 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm mb-4">
-                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
-                        <FiPlus /> Clique com o Botão Direito para adicionar novos nós
-                    </span>
-                </Panel>
+                    <Panel position="bottom-center" className="bg-white/80 dark:bg-gray-800/80 backdrop-blur px-4 py-2 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm mb-4">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
+                            <FiPlus /> Clique com o Botão Direito para adicionar novos nós
+                        </span>
+                    </Panel>
 
-                <ConfirmModal
-                    isOpen={!!nodeToDelete}
-                    onClose={cancelDelete}
-                    onConfirm={confirmDelete}
-                    title="Excluir Nó"
-                    message="Tem certeza que deseja excluir este nó? Esta ação não pode ser desfeita."
-                    confirmText="Excluir"
-                    cancelText="Cancelar"
-                    isDangerous={true}
-                    container={portalContainer || document.body}
-                />
-            </ReactFlow>
-        </div>
+                    <ConfirmModal
+                        isOpen={!!nodeToDelete}
+                        onClose={cancelDelete}
+                        onConfirm={confirmDelete}
+                        title="Excluir Nó"
+                        message="Tem certeza que deseja excluir este nó? Esta ação não pode ser desfeita."
+                        confirmText="Excluir"
+                        cancelText="Cancelar"
+                        isDangerous={true}
+                        container={portalContainer || document.body}
+                    />
+                </ReactFlow>
+            </div>
+        </GlobalVarsContext.Provider>
     );
 };
 
 // --- Main Wrapper ---
-const VisualFlowBuilder = ({ funnelId, onBack, onSave }) => {
+const VisualFlowBuilder = ({ funnelId, onBack, onSave, refreshKey }) => {
     const validId = funnelId || 1;
     const wrapperRef = useRef(null);
     const [isFullScreen, setIsFullScreen] = useState(false);
@@ -1824,6 +2268,7 @@ const VisualFlowBuilder = ({ funnelId, onBack, onSave }) => {
                         toggleFullScreen={toggleFullScreen}
                         onBack={onBack}
                         onSave={onSave}
+                        refreshKey={refreshKey}
                     />
                 </ReactFlowProvider>
             </PortalContext.Provider>

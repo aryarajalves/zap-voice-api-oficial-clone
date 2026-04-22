@@ -188,18 +188,17 @@ const TemplatePreview = ({ template, params = {} }) => {
     );
 };
 
-export default function TemplateBulkSender({ onViewChange }) {
+export default function TemplateBulkSender({ onViewChange, refreshKey }) {
     const { activeClient } = useClient();
     const [step, setStep] = useState(1); // 1: Config, 2: Contacts & Send
     const [templates, setTemplates] = useState([]);
+    const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState('');
     const [templateParams, setTemplateParams] = useState({});
-    const [templateCategory, setTemplateCategory] = useState('OTHERS');
-
     // A/B Testing
-    const [isABTesting, setIsABTesting] = useState(false);
+    const [isABTesting] = useState(false);
     const [variations, setVariations] = useState([
-        { id: 'v1', template: '', params: {}, weight: 50, cost: 0.0, category: 'OTHERS', direct_message: '', private_message: '', private_message_delay: 5, private_message_concurrency: 1 }
+        { id: 'v1', template: '', params: {}, weight: 50, cost: 0.0, category: 'OTHERS', direct_message: '', private_message: '', private_message_delay: 15, private_message_concurrency: 1 }
     ]);
 
     // Exclusion List
@@ -209,23 +208,34 @@ export default function TemplateBulkSender({ onViewChange }) {
     const [exclusionCsvData, setExclusionCsvData] = useState(null);
     const [exclusionColSelector, setExclusionColSelector] = useState(false);
     const [exclusionSelectedCol, setExclusionSelectedCol] = useState(null);
+    const [exclusionAvailableTags, setExclusionAvailableTags] = useState([]);
+    const [selectedExclusionTag, setSelectedExclusionTag] = useState('');
+    const [isLoadingExclusionTags, setIsLoadingExclusionTags] = useState(false);
+
+    // --- RECURRENCE STATES ---
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [recurrenceFrequency, setRecurrenceFrequency] = useState('weekly');
+    const [recurrenceDaysOfWeek, setRecurrenceDaysOfWeek] = useState([]); // [{day: 0, time: '09:00'}]
+    const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(""); // "1, 15, 30"
+    const [recurrenceTime, setRecurrenceTime] = useState("09:00");
+    const [recurringDispatches, setRecurringDispatches] = useState([]);
+    const [isLoadingRecurring, setIsLoadingRecurring] = useState(false);
 
     // Automation / Smart Logic
-    const [directMessageText, setDirectMessageText] = useState('');
-    const [directMessageButtons, setDirectMessageButtons] = useState([]);
     const [sendPrivateMessage, setSendPrivateMessage] = useState(false);
     const [privateMessageText, setPrivateMessageText] = useState('');
-    const [privateMessageDelay, setPrivateMessageDelay] = useState(5);
+    const [privateMessageDelay, setPrivateMessageDelay] = useState(15);
     const [privateMessageConcurrency, setPrivateMessageConcurrency] = useState(1);
 
     // Contacts & Execution
     const [finalContacts, setFinalContacts] = useState([]);
+    const [selectionMetadata, setSelectionMetadata] = useState({ mode: 'manual', tag: '' });
     const [isSending, setIsSending] = useState(false);
     const [currentTriggerId, setCurrentTriggerId] = useState(null);
     const [progress, setProgress] = useState(null);
-    const [delaySeconds, setDelaySeconds] = useState(5);
+    const [delaySeconds, setDelaySeconds] = useState(1);
     const [delayUnit, setDelayUnit] = useState('seconds');
-    const [concurrency, setConcurrency] = useState(1);
+    const [concurrency, setConcurrency] = useState(4);
     const [costPerUnit, setCostPerUnit] = useState(0.0);
     const [scheduledTime, setScheduledTime] = useState('');
 
@@ -236,6 +246,7 @@ export default function TemplateBulkSender({ onViewChange }) {
     const [expansion, setExpansion] = useState({ isOpen: false, title: '', key: '', value: '' });
     const [isWorking, setIsWorking] = useState(false);
     const [workingMessage, setWorkingMessage] = useState('');
+    const [isBulkGuideOpen, setIsBulkGuideOpen] = useState(false);
 
     /** 
      * Logic to detect category and price automatically
@@ -255,39 +266,149 @@ export default function TemplateBulkSender({ onViewChange }) {
         templates.find(t => t.name === selectedTemplate),
         [templates, selectedTemplate]);
 
+    const templateVariables = useMemo(() => {
+        if (!selectedTemplateObj) return [];
+        const seen = new Set();
+        const vars = [];
+        selectedTemplateObj.components?.forEach(c => {
+            if (!c.text) return;
+            const matches = [...c.text.matchAll(/\{\{(\d+)\}\}/g)];
+            matches.forEach(match => {
+                const varNum = parseInt(match[1]);
+                const key = `${c.type}_${varNum - 1}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    vars.push({ key, label: `{{${varNum}}}` });
+                }
+            });
+        });
+        return vars;
+    }, [selectedTemplateObj]);
+
     // WebSocket for Progress removed per user request - Monitoring via History tab
     useEffect(() => {
         setIsSending(false);
+
+        // Fetch unique tags for exclusion filter
+        const loadExclusionTags = async () => {
+            if (!activeClient) return;
+            setIsLoadingExclusionTags(true);
+            try {
+                const res = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
+                if (res.ok) {
+                    const data = await res.json();
+                    setExclusionAvailableTags(data.tags || []);
+                }
+            } catch (err) {
+                console.error("Erro ao carregar etiquetas para exclusão:", err);
+            } finally {
+                setIsLoadingExclusionTags(false);
+            }
+        };
+        loadExclusionTags();
     }, [activeClient]);
+
+    // Fetch recurring dispatches
+    useEffect(() => {
+        const loadRecurring = async () => {
+            if (!activeClient) return;
+            setIsLoadingRecurring(true);
+            try {
+                const res = await fetchWithAuth(`${API_URL}/schedules/recurring`, {}, activeClient.id);
+                if (res.ok) {
+                    const data = await res.json();
+                    setRecurringDispatches(data.items || []);
+                }
+            } catch (err) {
+                console.error("Erro ao carregar disparos recorrentes:", err);
+            } finally {
+                setIsLoadingRecurring(false);
+            }
+        };
+        loadRecurring();
+    }, [activeClient]);
+
+    const toggleRecurringStatus = async (id) => {
+        try {
+            const res = await fetchWithAuth(`${API_URL}/schedules/recurring/${id}/toggle`, {
+                method: 'PATCH'
+            }, activeClient.id);
+            if (res.ok) {
+                const data = await res.json();
+                setRecurringDispatches(prev => prev.map(rd => rd.id === id ? { ...rd, is_active: data.is_active } : rd));
+                toast.success(data.message);
+            }
+        } catch (err) {
+            toast.error("Erro ao alterar status");
+        }
+    };
+
+    const deleteRecurringDispatch = async (id) => {
+        if (!confirm("Deseja realmente excluir este disparo recorrente?")) return;
+        try {
+            const res = await fetchWithAuth(`${API_URL}/schedules/recurring/${id}`, {
+                method: 'DELETE'
+            }, activeClient.id);
+            if (res.ok) {
+                setRecurringDispatches(prev => prev.filter(rd => rd.id !== id));
+                toast.success("Excluído com sucesso");
+            }
+        } catch (err) {
+            toast.error("Erro ao excluir");
+        }
+    };
 
     useEffect(() => {
         const loadTemplates = async () => {
+            if (!activeClient) return;
+            setIsLoadingTemplates(true);
             try {
                 const res = await fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient?.id);
                 if (res.ok) {
                     const data = await res.json();
-                    setTemplates(data || []);
+                    // Filter APPROVED and ACTIVE only
+                    const approved = (data || []).filter(t => ['APPROVED', 'ACTIVE'].includes(t.status));
+                    setTemplates(approved);
                 }
             } catch (err) {
                 console.error('Failed to load templates', err);
+            } finally {
+                setIsLoadingTemplates(false);
             }
         };
         loadTemplates();
-    }, [activeClient]);
+    }, [activeClient, refreshKey]);
 
     const handleTemplateChange = (e) => {
         const val = e.target.value;
         setSelectedTemplate(val);
         const info = getTemplateCategoryInfo(val);
         setCostPerUnit(info.price);
-        setTemplateCategory(info.key);
+
+        // Reset fields that depend on the template
+        setDirectMessageText('');
+        setDirectMessageButtons([]);
+        setPrivateMessageText('');
 
         const t = templates.find(x => x.name === val);
         if (t) {
             const initialParams = {};
             t.components?.forEach(c => {
+                // Extrai variáveis do texto via regex (fonte da verdade)
+                if (c.text) {
+                    const seen = new Set();
+                    [...c.text.matchAll(/\{\{(\d+)\}\}/g)].forEach(match => {
+                        const varNum = parseInt(match[1]);
+                        if (!seen.has(varNum)) {
+                            seen.add(varNum);
+                            initialParams[`${c.type}_${varNum - 1}`] = '';
+                        }
+                    });
+                }
+                // fallback legado
                 c.variables?.forEach((v, idx) => {
-                    initialParams[`${c.type}_${idx}`] = '';
+                    const key = `${c.type}_${idx}`;
+                    if (!(key in initialParams)) initialParams[key] = '';
                 });
             });
             setTemplateParams(initialParams);
@@ -296,7 +417,7 @@ export default function TemplateBulkSender({ onViewChange }) {
 
     const handleAddVariation = () => {
         const newId = `v${variations.length + 1}`;
-        setVariations([...variations, { id: newId, template: '', params: {}, weight: 50, cost: 0.0, category: 'OTHERS', direct_message: '', private_message: '', private_message_delay: 5, private_message_concurrency: 1 }]);
+        setVariations([...variations, { id: newId, template: '', params: {}, weight: 50, cost: 0.0, category: 'OTHERS', direct_message: '', private_message: '', private_message_delay: 15, private_message_concurrency: 1 }]);
     };
 
     const handleRemoveVariation = (id) => {
@@ -316,8 +437,18 @@ export default function TemplateBulkSender({ onViewChange }) {
                     const t = templates.find(x => x.name === value);
                     updated.params = {};
                     t?.components?.forEach(c => {
+                        const seen = new Set();
+                        [... (c.text || '').matchAll(/\{\{(\d+)\}\}/g)].forEach(match => {
+                             const varNum = parseInt(match[1]);
+                             if (!seen.has(varNum)) {
+                                 seen.add(varNum);
+                                 updated.params[`${c.type}_${varNum - 1}`] = '';
+                             }
+                        });
+                        // Safe fallback for legacy
                         c.variables?.forEach((vars, idx) => {
-                            updated.params[`${c.type}_${idx}`] = '';
+                            const key = `${c.type}_${idx}`;
+                            if (!(key in updated.params)) updated.params[key] = '';
                         });
                     });
                 }
@@ -345,18 +476,29 @@ export default function TemplateBulkSender({ onViewChange }) {
     };
 
     const saveExpansion = (key, val) => {
-        if (key === 'directMessageText') setDirectMessageText(val);
-        else if (key === 'privateMessageText') setPrivateMessageText(val);
+        if (key === 'privateMessageText') setPrivateMessageText(val);
         else if (key.startsWith('param_')) {
             const paramKey = key.replace('param_', '');
             setTemplateParams(prev => ({ ...prev, [paramKey]: val }));
-        } else if (key.startsWith('ab_dm_')) {
-            const varId = key.replace('ab_dm_', '');
-            handleUpdateVariation(varId, 'direct_message', val);
         } else if (key.startsWith('ab_pm_')) {
             const varId = key.replace('ab_pm_', '');
             handleUpdateVariation(varId, 'private_message', val);
         }
+    };
+
+    const cloneToPrivateNote = (vId = null) => {
+        const tObj = vId ? templates.find(t => t.name === variations.find(v => v.id === vId)?.template) : selectedTemplateObj;
+        if (!tObj) return toast.error("Selecione um template primeiro");
+
+        const body = tObj.components?.find(c => c.type === 'BODY')?.text || '';
+        
+        if (vId) {
+            setVariations(variations.map(v => v.id === vId ? { ...v, private_message: body } : v));
+        } else {
+            setPrivateMessageText(body);
+            setSendPrivateMessage(true);
+        }
+        toast.success("Texto do template clonado para Nota Privada!");
     };
 
     const handleSaveExclusion = () => {
@@ -455,6 +597,34 @@ export default function TemplateBulkSender({ onViewChange }) {
         toast.success("DDI 55 adicionado a todos os números da exclusão!");
     };
 
+    const loadExclusionContactsByTag = async () => {
+        if (!selectedExclusionTag) return toast.error("Selecione uma etiqueta primeiro");
+        if (!activeClient) return toast.error("Selecione um cliente primeiro");
+
+        setWorkingMessage(`Buscando contatos da etiqueta "${selectedExclusionTag}" para exclusão...`);
+        setIsWorking(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/leads?tag=${encodeURIComponent(selectedExclusionTag)}&limit=10000`, {}, activeClient.id);
+            if (res.ok) {
+                const data = await res.json();
+                const phones = (data.items || []).map(lead => lead.phone.replace(/\D/g, '')).filter(p => p.length >= 8);
+
+                if (phones.length === 0) {
+                    toast.error("Nenhum contato encontrado com esta etiqueta");
+                    return;
+                }
+
+                setExclusionList(prev => [...new Set([...prev, ...phones])]);
+                toast.success(`${phones.length} contatos da etiqueta adicionados à exclusão!`);
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Erro ao buscar contatos por etiqueta");
+        } finally {
+            setIsWorking(false);
+        }
+    };
+
     const handleCopyFinalList = () => {
         if (finalContacts.length === 0) return toast.error("Nenhum contato na lista final!");
         const text = finalContacts.map(c => c.phone).join('\n');
@@ -468,83 +638,59 @@ export default function TemplateBulkSender({ onViewChange }) {
         const payloadComponents = [];
 
         template.components.forEach(c => {
-            // Se o componente não tem variáveis identificadas no frontend,
-            // verificamos se o usuário preencheu algo nos params para ele.
-            // A lógica de parse de variáveis {{1}} deve ter populado c.variables anteriormente.
-            // Se não tiver c.variables, assumimos que não precisa enviar (texto fixo).
-
-            // Exceção: Header de Mídia sempre precisa enviar se for imagem/video escolhido
             const isMediaHeader = c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format);
 
-            // Botões são tratados de forma especial pela Meta
             if (c.type === 'BUTTONS') {
                 c.buttons?.forEach((btn, idx) => {
-                    // Checar se é botão de URL dinâmica (único que suporta variável nativa de envio em massa simples)
                     if (btn.type === 'URL' && btn.url?.includes('{{1}}')) {
-                        const paramVal = params[`BUTTONS_${idx}`] || ''; // Ajustar chave conforme lógica de estado
+                        const paramVal = params[`BUTTONS_${idx}`] || '';
                         if (paramVal) {
                             payloadComponents.push({
                                 type: 'button',
                                 sub_type: 'url',
                                 index: idx,
-                                parameters: [
-                                    { type: 'text', text: paramVal }
-                                ]
+                                parameters: [{ type: 'text', text: paramVal }]
                             });
                         }
                     }
-                    // Copy Code ou Quick Reply fixos não mandam payload
                 });
                 return;
             }
 
-            const componentPayload = {
-                type: c.type.toLowerCase(),
-                parameters: []
-            };
+            const componentPayload = { type: c.type.toLowerCase(), parameters: [] };
 
-            // Adiciona parâmetros baseados nas variáveis
-            if (c.variables && c.variables.length > 0) {
+            // Extrai {{N}} do texto via regex (fonte da verdade, igual ao templateVariables)
+            if (c.text) {
+                const seen = new Set();
+                const matches = [...c.text.matchAll(/\{\{(\d+)\}\}/g)];
+                matches.forEach(match => {
+                    const varNum = parseInt(match[1]);
+                    if (!seen.has(varNum)) {
+                        seen.add(varNum);
+                        const val = params[`${c.type}_${varNum - 1}`] || '';
+                        componentPayload.parameters.push({ type: 'text', text: val });
+                    }
+                });
+            } else if (c.variables && c.variables.length > 0) {
+                // fallback legado
                 c.variables.forEach((v, idx) => {
                     const val = params[`${c.type}_${idx}`] || '';
                     componentPayload.parameters.push({ type: 'text', text: val });
                 });
             } else if (isMediaHeader && params[`${c.type}_0`]) {
-                // Header de mídia sem variáveis de texto, mas com URL
                 const val = params[`${c.type}_0`];
                 const typeName = c.format.toLowerCase();
-                // Create media object key (image, video, document)
                 const mediaObj = {};
                 mediaObj[typeName === 'document' ? 'document' : typeName] = { link: val };
-
-                componentPayload.parameters.push({
-                    type: typeName,
-                    ...mediaObj
-                });
+                componentPayload.parameters.push({ type: typeName, ...mediaObj });
             }
 
-            // SÓ ADICIONA SE TIVER PARÂMETROS
             if (componentPayload.parameters.length > 0) {
                 payloadComponents.push(componentPayload);
             }
         });
 
         return payloadComponents;
-    };
-
-    const handleAddDirectMessageButton = () => {
-        if (directMessageButtons.length >= 3) return toast.error('Máximo de 3 botões');
-        setDirectMessageButtons([...directMessageButtons, '']);
-    };
-
-    const handleRemoveDirectMessageButton = (index) => {
-        setDirectMessageButtons(directMessageButtons.filter((_, i) => i !== index));
-    };
-
-    const handleDirectMessageButtonChange = (index, value) => {
-        const newButtons = [...directMessageButtons];
-        newButtons[index] = value;
-        setDirectMessageButtons(newButtons);
     };
 
     const handleSend = async () => {
@@ -562,7 +708,17 @@ export default function TemplateBulkSender({ onViewChange }) {
 
         console.log('🚀 Initiating send with', contactsToUse.length, 'contacts');
 
-        const finalPhoneList = contactsToUse.map(c => c.phone);
+        // Build contacts list: with per-contact components if any contact has variables
+        const hasPerContactVars = contactsToUse.some(c => c.variables && Object.keys(c.variables).length > 0);
+        const finalPhoneList = hasPerContactVars
+            ? contactsToUse.map(c => {
+                if (!c.variables || Object.keys(c.variables).length === 0) return c.phone;
+                const mergedParams = { ...templateParams, ...c.variables };
+                const perContactComponents = buildComponentsPayload(selectedTemplateObj, mergedParams);
+                return perContactComponents.length > 0 ? { phone: c.phone, components: perContactComponents } : c.phone;
+            })
+            : contactsToUse.map(c => c.phone);
+
         const scheduleAt = scheduledTime ? new Date(scheduledTime).toISOString() : new Date().toISOString();
 
         // Convert delay to seconds for API
@@ -609,8 +765,8 @@ export default function TemplateBulkSender({ onViewChange }) {
                 language: selectedTemplateObj?.language || 'pt_BR',
                 cost_per_unit: costPerUnit,
                 components: buildComponentsPayload(selectedTemplateObj, templateParams),
-                direct_message: directMessageText || null,
-                direct_message_params: directMessageButtons.length > 0 ? { buttons: directMessageButtons } : {},
+                direct_message: null,
+                direct_message_params: {},
                 private_message: sendPrivateMessage ? privateMessageText : null,
                 private_message_delay: finalPrivateMessageDelay,
                 private_message_concurrency: privateMessageConcurrency
@@ -619,16 +775,49 @@ export default function TemplateBulkSender({ onViewChange }) {
 
         try {
             console.log('📡 Sending payload:', payload);
-            const res = await fetchWithAuth(`${API_URL}/bulk-send/schedule`, {
+            
+            const endpoint = isRecurring ? `${API_URL}/schedules/recurring` : `${API_URL}/bulk-send/schedule`;
+            
+            // Reusing recurrenceDaysOfWeek state for both weekly and monthly but sending to specific fields
+            const finalDaysOfWeek = isRecurring && recurrenceFrequency === 'weekly' ? recurrenceDaysOfWeek : [];
+            const finalDaysOfMonth = isRecurring && recurrenceFrequency === 'monthly' ? recurrenceDaysOfWeek : [];
+
+            const recurringPayload = isRecurring ? {
+                frequency: recurrenceFrequency,
+                days_of_week: finalDaysOfWeek, // Agora suporta [{day, time}]
+                day_of_month: finalDaysOfMonth, // Agora suporta [{day, time}]
+                scheduled_time: recurrenceTime,
+                funnel_id: null, // To be extended if needed
+                template_name: selectedTemplate,
+                template_language: selectedTemplateObj?.language || 'pt_BR',
+                template_components: buildComponentsPayload(selectedTemplateObj, templateParams),
+                contacts_list: selectionMetadata.mode === 'tag' ? null : finalPhoneList,
+                tag: selectionMetadata.mode === 'tag' ? selectionMetadata.tag : null,
+                exclusion_list: exclusionList,
+                delay_seconds: finalDelaySeconds,
+                concurrency_limit: concurrency,
+                private_message: sendPrivateMessage ? privateMessageText : null,
+                private_message_delay: finalPrivateMessageDelay,
+                private_message_concurrency: privateMessageConcurrency,
+                is_active: true
+            } : payload;
+
+            const res = await fetchWithAuth(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(recurringPayload)
             }, activeClient.id);
 
             if (res.ok) {
                 const data = await res.json();
-                setCurrentTriggerId(data.trigger_id);
-                toast.success(scheduledTime ? 'Disparo agendado com sucesso! 📅' : 'Disparo iniciado com sucesso! 🚀');
+                if (isRecurring) {
+                    toast.success('Disparo recorrente criado com sucesso! 🔄');
+                    // Add to list and clear
+                    setRecurringDispatches(prev => [data, ...prev]);
+                } else {
+                    setCurrentTriggerId(data.trigger_id);
+                    toast.success(scheduledTime ? 'Disparo agendado com sucesso! 📅' : 'Disparo iniciado com sucesso! 🚀');
+                }
 
                 // Reset states
                 setSelectedTemplate('');
@@ -639,12 +828,17 @@ export default function TemplateBulkSender({ onViewChange }) {
                 // Redirect to History View
                 if (onViewChange) onViewChange('history');
             } else {
-                const err = await res.json();
-                toast.error(err.detail || 'Erro ao agendar disparo');
+                let errorData = { detail: 'Erro ao agendar disparo' };
+                try {
+                    errorData = await res.json();
+                } catch (e) {
+                    console.error("Erro ao ler JSON de erro:", e);
+                }
+                toast.error(errorData.detail || 'Erro ao agendar disparo');
             }
         } catch (err) {
-            console.error('Send error:', err);
-            toast.error('Erro de conexão ao iniciar disparo');
+            console.error('Send error details:', err);
+            toast.error(`Erro de conexão: ${err.message || 'Falha ao iniciar disparo'}`);
         } finally {
             setIsSending(false);
         }
@@ -668,7 +862,19 @@ export default function TemplateBulkSender({ onViewChange }) {
             {/* Header com Stepper */}
             <div className="bg-slate-900/40 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-black text-white tracking-tight">Disparo em Massa <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">Pro</span></h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-3xl font-black text-white tracking-tight">Disparo em Massa <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">Pro</span></h1>
+                        <button
+                            type="button"
+                            onClick={() => setIsBulkGuideOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all hover:scale-105"
+                            style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }}
+                            title="Abrir guia do Disparo em Massa"
+                        >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                            Guia
+                        </button>
+                    </div>
                     <p className="text-slate-400 font-medium">Configure e execute disparos inteligentes em massa com IA.</p>
                 </div>
 
@@ -700,61 +906,49 @@ export default function TemplateBulkSender({ onViewChange }) {
                     <section className="bg-slate-900/60 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-white/5 overflow-hidden relative group/section">
                         <div className="hidden"></div>
 
-                        <div className="flex items-center justify-between mb-8 relative z-10">
-                            <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                                <span className="p-2 bg-green-500/10 text-green-400 rounded-xl border border-green-500/20">01</span>
-                                Template Oficial
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10 relative z-10 px-2">
+                            <h2 className="text-2xl font-black text-white flex items-center gap-4">
+                                <span className="p-3 bg-green-500/10 text-green-400 rounded-2xl border border-green-500/20 shadow-xl shadow-green-500/10">01</span>
+                                Configuração de Template
                             </h2>
-                            <label className="flex items-center gap-3 cursor-pointer group px-4 py-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-white/10">
-                                <input
-                                    type="checkbox"
-                                    className="w-5 h-5 rounded border-slate-700 bg-slate-800 text-green-500 focus:ring-green-500/50 transition-all"
-                                    checked={isABTesting}
-                                    onChange={(e) => {
-                                        const checked = e.target.checked;
-                                        setIsABTesting(checked);
-                                        if (checked && variations.length === 1 && variations[0].template === '') {
-                                            setVariations([{
-                                                id: 'v1',
-                                                template: selectedTemplate,
-                                                params: { ...templateParams },
-                                                weight: 100,
-                                                cost: costPerUnit,
-                                                category: templateCategory,
-                                                direct_message: directMessageText,
-                                                private_message: privateMessageText
-                                            }]);
-                                        }
-                                    }}
-                                />
-                                <span className="text-sm font-bold text-slate-400 group-hover:text-green-400 transition-colors">Modo Teste A/B</span>
-                            </label>
                         </div>
 
                         {isABTesting ? (
-                            <div className="space-y-8 relative z-10">
-                                <div className="p-5 bg-blue-500/10 text-blue-300 rounded-2xl text-sm border border-blue-500/20 flex items-start gap-4 backdrop-blur-sm">
-                                    <span className="text-xl">✨</span>
-                                    <p className="leading-relaxed">O <b>Teste A/B</b> permite comparar múltiplos templates ao mesmo tempo, distribuindo os contatos automaticamente.</p>
+                            <div className="space-y-10 relative z-10">
+                                <div className="p-6 bg-gradient-to-r from-blue-500/10 to-teal-500/10 text-blue-300 rounded-[2rem] text-sm border border-blue-500/20 flex items-center gap-5 backdrop-blur-md shadow-2xl">
+                                    <div className="p-3 bg-blue-500/20 rounded-2xl text-2xl">✨</div>
+                                    <p className="leading-relaxed font-medium">O <b>Modo A/B</b> distribui seus contatos entre diferentes templates. Defina o <b>Peso (%)</b> para controlar a proporção de cada variação no disparo total.</p>
                                 </div>
 
                                 {variations.map((v, vIdx) => {
                                     const vTemplate = templates.find(t => t.name === v.template);
                                     const vInfo = getTemplateCategoryInfo(v.template);
                                     return (
-                                        <div key={v.id} className="p-6 bg-slate-800/30 rounded-[2rem] border border-white/5 space-y-6 relative animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest bg-slate-900/50 px-3 py-1.5 rounded-lg border border-white/5">Variação #{vIdx + 1}</span>
-                                                    {v.template && (
-                                                        <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-lg border border-blue-500/20">
-                                                            {vInfo.type} - R$ {vInfo.price.toFixed(2)}
-                                                        </span>
-                                                    )}
+                                        <div key={v.id} className="group/var p-8 bg-slate-800/20 hover:bg-slate-800/40 rounded-[3rem] border border-white/5 hover:border-green-500/20 transition-all duration-500 relative animate-in fade-in slide-in-from-top-4 shadow-xl hover:shadow-green-500/5">
+                                            <div className="flex items-center justify-between mb-8">
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-12 h-12 flex items-center justify-center bg-slate-900 rounded-2xl text-xl font-black text-white border border-white/10 group-hover/var:bg-green-600 transition-colors">
+                                                        {vIdx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Variação de Template</h3>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-lg font-bold text-white tracking-tight">{v.template || 'Não selecionado'}</span>
+                                                            {v.template && (
+                                                                <span className="text-[9px] font-black text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 uppercase tracking-wider">
+                                                                    {vInfo.type} • R$ {vInfo.price.toFixed(2)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 {variations.length > 1 && (
-                                                    <button onClick={() => handleRemoveVariation(v.id)} className="text-red-400 hover:text-red-500 transition-colors p-2 bg-red-500/10 rounded-xl border border-red-500/20">
-                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                                                    <button
+                                                        onClick={() => handleRemoveVariation(v.id)}
+                                                        className="w-12 h-12 flex items-center justify-center text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 rounded-2xl transition-all border border-red-500/10 shadow-lg"
+                                                        title="Remover esta variação"
+                                                    >
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                                                     </button>
                                                 )}
                                             </div>
@@ -771,11 +965,13 @@ export default function TemplateBulkSender({ onViewChange }) {
                                                                 onChange={(e) => handleUpdateVariation(v.id, 'template', e.target.value)}
                                                             >
                                                                 <option value="" className="bg-slate-900">-- Escolha --</option>
-                                                                {templates.map(t => (
-                                                                    <option key={t.name} value={t.name} className="bg-slate-900">
-                                                                        {t.name} ({getTemplateCategoryInfo(t.name).type})
-                                                                    </option>
-                                                                ))}
+                                                                {templates
+                                                                    .filter(t => ['APPROVED', 'ACTIVE'].includes(t.status))
+                                                                    .map(t => (
+                                                                        <option key={t.name} value={t.name} className="bg-slate-900">
+                                                                            {t.name} ({getTemplateCategoryInfo(t.name).type})
+                                                                        </option>
+                                                                    ))}
                                                             </select>
                                                         </div>
                                                         <div>
@@ -817,6 +1013,15 @@ export default function TemplateBulkSender({ onViewChange }) {
                                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
                                                                 Verificação de Envio Inteligente (24h)
                                                             </label>
+                                                            <div className="flex justify-end mb-2">
+                                                                <button
+                                                                    onClick={() => cloneToSmartSend(v.id)}
+                                                                    className="text-[8px] font-black text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 rounded border border-blue-500/20 transition-all flex items-center gap-1 uppercase"
+                                                                >
+                                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
+                                                                    Clonar Template
+                                                                </button>
+                                                            </div>
                                                             <div className="relative group/field-sm">
                                                                 <textarea
                                                                     className="w-full p-3 bg-slate-900/40 border border-slate-700/50 rounded-xl focus:border-blue-500/50 outline-none text-white text-xs min-h-[80px]"
@@ -881,6 +1086,15 @@ export default function TemplateBulkSender({ onViewChange }) {
                                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                                                                     Nota Interna (Chatwoot)
                                                                 </label>
+                                                                <div className="flex justify-end mb-2">
+                                                                    <button
+                                                                        onClick={() => cloneToPrivateNote(v.id)}
+                                                                        className="text-[8px] font-black text-orange-400 hover:text-white bg-orange-500/10 hover:bg-orange-500/20 px-2 py-1 rounded border border-orange-500/20 transition-all flex items-center gap-1 uppercase"
+                                                                    >
+                                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
+                                                                        Clonar Template
+                                                                    </button>
+                                                                </div>
                                                                 <div className="relative group/field-pm">
                                                                     <textarea
                                                                         className="w-full p-3 bg-slate-900/40 border border-slate-700/50 rounded-xl focus:border-orange-500/50 outline-none text-white text-xs min-h-[80px]"
@@ -956,7 +1170,9 @@ export default function TemplateBulkSender({ onViewChange }) {
                                             value={selectedTemplate}
                                             onChange={handleTemplateChange}
                                         >
-                                            <option value="" className="bg-slate-900">-- Escolha um template cadastrado --</option>
+                                            <option value="" className="bg-slate-900">
+                                                {isLoadingTemplates ? "Carregando templates..." : "-- Escolha um template cadastrado --"}
+                                            </option>
                                             {templates.map(t => (
                                                 <option key={t.name} value={t.name} className="bg-slate-900">
                                                     {t.name} ({getTemplateCategoryInfo(t.name).type})
@@ -1013,152 +1229,94 @@ export default function TemplateBulkSender({ onViewChange }) {
                         )}
                     </section>
 
-                    {/* Bottom: Split Columns for Smart Send & Automation */}
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-                        {/* Left: Smart Send (if !AB) */}
-                        {!isABTesting && (
-                            <div className="xl:col-span-7">
-                                <section className="bg-slate-900/60 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-white/5 group/direct">
-                                    <div className="flex items-center justify-between mb-8">
-                                        <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                                            <span className="p-2 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">02</span>
-                                            Envio Inteligente: Mensagem Direta
-                                        </h2>
-                                        <div className="text-[10px] font-black bg-blue-500/20 text-blue-300 px-3 py-1.5 rounded-lg uppercase tracking-wider border border-blue-500/20 backdrop-blur-sm">Verificação de Janela 24h</div>
-                                    </div>
+                        {/* Automation Section (Now full width if not AB) */}
+                        <div className={`${!isABTesting ? 'xl:col-span-12' : 'xl:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8'}`}>
+                            <section className="bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-10 shadow-2xl border border-white/5 h-fit relative overflow-hidden group/auto">
+                                <div className="absolute -top-12 -right-12 w-32 h-32 bg-orange-500/5 blur-3xl rounded-full"></div>
 
-                                    <p className="text-sm text-slate-400 mb-6 font-medium leading-relaxed">Se houver uma interação recente (janela de 24h), enviaremos esta mensagem livre em vez do template oficial, economizando custos e tornando o papo mais natural.</p>
-
-                                    <div className="relative group/field">
-                                        <textarea
-                                            className="w-full p-6 pr-12 bg-slate-800/40 border-2 border-slate-700/50 rounded-3xl focus:border-blue-500/50 focus:bg-slate-800 outline-none transition-all text-white text-lg min-h-[160px] shadow-2xl placeholder:text-slate-600"
-                                            placeholder="Digite a mensagem direta (apenas texto ou lista de botões)..."
-                                            value={directMessageText}
-                                            onChange={(e) => setDirectMessageText(e.target.value)}
-                                        />
-                                        <button
-                                            onClick={() => openExpansion("Configuração - Mensagem Direta", "directMessageText", directMessageText)}
-                                            className="absolute bottom-5 right-5 p-3 bg-slate-700/60 backdrop-blur-md shadow-xl text-slate-400 hover:text-blue-400 rounded-2xl transition-all opacity-0 group-hover/field:opacity-100 border border-white/5 active:scale-95"
-                                            title="Maximizar"
-                                        >
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
-                                        </button>
-                                    </div>
-
-                                    <div className="mt-6 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Botões de Resposta (Opcional)</label>
-                                            <button
-                                                onClick={handleAddDirectMessageButton}
-                                                disabled={directMessageButtons.length >= 3}
-                                                className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 hover:bg-blue-500/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                            >
-                                                + ADICIONAR BOTÃO
-                                            </button>
-                                        </div>
-                                        <div className="space-y-3">
-                                            {directMessageButtons.map((btn, idx) => (
-                                                <div key={idx} className="flex gap-2 animate-in slide-in-from-left-2 duration-300">
-                                                    <input
-                                                        type="text"
-                                                        value={btn}
-                                                        onChange={(e) => handleDirectMessageButtonChange(idx, e.target.value)}
-                                                        placeholder={`Botão ${idx + 1}`}
-                                                        maxLength={20}
-                                                        className="flex-1 p-3 bg-slate-800/40 border border-slate-700/50 rounded-xl focus:border-blue-500/50 outline-none text-white text-sm"
-                                                    />
-                                                    <button
-                                                        onClick={() => handleRemoveDirectMessageButton(idx)}
-                                                        className="p-3 text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-xl border border-red-500/20 transition-all"
-                                                    >
-                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            {directMessageButtons.length === 0 && (
-                                                <div className="text-center p-4 border border-dashed border-slate-800 rounded-xl text-slate-600 text-xs italic">
-                                                    Nenhum botão adicionado. A mensagem será enviada apenas como texto.
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </section>
-                            </div>
-                        )}
-
-                        {/* Right: Automation */}
-                        <div className={`${!isABTesting ? 'xl:col-span-5 space-y-8' : 'xl:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8'}`}>
-                            <section className="bg-slate-900/60 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-white/5 h-fit">
-                                <div className="flex items-center gap-3 mb-8">
-                                    <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                                        <span className="p-2 bg-orange-500/10 text-orange-400 rounded-xl border border-orange-500/20">03</span>
-                                        Fluxo Pós-Envio
+                                <div className="flex items-center gap-4 mb-10 relative z-10">
+                                    <h2 className="text-2xl font-black text-white flex items-center gap-4">
+                                        <span className="p-3 bg-orange-500/10 text-orange-400 rounded-2xl border border-orange-500/20 shadow-xl shadow-orange-500/10">02</span>
+                                        Fluxo Automático Pós-Envio
                                     </h2>
+                                    <button
+                                        onClick={() => cloneToPrivateNote()}
+                                        className="text-[10px] font-black bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white px-4 py-2 rounded-xl uppercase tracking-widest border border-orange-500/20 backdrop-blur-md transition-all flex items-center gap-2"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
+                                        Clonar Template
+                                    </button>
                                 </div>
 
-                                <div className="space-y-6">
-                                    <label className={`flex items-center p-5 rounded-2xl cursor-pointer transition-all border-2 group ${sendPrivateMessage ? 'bg-orange-500/5 border-orange-500/30' : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800/60'}`}>
-                                        <div className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-500 ${sendPrivateMessage ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/40 rotate-6' : 'bg-slate-700 text-slate-500'}`}>
-                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                                <div className="space-y-8 relative z-10">
+                                    <label className={`flex items-center p-6 rounded-3xl cursor-pointer transition-all border-2 group/card ${sendPrivateMessage ? 'bg-orange-500/5 border-orange-500/30' : 'bg-slate-800/10 border-white/5 hover:border-white/10 hover:bg-slate-800/20'}`}>
+                                        <div className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all duration-700 ${sendPrivateMessage ? 'bg-orange-600 text-white shadow-2xl shadow-orange-900/40 rotate-6 scale-110' : 'bg-slate-800 text-slate-500'}`}>
+                                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
                                         </div>
-                                        <div className="ml-4 flex-1">
-                                            <div className={`font-bold transition-colors ${sendPrivateMessage ? 'text-white' : 'text-slate-400'}`}>Nota Privada Automatizada</div>
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Registro de histórico no Chatwoot</div>
+                                        <div className="ml-5 flex-1">
+                                            <div className={`text-lg font-black tracking-tight transition-colors ${sendPrivateMessage ? 'text-white' : 'text-slate-500'}`}>Nota Privada Automatizada</div>
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">Registro Automático Chatwoot</div>
+                                        </div>
+                                        <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${sendPrivateMessage ? 'bg-orange-600 border-orange-400' : 'bg-slate-900 border-slate-700'}`}>
+                                            {sendPrivateMessage && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-white"><path d="M20 6L9 17l-5-5" /></svg>}
                                         </div>
                                         <input
                                             type="checkbox"
-                                            className="w-6 h-6 rounded-lg border-slate-700 bg-slate-800 text-orange-500 focus:ring-orange-500/50 transition-all"
+                                            className="hidden"
                                             checked={sendPrivateMessage}
                                             onChange={(e) => setSendPrivateMessage(e.target.checked)}
                                         />
                                     </label>
 
                                     {sendPrivateMessage && !isABTesting && (
-                                        <div className="space-y-4 animate-in slide-in-from-top-3 fade-in duration-500">
+                                        <div className="space-y-6 animate-in slide-in-from-top-4 fade-in duration-500">
                                             <div className="relative group/field">
+                                                <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-3xl blur opacity-0 group-hover/field:opacity-100 transition duration-500"></div>
                                                 <textarea
-                                                    className="w-full p-5 pr-12 bg-slate-800/40 border-2 border-slate-700/50 rounded-2xl focus:border-orange-500/50 focus:bg-slate-800 outline-none transition-all text-slate-100 min-h-[130px] shadow-inner placeholder:text-slate-600"
-                                                    placeholder="Conteúdo que será registrado na conversa do cliente..."
+                                                    className="relative w-full p-6 pr-14 bg-black/40 border border-white/10 rounded-3xl focus:border-orange-500/40 outline-none transition-all text-slate-200 min-h-[140px] shadow-inner placeholder:text-slate-800 text-sm font-medium leading-relaxed"
+                                                    placeholder="Este conteúdo será visível apenas internamente no Chatwoot..."
                                                     value={privateMessageText}
                                                     onChange={(e) => setPrivateMessageText(e.target.value)}
                                                 />
                                                 <button
                                                     onClick={() => openExpansion("Configuração - Nota Privada (Chatwoot)", "privateMessageText", privateMessageText)}
-                                                    className="absolute bottom-4 right-4 p-2 bg-slate-700/50 backdrop-blur rounded-xl shadow-lg text-slate-400 hover:text-orange-400 hover:bg-slate-700 border border-white/5 transition-all opacity-0 group-hover/field:opacity-100"
+                                                    className="absolute bottom-5 right-5 p-3 bg-slate-800/80 backdrop-blur shadow-2xl text-slate-400 hover:text-orange-400 rounded-xl transition-all opacity-0 group-hover/field:opacity-100"
                                                 >
                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
                                                 </button>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="p-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl">
-                                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 ml-1">Delay de Registro</label>
-                                                    <div className="flex items-center gap-2 bg-slate-900/40 p-2 rounded-xl border border-white/5">
+                                            <div className="grid grid-cols-2 gap-5">
+                                                <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl group/param transition-all hover:bg-slate-800/60">
+                                                    <label className="block text-[9px] font-black text-slate-600 uppercase mb-3 px-1 tracking-widest group-hover/param:text-orange-400 transition-colors">Atrás do Envio</label>
+                                                    <div className="flex items-center gap-3 bg-black/40 p-2.5 rounded-2xl border border-white/5 shadow-inner">
                                                         <input
                                                             type="number"
-                                                            className="flex-1 bg-transparent outline-none text-white font-bold text-lg w-12"
+                                                            className="flex-1 bg-transparent outline-none font-black text-xl text-white tabular-nums w-12"
                                                             value={privateMessageDelay}
                                                             onChange={(e) => setPrivateMessageDelay(parseInt(e.target.value))}
                                                         />
                                                         <select
-                                                            className="bg-slate-700 text-[10px] font-bold text-slate-200 outline-none px-2 py-1 rounded-lg border border-white/10"
+                                                            className="bg-slate-700 text-[10px] font-black text-slate-200 outline-none px-3 py-1.5 rounded-xl border border-white/10"
                                                             value={privateMessageDelayUnit}
                                                             onChange={(e) => setPrivateMessageDelayUnit(e.target.value)}
                                                         >
-                                                            <option value="seconds">seg</option>
-                                                            <option value="minutes">min</option>
-                                                            <option value="hours">hr</option>
+                                                            <option value="seconds">SEG</option>
+                                                            <option value="minutes">MIN</option>
                                                         </select>
                                                     </div>
                                                 </div>
-                                                <div className="p-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl">
-                                                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 ml-1">Máx. Concorrência</label>
-                                                    <input
-                                                        type="number"
-                                                        className="w-full bg-transparent outline-none text-white font-bold text-lg"
-                                                        value={privateMessageConcurrency}
-                                                        onChange={(e) => setPrivateMessageConcurrency(parseInt(e.target.value))}
-                                                    />
+                                                <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl group/param transition-all hover:bg-slate-800/60">
+                                                    <label className="block text-[9px] font-black text-slate-600 uppercase mb-3 px-1 tracking-widest group-hover/param:text-orange-400 transition-colors">Concorrência</label>
+                                                    <div className="bg-black/40 p-2.5 rounded-2xl border border-white/5 shadow-inner flex items-center">
+                                                        <input
+                                                            type="number"
+                                                            className="w-full bg-transparent outline-none font-black text-xl text-white tabular-nums"
+                                                            value={privateMessageConcurrency}
+                                                            onChange={(e) => setPrivateMessageConcurrency(parseInt(e.target.value))}
+                                                        />
+                                                        <span className="text-[10px] font-black text-slate-700 uppercase">Jobs</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1174,7 +1332,10 @@ export default function TemplateBulkSender({ onViewChange }) {
 
                             <div className="flex flex-col justify-end h-full">
                                 <button
-                                    onClick={() => setStep(2)}
+                                    onClick={() => {
+                                        setStep(2);
+                                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
                                     disabled={isABTesting ? variations.some(v => !v.template) : !selectedTemplate}
                                     className="w-full py-6 bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-500 hover:to-emerald-400 text-white rounded-[2rem] font-black text-xl transition-all shadow-2xl shadow-green-900/30 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed group/btn overflow-hidden relative"
                                 >
@@ -1186,293 +1347,491 @@ export default function TemplateBulkSender({ onViewChange }) {
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </div >
-            )
-            }
+                </div>
+            )}
 
             {/* Step 2: Recipient Selection & Execution */}
-            {
-                step === 2 && (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-in slide-in-from-right-8 fade-in duration-700">
-                        {/* Left: Recipient Selector */}
-                        <div className="lg:col-span-12 xl:col-span-8 space-y-6">
-                            <section className="bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-8 shadow-2xl border border-white/5 relative overflow-hidden">
-                                <div className="flex items-center justify-between mb-10 relative z-10 px-2">
-                                    <h2 className="text-2xl font-black text-white flex items-center gap-4">
-                                        <span className="p-3 bg-purple-500/10 text-purple-400 rounded-2xl border border-purple-500/20 shadow-xl shadow-purple-500/10">04</span>
-                                        Filtros & Destinatários
-                                    </h2>
-                                    <button onClick={() => setStep(1)} className="group flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 px-5 py-2.5 rounded-2xl border border-white/5">
-                                        <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M15 19l-7-7 7-7" /></svg>
-                                        Voltar
-                                    </button>
+            {step === 2 && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-in slide-in-from-right-8 fade-in duration-700">
+                    {/* Left: Recipient Selector */}
+                    <div className="lg:col-span-12 xl:col-span-8 space-y-6">
+                        <section className="bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-8 shadow-2xl border border-white/5 relative overflow-hidden">
+                            <div className="flex items-center justify-between mb-10 relative z-10 px-2">
+                                <h2 className="text-2xl font-black text-white flex items-center gap-4">
+                                    <span className="p-3 bg-purple-500/10 text-purple-400 rounded-2xl border border-purple-500/20 shadow-xl shadow-purple-500/10">03</span>
+                                    Filtros & Destinatários
+                                </h2>
+                                <button onClick={() => setStep(1)} className="group flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 px-5 py-2.5 rounded-2xl border border-white/5">
+                                    <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M15 19l-7-7 7-7" /></svg>
+                                    Voltar
+                                </button>
+                            </div>
+
+                            <div className="space-y-10">
+                                <div className="relative z-10 glass-recipient-container">
+                                    <RecipientSelector
+                                        onSelect={(contacts, meta) => {
+                                            setFinalContacts(contacts);
+                                            setSelectionMetadata(meta);
+                                        }}
+                                        selectedInbox={activeClient?.wa_business_account_id}
+                                        title="Configuração de Público"
+                                        exclusionList={exclusionList}
+                                        templateVariables={templateVariables}
+                                    />
                                 </div>
 
-                                <div className="space-y-10">
-                                    <div className="relative z-10 glass-recipient-container">
-                                        <RecipientSelector
-                                            onSelect={setFinalContacts}
-                                            selectedInbox={activeClient?.wa_business_account_id}
-                                            title="Configuração de Público"
-                                            exclusionList={exclusionList}
-                                        />
+                                <div className="relative z-10 pt-10 border-t border-white/5 animate-in fade-in duration-700 delay-150">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
+                                        <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                            <span className="p-3 bg-red-500/10 text-red-400 rounded-2xl border border-red-500/20 shadow-xl shadow-red-500/10">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                            </span>
+                                            Filtro de Exclusão
+                                        </h3>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-3 text-xs font-black text-slate-400 uppercase tracking-widest bg-black/40 px-5 py-2.5 rounded-2xl border border-white/5 shadow-inner">
+                                                Ignorando: <span className="text-red-400 text-sm">{exclusionList.length}</span>
+                                            </div>
+                                            {exclusionList.length > 0 && (
+                                                <button
+                                                    onClick={() => setExclusionList([])}
+                                                    className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500 text-white rounded-2xl border border-red-500/20 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-900/10 group"
+                                                >
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="group-hover:rotate-12 transition-transform"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    Limpar Tudo
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
-                                    <div className="relative z-10 pt-10 border-t border-white/5">
-                                        <div className="flex items-center justify-between mb-8 px-2">
-                                            <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                                                <span className="p-2.5 bg-green-500/10 text-green-400 rounded-xl border border-green-500/20">
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-                                                </span>
-                                                Lista de Exclusão
-                                            </h3>
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest bg-black/20 px-4 py-2 rounded-xl border border-white/5">
-                                                    Total: <span className="text-green-400 ml-1">{exclusionList.length}</span>
-                                                </div>
-                                                {exclusionList.length > 0 && (
+                                    <div className="bg-slate-900/60 backdrop-blur-md rounded-[3rem] p-8 border border-white/5 space-y-8 shadow-2xl">
+                                        {!exclusionColSelector ? (
+                                            <div className="space-y-6">
+                                                <div className="flex items-center gap-3 bg-slate-800/50 p-1.5 rounded-2xl border border-white/10 shadow-inner">
                                                     <button
-                                                        onClick={() => setExclusionList([])}
-                                                        className="flex items-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl border border-red-500/20 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-900/10"
+                                                        onClick={() => setExclusionMode('manual')}
+                                                        className={`flex-1 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${exclusionMode === 'manual' ? 'bg-white/10 text-white shadow-lg ring-1 ring-white/10' : 'text-slate-500 hover:text-slate-300'}`}
                                                     >
-                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                        Limpar Tudo
+                                                        Entrada Manual
                                                     </button>
+                                                    <button
+                                                        onClick={() => setExclusionMode('upload')}
+                                                        className={`flex-1 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${exclusionMode === 'upload' ? 'bg-white/10 text-white shadow-lg ring-1 ring-white/10' : 'text-slate-500 hover:text-slate-300'}`}
+                                                    >
+                                                        Upload Planilha
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setExclusionMode('tag')}
+                                                        className={`flex-1 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${exclusionMode === 'tag' ? 'bg-white/10 text-white shadow-lg ring-1 ring-white/10' : 'text-slate-500 hover:text-slate-300'}`}
+                                                    >
+                                                        Etiquetas
+                                                    </button>
+                                                </div>
+
+                                                {exclusionMode === 'manual' ? (
+                                                    <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                                                        <div className="relative group/field">
+                                                            <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-3xl blur opacity-0 group-hover/field:opacity-100 transition duration-500"></div>
+                                                            <textarea
+                                                                className="relative w-full bg-black/40 border border-white/10 rounded-3xl p-8 text-white text-sm outline-none focus:border-red-500/50 transition-all font-mono min-h-[160px] shadow-inner placeholder:text-slate-800"
+                                                                placeholder="Insira um número por linha (ex: 5511999999999)..."
+                                                                value={exclusionText}
+                                                                onChange={(e) => setExclusionText(e.target.value)}
+                                                            />
+                                                        </div>
+                                                        <div className="flex gap-4">
+                                                            <button
+                                                                onClick={handleSaveExclusion}
+                                                                disabled={!exclusionText.trim()}
+                                                                className="flex-1 py-5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.26em] border border-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98] shadow-xl"
+                                                            >
+                                                                ATUALIZAR LISTA
+                                                            </button>
+                                                            {exclusionText.trim().length > 0 && (
+                                                                <button
+                                                                    onClick={add55ToExclusionText}
+                                                                    className="px-8 bg-slate-800/80 hover:bg-slate-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/5 transition-all shadow-md hover:shadow-lg active:scale-95 animate-in zoom-in duration-300"
+                                                                    title="Adicionar 55 aos números abaixo"
+                                                                >
+                                                                    +55
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : exclusionMode === 'upload' ? (
+                                                    <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                                                        <div className="relative h-56 flex flex-col items-center justify-center border-2 border-dashed border-slate-700/50 rounded-[2.5rem] p-8 hover:border-red-500/30 transition-all group cursor-pointer bg-slate-900/40 hover:bg-slate-800/40 overflow-hidden">
+                                                            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                            <input
+                                                                type="file"
+                                                                accept=".csv,.xlsx,.xls"
+                                                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                                onChange={handleExclusionFileUpload}
+                                                            />
+                                                            <div className="w-20 h-20 bg-slate-800/80 rounded-[2rem] flex items-center justify-center mb-6 group-hover:scale-110 group-hover:text-red-400 transition-all shadow-2xl border border-white/5">
+                                                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                                                            </div>
+                                                            <h4 className="font-bold text-white text-lg">Carregar CSV ou Excel</h4>
+                                                            <p className="text-slate-500 text-[10px] mt-2 font-black uppercase tracking-[0.3em]">Clique ou arraste o arquivo</p>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                                                        <div className="p-8 bg-slate-800/10 border border-white/5 rounded-3xl space-y-6">
+                                                            <div className="flex flex-col gap-2">
+                                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1 text-center">Selecione a Etiqueta para Excluir</label>
+                                                                <div className="relative group/tag-select-exclusion">
+                                                                    <select
+                                                                        className="w-full p-4 pl-5 bg-black/60 border border-white/10 rounded-2xl focus:border-red-500/50 outline-none transition-all text-white font-bold"
+                                                                        value={selectedExclusionTag}
+                                                                        onChange={(e) => setSelectedExclusionTag(e.target.value)}
+                                                                        disabled={isLoadingExclusionTags}
+                                                                    >
+                                                                        <option value="">{isLoadingExclusionTags ? 'Carregando etiquetas...' : '-- Escolha uma etiqueta --'}</option>
+                                                                        {exclusionAvailableTags.map(tag => (
+                                                                            <option key={tag} value={tag} className="bg-slate-900">{tag}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    {isLoadingExclusionTags && (
+                                                                        <div className="absolute right-12 top-1/2 -translate-y-1/2">
+                                                                            <div className="w-4 h-4 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin"></div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <button
+                                                                onClick={loadExclusionContactsByTag}
+                                                                disabled={!selectedExclusionTag || isWorking}
+                                                                className="w-full py-5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                                                            >
+                                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                                                Adicionar Etiquetas à Exclusão
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {exclusionList.length > 0 && (
+                                                    <div className="pt-8 space-y-4 border-t border-white/5">
+                                                        <div className="flex items-center justify-between px-2">
+                                                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Base de Exclusão</h4>
+                                                            <button
+                                                                onClick={add55ToLoadedExclusionList}
+                                                                className="flex items-center gap-2 px-4 py-2 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/10 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                                            >
+                                                                <span>PADRONIZAR +55</span>
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14" /></svg>
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-3 max-h-56 overflow-y-auto premium-scrollbar p-2 bg-black/20 rounded-3xl border border-white/5">
+                                                            {exclusionList.map(num => (
+                                                                <div key={num} className="group flex items-center gap-3 pl-4 pr-2 py-2 bg-slate-800/40 rounded-xl text-xs font-mono text-slate-400 border border-white/5 hover:border-red-500/30 hover:text-red-400 transition-all shadow-sm">
+                                                                    <span className="tracking-widest">{num}</span>
+                                                                    <button onClick={() => setExclusionList(prev => prev.filter(n => n !== num))} className="p-1 px-2 hover:bg-red-500/10 rounded-lg text-slate-600 hover:text-red-500 font-black transition-colors">
+                                                                        ×
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
-                                        </div>
-
-                                        <div className="bg-slate-900/40 rounded-[2rem] p-8 border border-white/5 space-y-8">
-                                            {!exclusionColSelector ? (
-                                                <div className="space-y-6">
-                                                    <div className="flex items-center gap-3 bg-slate-800/50 p-1.5 rounded-2xl border border-white/5">
+                                        ) : (
+                                            <div className="space-y-8 animate-in slide-in-from-right-8 duration-500 p-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="space-y-1">
+                                                        <h4 className="text-xl font-bold text-white">Mapeamento de Importação</h4>
+                                                        <p className="text-xs text-slate-500 font-medium">Selecione a coluna que contém os números de telefone.</p>
+                                                    </div>
+                                                    <button onClick={() => setExclusionColSelector(false)} className="px-4 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Cancelar</button>
+                                                </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                    {exclusionCsvData?.headers.map((h, idx) => (
                                                         <button
-                                                            onClick={() => setExclusionMode('manual')}
-                                                            className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${exclusionMode === 'manual' ? 'bg-green-600 text-white shadow-lg shadow-green-900/20' : 'text-slate-500 hover:text-slate-300'}`}
+                                                            key={idx}
+                                                            onClick={() => setExclusionSelectedCol(idx)}
+                                                            className={`p-6 rounded-3xl border-2 text-left transition-all relative overflow-hidden group/col ${exclusionSelectedCol === idx ? 'bg-red-500/10 border-red-500 text-white shadow-xl shadow-red-500/10' : 'bg-slate-800/40 border-slate-700/50 text-slate-500 hover:border-slate-500'}`}
                                                         >
-                                                            Entrada Manual
+                                                            <div className={`text-[9px] font-black uppercase mb-2 tracking-widest ${exclusionSelectedCol === idx ? 'text-red-400' : 'text-slate-600'}`}>Coluna {idx + 1}</div>
+                                                            <div className="font-bold text-sm truncate">{h || `Sem Nome`}</div>
+                                                            {exclusionSelectedCol === idx && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>}
                                                         </button>
-                                                        <button
-                                                            onClick={() => setExclusionMode('upload')}
-                                                            className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${exclusionMode === 'upload' ? 'bg-green-600 text-white shadow-lg shadow-green-900/20' : 'text-slate-500 hover:text-slate-300'}`}
+                                                    ))}
+                                                </div>
+                                                <button
+                                                    onClick={confirmExclusionColumn}
+                                                    disabled={exclusionSelectedCol === null}
+                                                    className="w-full py-6 bg-red-600 hover:bg-red-500 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl shadow-red-900/30 transition-all disabled:opacity-20 active:scale-[0.98]"
+                                                >
+                                                    Confirmar Importação de Exclusão
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    {/* Right: Execution Control */}
+                    <div className="lg:col-span-12 xl:col-span-4 space-y-8">
+                        <div className="bg-slate-900/90 backdrop-blur-3xl rounded-[3.5rem] p-10 shadow-3xl border border-white/10 space-y-12 sticky top-8 overflow-hidden group/exec">
+                            {/* Animated Background Gradient */}
+                            <div className="absolute -top-24 -right-24 w-64 h-64 bg-green-500/5 blur-[100px] rounded-full pointer-events-none"></div>
+                            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none"></div>
+
+                            <div className="space-y-2 relative px-2">
+                                <h2 className="text-3xl font-black text-white tracking-tighter">Resumo de Envio</h2>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Confirmação final do disparo</p>
+                            </div>
+
+                            <div className="space-y-10 relative z-10">
+                                <div className="space-y-6 px-2">
+                                    <div className="flex items-center justify-between p-8 bg-slate-800/40 rounded-[2.5rem] border border-white/5 shadow-inner group/info relative overflow-hidden">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover/info:opacity-100 transition-opacity"></div>
+                                        <div className="flex flex-col gap-2 relative z-10">
+                                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Destinatários Ativos</div>
+                                            <button
+                                                onClick={handleCopyFinalList}
+                                                className="flex items-center gap-2 text-[9px] font-black text-blue-400 hover:text-white transition-all uppercase tracking-widest bg-blue-500/10 px-3 py-1.5 rounded-xl border border-blue-500/10 hover:bg-blue-500 shadow-md"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
+                                                Copiar Lista
+                                            </button>
+                                        </div>
+                                        <div className="text-5xl font-black text-white group-hover/info:text-blue-400 transition-all tabular-nums tracking-tighter relative z-10">
+                                            {finalContacts.length}
+                                        </div>
+                                    </div>
+                                    <div className="px-2">
+                                        <div className={`p-6 rounded-[2.5rem] border-2 transition-all shadow-lg group/recurrence ${isRecurring ? 'bg-blue-500/5 border-blue-500/30' : 'bg-slate-800/40 border-white/5 hover:border-white/10'}`}>
+                                            <div className="flex items-center justify-between mb-6">
+                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] group-hover/recurrence:text-slate-200 transition-colors flex items-center gap-2">
+                                                    <div className={`p-1.5 rounded-lg transition-all ${isRecurring ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-700 text-slate-500'}`}>
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 2.1l4 4-4 4M3 12.2v-2a4 4 0 0 1 4-4h12.8M7 21.9l-4-4 4-4M21 11.8v2a4 4 0 0 1-4 4H4.2" /></svg>
+                                                    </div>
+                                                    Disparo Recorrente
+                                                </label>
+                                                 <div 
+                                                    onClick={() => {
+                                                        const newVal = !isRecurring;
+                                                        setIsRecurring(newVal);
+                                                        if (newVal) setScheduledTime('');
+                                                    }}
+                                                    className={`w-14 h-7 rounded-full relative cursor-pointer transition-all duration-500 ${isRecurring ? 'bg-blue-600 shadow-lg shadow-blue-900/40' : 'bg-slate-800 border border-white/5'}`}
+                                                >
+                                                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-500 shadow-md ${isRecurring ? 'left-8' : 'left-1'}`}></div>
+                                                </div>
+                                            </div>
+
+                                            {isRecurring && (
+                                                <div className="space-y-6 animate-in slide-in-from-top-4 fade-in duration-500">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <button 
+                                                            onClick={() => setRecurrenceFrequency('weekly')}
+                                                            className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${recurrenceFrequency === 'weekly' ? 'bg-blue-500 border-blue-400 text-white shadow-lg' : 'bg-black/20 border-white/5 text-slate-500 hover:text-slate-300'}`}
                                                         >
-                                                            Upload Arquivo
+                                                            Semanal
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setRecurrenceFrequency('monthly')}
+                                                            className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${recurrenceFrequency === 'monthly' ? 'bg-blue-500 border-blue-400 text-white shadow-lg' : 'bg-black/20 border-white/5 text-slate-500 hover:text-slate-300'}`}
+                                                        >
+                                                            Mensal
                                                         </button>
                                                     </div>
 
-                                                    {exclusionMode === 'manual' ? (
-                                                        <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                            <div className="relative group/field">
-                                                                <textarea
-                                                                    className="w-full bg-slate-800/30 border-2 border-slate-700/50 rounded-2xl p-6 text-white text-sm outline-none focus:border-green-500/50 transition-all font-mono min-h-[140px] shadow-inner placeholder:text-slate-700"
-                                                                    placeholder="Insira um número por linha (ex: 5511999999999)..."
-                                                                    value={exclusionText}
-                                                                    onChange={(e) => setExclusionText(e.target.value)}
-                                                                />
-                                                            </div>
-                                                            <div className="flex gap-4">
-                                                                <button
-                                                                    onClick={handleSaveExclusion}
-                                                                    disabled={!exclusionText.trim()}
-                                                                    className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
-                                                                >
-                                                                    ADICIONAR À LISTA
-                                                                </button>
-                                                                {exclusionText.trim().length > 0 && (
-                                                                    <button
-                                                                        onClick={add55ToExclusionText}
-                                                                        className="px-6 bg-slate-800/80 hover:bg-slate-700 text-white rounded-xl font-black text-xs uppercase tracking-widest border border-white/5 transition-all shadow-md hover:shadow-lg active:scale-95 animate-in zoom-in duration-200"
-                                                                        title="Adicionar 55 aos números abaixo"
-                                                                    >
-                                                                        +55
-                                                                    </button>
-                                                                )}
+                                                    {recurrenceFrequency === 'weekly' ? (
+                                                        <div className="space-y-4">
+                                                            <div className="flex flex-wrap gap-2 justify-center">
+                                                                {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((day, idx) => {
+                                                                    const isSelected = recurrenceDaysOfWeek.some(d => d.day === idx);
+                                                                    return (
+                                                                        <button
+                                                                            key={idx}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                if (isSelected) {
+                                                                                    setRecurrenceDaysOfWeek(prev => prev.filter(d => d.day !== idx));
+                                                                                } else {
+                                                                                    setRecurrenceDaysOfWeek(prev => [...prev, { day: idx, time: recurrenceTime }].sort((a, b) => a.day - b.day));
+                                                                                }
+                                                                            }}
+                                                                            className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs transition-all ${isSelected ? 'bg-blue-500 text-white shadow-md border-blue-400/30' : 'bg-black/40 text-slate-600 hover:bg-black/60 border border-white/5'}`}
+                                                                            title={['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'][idx]}
+                                                                        >
+                                                                            {day}
+                                                                        </button>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                                                            <div className="relative h-48 flex flex-col items-center justify-center border-2 border-dashed border-slate-700/50 rounded-3xl p-8 hover:border-green-500/30 transition-all group cursor-pointer bg-slate-800/10">
-                                                                <input
-                                                                    type="file"
-                                                                    accept=".csv,.xlsx,.xls"
-                                                                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                                                    onChange={handleExclusionFileUpload}
-                                                                />
-                                                                <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-xl">
-                                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500 group-hover:text-green-400"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                                                        <div className="flex flex-col gap-4">
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center justify-between px-1">
+                                                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Dias do Mês</label>
+                                                                    <span className="text-[8px] text-slate-500 font-bold uppercase italic">Ex: 1, 15, 30</span>
                                                                 </div>
-                                                                <h4 className="font-bold text-white text-sm">Carregar CSV ou Excel</h4>
-                                                                <p className="text-slate-500 text-[10px] mt-1 font-bold uppercase tracking-widest">Arraste ou clique aqui</p>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="1, 15, 30"
+                                                                    value={recurrenceDayOfMonth}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setRecurrenceDayOfMonth(val);
+                                                                        const dayNumbers = val.split(',').map(d => parseInt(d.trim())).filter(d => !isNaN(d) && d >= 1 && d <= 31);
+                                                                        const newDays = dayNumbers.map(d => {
+                                                                            const existing = recurrenceDaysOfWeek.find(ed => ed.day === d);
+                                                                            return existing || { day: d, time: recurrenceTime };
+                                                                        });
+                                                                        setRecurrenceDaysOfWeek(newDays);
+                                                                    }}
+                                                                    className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white font-bold outline-none focus:border-blue-500/50 shadow-inner"
+                                                                />
                                                             </div>
                                                         </div>
                                                     )}
 
-                                                    {exclusionList.length > 0 && (
-                                                        <div className="pt-4 space-y-3">
-                                                            <div className="flex items-center justify-between px-1">
-                                                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Números Ignorados</h4>
-                                                                <button
-                                                                    onClick={add55ToLoadedExclusionList}
-                                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
-                                                                >
-                                                                    <span>+55 TODOS</span>
-                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14" /></svg>
-                                                                </button>
-                                                            </div>
-                                                            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto premium-scrollbar p-1">
-                                                                {exclusionList.map(num => (
-                                                                    <div key={num} className="group flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 rounded-lg text-xs font-mono text-slate-400 border border-white/5 hover:border-red-500/30 hover:text-red-400 transition-all">
-                                                                        {num}
-                                                                        <button onClick={() => setExclusionList(prev => prev.filter(n => n !== num))} className="text-slate-600 hover:text-red-500 font-black">
-                                                                            ×
-                                                                        </button>
+                                                    {recurrenceDaysOfWeek.length > 0 && (
+                                                        <div className="space-y-3 pt-4 border-t border-white/10">
+                                                            <label className="text-[9px] font-black text-slate-500 uppercase px-1 tracking-widest text-center block">Horários por Dia</label>
+                                                            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto premium-scrollbar pr-1">
+                                                                {recurrenceDaysOfWeek.map((dayConfig, i) => (
+                                                                    <div key={i} className="flex items-center justify-between bg-black/40 p-3 rounded-2xl border border-white/5 shadow-sm">
+                                                                        <span className="text-[10px] font-black text-slate-300 uppercase">
+                                                                            {recurrenceFrequency === 'weekly' 
+                                                                                ? ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'][dayConfig.day]
+                                                                                : `Dia ${dayConfig.day}`
+                                                                            }
+                                                                        </span>
+                                                                        <input 
+                                                                            type="time" 
+                                                                            value={dayConfig.time}
+                                                                            onChange={(e) => {
+                                                                                const newDays = [...recurrenceDaysOfWeek];
+                                                                                newDays[i].time = e.target.value;
+                                                                                setRecurrenceDaysOfWeek(newDays);
+                                                                            }}
+                                                                            className="bg-slate-800 text-white font-bold text-xs p-2 rounded-xl outline-none focus:ring-1 ring-blue-500/50"
+                                                                        />
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         </div>
                                                     )}
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                                    <div className="flex items-center justify-between">
-                                                        <h4 className="text-sm font-black text-white uppercase tracking-widest">Selecione a coluna do telefone</h4>
-                                                        <button onClick={() => setExclusionColSelector(false)} className="text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest">Cancelar</button>
+
+                                                    <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                                                        <label className="text-[9px] font-black text-slate-600 uppercase px-1">{recurrenceFrequency === 'weekly' ? 'Horário Padrão (Fallback)' : 'Horário de Disparo (Todos os Dias)'}</label>
+                                                        <input
+                                                            type="time"
+                                                            value={recurrenceTime}
+                                                            onChange={(e) => setRecurrenceTime(e.target.value)}
+                                                            className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white font-bold outline-none focus:border-blue-500/50"
+                                                        />
                                                     </div>
-                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                        {exclusionCsvData?.headers.map((h, idx) => (
-                                                            <button
-                                                                key={idx}
-                                                                onClick={() => setExclusionSelectedCol(idx)}
-                                                                className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${exclusionSelectedCol === idx ? 'bg-green-500/10 border-green-500 text-white' : 'bg-slate-800/40 border-slate-700/50 text-slate-500 hover:border-slate-500'}`}
-                                                            >
-                                                                <div className="text-[9px] font-black uppercase mb-1 opacity-50">Col {idx + 1}</div>
-                                                                <div className="font-bold text-xs truncate">{h || `Vazio`}</div>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                    <button
-                                                        onClick={confirmExclusionColumn}
-                                                        disabled={exclusionSelectedCol === null}
-                                                        className="w-full py-4 bg-green-600 hover:bg-green-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-900/20 transition-all disabled:opacity-30"
-                                                    >
-                                                        Confirmar Importação
-                                                    </button>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-                                </div>
-                            </section>
-                        </div>
 
-                        {/* Right: Execution Control */}
-                        <div className="lg:col-span-12 xl:col-span-4 space-y-6">
-                            <div className="bg-slate-900/80 backdrop-blur-2xl rounded-[3rem] p-10 shadow-3xl border border-white/10 space-y-10 sticky top-8 overflow-hidden group/exec">
-                                {/* Animated Background Mesh */}
-                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-500 to-transparent opacity-50"></div>
-
-                                <h2 className="text-2xl font-black text-white tracking-tight relative px-2">Painel de Controle</h2>
-
-                                <div className="space-y-10 relative z-10">
-                                    <div className="space-y-4 px-2">
-                                        <div className="flex items-center justify-between p-6 bg-slate-800/40 rounded-3xl border border-white/5 shadow-inner group/info">
-                                            <div className="flex flex-col gap-1">
-                                                <div className="text-xs font-black text-slate-500 uppercase tracking-widest">Contatos na Lista</div>
-                                                <button
-                                                    onClick={handleCopyFinalList}
-                                                    className="flex items-center gap-2 text-[10px] font-black text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-widest bg-blue-500/5 px-2.5 py-1.5 rounded-lg border border-blue-500/10"
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="p-6 bg-slate-800/40 border border-white/5 rounded-[2.5rem] group/input focus-within:border-emerald-500/50 transition-all shadow-lg">
+                                            <label className="block text-[9px] font-black text-slate-500 uppercase mb-3 tracking-[0.2em] group-hover/input:text-slate-300 transition-colors">Delay (Frequência)</label>
+                                            <div className="flex items-center gap-3 bg-black/40 p-3 rounded-2xl border border-white/5 shadow-inner">
+                                                <input
+                                                    type="number"
+                                                    className="flex-1 bg-transparent outline-none font-black text-2xl text-white tabular-nums w-12"
+                                                    value={delaySeconds}
+                                                    onChange={(e) => setDelaySeconds(parseInt(e.target.value))}
+                                                />
+                                                <select
+                                                    className="bg-slate-700 text-[10px] font-black text-slate-200 outline-none px-3 py-2 rounded-xl border border-white/10 shadow-lg"
+                                                    value={delayUnit}
+                                                    onChange={(e) => setDelayUnit(e.target.value)}
                                                 >
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
-                                                    Copiar Destinatários
-                                                </button>
-                                            </div>
-                                            <div className="text-3xl font-black text-white group-hover/info:text-green-400 transition-colors tabular-nums">
-                                                {finalContacts.length}
+                                                    <option value="seconds">SEG</option>
+                                                    <option value="minutes">MIN</option>
+                                                    <option value="hours">HR</option>
+                                                </select>
                                             </div>
                                         </div>
-
-                                        <div className="grid grid-cols-2 gap-5">
-                                            <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-3xl group/input focus-within:border-green-500/50 transition-all">
-                                                <label className="block text-[9px] font-black text-slate-500 uppercase mb-2 tracking-[0.2em] group-hover/input:text-slate-300 transition-colors">Intervalo entre Envios</label>
-                                                <div className="flex items-center gap-2 bg-slate-900/40 p-2.5 rounded-2xl border border-white/5">
-                                                    <input
-                                                        type="number"
-                                                        className="flex-1 bg-transparent outline-none font-black text-2xl text-white tabular-nums w-12"
-                                                        value={delaySeconds}
-                                                        onChange={(e) => setDelaySeconds(parseInt(e.target.value))}
-                                                    />
-                                                    <select
-                                                        className="bg-slate-700 text-xs font-bold text-slate-200 outline-none px-3 py-1.5 rounded-xl border border-white/10"
-                                                        value={delayUnit}
-                                                        onChange={(e) => setDelayUnit(e.target.value)}
-                                                    >
-                                                        <option value="seconds">seg</option>
-                                                        <option value="minutes">min</option>
-                                                        <option value="hours">hr</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-3xl group/input focus-within:border-green-500/50 transition-all">
-                                                <label className="block text-[9px] font-black text-slate-500 uppercase mb-2 tracking-[0.2em] group-hover/input:text-slate-300 transition-colors">Jobs Paralelos</label>
+                                        <div className="p-6 bg-slate-800/40 border border-white/5 rounded-[2.5rem] group/input focus-within:border-emerald-500/50 transition-all shadow-lg">
+                                            <label className="block text-[9px] font-black text-slate-500 uppercase mb-3 tracking-[0.2em] group-hover/input:text-slate-300 transition-colors">Paralelismo</label>
+                                            <div className="bg-black/40 p-3 rounded-2xl border border-white/5 shadow-inner flex items-center">
                                                 <input
                                                     type="number"
                                                     className="w-full bg-transparent outline-none font-black text-2xl text-white tabular-nums"
                                                     value={concurrency}
                                                     onChange={(e) => setConcurrency(parseInt(e.target.value))}
                                                 />
+                                                <div className="text-[10px] font-black text-slate-600 uppercase">Jobs</div>
                                             </div>
                                         </div>
                                     </div>
+                                </div>
 
+                                 {!isRecurring && (
                                     <div className="px-2">
-                                        <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-3xl group/input focus-within:border-green-500/50 transition-all">
-                                            <label className="block text-[9px] font-black text-slate-500 uppercase mb-2 tracking-[0.2em] group-hover/input:text-slate-300 transition-colors flex items-center gap-2">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v20M2 12h20M12 2a10 10 0 0 1 10 10 10 10 0 0 1-10 10 10 10 0 0 1-10-10 10 10 0 0 1 10-10z" /></svg>
-                                                Agendamento (Opcional)
+                                        <div className="p-6 bg-slate-800/40 border border-white/5 rounded-[2.5rem] group/input focus-within:border-emerald-500/50 transition-all shadow-lg">
+                                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-4 tracking-[0.2em] group-hover/input:text-slate-200 transition-colors flex items-center gap-2">
+                                                <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2v20M2 12h20M12 2a10 10 0 0 1 10 10 10 10 0 0 1-10 10 10 10 0 0 1-10-10 10 10 0 0 1 10-10z" /></svg>
+                                                </div>
+                                                Agendamento para o Futuro
                                             </label>
-                                            <input
-                                                type="datetime-local"
-                                                className="w-full bg-transparent outline-none font-bold text-lg text-white placeholder:text-slate-700/50"
-                                                value={scheduledTime}
-                                                onChange={(e) => setScheduledTime(e.target.value)}
-                                                min={new Date().toISOString().slice(0, 16)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="p-2 bg-slate-800/50 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                                        <div className="bg-gradient-to-br from-green-600 to-emerald-700 p-8 rounded-[2rem] text-white shadow-xl shadow-green-900/40 relative overflow-hidden group/send">
-                                            {/* Shine effect */}
-                                            <div className="absolute top-0 -left-64 w-64 h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-35deg] group-hover/send:left-[150%] transition-all duration-[1500ms] pointer-events-none"></div>
-
-                                            <div className="flex items-center justify-between mb-8">
-                                                <span className="text-green-100 text-[10px] font-black uppercase tracking-widest">Custo Total Previsto</span>
-                                                <span className="text-3xl font-black tabular-nums">
-                                                    R$ {isABTesting
-                                                        ? variations.reduce((acc, v) => acc + (finalContacts.length * (v.weight / 100) * v.cost), 0).toFixed(2)
-                                                        : (finalContacts.length * costPerUnit).toFixed(2)
-                                                    }
-                                                </span>
+                                            <div className="bg-black/40 p-4 rounded-2xl border border-white/5 shadow-inner">
+                                                <input
+                                                    type="datetime-local"
+                                                    className="w-full bg-transparent outline-none font-bold text-lg text-white placeholder:text-slate-800 cursor-pointer"
+                                                    value={scheduledTime}
+                                                    onChange={(e) => setScheduledTime(e.target.value)}
+                                                    min={new Date().toISOString().slice(0, 16)}
+                                                />
                                             </div>
-                                            <button
-                                                onClick={handleSend}
-                                                disabled={isSending || finalContacts.length === 0 || (!selectedTemplate && !isABTesting)}
-                                                className="w-full py-5 bg-white text-green-700 rounded-2xl font-black text-xl hover:shadow-2xl hover:scale-[1.03] active:scale-95 transition-all disabled:opacity-20 disabled:cursor-not-allowed uppercase tracking-tighter"
-                                            >
-                                                🚀 {scheduledTime ? (isSending ? 'Agendando...' : 'Disparo Agendado') : (isSending ? 'Iniciando...' : 'Iniciar Disparo')}
-                                            </button>
                                         </div>
                                     </div>
+                                )}
 
-                                    <div className="text-[10px] text-slate-500 text-center font-bold px-8 leading-relaxed italic opacity-60">
-                                        "Ao iniciar, a IA processará a fila respeitando os delays para simular comportamento humano."
+                                <div className="p-2 bg-slate-800/60 rounded-[3rem] border border-white/10 shadow-3xl">
+                                    <div className="bg-gradient-to-br from-green-600 to-emerald-800 p-10 rounded-[2.5rem] text-white shadow-[0_20px_50px_rgba(0,0,0,0.3)] relative overflow-hidden group/send">
+                                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+                                        {/* Shine effect */}
+                                        <div className="absolute top-0 -left-64 w-64 h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-35deg] group-hover/send:left-[150%] transition-all duration-[1200ms] pointer-events-none"></div>
+
+                                        <div className="flex flex-col gap-1 mb-8 relative z-10">
+                                            <span className="text-green-100/60 text-[10px] font-black uppercase tracking-[0.3em]">Investimento Previsto</span>
+                                            <span className="text-4xl font-black tabular-nums tracking-tighter">
+                                                R$ {isABTesting
+                                                    ? variations.reduce((acc, v) => acc + (finalContacts.length * (v.weight / 100) * v.cost), 0).toFixed(2)
+                                                    : (finalContacts.length * costPerUnit).toFixed(2)
+                                                }
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={handleSend}
+                                            disabled={isSending || finalContacts.length === 0 || (!selectedTemplate && !isABTesting)}
+                                            className="w-full py-6 bg-white text-emerald-900 rounded-3xl font-black text-xl hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-20 disabled:cursor-not-allowed uppercase tracking-widest relative z-10"
+                                        >
+                                            {isRecurring 
+                                                ? (isSending ? 'CRIANDO...' : 'INICIAR RECORRÊNCIA')
+                                                : scheduledTime 
+                                                    ? (isSending ? 'AGENDANDO...' : 'CONFIRMAR AGENDAMENTO') 
+                                                    : (isSending ? 'INICIANDO...' : 'INICIAR DISPARO')}
+                                        </button>
                                     </div>
+                                </div>
+
+                                <div className="text-[10px] text-slate-600 text-center font-bold px-10 leading-relaxed uppercase tracking-widest opacity-60">
+                                    "Respeitando intervalos de segurança para proteção contra bloqueios."
                                 </div>
                             </div>
                         </div>
                     </div>
-                )
+                </div>
+            )
             }
 
             {/* Expansion Modal */}
@@ -1485,19 +1844,183 @@ export default function TemplateBulkSender({ onViewChange }) {
                 onSave={saveExpansion}
             />
 
-            {isWorking && createPortal(
-                <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
-                    <div className="bg-slate-900 w-full max-w-md p-10 rounded-[3rem] border border-white/10 shadow-[0_0_100px_rgba(0,0,0,0.8)] text-center space-y-8">
-                        <div className="relative w-24 h-24 mx-auto">
-                            <div className="absolute inset-0 border-4 border-emerald-500/20 rounded-full"></div>
-                            <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-emerald-500 animate-pulse"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" /></svg>
+            {
+                isWorking && createPortal(
+                    <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
+                        <div className="bg-slate-900 w-full max-w-md p-10 rounded-[3rem] border border-white/10 shadow-[0_0_100px_rgba(0,0,0,0.8)] text-center space-y-8">
+                            <div className="relative w-24 h-24 mx-auto">
+                                <div className="absolute inset-0 border-4 border-emerald-500/20 rounded-full"></div>
+                                <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-emerald-500 animate-pulse"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" /></svg>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-2xl font-black text-white">Processando</h3>
+                                <p className="text-sm text-slate-400 font-medium">{workingMessage || 'Aguarde um instante...'}</p>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-white">Processando</h3>
-                            <p className="text-sm text-slate-400 font-medium">{workingMessage || 'Aguarde um instante...'}</p>
+                    </div>,
+                    document.body
+                )
+            }
+
+            {/* ========= MODAL GUIA DISPARO EM MASSA ========= */}
+            {isBulkGuideOpen && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
+                    onClick={(e) => { if (e.target === e.currentTarget) setIsBulkGuideOpen(false); }}
+                >
+                    <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
+                        style={{ background: 'linear-gradient(160deg, #0a1628 0%, #0f1f14 100%)', border: '1px solid rgba(52,211,153,0.2)' }}>
+
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-8 py-6 border-b border-white/5"
+                            style={{ background: 'linear-gradient(90deg, rgba(52,211,153,0.12) 0%, transparent 100%)' }}>
+                            <div className="flex items-center gap-4">
+                                <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl"
+                                    style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.35)' }}>
+                                    🚀
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Guia do Disparo em Massa</h2>
+                                    <p className="text-sm text-slate-400">Entenda cada etapa e como enviar mensagens com inteligência.</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsBulkGuideOpen(false)}
+                                className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-white transition-all hover:scale-110"
+                                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="overflow-y-auto flex-1 px-8 py-6 space-y-4" style={{ scrollbarWidth: 'thin', scrollbarColor: '#1e3a2f transparent' }}>
+
+                            {/* Card 1 — Visão Geral */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #34d399' }}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-lg">📡</span>
+                                    <h3 className="font-bold text-white text-sm">O que é o Disparo em Massa?</h3>
+                                </div>
+                                <p className="text-slate-300 text-sm leading-relaxed">Permite enviar um <b className="text-white">template aprovado pela Meta</b> para centenas ou milhares de contatos de uma vez. Cada envio é individualizado e pode conter variáveis personalizadas por contato.</p>
+                                <p className="text-emerald-400 text-xs mt-2 italic">💡 Use junto com Funis e Agendamentos para criar sequências automáticas de relacionamento.</p>
+                            </div>
+
+                            {/* Card 2 — Passo 1: Configuração */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #6366f1' }}>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="w-6 h-6 rounded-full bg-indigo-500 text-white text-xs font-black flex items-center justify-center shrink-0">1</span>
+                                    <h3 className="font-bold text-white text-sm">Etapa 1 — Configuração de Template</h3>
+                                </div>
+                                <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: 'rgba(99,102,241,0.1)' }}>
+                                    <p className="text-slate-300 text-xs leading-relaxed">Um único template enviado para toda a lista. Você preenche as variáveis (ex: nome, data) com valores fixos ou por contato.</p>
+                                </div>
+                            </div>
+
+                            {/* Card 3 — Variáveis */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #a78bfa' }}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-lg">🔡</span>
+                                    <h3 className="font-bold text-white text-sm">Variáveis do Template</h3>
+                                </div>
+                                <p className="text-slate-300 text-sm leading-relaxed mb-3">Campos <b className="text-white">{'{{1}}'}, {'{{2}}'}</b> etc. aparecem ao selecionar o template. Preencha-os com o valor fixo desejado ou deixe em branco para ser preenchido por coluna do CSV.</p>
+                                <div className="rounded-xl p-3 font-mono text-xs text-purple-300 leading-relaxed" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                                    {'{{1}}'} = Nome do cliente → "Maria"<br/>
+                                    {'{{2}}'} = Data → "15/03/2026"
+                                </div>
+                                <p className="text-purple-400 text-xs mt-2 italic">💡 Use o botão ⛶ para expandir o campo e editar textos longos com conforto.</p>
+                            </div>
+
+                            {/* Card 4 — Mensagem Direta */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #f59e0b' }}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-lg">💬</span>
+                                    <h3 className="font-bold text-white text-sm">Mensagem Direta Pós-Envio</h3>
+                                </div>
+                                <p className="text-slate-300 text-sm leading-relaxed">Mensagem de texto livre enviada <b className="text-white">imediatamente após</b> o template, quando a janela de 24h já estiver aberta. Ideal para complementar o template com um texto mais pessoal.</p>
+                                <p className="text-amber-400 text-xs mt-2 italic">💡 Suporta botões de resposta rápida para qualificar o lead logo após o disparo.</p>
+                            </div>
+
+                            {/* Card 5 — Mensagem Privada */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #10b981' }}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-lg">⏱️</span>
+                                    <h3 className="font-bold text-white text-sm">Mensagem Privada com Delay</h3>
+                                </div>
+                                <p className="text-slate-300 text-sm leading-relaxed">Segunda mensagem enviada com um <b className="text-white">atraso configurável</b> (ex: 30 min, 2h). Enviada apenas internamente no Chatwoot como nota, ou também para o contato.</p>
+                                <div className="mt-3 space-y-1.5">
+                                    <p className="text-slate-400 text-xs"><span className="text-emerald-400 font-bold">Delay:</span> tempo de espera antes do envio da 2ª mensagem.</p>
+                                    <p className="text-slate-400 text-xs"><span className="text-emerald-400 font-bold">Concorrência:</span> quantas mensagens privadas são enviadas simultaneamente.</p>
+                                </div>
+                            </div>
+
+                            {/* Card 6 — Passo 2: Contatos */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #3b82f6' }}>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-black flex items-center justify-center shrink-0">2</span>
+                                    <h3 className="font-bold text-white text-sm">Etapa 2 — Contatos e Envio</h3>
+                                </div>
+                                <div className="space-y-2">
+                                    {[
+                                        { label: 'Lista Manual', desc: 'Cole números diretamente ou importe um CSV/Excel com coluna de telefone.' },
+                                        { label: 'Lista de Exclusão', desc: 'Números nesta lista serão pulados. Ideal para quem já recebeu ou pediu para sair.' },
+                                        { label: 'Delay entre envios', desc: 'Intervalo em segundos entre cada mensagem. Valores menores são mais rápidos mas aumentam o risco de bloqueio.' },
+                                        { label: 'Concorrência', desc: 'Quantas mensagens são enviadas em paralelo. Recomendado: 1-3 para contas novas.' },
+                                    ].map(item => (
+                                        <div key={item.label} className="flex items-start gap-3 p-2.5 rounded-xl" style={{ background: 'rgba(59,130,246,0.08)' }}>
+                                            <span className="text-blue-300 font-bold text-xs shrink-0 mt-0.5 w-28">{item.label}</span>
+                                            <p className="text-slate-400 text-xs leading-relaxed">{item.desc}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Card 7 — Agendamento */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #ec4899' }}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-lg">📅</span>
+                                    <h3 className="font-bold text-white text-sm">Agendamento</h3>
+                                </div>
+                                <p className="text-slate-300 text-sm leading-relaxed">Programe o disparo para uma <b className="text-white">data e hora futura</b>. O sistema enfileira o disparo e executa automaticamente, mesmo que você feche o navegador.</p>
+                                <p className="text-pink-400 text-xs mt-2 italic">💡 Combine com a seção "Agenda de Disparos" para visualizar e gerenciar todos os envios programados.</p>
+                            </div>
+
+                            {/* Card 8 — Custos */}
+                            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #f97316' }}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-lg">💰</span>
+                                    <h3 className="font-bold text-white text-sm">Estimativa de Custo (Meta)</h3>
+                                </div>
+                                <p className="text-slate-300 text-sm leading-relaxed mb-3">Cada template enviado tem um custo cobrado pela Meta. Os valores estimados são:</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { cat: 'Marketing', price: 'R$ 0,35', color: 'text-indigo-300' },
+                                        { cat: 'Utilidade', price: 'R$ 0,07', color: 'text-emerald-300' },
+                                        { cat: 'Autenticação', price: 'R$ 0,05', color: 'text-blue-300' },
+                                    ].map(item => (
+                                        <div key={item.cat} className="text-center p-2.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.25)' }}>
+                                            <p className={`font-black text-sm ${item.color}`}>{item.price}</p>
+                                            <p className="text-slate-500 text-[10px] mt-0.5">{item.cat}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-orange-400 text-xs mt-3 italic">⚠️ Valores podem variar conforme tabela oficial da Meta para o Brasil.</p>
+                            </div>
+
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-8 py-5 border-t border-white/5 flex justify-end" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                            <button
+                                onClick={() => setIsBulkGuideOpen(false)}
+                                className="px-8 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105 active:scale-95"
+                                style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', boxShadow: '0 4px 20px rgba(16,185,129,0.35)' }}
+                            >
+                                Entendido!
+                            </button>
                         </div>
                     </div>
                 </div>,

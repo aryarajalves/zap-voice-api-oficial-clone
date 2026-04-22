@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import models, schemas
 from database import SessionLocal
-from core.deps import get_current_user
+from core.deps import get_current_user, get_validated_client_id
 
 router = APIRouter()
 
@@ -16,18 +16,15 @@ def get_db():
 
 @router.get("/funnels", response_model=List[schemas.Funnel], summary="Listar todos os funis")
 def list_funnels(
-    skip: int = 0, 
-    limit: int = 100, 
-    x_client_id: Optional[int] = Header(None),
-    db: Session = Depends(get_db), 
+    skip: int = 0,
+    limit: int = 100,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Retorna uma lista paginada de todos os funis de automação cadastrados.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
-    
     funnels = db.query(models.Funnel).filter(
         models.Funnel.client_id == x_client_id
     ).offset(skip).limit(limit).all()
@@ -35,18 +32,15 @@ def list_funnels(
 
 @router.get("/funnels/{funnel_id}", response_model=schemas.Funnel, summary="Obter detalhes de um funil")
 def read_funnel(
-    funnel_id: int, 
-    x_client_id: Optional[int] = Header(None),
-    db: Session = Depends(get_db), 
+    funnel_id: int,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Busca um funil específico pelo seu ID.
     Retorna 404 se não encontrado.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
-    
     funnel = db.query(models.Funnel).filter(
         models.Funnel.id == funnel_id,
         models.Funnel.client_id == x_client_id
@@ -57,21 +51,18 @@ def read_funnel(
 
 @router.post("/funnels", response_model=schemas.Funnel, summary="Criar novo funil")
 def create_funnel(
-    funnel: schemas.FunnelCreate, 
-    x_client_id: Optional[int] = Header(None),
-    db: Session = Depends(get_db), 
+    funnel: schemas.FunnelCreate,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Cria um novo funil de automação.
-    
+
     - **name**: Nome interno do funil.
     - **steps**: Lista de passos (mensagens, delays, mídias).
     - **trigger_phrase**: (Opcional) Gatilho de texto exato.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
-    
     # Check for duplicate name for this client
     existing = db.query(models.Funnel).filter(
         models.Funnel.name == funnel.name,
@@ -94,7 +85,12 @@ def create_funnel(
         description=funnel.description, 
         steps=steps_payload,
         trigger_phrase=funnel.trigger_phrase,
+        allowed_phones=funnel.allowed_phones,
+        blocked_phones=funnel.blocked_phones,
         allowed_phone=funnel.allowed_phone,
+        business_hours_start=funnel.business_hours_start,
+        business_hours_end=funnel.business_hours_end,
+        business_hours_days=funnel.business_hours_days,
         client_id=x_client_id
     )
     db.add(db_funnel)
@@ -104,18 +100,15 @@ def create_funnel(
 
 @router.put("/funnels/{funnel_id}", response_model=schemas.Funnel, summary="Atualizar funil existente")
 def update_funnel(
-    funnel_id: int, 
-    funnel_update: schemas.FunnelCreate, 
-    x_client_id: Optional[int] = Header(None),
-    db: Session = Depends(get_db), 
+    funnel_id: int,
+    funnel_update: schemas.FunnelCreate,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Atualiza as propriedades e passos de um funil existente.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
-    
     db_funnel = db.query(models.Funnel).filter(
         models.Funnel.id == funnel_id,
         models.Funnel.client_id == x_client_id
@@ -135,8 +128,12 @@ def update_funnel(
     db_funnel.name = funnel_update.name
     db_funnel.description = funnel_update.description
     db_funnel.trigger_phrase = funnel_update.trigger_phrase
+    db_funnel.allowed_phones = funnel_update.allowed_phones
+    db_funnel.blocked_phones = funnel_update.blocked_phones
     db_funnel.allowed_phone = funnel_update.allowed_phone
-    db_funnel.allowed_phone = funnel_update.allowed_phone
+    db_funnel.business_hours_start = funnel_update.business_hours_start
+    db_funnel.business_hours_end = funnel_update.business_hours_end
+    db_funnel.business_hours_days = funnel_update.business_hours_days
     
     steps_data = funnel_update.steps
     if isinstance(steps_data, list):
@@ -151,16 +148,13 @@ def update_funnel(
 @router.delete("/funnels/bulk", summary="Excluir múltiplos funis")
 def delete_funnels_bulk(
     payload: schemas.FunnelBulkDelete,
-    x_client_id: Optional[int] = Header(None),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Remove permanentemente múltiplos funis do sistema de uma vez.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
-    
     # Busca todos os funis que pertencem ao cliente e estão na lista de IDs
     query = db.query(models.Funnel).filter(
         models.Funnel.id.in_(payload.funnel_ids),
@@ -181,6 +175,17 @@ def delete_funnels_bulk(
     ).update({models.ScheduledTrigger.funnel_id: None}, synchronize_session=False)
 
     # 2. Delete Webhooks
+    # First delete events to avoid Foreign Key violation
+    webhook_ids_query = db.query(models.WebhookConfig.id).filter(
+        models.WebhookConfig.funnel_id.in_(funnel_ids)
+    ).all()
+    webhook_ids = [w[0] for w in webhook_ids_query]
+    
+    if webhook_ids:
+        db.query(models.WebhookEvent).filter(
+            models.WebhookEvent.webhook_id.in_(webhook_ids)
+        ).delete(synchronize_session=False)
+
     db.query(models.WebhookConfig).filter(
         models.WebhookConfig.funnel_id.in_(funnel_ids)
     ).delete(synchronize_session=False)
@@ -193,17 +198,14 @@ def delete_funnels_bulk(
 
 @router.delete("/funnels/{funnel_id}", summary="Excluir funil")
 def delete_funnel(
-    funnel_id: int, 
-    x_client_id: Optional[int] = Header(None),
-    db: Session = Depends(get_db), 
+    funnel_id: int,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Remove permanentemente um funil do sistema.
     """
-    if not x_client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
-    
     db_funnel = db.query(models.Funnel).filter(
         models.Funnel.id == funnel_id,
         models.Funnel.client_id == x_client_id
@@ -219,6 +221,17 @@ def delete_funnel(
 
     # 2. Handle WebhookConfigs
     # Delete webhooks associated with this funnel as they cannot exist without it
+    # First delete events to avoid Foreign Key violation
+    webhook_ids_query = db.query(models.WebhookConfig.id).filter(
+        models.WebhookConfig.funnel_id == funnel_id
+    ).all()
+    webhook_ids = [w[0] for w in webhook_ids_query]
+    
+    if webhook_ids:
+        db.query(models.WebhookEvent).filter(
+            models.WebhookEvent.webhook_id.in_(webhook_ids)
+        ).delete(synchronize_session=False)
+
     db.query(models.WebhookConfig).filter(
         models.WebhookConfig.funnel_id == funnel_id
     ).delete(synchronize_session=False)

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe } from 'react-icons/fi'; // Add FiGlobe
+import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign } from 'react-icons/fi';
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
@@ -33,11 +33,14 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
     const menuItems = [
         { id: 'templates', label: 'Criar Template', icon: FiPlus, roles: ['super_admin', 'admin', 'premium'] },
         { id: 'bulk_sender', label: 'Disparo em Massa', icon: FiHome, roles: ['super_admin', 'admin', 'premium'] },
+        { id: 'recurring_schedules', label: 'Disparo Recorrente Criado', icon: FiClock, roles: ['super_admin', 'admin', 'premium'] },
         { id: 'funnels', label: 'Meus Funis', icon: FiLayers, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'incoming_webhooks', label: 'Integrações (Webhooks)', icon: FiGlobe, roles: ['super_admin', 'admin', 'premium'] },
         { id: 'schedules', label: 'Agenda de Disparos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium', 'user'] },
         { id: 'history', label: 'Histórico', icon: FiClock, roles: ['super_admin', 'admin', 'premium', 'user'] },
+        { id: 'integrations', label: 'Integrações Webhook', icon: FiZap, roles: ['super_admin', 'admin', 'premium'] },
+        { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'] },
         { id: 'blocked', label: 'Contatos Bloqueados', icon: FiSlash, roles: ['super_admin', 'admin', 'premium'] },
+        { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium'] },
         { id: 'users', label: 'Gestão de Usuários', icon: FiUsers, roles: ['super_admin'] },
         { id: 'monitoring', label: 'Monitoramento', icon: FiActivity, roles: ['super_admin'] },
     ];

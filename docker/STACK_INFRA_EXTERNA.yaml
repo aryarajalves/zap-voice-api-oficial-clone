@@ -5,7 +5,7 @@ services:
   # 1. APLICAÇÃO PRINCIPAL (API)
   # =========================================
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.2
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:2.0.0
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
@@ -27,7 +27,7 @@ services:
       # MinIO Externo (Opcional - Se não usar, o sistema salva localmente)
       # - S3_ENDPOINT_URL=http://nome-do-minio:9000
       
-      - SECRET_KEY=changeme_secret_key_12345
+      - SECRET_KEY=zapvoice_long_secret_key_for_production_validation_min_32_chars
       - CORS_ORIGINS=*
       
       # Acesso Inicial
@@ -56,7 +56,7 @@ services:
   # 2. WORKER (Deve ter as mesmas variáveis)
   # =========================================
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:1.1.2
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:2.0.0
     command: python worker.py
     networks:
       - network_swarm_public
@@ -65,7 +65,7 @@ services:
     environment:
       # FIX: Variáveis repetidas apontando para infra externa
       - DATABASE_URL=postgresql://postgres:35cb19b8-13cd-4f02-af3e-abdcdd373ae5@NOME_DO_SEU_POSTGRES:5432/zapvoice
-      - SECRET_KEY=changeme_secret_key_12345
+      - SECRET_KEY=zapvoice_long_secret_key_for_production_validation_min_32_chars
       - RABBITMQ_HOST=NOME_DO_SEU_RABBIT
       - RABBITMQ_PORT=5672
 

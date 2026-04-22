@@ -124,18 +124,18 @@ export const ClientProvider = ({ children }) => {
         }
     };
 
+    const value = React.useMemo(() => ({
+        clients,
+        activeClient,
+        loading,
+        switchClient,
+        createClient,
+        deleteClient,
+        refreshClients: fetchClients,
+    }), [clients, activeClient, loading, fetchClients]);
+
     return (
-        <ClientContext.Provider
-            value={{
-                clients,
-                activeClient,
-                loading,
-                switchClient,
-                createClient,
-                deleteClient,
-                refreshClients: fetchClients,
-            }}
-        >
+        <ClientContext.Provider value={value}>
             {children}
         </ClientContext.Provider>
     );

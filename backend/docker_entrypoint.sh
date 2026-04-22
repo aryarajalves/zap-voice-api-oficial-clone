@@ -33,14 +33,14 @@ EOF
 
 echo "✅ Arquivo $CONFIG_FILE gerado com sucesso!"
 
-# Criar banco de dados se não existir (somente se DATABASE_URL estiver definido)
-if [ -n "$DATABASE_URL" ]; then
+# Criar banco de dados se não existir (somente se DATABASE_URL estiver definido e for o App principal)
+if [ -n "$DATABASE_URL" ] && [ "$1" = "uvicorn" ]; then
     echo "🗄️  Verificando/criando banco de dados PostgreSQL..."
     python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
     echo "🏗️  Aplicando migrações de esquema..."
     python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
     echo "🏗️  Aplicando migrações de esquema..."
-    python scripts/database/update_schema.py || echo "⚠️  Aviso: Falha ao aplicar migrações de esquema."
+    python scripts/database/update_schema.py || { echo "🚨 ERRO CRÍTICO: Falha na migração/verificação do banco de dados!"; exit 1; }
 fi
 
 # Inicia a aplicação original (uvicorn)
