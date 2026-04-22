@@ -1,0 +1,34 @@
+﻿
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90mC:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/pages[39m
+
+node.exe : [31mNo test 
+files found, exiting with 
+code 1
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (  
+  [31mNo test fi...ing    
+ with code 1:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+[39m
+[2mfilter: [22m[33msrc/
+pages/Integrations.test.js
+x[39m
+[2minclude: [22m[33m**/
+*.{test,spec}.?(c|m)[jt]s?
+(x)[39m
+[2mexclude:  [22m[33m**
+/node_modules/**[2m, 
+[22m**/.git/**[39m
+

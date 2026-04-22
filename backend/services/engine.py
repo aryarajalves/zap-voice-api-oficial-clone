@@ -510,7 +510,7 @@ async def execute_funnel(
             logger.warning(f"🚫 [GUARD] Forçando ABORTO: Contato {contact_phone} está na lista GLOBAL de bloqueados.")
             if not trigger.is_bulk:
                 trigger.status = 'failed'
-                trigger.failure_reason = "Contato bloqueado globalmente (Lista de Exclusão)."
+                trigger.failure_reason = "Bloqueado na Plataforma (Lista de Exclusão)"
             db.commit()
             return
     else:
@@ -538,7 +538,7 @@ async def execute_funnel(
             logger.warning(f"🚫 [GUARD] Forçando ABORTO: Contato {contact_phone} bloqueado nas configurações deste FUNIL.")
             if not trigger.is_bulk:
                 trigger.status = 'failed'
-                trigger.failure_reason = "Contato bloqueado nas configurações deste funil."
+                trigger.failure_reason = "Bloqueado especificamente nas configurações deste Funil"
             db.commit()
             return
 

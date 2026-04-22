@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v2.8.5)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.1.3)
 
-Bem-vindo à versão **2.8.5** do **ZapVoice**! Este é um sistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.1.3** do **ZapVoice**! Este é um sistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -134,14 +134,14 @@ Para gerar a imagem de produção e enviar para o Docker Hub:
 
 3. Build da Imagem:
 ```bash
-docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:3.1.2 -f docker/Dockerfile .
+docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:3.1.3 -f docker/Dockerfile .
 ```
 
 4. Push da Imagem:
 ```bash
-docker push aryarajalves/zap-voice-funil-api-oficial-zap:3.1.2
+docker push aryarajalves/zap-voice-funil-api-oficial-zap:3.1.3
 ```
-*(Versão atual: 3.1.2 - Label Application & Stability)*
+*(Versão atual: 3.1.3 - Label Application & Stability)*
 
 ---
 

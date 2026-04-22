@@ -1253,9 +1253,10 @@ async def handle_whatsapp_event(data: dict):
                                     )
                                     logger.info(f"🚀 [CHATWOOT SYNC] Inbound message '{button_text}' synced to convo {conv_id_resolved}")
                                 except Exception as sync_err:
-                                    # [REMOVIDO] Fallback para Notas Privadas desativado a pedido do usuário.
-                                    # Inbound Button clicks não serão mais registrados como notas internas se a Inbox for oficial (422).
-                                    logger.warning(f"⚠️ [CHATWOOT SYNC] Skip sync/fallback for inbound message: {sync_err}")
+                                    if "422" in str(sync_err) or "Api inboxes" in str(sync_err):
+                                        logger.info(f"ℹ️ [CHATWOOT SYNC] Sincronização pulada: Inbox Oficial não permite criação manual de interações (422).")
+                                    else:
+                                        logger.warning(f"⚠️ [CHATWOOT SYNC] Falha ao sincronizar interação: {sync_err}")
 
                                 # --- NEW: Immediate Window ID Sync ---
                                 # We just got the convo ID, so we must associate it with the fresh window timestamp.
@@ -1555,12 +1556,23 @@ async def handle_deferred_post_delivery(trigger_id: int, message_record_id: int,
         logger.info(f"🧠 [MEMORY DEBUG] Trigger {trigger.id} | Bulk: {trigger.is_bulk} | URL: {bool(memory_webhook)} | Toggle: {individual_toggle} | Should: {should_trigger_memory}")
 
         if should_trigger_memory:
-            if (message_record.memory_webhook_status is None or message_record.memory_webhook_status == "failed"):
-                # Atomic lock
+            # 1. Tentar Lock Atômico (Incluindo retentativa se estiver 'pending' há mais de 30s)
+            from datetime import datetime, timezone, timedelta
+            stale_limit = datetime.now(timezone.utc) - timedelta(seconds=30)
+            
+            # Filtro robusto: Aceita se for None, 'failed' ou se estiver 'pending' travado (stale)
+            if (message_record.memory_webhook_status is None or 
+                message_record.memory_webhook_status == "failed" or
+                (message_record.memory_webhook_status == "pending" and message_record.updated_at and message_record.updated_at < stale_limit)):
+                
                 locked = db.query(models.MessageStatus).filter(
                     models.MessageStatus.id == message_record.id,
-                    or_(models.MessageStatus.memory_webhook_status == None, models.MessageStatus.memory_webhook_status == "failed")
-                ).update({"memory_webhook_status": "pending"})
+                    or_(
+                        models.MessageStatus.memory_webhook_status == None, 
+                        models.MessageStatus.memory_webhook_status == "failed",
+                        and_(models.MessageStatus.memory_webhook_status == "pending", models.MessageStatus.updated_at < stale_limit)
+                    )
+                ).update({"memory_webhook_status": "pending", "updated_at": datetime.now(timezone.utc)})
                 db.commit()
 
                 logger.info(f"🧠 [MEMORY DEBUG] Locked: {locked} for Msg {message_record.id}")
@@ -1569,7 +1581,36 @@ async def handle_deferred_post_delivery(trigger_id: int, message_record_id: int,
                     try:
                         # RENDER TEMPLATE CONTENT FOR AI MEMORY
                         final_content = message_record.content
-                        if "[Template:" in final_content:
+                        
+                        # -----------------------------------------------------------------
+                        # NOVO: Fallback para Nó de Texto se o conteúdo estiver vazio (Race Condition)
+                        # -----------------------------------------------------------------
+                        if not final_content or not str(final_content).strip():
+                             try:
+                                 # Recuperamos o ID do nó que gerou esta mensagem
+                                 node_id = message_record.node_id or trigger.current_node_id
+                                 if node_id:
+                                     # Buscamos o funil para ler o conteúdo original do nó no grafo
+                                     from models import Funnel
+                                     fun_obj = db.query(Funnel).filter(Funnel.id == trigger.funnel_id).first()
+                                     if fun_obj and fun_obj.steps:
+                                         import json
+                                         # O campo 'steps' armazena o JSON do Grafo (nodes/edges)
+                                         graph_data = fun_obj.steps if isinstance(fun_obj.steps, dict) else json.loads(fun_obj.steps)
+                                         nodes_list = graph_data.get("nodes", [])
+                                         # Localiza o nó exato pelo ID
+                                         node_data = next((n for n in nodes_list if str(n.get("id")) == str(node_id)), None)
+                                         if node_data:
+                                             node_d = node_data.get("data", {})
+                                             # Tenta capturar o texto de diferentes formatos de nó
+                                             raw_text = node_d.get("content") or node_d.get("text") or node_d.get("caption")
+                                             if raw_text:
+                                                 final_content = raw_text
+                                                 logger.info(f"✅ [MEMORY FALLBACK] Conteúdo recuperado do Nó {node_id}: {final_content[:50]}...")
+                             except Exception as e:
+                                 logger.error(f"⚠️ [MEMORY FALLBACK] Erro ao recuperar texto do nó: {e}")
+
+                        if final_content and "[Template:" in final_content:
                             tpl_name = message_record.template_name or trigger.template_name
                             if not tpl_name:
                                 import re

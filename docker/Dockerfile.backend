@@ -1,0 +1,47 @@
+# ESTÁGIO 1: Build do Frontend (Vite)
+FROM node:18-alpine AS frontend-build
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# ESTÁGIO 2: Backend Python
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libmagic1 \
+    dos2unix \
+    gcc \
+    libc-dev \
+    libffi-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar dependências Python
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código do backend
+COPY backend/ .
+
+# Criar diretórios necessários e copiar build do frontend para static/dist
+RUN mkdir -p /app/static/dist && mkdir -p /app/static/uploads
+COPY --from=frontend-build /frontend/dist /app/static/dist
+
+# Configurar entrypoint
+COPY docker/entrypoint.sh /app/docker_entrypoint.sh
+RUN dos2unix /app/docker_entrypoint.sh && chmod +x /app/docker_entrypoint.sh
+
+# Variáveis (Defaults)
+ENV PORT=8000
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+ENTRYPOINT ["/app/docker_entrypoint.sh"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

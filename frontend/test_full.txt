@@ -1,0 +1,75 @@
+﻿
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90mC:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend[39m
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe loading inicialmente
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mrenderiza lista de disparos ap├│s carregar
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mrenderiza lista de disparos ap├│s carregar
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe mensagem quando n├úo h├í disparos
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe mensagem quando n├úo h├í disparos
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe erro quando fetch falha
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe erro quando fetch falha
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mfiltra por nome ao digitar no campo de busca
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mfiltra por nome ao digitar no campo de busca
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mfiltra por nome ao digitar no campo de busca
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+DEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe os r├│tulos de Chegada e Disparo
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe os r├│tulos de Chegada e Disparo
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe o r├│tulo de status correto (Enviado, Enviando, etc.)
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+[90mstdout[2m | src/components/TriggerHistory.test.jsx[2m > [22m[2mTriggerHistory[2m > [22m[2mexibe o r├│tulo de status correto (Enviado, Enviando, etc.)
+[22m[39mDEBUG: fetchHistory called. Active Client: { id: [33m1[39m }
+DEBUG: Current User Role: super_admin | User: { role: [32m'super_admin'[39m }
+
+ [31mÔØ»[39m src/components/TriggerHistory.test.jsx [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1192[2mms[22m[39m
+     [32mÔ£ô[39m exibe loading inicialmente[32m 42[2mms[22m[39m
+     [32mÔ£ô[39m renderiza lista de disparos ap├│s carregar[32m 38[2mms[22m[39m
+     [32mÔ£ô[39m exibe mensagem quando n├úo h├í disparos[32m 19[2mms[22m[39m
+     [32mÔ£ô[39m exibe erro quando fetch falha[32m 21[2mms[22m[39m
+     [32mÔ£ô[39m filtra por nome ao digitar no campo de busca[32m 41[2mms[22m[39m
+     [32mÔ£ô[39m exibe os r├│tulos de Chegada e Disparo[32m 19[2mms[22m[39m
+[31m     [31m├ù[31m exibe o r├│tulo de status correto (Enviado, Enviando, etc.)[39m[33m 1009[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m6 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 16:25:26
+[2m   Duration [22m 2.09s[2m (transform 89ms, setup 130ms, import 91ms, tests 1.19s, environment 555ms)[22m
+

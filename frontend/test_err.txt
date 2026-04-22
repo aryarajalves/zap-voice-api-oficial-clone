@@ -1,0 +1,20 @@
+﻿
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90mC:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend[39m
+
+ [31mÔØ»[39m src/components/RecipientSelector.test.jsx [2m([22m[2m10 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[33m 1253[2mms[22m[39m
+[31m     [31m├ù[31m renderiza o t├¡tulo corretamente[39m[32m 37[2mms[22m[39m
+[31m     [31m├ù[31m renderiza bot├Áes de modo manual e upload[39m[32m 6[2mms[22m[39m
+     [32mÔ£ô[39m inicia no modo manual[32m 96[2mms[22m[39m
+[31m     [31m├ù[31m chama onSelect com lista vazia ao iniciar[39m[32m 7[2mms[22m[39m
+[31m     [31m├ù[31m muda para modo upload ao clicar no bot├úo[39m[32m 6[2mms[22m[39m
+     [32mÔ£ô[39m aceita entrada manual de telefones[32m 30[2mms[22m[39m
+     [32mÔ£ô[39m respects requireOpenWindow prop setting filterOpenOnly[32m 10[2mms[22m[39m
+     [32mÔ£ô[39m exibe vari├íveis de template na aba de etiquetas[32m 15[2mms[22m[39m
+     [32mÔ£ô[39m abre o menu m├ígico e seleciona uma op├º├úo[32m 22[2mms[22m[39m
+[31m     [31m├ù[31m carrega leads da etiqueta e aplica vari├íveis[39m[33m 1022[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (10)[39m
+[2m   Start at [22m 10:06:02
+[2m   Duration [22m 2.43s[2m (transform 91ms, setup 153ms, import 91ms, tests 1.25s, environment 591ms)[22m
+
