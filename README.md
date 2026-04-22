@@ -134,14 +134,14 @@ Para gerar a imagem de produção e enviar para o Docker Hub:
 
 3. Build da Imagem:
 ```bash
-docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:3.1.1 -f docker/Dockerfile .
+docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:3.1.2 -f docker/Dockerfile .
 ```
 
 4. Push da Imagem:
 ```bash
-docker push aryarajalves/zap-voice-funil-api-oficial-zap:3.1.1
+docker push aryarajalves/zap-voice-funil-api-oficial-zap:3.1.2
 ```
-*(Versão atual: 3.1.1 - Label Application & Stability)*
+*(Versão atual: 3.1.2 - Label Application & Stability)*
 
 ---
 
