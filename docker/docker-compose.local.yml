@@ -12,6 +12,8 @@ services:
     volumes:
       - zapvoice_uploads:/app/static/uploads
       - ../backend:/app
+
+
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude "tests_unit/*" --reload-exclude "*.log" --reload-exclude "*.txt"
     env_file:
       - ../backend/.env
@@ -45,6 +47,7 @@ services:
     volumes:
       - zapvoice_uploads:/app/static/uploads
       - ../backend:/app
+
     env_file:
       - ../backend/.env
     environment:

@@ -85,7 +85,8 @@ def update_schema():
             ("is_interaction", "BOOLEAN DEFAULT FALSE"),
             ("content", "TEXT"),
             ("meta_price_category", "VARCHAR"),
-            ("meta_price_brl", "FLOAT")
+            ("meta_price_brl", "FLOAT"),
+            ("read_counted", "BOOLEAN DEFAULT FALSE")
         ]
         
         for col_name, col_type in ms_columns:

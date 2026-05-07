@@ -74,6 +74,7 @@ class ScheduledTrigger(ScheduledTriggerBase):
     private_message_concurrency: int = 1
     total_sent: int = 0
     total_failed: int = 0
+    total_contacts: int = 0
     contacts_list: Optional[List[Union[dict, str]]] = Field(None, description="Lista de contatos alvo (para validação)")
     delay_seconds: int = Field(5, description="Intervalo entre envios (bulk)")
     concurrency_limit: int = 1
@@ -99,6 +100,16 @@ class ScheduledTrigger(ScheduledTriggerBase):
     is_interaction: bool = False
     sent_as: Optional[str] = None  # Resultado real: 'FREE_MESSAGE' (grátis) ou 'TEMPLATE' (pago)
     chatwoot_label: Optional[List[str]] = Field(default_factory=list)
+
+    @field_validator('chatwoot_label', mode='before')
+    @classmethod
+    def parse_chatwoot_label(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return []
+        return v or []
     updated_at: Optional[datetime] = None
     
     # Nested Funnels
@@ -279,6 +290,7 @@ class WebhookEventMappingBase(BaseModel):
     manychat_phone: Optional[str] = Field(None, description="Campo dinâmico telefone ManyChat")
     manychat_tag: Optional[str] = Field(None, description="Tag para adicionar no ManyChat")
     manychat_tag_automation: Optional[bool] = Field(False, description="Ativar automação de tag dinâmica")
+    manychat_tag_include_date: Optional[bool] = Field(True, description="Incluir data DD-MM-YYYY na etiqueta")
     manychat_tag_prefix: Optional[str] = Field(None, description="Prefixo da tag dinâmica")
     manychat_tag_rotation_time: Optional[str] = Field("08:00", description="Horário de rotação (HH:mm)")
     manychat_tag_rotation_day: Optional[int] = Field(4, description="Dia da semana da rotação (0-6)")

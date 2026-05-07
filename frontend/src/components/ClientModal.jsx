@@ -30,17 +30,11 @@ export default function ClientModal({ isOpen, onClose }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full transition-colors duration-200 filter border border-gray-100 dark:border-gray-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity">
+            <div className="bg-white dark:bg-[#1e293b] rounded-[2rem] shadow-2xl max-w-md w-full transition-colors duration-200 border border-gray-100 dark:border-white/5 overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Novo Cliente</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    >
-                        <FiX size={24} />
-                    </button>
+                <div className="flex items-center justify-between p-8 border-b border-gray-200 dark:border-white/5 bg-gray-50/50 dark:bg-white/5">
+                    <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Novo Cliente</h2>
                 </div>
 
                 {/* Body */}

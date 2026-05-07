@@ -10,11 +10,15 @@ vi.mock('react-hot-toast', () => ({
 
 import { fetchWithAuth } from '../AuthContext';
 vi.mock('../AuthContext', () => ({
-  fetchWithAuth: vi.fn(),
+  fetchWithAuth: vi.fn().mockImplementation(() => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ event_types: [], product_names: [], tags: ['tag_teste'], items: [] })
+  }))
 }));
 
+const mockClient = { activeClient: { id: 1 } };
 vi.mock('../contexts/ClientContext', () => ({
-  useClient: () => ({ activeClient: { id: 1 } }),
+  useClient: () => mockClient,
 }));
 
 vi.mock('xlsx', () => ({
@@ -62,7 +66,7 @@ describe('RecipientSelector', () => {
 
   it('chama onSelect com lista vazia ao iniciar', () => {
     render(<RecipientSelector {...defaultProps} />);
-    expect(defaultProps.onSelect).toHaveBeenCalledWith([]);
+    expect(defaultProps.onSelect).toHaveBeenCalledWith([], expect.any(Object));
   });
 
   it('muda para modo upload ao clicar no botão', () => {
@@ -140,6 +144,15 @@ describe('RecipientSelector', () => {
     // Mudar para Etiquetas e selecionar a tag mockada
     fireEvent.click(screen.getByText(/etiquetas/i));
     
+    // Aguardar as etiquetas carregarem
+    await waitFor(() => {
+      expect(screen.getByText('tag_teste')).toBeInTheDocument();
+    });
+    
+    // Precisamos selecionar a etiqueta no dropdown para habilitar o botão
+    const select = screen.getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'tag_teste' } });
+    
     // Preencher variável manualmente com código
     const input = screen.getByPlaceholderText(/Valor para Var 1/i);
     fireEvent.change(input, { target: { value: 'Olá {{primeiro_nome}}!' } });
@@ -153,7 +166,7 @@ describe('RecipientSelector', () => {
         expect.objectContaining({
           vars: expect.objectContaining({ '1': 'Olá João!' })
         })
-      ]));
+      ]), expect.any(Object));
     });
   });
 });

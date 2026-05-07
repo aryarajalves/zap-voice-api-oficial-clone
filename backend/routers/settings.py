@@ -78,6 +78,10 @@ def read_settings(
             else:
                 masked_settings[key] = value
         
+        # Incluir o Token de Verificação da Meta (vindo do ENV ou padrão)
+        import os
+        masked_settings["WHATSAPP_VERIFY_TOKEN"] = os.getenv("WHATSAPP_VERIFY_TOKEN", "zapvoice_oficial")
+
         print(f"[SETTINGS] Returning masked settings: {list(masked_settings.keys())}")
         return masked_settings
     except Exception as e:
@@ -123,6 +127,7 @@ async def update_settings(
         "WA_BUSINESS_ACCOUNT_ID",
         "WA_PHONE_NUMBER_ID",
         "WA_ACCESS_TOKEN",
+        "WA_PIN",
         "CHATWOOT_API_URL",
         "CHATWOOT_API_TOKEN",
         "CHATWOOT_ACCOUNT_ID",
@@ -134,7 +139,8 @@ async def update_settings(
         "META_RETURN_CONFIG",
         "AUTO_BLOCK_KEYWORDS",
         "AI_MEMORY_ENABLED",
-        "AGENT_MEMORY_WEBHOOK_URL"
+        "AGENT_MEMORY_WEBHOOK_URL",
+        "MANYCHAT_API_KEY"
     }
     
     saved_count = 0

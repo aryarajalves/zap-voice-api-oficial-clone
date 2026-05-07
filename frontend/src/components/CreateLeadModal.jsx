@@ -68,8 +68,7 @@ const CreateLeadModal = ({
         <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 sm:p-6">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/85 backdrop-blur-md animate-in fade-in duration-300"
-                onClick={onClose}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
             />
 
             {/* Modal Content */}
@@ -94,12 +93,6 @@ const CreateLeadModal = ({
                                 Preencha os dados abaixo. Se o telefone já existir, o contato será atualizado.
                             </p>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all active:scale-90"
-                        >
-                            <FiX size={24} />
-                        </button>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">

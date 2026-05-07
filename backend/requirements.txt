@@ -53,3 +53,6 @@ pytz
 psutil==5.9.8
 pandas
 openpyxl
+# Ferramentas de Teste
+pytest==8.3.3
+pytest-asyncio==0.24.0

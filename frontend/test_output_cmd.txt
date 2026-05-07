@@ -1,0 +1,1131 @@
+
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90mC:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend[39m
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mrenderiza o título corretamente
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mrenderiza botões de modo manual e upload
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2minicia no modo manual
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mchama onSelect com lista vazia ao iniciar
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mmuda para modo upload ao clicar no botão
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2maceita entrada manual de telefones
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mrespects requireOpenWindow prop setting filterOpenOnly
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mrespects requireOpenWindow prop setting filterOpenOnly
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mexibe variáveis de template na aba de etiquetas
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mabre o menu mágico e seleciona uma opção
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+An update to RecipientSelector inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mcarrega leads da etiqueta e aplica variáveis
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+Erro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+
+[90mstderr[2m | src/components/RecipientSelector.test.jsx[2m > [22m[2mRecipientSelector[2m > [22m[2mcarrega leads da etiqueta e aplica variáveis
+[22m[39mErro ao carregar filtros de leads: TypeError: Cannot read properties of undefined (reading 'ok')
+    at C:/Users/aryar/.gemini/antigravity/scratch/Projetos Serios/Projeto - ZapVoice no Chatwoot/frontend/src/components/RecipientSelector/hooks/useRecipientSelector.js:58:21
+
+ [31m❯[39m src/components/RecipientSelector.test.jsx [2m([22m[2m10 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[33m 1353[2mms[22m[39m
+[31m     [31m×[31m renderiza o título corretamente[39m[32m 53[2mms[22m[39m
+[31m     [31m×[31m renderiza botões de modo manual e upload[39m[32m 11[2mms[22m[39m
+     [32m✓[39m inicia no modo manual[32m 142[2mms[22m[39m
+[31m     [31m×[31m chama onSelect com lista vazia ao iniciar[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m muda para modo upload ao clicar no botão[39m[32m 8[2mms[22m[39m
+     [32m✓[39m aceita entrada manual de telefones[32m 38[2mms[22m[39m
+     [32m✓[39m respects requireOpenWindow prop setting filterOpenOnly[32m 15[2mms[22m[39m
+     [32m✓[39m exibe variáveis de template na aba de etiquetas[32m 20[2mms[22m[39m
+     [32m✓[39m abre o menu mágico e seleciona uma opção[32m 25[2mms[22m[39m
+[31m     [31m×[31m carrega leads da etiqueta e aplica variáveis[39m[33m 1027[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/RecipientSelector.test.jsx[2m > [22mRecipientSelector[2m > [22mrenderiza o título corretamente
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Meus Destinatários. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-6"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative overflow-hidden group"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex justify-center mb-8"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-black/40 p-1.5 rounded-2xl inline-flex relative w-full max-w-md border border-white/5 shadow-inner"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-white shadow-lg shadow-emerald-900/20 bg-slate-800 border border-white/5"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mManual[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+                [36m<polyline[39m
+                  [33mpoints[39m=[32m"17 8 12 3 7 8"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"12"[39m
+                  [33mx2[39m=[32m"12"[39m
+                  [33my1[39m=[32m"3"[39m
+                  [33my2[39m=[32m"15"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mArquivo[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"7"[39m
+                  [33mx2[39m=[32m"7.01"[39m
+                  [33my1[39m=[32m"7"[39m
+                  [33my2[39m=[32m"7"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mEtiquetas[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative group/input"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur opacity-0 group-hover/input:opacity-100 transition duration-500"[39m
+            [36m/>[39m
+            [36m<textarea[39m
+              [33mclass[39m=[32m"relative w-full p-6 bg-black/40 border border-white/10 rounded-2xl focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 outline-none text-slate-200 text-sm min-h-[160px] placeholder:text-slate-600 font-mono transition-all resize-none shadow-inner"[39m
+              [33mplaceholder[39m=[32m"Cole sua lista aqui...
+5511999999999
+5511888888888"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute bottom-4 right-4 text-[10px] uppercase font-black text-slate-600 tracking-widest pointer-events-none"[39m
+            [36m>[39m
+              [0mUm por linha[0m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex gap-4"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg shadow-emerald-900/40 hover:shadow-emerald-900/60 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group-hover/input:shadow-emerald-500/10"[39m
+              [33mdisabled[39m=[32m""[39m
+            [36m>[39m
+              [0mProcessar Lista[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/RecipientSelector.test.jsx:[2m48:19[22m[39m
+    [90m 46|[39m   [34mit[39m([32m'renderiza o título corretamente'[39m[33m,[39m () [33m=>[39m {
+    [90m 47|[39m     render(<RecipientSelector {...defaultProps} title="Meus Destinatár…
+    [90m 48|[39m     [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Meus Destinatários'[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m   |[39m                   [31m^[39m
+    [90m 49|[39m   })[33m;[39m
+    [90m 50|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/RecipientSelector.test.jsx[2m > [22mRecipientSelector[2m > [22mrenderiza botões de modo manual e upload
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: /upload/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-6"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative overflow-hidden group"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex justify-center mb-8"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-black/40 p-1.5 rounded-2xl inline-flex relative w-full max-w-md border border-white/5 shadow-inner"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-white shadow-lg shadow-emerald-900/20 bg-slate-800 border border-white/5"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mManual[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+                [36m<polyline[39m
+                  [33mpoints[39m=[32m"17 8 12 3 7 8"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"12"[39m
+                  [33mx2[39m=[32m"12"[39m
+                  [33my1[39m=[32m"3"[39m
+                  [33my2[39m=[32m"15"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mArquivo[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"7"[39m
+                  [33mx2[39m=[32m"7.01"[39m
+                  [33my1[39m=[32m"7"[39m
+                  [33my2[39m=[32m"7"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mEtiquetas[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative group/input"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur opacity-0 group-hover/input:opacity-100 transition duration-500"[39m
+            [36m/>[39m
+            [36m<textarea[39m
+              [33mclass[39m=[32m"relative w-full p-6 bg-black/40 border border-white/10 rounded-2xl focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 outline-none text-slate-200 text-sm min-h-[160px] placeholder:text-slate-600 font-mono transition-all resize-none shadow-inner"[39m
+              [33mplaceholder[39m=[32m"Cole sua lista aqui...
+5511999999999
+5511888888888"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute bottom-4 right-4 text-[10px] uppercase font-black text-slate-600 tracking-widest pointer-events-none"[39m
+            [36m>[39m
+              [0mUm por linha[0m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex gap-4"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg shadow-emerald-900/40 hover:shadow-emerald-900/60 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group-hover/input:shadow-emerald-500/10"[39m
+              [33mdisabled[39m=[32m""[39m
+            [36m>[39m
+              [0mProcessar Lista[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/RecipientSelector.test.jsx:[2m54:19[22m[39m
+    [90m 52|[39m     [34mrender[39m([33m<[39m[33mRecipientSelector[39m [33m{[39m[33m...[39mdefaultProps[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 53|[39m     [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([36m/manual/i[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m 54|[39m     [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([36m/upload/i[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m   |[39m                   [31m^[39m
+    [90m 55|[39m   })[33m;[39m
+    [90m 56|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/RecipientSelector.test.jsx[2m > [22mRecipientSelector[2m > [22mchama onSelect com lista vazia ao iniciar
+[31m[1mAssertionError[22m: expected "vi.fn()" to be called with arguments: [ [] ][90m
+
+Received:
+
+[1m  1st vi.fn() call:
+
+[22m[2m  [[22m
+[2m    [],[22m
+[31m+   {[90m
+[31m+     "mode": "manual",[90m
+[31m+     "tag": "",[90m
+[31m+   },[90m
+[2m  ][22m
+[31m[90m
+
+Number of calls: [1m1[22m
+[31m[39m
+[36m [2m❯[22m src/components/RecipientSelector.test.jsx:[2m65:35[22m[39m
+    [90m 63|[39m   [34mit[39m([32m'chama onSelect com lista vazia ao iniciar'[39m[33m,[39m () [33m=>[39m {
+    [90m 64|[39m     [34mrender[39m([33m<[39m[33mRecipientSelector[39m [33m{[39m[33m...[39mdefaultProps[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 65|[39m     [34mexpect[39m(defaultProps[33m.[39monSelect)[33m.[39m[34mtoHaveBeenCalledWith[39m([])[33m;[39m
+    [90m   |[39m                                   [31m^[39m
+    [90m 66|[39m   })[33m;[39m
+    [90m 67|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/RecipientSelector.test.jsx[2m > [22mRecipientSelector[2m > [22mmuda para modo upload ao clicar no botão
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: /upload/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-6"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative overflow-hidden group"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex justify-center mb-8"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-black/40 p-1.5 rounded-2xl inline-flex relative w-full max-w-md border border-white/5 shadow-inner"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-white shadow-lg shadow-emerald-900/20 bg-slate-800 border border-white/5"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mManual[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+                [36m<polyline[39m
+                  [33mpoints[39m=[32m"17 8 12 3 7 8"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"12"[39m
+                  [33mx2[39m=[32m"12"[39m
+                  [33my1[39m=[32m"3"[39m
+                  [33my2[39m=[32m"15"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mArquivo[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-width[39m=[32m"2.5"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"7"[39m
+                  [33mx2[39m=[32m"7.01"[39m
+                  [33my1[39m=[32m"7"[39m
+                  [33my2[39m=[32m"7"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mEtiquetas[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"relative group/input"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur opacity-0 group-hover/input:opacity-100 transition duration-500"[39m
+            [36m/>[39m
+            [36m<textarea[39m
+              [33mclass[39m=[32m"relative w-full p-6 bg-black/40 border border-white/10 rounded-2xl focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 outline-none text-slate-200 text-sm min-h-[160px] placeholder:text-slate-600 font-mono transition-all resize-none shadow-inner"[39m
+              [33mplaceholder[39m=[32m"Cole sua lista aqui...
+5511999999999
+5511888888888"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute bottom-4 right-4 text-[10px] uppercase font-black text-slate-600 tracking-widest pointer-events-none"[39m
+            [36m>[39m
+              [0mUm por linha[0m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex gap-4"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"flex-1 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg shadow-emerald-900/40 hover:shadow-emerald-900/60 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group-hover/input:shadow-emerald-500/10"[39m
+              [33mdisabled[39m=[32m""[39m
+            [36m>[39m
+              [0mProcessar Lista[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/RecipientSelector.test.jsx:[2m70:30[22m[39m
+    [90m 68|[39m   [34mit[39m([32m'muda para modo upload ao clicar no botão'[39m[33m,[39m () [33m=>[39m {
+    [90m 69|[39m     [34mrender[39m([33m<[39m[33mRecipientSelector[39m [33m{[39m[33m...[39mdefaultProps[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 70|[39m     [35mconst[39m uploadBtn [33m=[39m screen[33m.[39m[34mgetByText[39m([36m/upload/i[39m)[33m;[39m
+    [90m   |[39m                              [31m^[39m
+    [90m 71|[39m     fireEvent[33m.[39m[34mclick[39m(uploadBtn)[33m;[39m
+    [90m 72|[39m     [90m// Modo upload exibe input de arquivo[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/RecipientSelector.test.jsx[2m > [22mRecipientSelector[2m > [22mcarrega leads da etiqueta e aplica variáveis
+[31m[1mAssertionError[22m[39m: expected "vi.fn()" to be called with arguments: [ ArrayContaining{…} ][90m
+
+Received:
+
+[1m  1st vi.fn() call:
+
+[22m[2m  [[22m
+[32m-   ArrayContaining [[90m
+[32m-     ObjectContaining {[90m
+[32m-       "vars": ObjectContaining {[90m
+[32m-         "1": "Olá João!",[90m
+[32m-       },[90m
+[31m+   [],[90m
+[31m+   {[90m
+[31m+     "mode": "manual",[90m
+[31m+     "tag": "",[90m
+[2m    },[22m
+[32m-   ],[90m
+[2m  ][22m
+
+[1m  2nd vi.fn() call:
+
+[22m[2m  [[22m
+[32m-   ArrayContaining [[90m
+[32m-     ObjectContaining {[90m
+[32m-       "vars": ObjectContaining {[90m
+[32m-         "1": "Olá João!",[90m
+[32m-       },[90m
+[31m+   [],[90m
+[31m+   {[90m
+[31m+     "mode": "tag",[90m
+[31m+     "tag": "",[90m
+[2m    },[22m
+[32m-   ],[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-6"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative overflow-hidden group"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex justify-center mb-8"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"bg-black/40 p-1.5 rounded-2xl inline-flex relative w-full max-w-md border border-white/5 shadow-inner"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"16"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-width[39m=[32m"2.5"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"16"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mManual[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-slate-500 hover:text-slate-300"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"16"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-width[39m=[32m"2.5"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"16"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                  [36m/>[39m
+                  [36m<polyline[39m
+                    [33mpoints[39m=[32m"17 8 12 3 7 8"[39m
+                  [36m/>[39m
+                  [36m<line[39m
+                    [33mx1[39m=[32m"12"[39m
+                    [33mx2[39m=[32m"12"[39m
+                    [33my1[39m=[32m"3"[39m
+                    [33my2[39m=[32m"15"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mArquivo[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 relative z-10 text-white shadow-lg shadow-emerald-900/20 bg-slate-800 border border-white/5"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"16"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-width[39m=[32m"2.5"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"16"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"[39m
+                  [36m/>[39m
+                  [36m<line[39m
+                    [33mx1[39m=[32m"7"[39m
+                    [33mx2[39m=[32m"7.01"[39m
+                    [33my1[39m=[32m"7"[39m
+                    [33my2[39m=[32m"7"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mEtiquetas[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"p-8 bg-slate-800/20 border border-white/5 rounded-3xl space-y-6"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-col gap-2"[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"text-[10px] font-black text-slate-500 uppercase tracking-widest px-1"[39m
+                [36m>[39m
+                  [0mSelecione a Etiqueta Interna[0m
+                [36m</label>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"relative group/tag-select"[39m
+                [36m>[39m
+                  [36m<select[39m
+                    [33mclass[39m=[32m"w-full p-4 pl-5 bg-black/40 border border-white/10 rounded-2xl focus:border-emerald-500/50 outline-none transition-all text-white font-bold"[39m
+                  [36m>[39m
+                    [36m<option[39m
+                      [33mvalue[39m=[32m""[39m
+                    [36m>[39m
+                      [0m-- Escolha uma etiqueta --[0m
+                    [36m</option>[39m
+                  [36m</select>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"space-y-4 pt-6 border-t border-white/10"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center justify-between px-1"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-0.5"[39m
+                  [36m>[39m
+                    [36m<h4[39m
+                      [33mclass[39m=[32m"text-[10px] font-black text-emerald-400 uppercase tracking-widest"[39m
+                    [36m>[39m
+                      [0mVariáveis do Template[0m
+                    [36m</h4>[39m
+                    [36m<p[39m
+                      [33mclass[39m=[32m"text-[8px] text-slate-500 font-bold uppercase"[39m
+                    [36m>[39m
+                      [0mConfigure os valores para este disparo[0m
+                    [36m</p>[39m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"text-[8px] font-black text-slate-600 bg-slate-800/50 px-2 py-1 rounded border border-white/5 uppercase tracking-widest"[39m
+                  [36m>[39m
+                    [0mDica: Use [0m
+                    [0m{{nome}}[0m
+                    [0m ou [0m
+                    [0m{{telefone}}[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"grid grid-cols-1 sm:grid-cols-2 gap-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"space-y-2 group/var relative"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"flex items-center justify-between ml-1"[39m
+                    [36m>[39m
+                      [36m<label[39m
+                        [33mclass[39m=[32m"text-[9px] font-black text-slate-500 uppercase tracking-wider group-focus-within/var:text-emerald-400 transition-colors"[39m
+                      [36m>[39m
+                        [0mVar 1[0m
+                      [36m</label>[39m
+                    [36m</div>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"relative"[39m
+                    [36m>[39m
+                      [36m<input[39m
+                        [33mclass[39m=[32m"w-full p-4 pr-12 bg-black/40 border border-white/5 rounded-2xl focus:border-emerald-500/50 outline-none text-white text-xs transition-all shadow-inner placeholder:text-slate-700 font-bold"[39m
+                        [33mplaceholder[39m=[32m"Valor para Var 1..."[39m
+                        [33mtype[39m=[32m"text"[39m
+                        [33mvalue[39m=[32m"Olá {{primeiro_nome}}!"[39m
+                      [36m/>[39m
+                      [36m<button[39m
+                        [33mclass[39m=[32m"absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all bg-slate-800 text-slate-400 hover:text-emerald-400 border border-white/5"[39m
+                        [33mtitle[39m=[32m"Campos Mágicos"[39m
+                        [33mtype[39m=[32m"button"[39m
+                      [36m>[39m
+                        [36m<svg[39m
+                          [33mfill[39m=[32m"none"[39m
+                          [33mheight[39m=[32m"14"[39m
+                          [33mstroke[39m=[32m"currentColor"[39m
+                          [33mstroke-width[39m=[32m"3"[39m
+                          [33mviewBox[39m=[32m"0 0 24 24"[39m
+                          [33mwidth[39m=[32m"14"[39m
+                        [36m>[39m
+                          [36m<path[39m
+                            [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"[39m
+                          [36m/>[39m
+                        [36m</svg>[39m
+                      [36m</button>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-900/20 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"[39m
+                [33mdisabled[39m=[32m""[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"18"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-width[39m=[32m"3"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"18"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                  [36m/>[39m
+                  [36m<polyline[39m
+                    [33mpoints[39m=[32m"17 8 12 3 7 8"[39m
+                  [36m/>[39m
+                  [36m<line[39m
+                    [33mx1[39m=[32m"12"[39m
+                    [33mx2[39m=[32m"12"[39m
+                    [33my1[39m=[32m"3"[39m
+                    [33my2[39m=[32m"15"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mCarregar Leads da Etiqueta[0m
+              [36m</button>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl text-center"[39m
+              [36m>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"text-[10px] text-blue-300/60 font-bold uppercase tracking-widest leading-relaxed"[39m
+                [36m>[39m
+                  [0m💡 Isso buscará todos os contatos capturados via Webhook ou Importação que possuem esta etiqueta interna.[0m
+                [36m</p>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+[36m [2m❯[22m src/components/RecipientSelector.test.jsx:[2m152:37[22m[39m
+    [90m150|[39m
+    [90m151|[39m     [35mawait[39m [34mwaitFor[39m(() [33m=>[39m {
+    [90m152|[39m       expect(defaultProps.onSelect).toHaveBeenCalledWith(expect.arrayC…
+    [90m   |[39m                                     [31m^[39m
+    [90m153|[39m         expect[33m.[39m[34mobjectContaining[39m({
+    [90m154|[39m           vars[33m:[39m expect[33m.[39m[34mobjectContaining[39m({ [32m'1'[39m[33m:[39m [32m'Olá João!'[39m })
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (10)[39m
+[2m   Start at [22m 17:16:35
+[2m   Duration [22m 3.02s[2m (transform 212ms, setup 207ms, import 236ms, tests 1.35s, environment 932ms)[22m
+

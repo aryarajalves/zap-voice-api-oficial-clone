@@ -83,6 +83,35 @@ async def create_chatwoot_label(
     data = await chatwoot.create_label(title=title, color=color, description=description)
     return data
 
+@router.patch("/chatwoot/labels/{label_id}")
+async def update_chatwoot_label(
+    label_id: int,
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user)
+):
+    chatwoot = ChatwootClient(client_id=client_id)
+    title = payload.get("title")
+    color = payload.get("color")
+    description = payload.get("description")
+    
+    if not title:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="O título da etiqueta é obrigatório")
+        
+    data = await chatwoot.update_label(label_id=label_id, title=title, color=color, description=description)
+    return data
+
+@router.delete("/chatwoot/labels/{label_id}")
+async def delete_chatwoot_label(
+    label_id: int,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user)
+):
+    chatwoot = ChatwootClient(client_id=client_id)
+    data = await chatwoot.delete_label(label_id=label_id)
+    return data
+
 @router.post("/chatwoot/agents")
 async def create_chatwoot_agent(
     payload: dict,

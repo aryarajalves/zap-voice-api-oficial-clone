@@ -1,102 +1,55 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.1.3)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.2.8)
 
-Bem-vindo à versão **3.1.3** do **ZapVoice**! Este é um sistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.2.8** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
 ## 🚀 O que o ZapVoice faz?
 
-O **ZapVoice** é a solução definitiva para escalar seu marketing e atendimento com estabilidade e segurança:
+O **ZapVoice** é a solução definitiva para escalar seu marketing e atendimento com estabilidade, segurança e uma interface **Premium (Glassmorphism)**:
 
-*   **WhatsApp API Oficial:** Integração estável seguindo todas as políticas da Meta.
-*   **Disparos em Massa (Bulk Send):** Envio de templates para milhares de contatos com alta velocidade.
-*   **Funis de Mensagens:** Réguas de relacionamento automáticas com Vídeos, Imagens e PDFs.
-*   **Gestão Multi-Cliente:** Controle múltiplos clientes e inboxes em uma única plataforma.
-*   **Configuração Dinâmica:** Gerencie APIs e infraestrutura diretamente pelo painel.
-
----
-
-## 📺 Conheça as Funcionalidades (Telas)
-
-O sistema foi desenhado para ser intuitivo e poderoso:
-
-### **1. Meus Funis**
-A central de inteligência do sistema. Aqui você cria seus fluxos de mensagens, define gatilhos automáticos e pode disparar funis manualmente para listas de contatos. Cada funil pode ter múltiplas etapas com delays customizados.
-
-### **2. Histórico de Disparos**
-Transparência total sobre seus envios. Acompanhe em tempo real:
-*   **Data/Hora** do disparo.
-*   **Status detalhado** (Pendente, Enviado, Lido, Falhado).
-*   **Relatórios de Massa**: Veja quantos contatos faltam e baixe relatórios de erro.
-
-### **3. Contatos Bloqueados**
-Segurança e compliance. Gerencie uma "Lista Negra" de números que nunca devem receber mensagens de automação. Você pode adicionar números manualmente por linha ou vírgula.
-
-### **4. Gestão de Usuários**
-Controle quem acessa o quê. Crie usuários com diferentes níveis de permissão (Admin, User) e defina a quais Clientes cada usuário tem acesso.
+*   **WhatsApp API Oficial:** Integração estável e segura seguindo todas as diretrizes da Meta, garantindo maior entrega e menor risco de banimento.
+*   **Disparos em Massa (Bulk Send):** Envio de templates aprovados para milhares de contatos com alta velocidade e monitoramento em tempo real.
+*   **Funis de Mensagens Inteligentes:** Réguas de relacionamento automáticas com suporte a Vídeos, Imagens, PDFs e Áudios.
+*   **Integrações Avançadas (Webhooks):** Conecte-se nativamente com Hotmart, Kiwify, Eduzz e Elementor.
+*   **Slugs Personalizados:** Crie URLs de webhook amigáveis (ex: `https://api.dominio.com/api/webhooks/venda-vip`) para facilitar a organização.
+*   **Gestão Multi-Cliente:** Arquitetura multi-tenant que permite isolar dados e configurações para diferentes empresas em uma única instância.
 
 ---
 
-## 🔐 Primeiro Acesso e Login
+## 📺 Funcionalidades de Destaque
 
-O ZapVoice utiliza autenticação segura via JWT.
+### **1. Webhook Integrations (Novo!)**
+Conecte suas plataformas de vendas em segundos. O sistema processa eventos de checkout, boleto gerado e compra aprovada automaticamente.
+- **Mapeamento Flexível**: Defina qual funil disparar para cada tipo de evento.
+- **Filtro de Produtos**: Escolha processar webhooks apenas de produtos específicos.
+- **URLs Amigáveis**: Use slugs customizados para suas integrações.
 
-### **Como funciona o Primeiro Acesso:**
-Ao instalar o sistema, ele cria automaticamente um **Super Admin** com os dados das variáveis de ambiente:
-*   `SUPER_ADMIN_EMAIL`: Seu email de login.
-*   `SUPER_ADMIN_PASSWORD`: Sua senha inicial.
+### **2. Funnel Builder Visual**
+Crie automações complexas com uma interface visual intuitiva.
+- **Delays Inteligentes**: Configure intervalos entre mensagens para simular comportamento humano.
+- **Hierarquia de Funis**: Execute funis dentro de outros funis para criar árvores de decisão.
 
-### **Cadastro de Usuários:**
-*   **Via Interface**: O Super Admin pode criar novos usuários no menu "Gestão de Usuários".
-*   **Via CLI (Segurança)**: Se perder o acesso, use o script `python backend/scripts/admin/create_admin.py` dentro do container para listar ou resetar senhas.
+### **3. Monitoramento em Tempo Real**
+Dashboard completo para acompanhar o status de cada disparo.
+- **Logs Detalhados**: Saiba exatamente quando a mensagem foi entregue e lida.
+- **Gestão de Custos**: Calculadora integrada para estimar gastos com a API da Meta.
+
+### **4. Gestão de Contatos e Compliance**
+- **Lista Negra (Blacklist)**: Bloqueio automático ou manual de números para evitar envios indesejados.
+- **Monitoramento de Janelas**: Respeite a janela de 24h da Meta para envios de mensagens de sessão.
 
 ---
 
-## ⚙️ Configuração na Interface (UI)
+## ⚙️ Arquitetura Técnica
 
-Toda a conectividade é configurada no menu **Configurações**:
-*   **WhatsApp API**: Phone ID, WABA ID e User Token da Meta.
-*   **Infraestrutura**: Endereços do RabbitMQ e S3/MinIO.
-*   **Chatwoot (Opcional)**: Conecte sua instância para centralizar o atendimento.
-
-## 🗄️ Estrutura de Banco de Dados (PostgreSQL)
-
-Quase todos os dados do sistema são armazenados em tabelas no PostgreSQL. Abaixo estão as principais tabelas e suas finalidades:
-
-### **1. Estrutura de Negócio**
-*   **`clients`**: Tabela mestre para multi-tenancy (isolamento de empresas/clientes).
-*   **`users`**: Cadastro de usuários com níveis de acesso (Super Admin, Admin, User).
-*   **`app_config`**: Guarda chaves de APIs, tokens e configurações alteradas via painel.
-
-### **2. Funis e Campanhas**
-*   **`funnels`**: Estrutura dos funis de mensagens e frases de gatilho.
-*   **`global_variables`**: Variáveis para substituição dinâmica em mensagens (ex: `{{link}}`).
-*   **`webhooks_configs`**: Configurações de URLs de entrada para integrações externas (Hotmart, etc).
-*   **`webhooks_events`**: Log histórico de todos os eventos recebidos via webhook.
-
-### **3. Histórico e Monitoramento**
-*   **`scheduled_triggers`**: **Tabela principal de histórico.** Registra cada disparo (massa ou individual) e seu status.
-*   **`message_status`**: Detalhamento em tempo real (Enviado, Lido, Clicado) de cada mensagem via API oficial.
-*   **`product_status`**: Rastreia a jornada de compra do lead/cliente.
-
-### **4. Controle e Compliance**
-*   **`blocked_contacts`**: Lista negra de números que não devem receber automações.
-*   **`contact_windows`**: Cache de interações de 24h para gerenciar o envio de mensagens diretas conforme as regras da Meta.
-*   **`contatos_monitorados`**: Tabela que armazena automaticamente os dados de contatos que interagiram (Nome, Número, Inbox e Data).
-
-clients,
-users,
-app_config,
-funnels,
-global_variables,
-webhooks_configs,
-webhooks_events,
-scheduled_triggers,
-message_status,
-product_status,
-blocked_contacts,
-contact_windows,
-contatos_monitorados
+O ZapVoice utiliza uma stack moderna e escalável:
+- **Backend**: FastAPI (Python 3.10+) com processamento assíncrono.
+- **Frontend**: React + Vite com design system baseado em Glassmorphism e Tailwind.
+- **Banco de Dados**: PostgreSQL para persistência de dados críticos.
+- **Mensageria**: RabbitMQ para gestão de filas de disparos e eventos.
+- **Cache/Session**: Redis para alta performance em tempo real.
+- **Infra**: Docker e Docker Compose para deploy simplificado em qualquer VPS.
 
 ---
 
@@ -104,50 +57,36 @@ contatos_monitorados
 
 ```text
 /
-├── docker/                  # Configurações de Deploy (Local e Produção)
-├── backend/                 # API FastAPI (Python) e Scripts Utilitários
-├── frontend/                # Painel Administrativo (React + Vite)
+├── docker/                  # Configurações de Deploy e entrypoints
+├── backend/                 # API FastAPI, Services, Workers e Routers
+│   ├── core/                # Configurações globais e logs
+│   ├── models/              # Modelos de dados SQLAlchemy
+│   ├── services/            # Lógica de negócio (WhatsApp, Webhooks, Funis)
+│   └── routers/             # Endpoints da API organizados por módulo
+├── frontend/                # Painel Administrativo React
+│   ├── src/components/      # Componentes UI reutilizáveis
+│   └── src/pages/           # Páginas e hooks de integração
 └── README.md                # Documentação Oficial
 ```
 
 ---
 
-## 🛠️ Como Iniciar
+## 🛠️ Como Iniciar (Quick Start)
 
-**Local (Full Stack):**
+**Local (Modo Desenvolvedor):**
 ```bash
 docker-compose -f docker/docker-compose.local.yml up -d --build
 ```
 
-docker restart zapvoice_app zapvoice_worker
-
-docker compose -f docker/docker-compose.local.yml up --build -d zapvoice_app
-
-
-**Produção (App Only):**
-```bash
-docker-compose -f docker/docker-compose.yml up -d --build
-```
-
-### **Docker Build & Push (Deploy)**
-Para gerar a imagem de produção e enviar para o Docker Hub:
-
-3. Build da Imagem:
-```bash
-docker build -t aryarajalves/zap-voice-funil-api-oficial-zap:3.1.3 -f docker/Dockerfile .
-```
-
-4. Push da Imagem:
-```bash
-docker push aryarajalves/zap-voice-funil-api-oficial-zap:3.1.3
-```
-*(Versão atual: 3.1.3 - Label Application & Stability)*
+O sistema estará disponível em:
+- **Frontend**: `http://localhost:5176`
+- **API Docs**: `http://localhost:8000/docs`
 
 ---
 
-## 🏆 Marco v1.0
-*   **Foco na API Oficial**: Estabilidade garantida pela Meta.
-*   **Mídias Ricas**: Suporte a Vídeo, Imagem e PDF (Sem áudio).
-*   **Simplicidade**: 100% configurável via interface gráfica.
+## 🏆 Diferenciais Premium
+*   **Design State-of-the-art**: Interface escura com efeitos neon e desfoque, pensada na melhor experiência do usuário.
+*   **Alta Disponibilidade**: Sistema de filas que garante que nenhuma mensagem seja perdida, mesmo em picos de tráfego.
+*   **Segurança**: Autenticação JWT e isolamento de banco de dados por cliente.
 
-**Escalando seu negócio com a API Oficial do WhatsApp.** 🚀
+**ZapVoice - Escalando seu negócio com a inteligência da API Oficial.** 🚀

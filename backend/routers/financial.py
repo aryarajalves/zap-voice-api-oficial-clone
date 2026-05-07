@@ -87,25 +87,46 @@ def get_financial_summary(
         day_key = dt_br.strftime("%Y-%m-%d")
         b = buckets[day_key]
 
-        is_paid = (t.sent_as == "TEMPLATE") or (t.is_free_message == False and t.sent_as != "FREE_MESSAGE")
-        is_free = (t.sent_as == "FREE_MESSAGE") or (t.is_free_message == True)
+        total_delivered = t.total_delivered or 0
+        paid_sent = t.total_paid_templates or 0
+        
+        # Se o gatilho foi explicitamente marcado como gratuito (Mensagem de Sessão/Interação)
+        is_session_message = (t.sent_as == "FREE_MESSAGE") or (t.is_free_message == True)
+        
+        if is_session_message:
+            paid_sent = 0
+            free_sent = total_delivered
+        else:
+            # Fallback para registros antigos onde total_paid_templates pode estar zerado mas era um template
+            if t.template_name and paid_sent == 0 and total_delivered > 0:
+                # Se não temos custo mas é template, tratamos como pago para manter consistência com dados antigos
+                # exceto se o custo for explicitamente 0 no total_cost (indicando que o worker processou e viu que era free)
+                if (t.total_cost or 0) == 0 and t.total_delivered > 0:
+                    paid_sent = 0
+                else:
+                    paid_sent = total_delivered
+            
+            free_sent = max(0, total_delivered - paid_sent)
 
         b["total_triggers"] += 1
-        b["total_sent"] += t.total_sent or 0
+        b["total_sent"] += total_delivered
 
-        if is_paid:
+        if paid_sent > 0:
             b["paid_triggers"] += 1
-            b["paid_sent"] += t.total_sent or 0
+            b["paid_sent"] += paid_sent
+            
+            # Cálculo de Custo
             cost = float(t.total_cost or 0)
-            if cost == 0 and t.total_sent:
-                cost = float(t.cost_per_unit or AVG_TEMPLATE_PRICE_BRL) * (t.total_sent or 0)
+            if cost == 0:
+                cost = float(t.cost_per_unit or AVG_TEMPLATE_PRICE_BRL) * paid_sent
             b["total_cost"] += cost
-        elif is_free:
+            
+        if free_sent > 0:
             b["free_triggers"] += 1
-            b["free_sent"] += t.total_sent or 0
-            # Savings = what it would have cost if paid
+            b["free_sent"] += free_sent
+            # Economia = o que custaria se fosse um template pago
             cost_per = float(t.cost_per_unit or AVG_TEMPLATE_PRICE_BRL)
-            b["estimated_savings"] += cost_per * (t.total_sent or 0)
+            b["estimated_savings"] += cost_per * free_sent
 
     # Aggregate into requested period
     def group_key(day_str: str, period: str) -> str:

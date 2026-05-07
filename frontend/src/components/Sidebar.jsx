@@ -3,6 +3,7 @@ import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGi
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
+import { resolveUrl } from '../config';
 
 export default function Sidebar({ activeView, onViewChange, onLogout, onSettings, user, clientName, onClientCreate, appBranding }) {
     const { activeClient } = useClient();
@@ -57,12 +58,12 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
     };
 
     return (
-        <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen sticky top-0 shadow-sm z-30 font-sans transition-colors duration-200">
+        <aside className="w-64 bg-white dark:bg-[#1e293b] border-r border-gray-200 dark:border-white/5 flex flex-col h-screen sticky top-0 shadow-sm z-30 font-sans transition-colors duration-200">
             <div className="p-6 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-3 mb-3">
                     {appLogo ? (
                         <div className={`${logoContainerClass} rounded-lg overflow-hidden shadow-md shrink-0`}>
-                            <img src={appLogo} alt={appName} className="w-full h-full object-cover" />
+                            <img src={resolveUrl(appLogo)} alt={appName} className="w-full h-full object-cover" />
                         </div>
                     ) : (
                         <div className={`${logoContainerClass} bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white font-bold ${logoTextSize} shadow-md shrink-0`}>
@@ -100,7 +101,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                 })}
             </nav>
 
-            <div className="p-4 border-t border-gray-100 dark:border-gray-700 space-y-2 bg-gray-50/50 dark:bg-gray-800/50">
+            <div className="p-4 border-t border-gray-100 dark:border-white/5 space-y-2 bg-gray-50/50 dark:bg-[#0b0e14]/50">
                 {user && (
                     <div className="px-4 py-2 mb-2">
                         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
@@ -126,6 +127,11 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                     <FiLogOut size={18} />
                     Sair
                 </button>
+                <div className="px-4 py-1 mt-1 border-t border-gray-100 dark:border-white/5 opacity-50">
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium tracking-widest uppercase text-center">
+                        ZapVoice v3.3.1
+                    </p>
+                </div>
             </div>
 
             <ConfirmModal

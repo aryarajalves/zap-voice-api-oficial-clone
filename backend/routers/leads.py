@@ -14,7 +14,55 @@ from services.leads import upsert_webhook_lead
 class BulkDeleteRequest(BaseModel):
     lead_ids: List[int]
 
+class LeadBatchItem(BaseModel):
+    phone: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+class BulkCreateLeadsRequest(BaseModel):
+    leads: List[LeadBatchItem]
+    tags: Optional[str] = None
+
 router = APIRouter()
+
+@router.post("/leads/bulk", summary="Salvar múltiplos leads em massa")
+def bulk_create_leads(
+    request: BulkCreateLeadsRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Cria ou atualiza uma lista de leads.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    success_count = 0
+    
+    for item in request.leads:
+        # Limpeza de telefone
+        import re
+        clean_phone = re.sub(r"\D", "", item.phone)
+        if not clean_phone or len(clean_phone) < 8:
+            continue
+            
+        lead_data = {
+            "phone": clean_phone,
+            "name": item.name,
+            "email": item.email,
+            "event_type": "bulk_manual_import"
+        }
+        
+        upsert_webhook_lead(
+            db=db,
+            client_id=client_id,
+            platform="manual_bulk",
+            parsed_data=lead_data,
+            tag=request.tags
+        )
+        success_count += 1
+        
+    db.commit()
+    return {"status": "success", "imported": success_count}
 
 @router.post("/leads/import/preview", summary="Pré-visualizar arquivo de importação")
 async def preview_import(

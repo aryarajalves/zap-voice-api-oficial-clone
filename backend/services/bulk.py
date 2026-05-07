@@ -5,129 +5,12 @@ from chatwoot_client import ChatwootClient
 from rabbitmq_client import rabbitmq
 from services.engine import execute_funnel
 from core.logger import setup_logger
-
+from services.utils.bulk_helpers import render_template_body, sanitize_template_components, extract_template_buttons
 
 import zoneinfo
 from datetime import datetime, timezone, timedelta
 logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
-
-
-def render_template_body(body: str, components: list, contact_name: str = None, var1: str = None, var2: str = None, var3: str = None, var4: str = None, var5: str = None) -> str:
-    """Substitui {{1}}, {{2}}... e {{nome}}, {{telefone}} no corpo da mensagem."""
-    if not body:
-        return ""
-        
-    # Proteção: Se o nome for "1", tratamos como vazio
-    real_name = contact_name if str(contact_name) != "1" else ""
-
-    # 0. Prioridade absoluta: Variáveis persistidas (var1-var5)
-    persist_vars = {
-        "1": var1,
-        "2": var2,
-        "3": var3,
-        "4": var4,
-        "5": var5
-    }
-    
-    for idx_s, val in persist_vars.items():
-        if val: # Só substitui se houver valor preenchido (não vazio e não None)
-             body = body.replace(f"{{{{{idx_s}}}}}", str(val))
-
-    # 1. Substituição de variáveis nomeadas (padrão amigável)
-    body = body.replace("{{nome}}", real_name or "")
-    body = body.replace("{{name}}", real_name or "")
-    
-    body_comp = next(
-        (c for c in components if isinstance(c, dict) and str(c.get("type", "")).lower() == "body"),
-        None
-    )
-    
-    # 2. Se houver componentes (Template Meta), processa variáveis numéricas {{1}}, {{2}}...
-    # Apenas se as variáveis persistidas não tiverem preenchido tudo ou se preferirmos fallback
-    if body_comp:
-        for idx, param in enumerate(body_comp.get("parameters", []), 1):
-            # Se já preenchemos via persist_vars, pulamos ou usamos o valor persistido
-            if persist_vars.get(str(idx)) is not None:
-                continue
-                
-            value = param.get("text", "") if isinstance(param, dict) else str(param)
-            
-            # Se o valor for "1" e for o primeiro parâmetro, tentamos usar o nome do contato
-            if idx == 1 and str(value) == "1" and real_name:
-                value = real_name
-            elif str(value) == "1":
-                value = ""
-                
-            body = body.replace(f"{{{{{idx}}}}}", str(value))
-    
-    # 3. Fallback final para {{1}} (comum em CRM) mesmo sem body_comp
-    if "{{1}}" in body:
-        # Se var1 não foi passado ou está vazio, usamos real_name
-        fallback_val = persist_vars.get("1") or real_name or ""
-        body = body.replace("{{1}}", fallback_val)
-        
-    return body
-
-
-
-def sanitize_template_components(components: list, contact_name: str = None) -> list:
-    """
-    Remove ou substitui valores inválidos (como '1') nos componentes do template
-    antes de enviar para a Meta API. Isso evita o erro "Ei 1" quando o CRM
-    manda dados inconsistentes.
-    """
-    if not components:
-        return []
-    
-    import copy
-    try:
-        new_components = copy.deepcopy(components)
-        for comp in new_components:
-            if isinstance(comp, dict) and comp.get("type", "").lower() == "body":
-                params = comp.get("parameters", [])
-                for param in params:
-                    if isinstance(param, dict) and param.get("type") == "text":
-                        val = str(param.get("text", "")).strip()
-                        if val == "1":
-                            # Substitui pelo nome do contato se disponível, senão vazio
-                            param["text"] = contact_name if contact_name else ""
-        return new_components
-    except Exception as e:
-        print(f"⚠️ Erro ao sanitizar componentes: {e}")
-        return components
-
-
-def extract_template_buttons(components: list) -> dict:
-    """
-    Extrai informações de botões dos componentes do template da Meta.
-    Retorna: {
-        "quick_replies": [str], 
-        "has_special_buttons": bool (URL/Phone)
-    }
-    """
-    quick_replies = []
-    has_special_buttons = False
-    
-    if not components:
-        return {"quick_replies": [], "has_special_buttons": False}
-        
-    for comp in components:
-        if isinstance(comp, dict) and comp.get("type", "").upper() == "BUTTONS":
-            buttons = comp.get("buttons", [])
-            for btn in buttons:
-                b_type = str(btn.get("type", "")).upper()
-                if b_type == "QUICK_REPLY":
-                    text = btn.get("text")
-                    if text:
-                        quick_replies.append(text)
-                elif b_type in ["URL", "PHONE_NUMBER"]:
-                    has_special_buttons = True
-    
-    return {
-        "quick_replies": quick_replies,
-        "has_special_buttons": has_special_buttons
-    }
 
 
 async def process_bulk_send(trigger_id: int, template_name: str, contacts: list, delay: int, concurrency: int, language: str = 'pt_BR', components: list = None, direct_message: str = None, direct_message_params: dict = None):
@@ -167,6 +50,8 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
          # Reset counters to 0 just in case
          init_trig.total_sent = 0
          init_trig.total_failed = 0
+         init_trig.total_blocked = 0
+         init_trig.total_contacts = total
          
          p_message = init_trig.private_message
          p_delay = init_trig.private_message_delay
@@ -614,13 +499,31 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                                 f"Coluna(status): 'sent'"
                             )
 
+                            # Normaliza o telefone: usa apenas os dígitos do número, limitando a 13 para BR (55+DDD+número)
+                            # Isso evita o bug de prefixo duplicado (ex: 5585996123586 vs 558596123586)
+                            _raw_phone = "".join(filter(str.isdigit, str(batch_phones[idx])))
+                            if _raw_phone.startswith("55") and len(_raw_phone) > 13:
+                                _raw_phone = _raw_phone[-13:]
+                            _normalized_phone = _raw_phone
+
+                            # Renderizar corpo do template para persistência (Turbo Send)
+                            msg_content = direct_message
+                            if not msg_content and template_body_cache:
+                                try:
+                                    msg_content = render_template_body(template_body_cache, effective_components or [], contact_name=batch_names[idx])
+                                except:
+                                    msg_content = f"[Template: {actual_template_name}]"
+                            
+                            if not msg_content:
+                                msg_content = f"[Template: {actual_template_name}]"
+
                             msg_status = models.MessageStatus(
                                 trigger_id=trigger_id,
                                 message_id=message_id,
-                                phone_number=batch_phones[idx],
+                                phone_number=_normalized_phone,
                                 status='sent',
                                 message_type=msg_type,
-                                content=direct_message or f"[Template: {actual_template_name}]",
+                                content=msg_content,
                                 var1=cv.get('var1'),
                                 var2=cv.get('var2'),
                                 var3=cv.get('var3'),
@@ -646,6 +549,22 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                                 logger.info(f"💬 [DEBUG NOTE] Nota renderizada para {phone}: {rendered_p_msg[:50]}...")
                                 type_label = "MENSAGEM DIRETA (Livre)" if msg_type == "FREE_MESSAGE" else f"TEMPLATE OFICIAL ({actual_template_name})"
                                 msg_status.pending_private_note = f"{rendered_p_msg}\n\n📢 Enviado via: {type_label}"
+
+                            # 🏷️ APLICAR ETIQUETAS CHATWOOT (NOVO)
+                            if t_update and getattr(t_update, 'chatwoot_label', None):
+                                try:
+                                    logger.info(f"🏷️ [BULK LABEL] Aplicando etiquetas {t_update.chatwoot_label} para {batch_phones[idx]}")
+                                    inbox_id = await chatwoot.get_default_whatsapp_inbox()
+                                    discovery = await chatwoot.ensure_conversation(batch_phones[idx], batch_names[idx] or batch_phones[idx], inbox_id)
+                                    if discovery and discovery.get("conversation_id"):
+                                        conv_id = discovery["conversation_id"]
+                                        await chatwoot.add_label_to_conversation(conv_id, t_update.chatwoot_label)
+                                        logger.info(f"   ✅ [BULK LABEL] Etiquetas aplicadas na Conv {conv_id}")
+                                        msg_status.chatwoot_conversation_id = conv_id
+                                        msg_status.chatwoot_account_id = discovery.get("account_id")
+                                        msg_status.chatwoot_inbox_id = inbox_id
+                                except Exception as e_lbl:
+                                    logger.warning(f"⚠️ [BULK LABEL] Falha ao aplicar etiquetas: {e_lbl}")
                         
                         if t_update:
                             t_update.total_sent = (t_update.total_sent or 0) + 1
@@ -671,8 +590,16 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                         db_msg.add(msg_status)
                         
                         if t_update:
-                            t_update.total_failed = (t_update.total_failed or 0) + 1
-                        failed_count += 1
+                            if failure_reason == "Contato Bloqueado":
+                                t_update.total_blocked = (t_update.total_blocked or 0) + 1
+                            else:
+                                t_update.total_failed = (t_update.total_failed or 0) + 1
+                        
+                        if failure_reason == "Contato Bloqueado":
+                            # Don't increment failed_count local if we want it strictly separated
+                            pass
+                        else:
+                            failed_count += 1
                     
                     db_msg.commit()
                 except Exception as e_item:
@@ -695,6 +622,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             "sent": t_ev.total_sent if t_ev else sent_count,
             "failed": t_ev.total_failed if t_ev else failed_count,
             "blocked": t_ev.total_blocked if t_ev else 0,
+            "total_contacts": t_ev.total_contacts if t_ev else total,
             "total": total,
             "delivered": t_ev.total_delivered if t_ev else 0,
             "read": t_ev.total_read if t_ev else 0,
@@ -708,6 +636,16 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         db_ev.close()
 
         try:
+            # [PIPELINE] Log de Progresso a cada 10% ou a cada lote se for pequeno
+            if i % max(1, (total // 10)) == 0 or i == 0:
+                from services.engine import log_node_execution
+                log_node_execution(
+                    db_ev, t_ev, 
+                    node_id='DELIVERY', 
+                    status='processing', 
+                    details=f'Progresso: {i + len(batch)} de {total} contatos processados ({sent_count} enviados, {failed_count} falhas).'
+                )
+
             await rabbitmq.publish_event("bulk_progress", progress_data)
         except Exception as e:
             print(f"⚠️ Error publishing bulk progress: {e}")
@@ -738,6 +676,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             "sent": t_final.total_sent,
             "failed": t_final.total_failed,
             "blocked": t_final.total_blocked or 0,
+            "total_contacts": t_final.total_contacts or total,
             "total": total,
             "delivered": t_final.total_delivered or 0,
             "read": t_final.total_read or 0,

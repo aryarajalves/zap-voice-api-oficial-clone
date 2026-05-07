@@ -79,18 +79,15 @@ const ChatwootLabelsModal = ({ isOpen, onClose }) => {
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col max-h-[85vh] overflow-hidden">
+            <div className="bg-white dark:bg-[#1e293b] rounded-[2.5rem] w-full max-w-2xl shadow-2xl border border-gray-100 dark:border-white/5 flex flex-col max-h-[85vh] overflow-hidden">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+                <div className="p-8 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
                     <div>
-                        <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <h3 className="text-xl font-black text-gray-800 dark:text-white flex items-center gap-2 uppercase tracking-tight">
                             <FiTag className="text-blue-500" /> Etiquetas do Chatwoot
                         </h3>
-                        <p className="text-xs text-gray-500 mt-1">Gerencie as etiquetas (tags) disponíveis na sua conta do Chatwoot</p>
+                        <p className="text-xs text-gray-500 mt-1 font-medium italic">Gerencie as etiquetas (tags) disponíveis na sua conta do Chatwoot</p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
-                        <FiX size={20} />
-                    </button>
                 </div>
 
                 {/* Content */}

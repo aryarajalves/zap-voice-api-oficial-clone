@@ -1,0 +1,13 @@
+{
+  "Product": {
+    "product_name": "Método Laser Day"
+  },
+  "Customer": {
+    "full_name": "Rosean Alvarenga",
+    "mobile": "+5521964279103",
+    "email": "rosean@example.com"
+  },
+  "order_id": "TEST_ID_123",
+  "order_status": "paid",
+  "payment_method": "pix"
+}

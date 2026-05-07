@@ -4,10 +4,9 @@ import React from 'react';
 import Login from './Login';
 
 // Mocks
+const mockUseAuth = vi.fn();
 vi.mock('../AuthContext', () => ({
-  useAuth: () => ({
-    login: vi.fn(),
-  }),
+  useAuth: () => mockUseAuth(),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -23,6 +22,9 @@ vi.mock('react-icons/fi', () => ({
 describe('Login', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({
+      login: vi.fn(),
+    });
   });
 
   it('renderiza o formulário corretamente', () => {
@@ -34,7 +36,8 @@ describe('Login', () => {
 
   it('exibe texto do branding', () => {
     render(<Login />);
-    expect(screen.getByText(/ZapVoice/i)).toBeInTheDocument();
+    const branding = screen.getAllByText(/ZapVoice/i);
+    expect(branding.length).toBeGreaterThan(0);
     expect(screen.getByText(/Entre na sua conta/i)).toBeInTheDocument();
   });
 
@@ -69,8 +72,7 @@ describe('Login', () => {
   });
 
   it('botão submit fica desabilitado durante loading', async () => {
-    const { useAuth } = await import('../AuthContext');
-    useAuth.mockReturnValue({
+    mockUseAuth.mockReturnValue({
       login: () => new Promise((resolve) => setTimeout(resolve, 500)),
     });
 
@@ -91,8 +93,7 @@ describe('Login', () => {
   });
 
   it('exibe mensagem de erro quando login falha', async () => {
-    const { useAuth } = await import('../AuthContext');
-    useAuth.mockReturnValue({
+    mockUseAuth.mockReturnValue({
       login: vi.fn().mockRejectedValue(new Error('Email ou senha incorretos')),
     });
 
@@ -110,15 +111,9 @@ describe('Login', () => {
     });
   });
 
-  it('redireciona para / após login com sucesso', async () => {
-    const { useAuth } = await import('../AuthContext');
+  it('chama a função de login com sucesso', async () => {
     const mockLogin = vi.fn().mockResolvedValue(undefined);
-    useAuth.mockReturnValue({ login: mockLogin });
-
-    // Mock window.location.href
-    const originalHref = window.location.href;
-    delete window.location;
-    window.location = { href: '' };
+    mockUseAuth.mockReturnValue({ login: mockLogin });
 
     render(<Login />);
     fireEvent.change(screen.getByPlaceholderText('seu@email.com'), {
@@ -132,7 +127,5 @@ describe('Login', () => {
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith('admin@test.com', 'pass');
     });
-
-    window.location = { href: originalHref };
   });
 });

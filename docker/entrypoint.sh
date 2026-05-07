@@ -16,21 +16,29 @@ fi
 # Nota: Aceita tanto VITE_API_URL quanto API_URL
 API_URL="${API_URL:-${VITE_API_URL:-http://localhost:8000}}"
 WS_URL="${WS_URL:-${VITE_WS_URL:-ws://localhost:8000}}"
+WEBHOOK_BASE_URL="${WEBHOOK_BASE_URL:-${VITE_WEBHOOK_BASE_URL:-http://localhost:8000}}"
+
 
 # Remove aspas se existirem (comum ao copiar do .env para o Portainer)
 API_URL=$(echo "$API_URL" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
 WS_URL=$(echo "$WS_URL" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
+WEBHOOK_BASE_URL=$(echo "$WEBHOOK_BASE_URL" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
+
 
 echo "🔧 Gerando configuração dinâmica para o Frontend..."
 echo "  API_URL: $API_URL"
 echo "  WS_URL: $WS_URL"
+echo "  WEBHOOK_BASE_URL: $WEBHOOK_BASE_URL"
+
 
 # Cria o arquivo env-config.js
 cat <<EOF > "$CONFIG_FILE"
 window._env_ = {
   API_URL: "$API_URL",
-  WS_URL: "$WS_URL"
+  WS_URL: "$WS_URL",
+  WEBHOOK_BASE_URL: "$WEBHOOK_BASE_URL"
 };
+
 EOF
 
 echo "✅ Arquivo $CONFIG_FILE gerado com sucesso!"

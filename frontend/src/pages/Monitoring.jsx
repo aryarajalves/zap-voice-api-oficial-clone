@@ -131,7 +131,7 @@ const StatusCard = ({ title, value, subValue, icon, color, percent }) => {
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl">
+        <div className="bg-white dark:bg-[#131722] p-8 rounded-3xl border border-gray-200 dark:border-white/5 shadow-xl">
             <div className="flex justify-between items-start mb-6">
                 <div className={`p-4 rounded-2xl ${colors[color] || 'bg-gray-50'}`}>
                     {React.cloneElement(icon, { size: 32 })}

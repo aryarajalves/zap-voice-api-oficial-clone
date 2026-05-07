@@ -4,6 +4,8 @@
 - **Modo Econômico (Fast):** Utilize o **Gemini 3 Flash** para todas as tarefas de leitura de logs, explicações de código, buscas na web ou verificações simples em arquivos únicos.
 - **Modo Planejamento (High):** Ative o **Gemini 3 Pro/High** apenas para refatorações que afetem múltiplos arquivos simultaneamente ou para depurar erros complexos de lógica no Docker Swarm.
 - **Filtro de Contexto:** Não indexe o projeto inteiro se a pergunta for específica sobre uma linha ou função. Leia apenas o contexto imediato (±20 linhas).
+- **Acesso ao Sistema:** URL: http://localhost:5176 | Login: aryarajmarketing@gmail.com | Senha: 123456
+
 
 ---
 
@@ -24,3 +26,86 @@
 - **Arquitetura:** Este ambiente utiliza Docker Swarm para integrar ZapVoice e Chatwoot.
 - **Tratamento do Ngrok:** Para erros como o `ERR_NGROK_105`, verifique o `NGROK_AUTHTOKEN` no `.env` e confirme se o serviço `ngrok` está conseguindo resolver o DNS do container alvo.
 - **Prioridade de Busca:** Em caso de erros de rede, pesquise na documentação oficial (Google Search) antes de tentar adivinhar a configuração.
+
+---
+
+## 5. Reinício Automático e Limpeza de Cache
+- **Obrigatoriedade:** Sempre que implementar uma nova mecânica, interface frontend ou código Python, reinicie os serviços pertinentes **automaticamente**.
+- **Limpeza de Cache:** Force sempre a recriação/limpeza (ex: `--force-recreate`) para garantir que a versão antiga não persista.
+- **Notificação Obrigatória:** Você deve sempre listar na sua resposta quais containers foram reiniciados.
+- **Objetivo:** Sincronização imediata entre código e execução sem intervenção manual.
+
+---
+
+## 6. Validação de Saúde e Integridade (Testes)
+- **Smoke Test:** Verifique se o frontend está online (Status 200) e sem "tela branca".
+- **Fluxos:** Teste o caminho completo da tela (ex: preencher e clicar em Avançar).
+- **Dados:** Valide se listas dinâmicas (ex: templates) estão sendo povoadas corretamente.
+- **Logs:** Cheque `docker logs` para garantir que não houve regressões no backend.
+- **Relatório:** Use o prefixo `[OK]` para confirmar cada validação na resposta final.
+
+---
+
+## 7. Integridade Estética e Design System
+- **Snapshot Comparativo:** Tire prints (Antes/Depois) para garantir que o layout e estilo não sofreram regressões indesejadas.
+- **Respeito ao Estilo:** Mantenha o padrão Glassmorphism/Neon. Evite estilos inline ou cores fora da paleta do projeto.
+- **Evidência:** Mostre prints na resposta final para validar mudanças visuais significativas.
+
+---
+
+## 8. Integridade de Esquema (Banco de Dados)
+- **Rastreabilidade:** Toda coluna ou tabela nova deve ser registrada no `DATABASE_SCHEMA_LOG.md`.
+- **Migração:** Crie sempre um script `.py` de migração para qualquer alteração no `models.py`.
+- **Automação:** Garanta que o `auto_migrate` no `database.py` seja chamado no startup do sistema.
+
+---
+
+## 9. Segurança e Configurações (.env)
+- **.env.example:** Sempre adicione novas variáveis de ambiente ao arquivo `.env.example`.
+- **Máscaras:** Nunca exiba tokens ou senhas reais em logs ou respostas. Use `****`.
+- **Portabilidade:** Informe ao usuário se ele precisar configurar algo novo no `.env` real.
+
+---
+
+## 10. Rastreabilidade e Logs (Backend)
+- **Logger:** Use `from core.logger import logger` para registrar marcos críticos.
+- **Contexto:** Logs de erro devem incluir IDs e detalhes que facilitem o debug.
+- **Clareza:** Mantenha os logs limpos, informativos e sem verbosidade excessiva.
+
+---
+
+## 11. Dependências (requirements.txt)
+- **Versionamento:** Sempre especifique a versão da biblioteca (ex: `lib==1.0.0`).
+- **Documentação:** Adicione um comentário lateral explicando a utilidade da biblioteca.
+- **Sincronia:** Atualize o container após adicionar novas dependências.
+
+---
+
+## 12. Limites de Código (Clean Code)
+- **Backend:** Máximo de **1.000 linhas** por arquivo.
+- **Frontend:** Máximo de **500 linhas** por arquivo.
+- **Ação:** Modularize antes de ultrapassar esses limites.
+
+---
+
+## 13. Experiência do Usuário (UX)
+- **Loading:** Sempre use estados de carregamento em ações assíncronas.
+- **Feedback:** Use `toasts` para informar sucesso ou erro em todas as operações.
+
+---
+
+## 14. Modularização e Arquitetura
+- **Barrels:** Mantenha `index` files para facilitar imports.
+- **Ninhos:** Proibido sub-componentes complexos no mesmo arquivo.
+- **Isolamento:** Separe hooks, lógica e UI.
+
+---
+
+## 15. Segurança de API e Proteção
+- **Autenticação:** Rotas internas exigem `client_id` e sessão válida.
+- **Webhooks:** Webhooks de vendas usam apenas o **Slug Único**.
+- **Rate Limit:** Limite de requisições em rotas críticas (Login/Envio).
+- **IDOR:** Sempre filtre consultas pelo `client_id` do usuário.
+
+
+

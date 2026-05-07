@@ -74,8 +74,7 @@ const EditLeadModal = ({
         <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 sm:p-6">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/85 backdrop-blur-md animate-in fade-in duration-300"
-                onClick={onClose}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
             />
 
             {/* Modal Content */}
@@ -100,12 +99,6 @@ const EditLeadModal = ({
                                ID: <span className="font-mono text-xs">{lead.id}</span> • Atualize os dados deste contato.
                             </p>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all active:scale-90"
-                        >
-                            <FiX size={24} />
-                        </button>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">

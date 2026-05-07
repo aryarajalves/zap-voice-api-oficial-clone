@@ -5,9 +5,9 @@ import pytz
 
 # Testando com as chaves de PRODUÇÃO fornecidas pelo usuário
 s3_endpoint = "https://s3.us-east-005.backblazeb2.com"
-s3_access_key = "0047daba280ace4000000000f"
-s3_secret_key = "K004zPzo6KfHLNGAKb1vo/CUQOTOMcU"
-s3_bucket_name = "zap-voice"
+s3_access_key = "0047daba280ace40000000018"
+s3_secret_key = "K004hOr1W5J+qB8W3u0Opjv3/Sg4UCA"
+s3_bucket_name = "zapjords"
 s3_region = "us-east-005"
 
 print("--- Testing S3 with Production Keys on Localhost ---")

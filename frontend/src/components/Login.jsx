@@ -24,7 +24,6 @@ const Login = () => {
             await login(email, password);
             console.log("✅ Login bem-sucedido!");
             toast.success('Login realizado com sucesso!');
-            window.location.href = '/';
         } catch (error) {
             console.error("❌ Erro no login (Catch):", error);
 

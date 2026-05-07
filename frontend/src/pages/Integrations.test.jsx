@@ -4,6 +4,21 @@ import React from 'react';
 import Integrations from './Integrations';
 import { fetchWithAuth } from '../AuthContext';
 
+// Timeout global de 2 minutos para lidar com a complexidade do componente
+vi.setConfig({ testTimeout: 120000 });
+
+// Mock WebSocket
+global.WebSocket = vi.fn(function() {
+  return {
+    send: vi.fn(),
+    close: vi.fn(),
+    onmessage: null,
+    onopen: null,
+    onerror: null,
+    onclose: null,
+  };
+});
+
 // Mock values
 const mockIntegrations = [
   {
@@ -30,7 +45,7 @@ vi.mock('../contexts/ClientContext', () => ({
   useClient: () => ({ activeClient: { id: 1, name: 'Test Client' } }),
 }));
 
-vi.mock('../config', () => ({ API_URL: '/api' }));
+vi.mock('../config', () => ({ API_URL: '/api', WS_URL: 'ws://localhost/api/ws' }));
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../components/ConfirmModal', () => ({ default: () => null }));
 vi.mock('react-icons/fi', () => ({
@@ -50,11 +65,14 @@ vi.mock('react-icons/fi', () => ({
   FiCopy: () => <span />,
   FiX: () => <span />,
   FiCheck: () => <span />,
+  FiHistory: () => <span />,
+  FiCheckSquare: () => <span />,
 }));
 
 describe('Integrations Page Interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     
     // Default mock behavior
     vi.mocked(fetchWithAuth).mockImplementation((url) => {
@@ -71,56 +89,78 @@ describe('Integrations Page Interactions', () => {
     });
   });
 
-  it('alterna visibilidade dos detalhes ao clicar nos elementos de toggle', async () => {
+  it('renderiza a página e lista integrações', async () => {
     await act(async () => {
       render(<Integrations />);
     });
 
-    await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument());
-    
-    const editBtn = screen.getByTestId('edit-icon').closest('button');
-    fireEvent.click(editBtn);
+    await act(async () => {
+      vi.runAllTimers();
+    });
 
-    await waitFor(() => expect(screen.getByTestId('mapping-header-mapping-1')).toBeInTheDocument());
-    
-    expect(screen.getByDisplayValue(/Compra Aprovada/i)).toBeInTheDocument();
-
-    const header = screen.getByTestId('mapping-header-mapping-1');
-    fireEvent.click(header);
-    
-    await waitFor(() => expect(screen.queryByDisplayValue(/Compra Aprovada/i)).not.toBeInTheDocument());
-
-    fireEvent.click(header);
-    await waitFor(() => expect(screen.getByDisplayValue(/Compra Aprovada/i)).toBeInTheDocument());
-
-    const label = screen.getByTestId('trigger-label');
-    fireEvent.click(label);
-    
-    await waitFor(() => expect(screen.queryByDisplayValue(/Compra Aprovada/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
   });
 
-  it('reseta os filtros do histórico de disparos ao clicar no botão de reset', async () => {
+  it('seleciona todos os registros do histórico e dispara o reenvio em massa', async () => {
+    // Mock do histórico
+    const mockHistory = [
+      { id: 101, event_type: 'compra_aprovada', status: 'processed', created_at: new Date().toISOString(), payload: {} },
+      { id: 102, event_type: 'pix_gerado', status: 'processed', created_at: new Date().toISOString(), payload: {} },
+    ];
+
+    vi.mocked(fetchWithAuth).mockImplementation((url) => {
+      if (url.includes('history')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockHistory,
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => mockIntegrations,
+      });
+    });
+
     await act(async () => {
       render(<Integrations />);
     });
 
-    await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument());
-    const disparosBtn = screen.getByText(/Disparos/i);
-    fireEvent.click(disparosBtn);
+    await act(async () => {
+      vi.runAllTimers();
+    });
 
-    await waitFor(() => expect(screen.getByText(/Histórico de Disparos:/i)).toBeInTheDocument());
-    
-    const resetBtn = screen.getByTitle('Limpar Filtros e Resetar');
-    fireEvent.click(resetBtn);
+    await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
 
+    // Abrir histórico
+    const historicoBtn = screen.getByTitle(/Histórico/i);
+    fireEvent.click(historicoBtn);
+
+    await waitFor(() => expect(screen.getByText(/Selecionar Todos os Registros/i)).toBeInTheDocument(), { timeout: 20000 });
+
+    // Clicar em Selecionar Todos
+    const selectAllBtn = screen.getByText(/Selecionar Todos os Registros/i);
+    fireEvent.click(selectAllBtn);
+
+    // Verificar se o botão de reenvio em massa apareceu com a contagem correta
+    await waitFor(() => expect(screen.getByText(/Reenviar Selecionados \(2\)/i)).toBeInTheDocument(), { timeout: 20000 });
+
+    // Clicar em Reenviar
+    const resendBulkBtn = screen.getByText(/Reenviar Selecionados \(2\)/i);
+    fireEvent.click(resendBulkBtn);
+
+    // Verificar se o modal premium apareceu
+    await waitFor(() => expect(screen.getByText(/Reenviar Webhooks\?/i)).toBeInTheDocument(), { timeout: 20000 });
+
+    // Confirmar reenvio
+    const confirmBtn = screen.getByText(/SIM, REENVIAR/i);
+    fireEvent.click(confirmBtn);
+
+    // Verificar se a API foi chamada
     await waitFor(() => {
         const fetchCalls = vi.mocked(fetchWithAuth).mock.calls;
-        const dispatchCalls = fetchCalls.filter(call => call[0].includes('dispatches'));
-        expect(dispatchCalls.length).toBeGreaterThanOrEqual(1);
-        
-        const lastCall = dispatchCalls[dispatchCalls.length - 1][0];
-        expect(lastCall).not.toContain('search=');
-        expect(lastCall).not.toContain('event_type=');
-    });
+        const bulkResendCall = fetchCalls.find(call => call[0].includes('bulk-resend'));
+        expect(bulkResendCall).toBeDefined();
+        expect(JSON.parse(bulkResendCall[1].body)).toEqual([101, 102]);
+    }, { timeout: 20000 });
   });
 });

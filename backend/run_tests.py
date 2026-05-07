@@ -11,11 +11,11 @@ if os.path.exists("./test_zapvoice.db"):
     os.remove("./test_zapvoice.db")
 
 # Executa o script de teste
-print(f"🚀 Rodando teste de idempotência com DATABASE_URL={os.environ['DATABASE_URL']}")
+print(f"Rodando teste de idempotencia com DATABASE_URL={os.environ['DATABASE_URL']}")
 result = subprocess.run([sys.executable, "tests/test_idempotency.py"], cwd=".")
 
 if result.returncode == 0:
-    print("✅ Sucesso!")
+    print("Sucesso!")
 else:
-    print(f"❌ Falha (Código: {result.returncode})")
+    print(f"Falha (Codigo: {result.returncode})")
     sys.exit(result.returncode)

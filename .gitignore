@@ -65,6 +65,8 @@ debug_output.txt
 keys_output.txt
 keys_simple.txt
 debug_run.txt
+tmp/
+
 
 # === OS Files ===
 .DS_Store

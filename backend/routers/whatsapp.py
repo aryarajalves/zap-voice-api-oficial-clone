@@ -4,10 +4,13 @@ from chatwoot_client import ChatwootClient
 import models
 import schemas
 from fastapi import Depends
-from core.deps import get_current_user
+from core.deps import get_current_user, get_db
 from core.logger import setup_logger
 from config_loader import get_setting
 import httpx
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from datetime import datetime, timezone, time
 
 logger = setup_logger(__name__)
 
@@ -260,7 +263,10 @@ async def send_template(
                             scheduled_time=datetime.now(timezone.utc),
                             contacts_list=[],
                             processed_contacts=[],
-                            total_sent=0
+                            total_sent=0,
+                            total_delivered=0,
+                            total_paid_templates=0,
+                            total_cost=0.0
                         )
                         db_log.add(aggregator)
                         db_log.commit()
@@ -312,7 +318,8 @@ async def send_template(
 @router.get("/profile", summary="Busca o perfil do WhatsApp Business")
 async def get_whatsapp_profile(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
@@ -322,7 +329,7 @@ async def get_whatsapp_profile(
         return {"error": "Configurações do WhatsApp incompletas."}
 
     async with httpx.AsyncClient(timeout=30.0) as http:
-        # Busca detalhes do perfil
+        # 1. Busca detalhes do perfil
         res = await http.get(
             f"https://graph.facebook.com/v25.0/{wa_phone_id}/whatsapp_business_profile",
             params={
@@ -333,13 +340,88 @@ async def get_whatsapp_profile(
         
         profile_data = res.json().get("data", [{}])[0]
         
-        # Busca detalhes do número (para pegar display_phone_number)
+        # 2. Busca detalhes do número (para pegar display_phone_number, messaging_limit_tier e verified_name)
         num_res = await http.get(
             f"https://graph.facebook.com/v25.0/{wa_phone_id}",
-            params={"access_token": wa_token}
+            params={
+                "fields": "display_phone_number,messaging_limit_tier,quality_rating,verified_name,name_status",
+                "access_token": wa_token
+            }
         )
         if num_res.status_code == 200:
-            profile_data["display_phone_number"] = num_res.json().get("display_phone_number", "")
+            num_data = num_res.json()
+            profile_data["display_phone_number"] = num_data.get("display_phone_number", "")
+            profile_data["messaging_limit_tier"] = num_data.get("messaging_limit_tier", "TIER_250")
+            profile_data["quality_rating"] = num_data.get("quality_rating", "UNKNOWN")
+            profile_data["verified_name"] = num_data.get("verified_name", "")
+            profile_data["name_status"] = num_data.get("name_status", "APPROVED")
+
+        # 3. Busca status da conta empresarial (WABA/BM Verification)
+        wa_waba_id = get_setting("WA_BUSINESS_ACCOUNT_ID", "", client_id=client_id)
+        if wa_waba_id:
+            try:
+                waba_res = await http.get(
+                    f"https://graph.facebook.com/v25.0/{wa_waba_id}",
+                    params={
+                        "fields": "verification_status,account_review_status,name,message_template_namespace",
+                        "access_token": wa_token
+                    }
+                )
+                if waba_res.status_code == 200:
+                    waba_data = waba_res.json()
+                    logger.info(f"WABA Data for {wa_waba_id}: {waba_data}")
+                    
+                    # Se verification_status for 'not_verified' mas account_review_status for 'APPROVED', 
+                    # pode ser que a Meta considere como funcionalmente verificada para templates.
+                    profile_data["verification_status"] = waba_data.get("verification_status", "not_verified")
+                    profile_data["account_review_status"] = waba_data.get("account_review_status", "")
+                    
+                    # Tentar buscar status da BM vinculada se possível
+                    # fields=business{verification_status}
+                    bm_res = await http.get(
+                        f"https://graph.facebook.com/v25.0/{wa_waba_id}",
+                        params={
+                            "fields": "business",
+                            "access_token": wa_token
+                        }
+                    )
+                    if bm_res.status_code == 200:
+                        bm_info = bm_res.json().get("business")
+                        if bm_info:
+                            logger.info(f"BM Info for WABA {wa_waba_id}: {bm_info}")
+                            # Se a BM estiver verificada, sobrepomos o status da WABA para fins de exibição
+                            if bm_info.get("verification_status") == "verified":
+                                profile_data["verification_status"] = "verified"
+            except Exception as e:
+                logger.error(f"Erro ao buscar status de verificação da WABA: {e}")
+
+        # 4. Calcular envios realizados hoje via Banco de Dados
+
+        # 4. Calcular envios realizados hoje via Banco de Dados
+        try:
+            # Início do dia em UTC
+            today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min).replace(tzinfo=timezone.utc)
+            
+            # Encontrar todos os clients que usam o mesmo WA_PHONE_NUMBER_ID
+            # Isso é necessário porque o limite da Meta é compartilhado pelo número
+            sibling_client_ids = db.query(models.AppConfig.client_id)\
+                .filter(models.AppConfig.key == 'WA_PHONE_NUMBER_ID', models.AppConfig.value == wa_phone_id)\
+                .all()
+            sibling_ids = [c[0] for c in sibling_client_ids]
+
+            # Contar MessageStatus vinculados a esses client_ids
+            usage_count = db.query(func.count(models.MessageStatus.id))\
+                .join(models.ScheduledTrigger, models.MessageStatus.trigger_id == models.ScheduledTrigger.id)\
+                .filter(
+                    models.ScheduledTrigger.client_id.in_(sibling_ids),
+                    models.MessageStatus.timestamp >= today_start,
+                    models.MessageStatus.status != 'failed' # Não contar falhas
+                ).scalar() or 0
+            
+            profile_data["current_usage"] = usage_count
+        except Exception as e:
+            logger.error(f"Erro ao calcular uso de mensagens: {e}")
+            profile_data["current_usage"] = 0
             
         return profile_data
 
@@ -446,4 +528,92 @@ async def update_whatsapp_profile(
             raise HTTPException(status_code=400, detail=f"Erro Meta API: {res.text}")
 
         return {"success": True, "message": "Perfil atualizado com sucesso!"}
+
+
+@router.post("/profile-name", summary="Atualiza o nome de exibição do WhatsApp Business")
+async def update_whatsapp_name(
+    payload: dict,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
+    wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
+    new_name = payload.get("display_name")
+
+    if not wa_token or not wa_phone_id:
+        raise HTTPException(status_code=400, detail="Configurações do WhatsApp incompletas.")
+    
+    if not new_name:
+        raise HTTPException(status_code=400, detail="O nome de exibição é obrigatório.")
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        # Step 1: Solicitar alteração de nome na Meta
+        res = await http.post(
+            f"https://graph.facebook.com/v25.0/{wa_phone_id}",
+            params={"access_token": wa_token},
+            json={"display_name": new_name}
+        )
+        
+        if res.status_code != 200:
+            logger.error(f"Erro ao atualizar nome WhatsApp: {res.text}")
+            raise HTTPException(status_code=400, detail=f"Erro Meta API: {res.text}")
+
+        return {"success": True, "message": "Solicitação de alteração de nome enviada. A Meta analisará a mudança."}
+
+@router.post("/register-number", summary="Registra o número de telefone (Ativa certificado de nome)")
+async def register_whatsapp_number(
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
+    wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
+
+    if not wa_token or not wa_phone_id:
+        raise HTTPException(status_code=400, detail="Configurações do WhatsApp incompletas.")
+
+    wa_pin = get_setting("WA_PIN", "123456", client_id=client_id)
+
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        # Tenta registrar o número para ativar o certificado do nome aprovado
+        res = await http.post(
+            f"https://graph.facebook.com/v25.0/{wa_phone_id}/register",
+            headers={"Authorization": f"Bearer {wa_token}"},
+            json={
+                "messaging_product": "whatsapp",
+                "pin": wa_pin
+            }
+        )
+        
+        if res.status_code != 200:
+            logger.error(f"Erro ao registrar número: {res.text}")
+            # Se der erro de PIN, avisar
+            if "pin" in res.text.lower():
+                return {"success": False, "error": "PIN incorreto ou necessário. Verifique no painel da Meta."}
+            raise HTTPException(status_code=400, detail=f"Erro ao registrar: {res.text}")
+
+        return {"success": True, "message": "Número registrado com sucesso! O nome deve aparecer em breve."}
+
+@router.get("/debug/meta/{waba_id}")
+async def debug_meta(
+    waba_id: str,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
+    
+    async with httpx.AsyncClient(timeout=30.0) as http:
+        res = await http.get(
+            f"https://graph.facebook.com/v25.0/{waba_id}",
+            params={
+                "fields": "verification_status,account_review_status,name,message_template_namespace,business",
+                "access_token": wa_token
+            }
+        )
+        return {
+            "status_code": res.status_code,
+            "data": res.json()
+        }
 

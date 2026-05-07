@@ -79,6 +79,16 @@ async def run_history_cleanup():
 
 async def run_stale_triggers_cleanup():
     """Cancela Gatilhos pausados aguardando entrega por mais de 24 horas."""
+    global _last_cleanup_date
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Para o stale cleanup, podemos rodar a cada 1h para ser mais preciso, 
+    # mas o usuário quer silêncio nos logs. Vamos manter diário ou silenciar logs de "nada encontrado".
+    
+    # Se já rodou hoje, pulamos o log barulhento, mas podemos rodar a lógica silenciosamente se necessário.
+    # Mas seguindo o pedido do usuário, vamos rodar apenas 1x ao dia.
+    if _last_cleanup_date == today:
+        return
+
     logger.info("🔍 [STALE CLEANUP] Verificando funis pausados há mais de 24h...")
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     db = SessionLocal()
@@ -238,10 +248,13 @@ async def scheduler_task():
                     logger.warning(f"⚠️ [SCHEDULER] Trigger {trigger.id} ignorado no despacho por falta de destinatário válido.")
             
             db.close()
+            
+            # Rodar limpezas apenas se mudou o dia (respeitando as flags internas das funções)
             await run_history_cleanup()
             await run_stale_triggers_cleanup()
             await run_log_file_cleanup()
         except Exception as e:
             logger.error(f"Scheduler loop error: {e}")
 
-        await asyncio.sleep(2)
+        # Aumentar levemente o sleep para reduzir carga e logs repetitivos se houver erros
+        await asyncio.sleep(5)

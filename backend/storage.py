@@ -10,9 +10,6 @@ logger = setup_logger(__name__)
 
 class StorageClient:
     def __init__(self):
-        # Tenta pegar do banco, fallback para env
-        # Nota: Storage costuma ser global, então pegamos sem client_id específico (assumindo config global)
-        # ou pegamos de tudo. Por simplicidade, vamos usar get_setting que já faz o fallback.
         from config_loader import get_setting
 
         self.endpoint_url = get_setting("S3_ENDPOINT_URL")
@@ -21,14 +18,12 @@ class StorageClient:
         self.bucket_name = get_setting("S3_BUCKET_NAME") or "zapvoice-files"
         self.region = get_setting("S3_REGION") or "us-east-1"
 
-        # Limpar espaços e comentários residuais (segurança extra)
         if self.endpoint_url: self.endpoint_url = self.endpoint_url.split('#')[0].strip().strip('"').strip("'")
         if self.access_key: self.access_key = self.access_key.split('#')[0].strip().strip('"').strip("'")
         if self.secret_key: self.secret_key = self.secret_key.split('#')[0].strip().strip('"').strip("'")
         if self.bucket_name: self.bucket_name = self.bucket_name.split('#')[0].strip().strip('"').strip("'")
         if self.region: self.region = self.region.split('#')[0].strip().strip('"').strip("'")
         
-        # Só inicializa se tiver config
         if self.endpoint_url and self.access_key:
             try:
                 logger.info(f"Conectando ao S3: {self.endpoint_url} (Region: {self.region})")
@@ -45,7 +40,6 @@ class StorageClient:
                 self._ensure_bucket_exists()
             except Exception as e:
                 logger.error(f"Erro CRITICO ao inicializar S3: {str(e)}")
-                # Se falhar aqui, desativamos o S3 para forçar fallback local seguro
                 self.s3_client = None
                 logger.warning("S3 desativado devido a erro de configuracao. Usando modo Local.")
         else:
@@ -55,28 +49,23 @@ class StorageClient:
     def _ensure_bucket_exists(self):
         if not self.s3_client: return
         try:
-            # Tenta verificar se o bucket existe - Isso valida as credenciais
             self.s3_client.head_bucket(Bucket=self.bucket_name)
         except Exception as e:
-            # Se for erro de credencial, vamos subir a exceção para desativar o S3 no __init__
-            if "InvalidAccessKeyId" in str(e) or "SignatureDoesNotMatch" in str(e) or "403" in str(e):
-                logger.error(f"Erro de Autenticacao S3: {e}")
-                raise e
+            if "InvalidAccessKeyId" in str(e) or "SignatureDoesNotMatch" in str(e) or "403" in str(e) or "401" in str(e):
+                logger.error(f"❌ Erro de Autenticacao S3: {e}. Desativando modo S3 e usando modo Local.")
+                self.s3_client = None # Desativa para o restante da execucao
+                return
             
-            # Se for apenas 'Not Found', tenta criar
             logger.info(f"Bucket '{self.bucket_name}' nao encontrado ou inacessivel. Tentando criar...")
             try:
                 self.s3_client.create_bucket(Bucket=self.bucket_name)
-                # Configurar policy para public-read (Opcional)
                 self._set_public_policy()
             except Exception as e2:
                 logger.error(f"Falha ao criar bucket: {e2}")
-                # Nao vamos subir erro aqui, pode ser que o bucket já exista mas head_bucket falhou por outro motivo
+                self.s3_client = None
 
     def _set_public_policy(self):
         if not self.s3_client: return
-        # Nota: Alguns provedores como Backblaze B2 não suportam put_bucket_policy via S3 API
-        # ou exigem permissões administrativas. Vamos tentar, mas se falhar, não trava o app.
         try:
             import json
             bucket_policy = {
@@ -97,18 +86,85 @@ class StorageClient:
             )
             logger.info(f"Bucket '{self.bucket_name}' configurado como PUBLICO")
         except Exception as e:
-            logger.warning(f"Nao foi possivel configurar politica publica no bucket (comum em B2/MinIO): {e}")
-            logger.info("Certifique-se de que o bucket esta configurado como PUBLICO no painel do seu provedor S3.")
+            logger.warning(f"Nao foi possivel configurar politica publica no bucket: {e}")
+
+    def _get_url_for_file(self, filename):
+        """Helper para gerar a URL pública baseada nas configurações atuais."""
+        public_url_base = os.getenv("S3_PUBLIC_URL")
+        if public_url_base:
+            if public_url_base.endswith("/"): public_url_base = public_url_base[:-1]
+            
+            # Se a URL base for o formato antigo (sem o bucket no subdominio) e for Backblaze, corrigimos
+            # Procuramos por bucket. (virtual-host) ou /bucket (path-style)
+            has_bucket = f"{self.bucket_name}." in public_url_base or f"/{self.bucket_name}" in public_url_base
+            
+            if "backblazeb2.com" in public_url_base and not has_bucket:
+                 parts = public_url_base.split("://")
+                 if len(parts) == 2:
+                     return f"{parts[0]}://{self.bucket_name}.{parts[1]}/{filename}"
+            
+            # Se já tiver o bucket em qualquer lugar da URL base, apenas anexamos o arquivo
+            if has_bucket:
+                return f"{public_url_base}/{filename}"
+            
+            return f"{public_url_base}/{self.bucket_name}/{filename}"
+
+        if self.endpoint_url and ("minio" in self.endpoint_url):
+            return f"{self.endpoint_url.replace('//minio', '//localhost').replace('//zapvoice-minio', '//localhost')}/{self.bucket_name}/{filename}"
+
+        if self.endpoint_url and "amazonaws.com" not in self.endpoint_url:
+             endpoint = self.endpoint_url
+             if endpoint.endswith("/"): endpoint = endpoint[:-1]
+             
+             # Para Backblaze B2 S3, o estilo Virtual-Host (bucket no subdominio) é mais confiavel para acesso publico
+             if "backblazeb2.com" in endpoint:
+                 # endpoint e.g. https://s3.us-west-004.backblazeb2.com
+                 parts = endpoint.split("://")
+                 if len(parts) == 2:
+                     return f"{parts[0]}://{self.bucket_name}.{parts[1]}/{filename}"
+             
+             return f"{endpoint}/{self.bucket_name}/{filename}"
+        
+        return f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{filename}"
+
+    def get_public_url(self, filename_or_path):
+        """Converte um caminho local ou nome de arquivo em uma URL pública acessível."""
+        if not filename_or_path: return ""
+        if str(filename_or_path).startswith(("http://", "https://")):
+            # Se for uma URL do nosso Backblaze no formato antigo (path-style), re-formatamos para o novo (virtual-host)
+            # Verificação case-insensitive para o bucket
+            if "backblazeb2.com" in filename_or_path.lower() and f"/{self.bucket_name.lower()}/" in filename_or_path.lower():
+                filename = filename_or_path.split("/")[-1] # Pega apenas o nome do arquivo
+                return self._get_url_for_file(filename)
+            return filename_or_path
+            
+        filename = os.path.basename(filename_or_path)
+        if not self.s3_client:
+            # Fallback local com URL absoluta para Meta/WhatsApp
+            api_url = os.getenv("VITE_API_URL", "")
+            base_url = api_url.replace("/api", "") if api_url else ""
+            
+            if not base_url:
+                domain = os.getenv("DOMAIN", "")
+                if domain:
+                    base_url = f"https://{domain}"
+            
+            if base_url:
+                if base_url.endswith("/"): base_url = base_url[:-1]
+                return f"{base_url}/static/uploads/{filename}"
+                
+            return f"/static/uploads/{filename}"
+            
+        return self._get_url_for_file(filename)
 
     def upload_file(self, file_obj, filename, content_type):
+        logger.info(f"📤 [STORAGE] Iniciando upload: {filename}")
         if not self.s3_client:
-            # Fallback to local storage
             try:
                 upload_dir = "static/uploads"
                 os.makedirs(upload_dir, exist_ok=True)
                 file_path = os.path.join(upload_dir, filename)
                 
-                # Reset file pointer just in case
                 if hasattr(file_obj, 'seek'):
                      file_obj.seek(0)
 
@@ -116,19 +172,13 @@ class StorageClient:
                     shutil.copyfileobj(file_obj, buffer)
                 
                 logger.info(f"Arquivo salvo localmente: {file_path}")
-                
-                # Construct local URL
-                # Se API_BASE_URL estiver definido (ex: https://zapvoice.aryaraj.shop), usa ele.
-                # Caso contrário, retorna um caminho relativo como /static/uploads/...
-                # Caminhos relativos são melhores para white label pois funcionam independente do domínio/ssl.
-                return f"/{upload_dir}/{filename}"
-                
+                logger.info(f"✅ [STORAGE] Arquivo salvo localmente: {file_path}")
+                return self.get_public_url(filename)
             except Exception as e:
                 logger.error(f"Erro upload Local: {e}")
                 raise e
         
         try:
-            # Reset file pointer
             if hasattr(file_obj, 'seek'):
                 file_obj.seek(0)
                 
@@ -138,37 +188,11 @@ class StorageClient:
                 filename,
                 ExtraArgs={'ContentType': content_type}
             )
-            
-            # Retorna URL pública
-            # 1. Se tiver S3_PUBLIC_URL (ex: https://cdn.meudominio.com), usa ela
-            public_url_base = os.getenv("S3_PUBLIC_URL")
-            if public_url_base:
-                # Remove barra final se tiver
-                if public_url_base.endswith("/"): public_url_base = public_url_base[:-1]
-                return f"{public_url_base}/{self.bucket_name}/{filename}"
-
-            # 2. Se for ambiente Docker (minio/zapvoice-minio), troca por localhost para o navegador conseguir acessar
-            if "minio" in self.endpoint_url:
-                # Substituição robusta para minio ou zapvoice-minio
-                # Se o endpoint for http://zapvoice-minio:9000, vira http://localhost:9000
-                return f"{self.endpoint_url.replace('//minio', '//localhost').replace('//zapvoice-minio', '//localhost')}/{self.bucket_name}/{filename}"
-
-            # 3. Fallback inteligente (S3 Genérico vs AWS)
-            # Se temos um endpoint configurado que NÃO é o padrão da AWS, usamos ele
-            if self.endpoint_url and "amazonaws.com" not in self.endpoint_url:
-                 # Remove barra final se tiver
-                 endpoint = self.endpoint_url
-                 if endpoint.endswith("/"): endpoint = endpoint[:-1]
-                 return f"{endpoint}/{self.bucket_name}/{filename}"
-            
-            # 4. Default AWS S3
-            return f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{filename}"
-                
+            return self._get_url_for_file(filename)
         except Exception as e:
             import traceback
             logger.error(f"Erro upload S3 (Detalhado): {str(e)}")
             logger.error(traceback.format_exc())
             raise e
 
-# Singleton
 storage = StorageClient()
