@@ -147,7 +147,7 @@ export function useIntegrations(activeClient) {
       mappings: (integration.mappings || []).map(m => ({
         ...m,
         id: m.id || Date.now() + Math.random(),
-        chatwoot_labels: normalizeChatwootLabel(m.chatwoot_labels || m.chatwoot_label)
+        chatwoot_label: normalizeChatwootLabel(m.chatwoot_label || m.chatwoot_labels)
       })),
       product_filtering: integration.product_filtering || false,
       product_whitelist: integration.product_whitelist || [],

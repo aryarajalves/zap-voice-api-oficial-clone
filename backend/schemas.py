@@ -276,7 +276,9 @@ class WebhookEventMappingBase(BaseModel):
     delay_seconds: Optional[int] = Field(0, description="Segundos de atraso")
     variables_mapping: Optional[dict] = Field({}, description="Mapeamento de variáveis {{1}}: 'nome'")
     private_note: Optional[str] = Field(None, description="Nota interna para criação na conversa (Chatwoot)")
-    cancel_events: Optional[List[str]] = Field(None, description="Eventos a cancelar quando este dispara")
+    cancel_events: Optional[List[str]] = Field(None, description="Eventos a cancelar quando este dispara (Legado)")
+    cancel_pending_on_trigger: Optional[bool] = Field(False, description="Ativar interrupção inteligente")
+    cancel_event_types: Optional[List[str]] = Field(None, description="Tipos de eventos a cancelar")
     chatwoot_label: Optional[List[str]] = Field(default_factory=list, description="Lista de etiquetas a serem adicionadas na conversa (Chatwoot)")
     internal_tags: Optional[str] = Field(None, description="Etiquetas internas do contato (ZapVoice)")
     publish_external_event: Optional[bool] = Field(False, description="Publicar evento externo (RabbitMQ) no ato da entrega")
@@ -299,6 +301,25 @@ class WebhookEventMappingBase(BaseModel):
     @field_validator('chatwoot_label', mode='before')
     @classmethod
     def validate_list_or_string(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v_trimmed = v.strip()
+            if not v_trimmed:
+                return []
+            if v_trimmed.startswith('['):
+                try:
+                    return json.loads(v_trimmed)
+                except:
+                    return [v_trimmed]
+            return [v_trimmed]
+        return []
+
+    @field_validator('cancel_event_types', mode='before')
+    @classmethod
+    def validate_cancel_event_types(cls, v):
         if v is None:
             return []
         if isinstance(v, list):

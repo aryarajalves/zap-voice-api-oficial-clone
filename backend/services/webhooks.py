@@ -531,6 +531,31 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             if tpl_cache:
                 template_name = tpl_cache.name
 
+        # --- LÓGICA DE INTERRUPÇÃO INTELIGENTE (CANCELAMENTO) ---
+        if getattr(mapping, "cancel_pending_on_trigger", False) and mapping.cancel_event_types:
+            phone = variables.get("phone")
+            event_types_to_cancel = mapping.cancel_event_types
+            
+            if phone and event_types_to_cancel:
+                logger.info(f"🛡️ SMART_CANCEL | Iniciando cancelamento para {phone} nos eventos: {event_types_to_cancel}")
+                
+                # Busca disparos pendentes/enfileirados para este contato e eventos
+                pending_triggers = db.query(models.ScheduledTrigger).filter(
+                    models.ScheduledTrigger.client_id == client_id,
+                    models.ScheduledTrigger.contact_phone == phone,
+                    models.ScheduledTrigger.status.in_(["pending", "queued"]),
+                    models.ScheduledTrigger.event_type.in_(event_types_to_cancel)
+                ).all()
+                
+                for pt in pending_triggers:
+                    logger.info(f"🚫 SMART_CANCEL | Cancelando trigger #{pt.id} (Evento: {pt.event_type})")
+                    pt.status = "cancelled"
+                    pt.failure_reason = f"Interrompido pelo evento: {history.event_type}"
+                
+                if pending_triggers:
+                    db.commit()
+                    logger.info(f"✅ SMART_CANCEL | {len(pending_triggers)} disparos cancelados com sucesso.")
+
         if not template_name and not funnel_id and not mapping.private_note:
             logger.info(f"AUTO_SKIP | Mapeamento #{mapping.id} sem conteúdo de disparo.")
             return

@@ -135,8 +135,9 @@ async def bulk_resend_webhook(
         "message": f"Processamento de {len(history_ids)} registros iniciado em segundo plano."
     }
 
-@router.delete("/history/{history_id}", summary="Excluir um registro de histórico")
+@router.delete("/{integration_id}/history/{history_id}", summary="Excluir um registro de histórico")
 async def delete_webhook_history(
+    integration_id: str,
     history_id: int,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
@@ -157,13 +158,20 @@ async def delete_webhook_history(
     db.commit()
     return {"status": "success"}
 
-@router.post("/history/bulk-delete", summary="Excluir múltiplos registros")
+@router.delete("/{integration_id}/history/bulk-delete", summary="Excluir múltiplos registros")
 async def bulk_delete_webhook_history(
-    history_ids: List[int],
+    integration_id: str,
+    request: Request,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    try:
+        data = await request.json()
+        history_ids = data.get("ids", [])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
     db.query(models.WebhookHistory).filter(
         models.WebhookHistory.id.in_(history_ids),
         models.WebhookHistory.integration_id.in_(
@@ -258,7 +266,8 @@ async def sync_webhook_history(
 
         # Atualiza as flags de automação no processed_data para o frontend saber o que exibir
         updated_data = dict(history.processed_data or {})
-        updated_data["manychat_enabled"] = getattr(mapping_exists, "manychat_active", False) if mapping_exists else False
+        is_mc_active = getattr(mapping_exists, "manychat_active", False) if mapping_exists else False
+        updated_data["manychat_enabled"] = is_mc_active
         updated_data["private_note_enabled"] = bool(getattr(mapping_exists, "private_note", None)) if mapping_exists else False
         updated_data["chatwoot_label"] = getattr(mapping_exists, "chatwoot_label", []) if mapping_exists else []
         updated_data["free_message_enabled"] = getattr(mapping_exists, "send_as_free_message", False) if mapping_exists else False
@@ -296,7 +305,7 @@ async def sync_webhook_history(
     db.refresh(history)
     return history
 
-@router.post("/{integration_id}/sync-all", summary="Sincronizar todo o histórico da integração")
+@router.post("/{integration_id}/history/sync-all", summary="Sincronizar todo o histórico da integração")
 async def sync_all_webhook_history(
     integration_id: str,
     background_tasks: BackgroundTasks,
@@ -323,6 +332,15 @@ async def sync_all_webhook_history(
     mappings = db.query(models.WebhookEventMapping).filter(
         models.WebhookEventMapping.integration_id == uuid_obj
     ).all()
+    
+    # --- AUTO-FIX: Limpeza de etiquetas bugadas nos mapeamentos ---
+    for m in mappings:
+        if m.chatwoot_label:
+            cleaned = robust_extract_labels(m.chatwoot_label)
+            if cleaned != m.chatwoot_label:
+                m.chatwoot_label = cleaned
+    db.flush()
+
     mapping_event_types = {m.event_type.lower() for m in mappings}
 
     count = 0
@@ -369,7 +387,11 @@ async def sync_all_webhook_history(
                     updated_data = dict(history.processed_data or {})
                     updated_data["manychat_enabled"] = is_mc_active
                     updated_data["private_note_enabled"] = bool(getattr(m_obj, "private_note", None))
-                    updated_data["chatwoot_label"] = getattr(m_obj, "chatwoot_label", [])
+                    
+                    # Auto-fix na extração do histórico
+                    raw_labels = getattr(m_obj, "chatwoot_label", [])
+                    updated_data["chatwoot_label"] = robust_extract_labels(raw_labels)
+                    
                     updated_data["free_message_enabled"] = getattr(m_obj, "send_as_free_message", False)
                     history.processed_data = updated_data
 
@@ -412,3 +434,54 @@ async def sync_all_webhook_history(
     db.commit()
 
     return {"status": "success", "synced_count": count, "duplicates_removed": deleted_dupes}
+
+@router.post("/{integration_id}/history/import", summary="Importar histórico de webhooks via JSON")
+async def import_webhook_history(
+    integration_id: str,
+    payloads: List[dict],
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+
+    integration = db.query(models.WebhookIntegration).filter(
+        models.WebhookIntegration.id == uuid_obj,
+        models.WebhookIntegration.client_id == x_client_id
+    ).first()
+    if not integration:
+        raise HTTPException(status_code=404, detail="Integration not found")
+
+    imported_count = 0
+    for item in payloads:
+        try:
+            # Pode ser uma lista de WebhookHistory ou apenas payloads
+            raw_payload = item.get("payload") if isinstance(item, dict) and "payload" in item else item
+            if not raw_payload: continue
+            
+            parsed_data = parse_webhook_payload(integration.platform, raw_payload)
+            
+            # Tentar pegar data do payload ou usar agora
+            created_at = datetime.now()
+            if "created_at" in item:
+                try: created_at = datetime.fromisoformat(item["created_at"].replace('Z', '+00:00'))
+                except: pass
+            
+            new_history = models.WebhookHistory(
+                integration_id=uuid_obj,
+                payload=raw_payload,
+                event_type=parsed_data.get("event_type", "outros").lower(),
+                status="ignored", # Começa como ignorado até ser sincronizado
+                processed_data=parsed_data,
+                created_at=created_at
+            )
+            db.add(new_history)
+            imported_count += 1
+        except Exception as e:
+            logger.error(f"Erro ao importar item: {e}")
+
+    db.commit()
+    return {"status": "success", "imported_count": imported_count}

@@ -27,7 +27,7 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
           is_active: true,
           private_note: "false",
           note_template: '',
-          chatwoot_labels: [],
+          chatwoot_label: [],
           cancel_pending_on_trigger: false,
           cancel_event_types: [],
           publish_external_event: false,

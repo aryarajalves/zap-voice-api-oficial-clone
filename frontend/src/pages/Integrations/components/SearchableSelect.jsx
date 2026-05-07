@@ -99,7 +99,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
         <>
           <div className="fixed inset-0 z-[99999]" onClick={() => setIsOpen(false)}></div>
           <div
-            className="fixed bg-white dark:bg-[#0f172a] border border-gray-100 dark:border-white/5 rounded-xl shadow-2xl z-[100000] overflow-hidden animate-in fade-in duration-150"
+            className="fixed bg-white dark:bg-[#0f172a] border border-gray-100 dark:border-white/5 rounded-xl shadow-2xl z-[100000] overflow-hidden"
             style={{
               left: coords.left,
               width: coords.width,

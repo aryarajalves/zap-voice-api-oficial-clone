@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
 import { toast } from 'react-hot-toast';
@@ -15,6 +15,20 @@ export function useWebhookHistory(activeClient) {
   const [webhookHistoryStatusFilter, setWebhookHistoryStatusFilter] = useState('');
   const [webhookHistorySearch, setWebhookHistorySearch] = useState('');
   const [isSavingJson, setIsSavingJson] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+
+  // Prevenir F5 durante sincronização
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isSyncingAll) {
+        e.preventDefault();
+        e.returnValue = 'A sincronização está em andamento. Se você sair agora, o processo será interrompido.';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isSyncingAll]);
 
   const fetchHistory = useCallback(async (integrationId, status = '', search = '', isSilent = false) => {
     if (!activeClient || !integrationId) return;
@@ -174,6 +188,7 @@ export function useWebhookHistory(activeClient) {
     webhookHistorySearch,
     setWebhookHistorySearch,
     isSavingJson,
+    syncProgress,
     fetchHistory,
     handleResendWebhook,
     handleSyncHistory,

@@ -156,6 +156,8 @@ class WebhookEventMapping(Base):
     private_note = Column(String, nullable=True)
     variables_mapping = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     cancel_events = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    cancel_pending_on_trigger = Column(Boolean, default=False)
+    cancel_event_types = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     chatwoot_label = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     internal_tags = Column(String, nullable=True)
     publish_external_event = Column(Boolean, default=False)

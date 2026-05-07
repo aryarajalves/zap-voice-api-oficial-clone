@@ -54,33 +54,60 @@ def find_name_in_payload(payload, key):
     return val, key if val is not None else (None, None)
 def robust_extract_labels(label_data):
     """
-    Extracts a list of labels from various formats:
-    - List of strings: ['tag1', 'tag2']
-    - JSON string: "['tag1', 'tag2']" or '["tag1", "tag2"]'
-    - Comma-separated string: "tag1, tag2"
+    Extracts a list of labels from various formats recursively.
+    Handles: List of strings, JSON strings (single/double escaped), comma-separated strings.
     """
     if not label_data:
         return []
 
-    if isinstance(label_data, list):
-        return [str(l).strip() for l in label_data if l]
-
-    if isinstance(label_data, str) and label_data.strip():
-        import json
-        lb_str = label_data.strip()
-        # Case 1: Likely a JSON array string
-        if lb_str.startswith('[') and lb_str.endswith(']'):
-            try:
-                # Replace single quotes with double quotes for valid JSON
-                # This is a common pattern when Python lists are coerced to strings in DBs
-                json_compatible = lb_str.replace("'", '"')
-                parsed = json.loads(json_compatible)
-                if isinstance(parsed, list):
-                    return [str(l).strip() for l in parsed if l]
-            except Exception:
-                pass
+    import json
+    curr = label_data
+    
+    # Recursive unescaping (up to 5 levels)
+    max_depth = 5
+    while max_depth > 0:
+        if isinstance(curr, list):
+            return [str(l).strip() for l in curr if l]
         
-        # Case 2: Comma-separated or fallback
-        return [l.strip() for l in lb_str.split(',') if l.strip()]
+        if not isinstance(curr, str):
+            break
+            
+        lb_str = curr.strip()
+        if not lb_str:
+            return []
+            
+        # Case 1: JSON-like array or string
+        if (lb_str.startswith('[') and lb_str.endswith(']')) or (lb_str.startswith('"') and lb_str.endswith('"')):
+            try:
+                # Handle single-quoted pseudo-JSON common in Python stringification
+                if "'" in lb_str and '"' not in lb_str:
+                    lb_str = lb_str.replace("'", '"')
+                
+                parsed = json.loads(lb_str)
+                if parsed == curr: # Infinite loop protection
+                    break
+                curr = parsed
+            except Exception:
+                # If JSON fails but it looks like a comma-list inside brackets, try splitting
+                if lb_str.startswith('[') and lb_str.endswith(']'):
+                    content = lb_str[1:-1]
+                    if ',' in content:
+                        curr = content.split(',')
+                    else:
+                        break
+                else:
+                    break
+        else:
+            # Case 2: Comma-separated or single string
+            if ',' in lb_str:
+                return [l.strip() for l in lb_str.split(',') if l.strip()]
+            return [lb_str]
+        
+        max_depth -= 1
 
+    # Fallback
+    if isinstance(curr, list):
+        return [str(l).strip() for l in curr if l]
+    if isinstance(curr, str) and curr:
+        return [curr.strip()]
     return []
