@@ -2,6 +2,7 @@ import logging
 import asyncio
 from datetime import datetime, timezone, timedelta
 import models
+from config_loader import get_setting
 from .logging import log_node_execution
 
 logger = logging.getLogger("FunnelEngine.LegacyExecutor")
@@ -53,5 +54,6 @@ async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, conta
         db.commit()
     
     trigger.status = 'completed'
-    log_node_execution(db, trigger, "FINISH", "completed", "Funil (Lista) concluído com sucesso.")
+    client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=trigger.client_id)
+    log_node_execution(db, trigger, "FINISH", "completed", f"{client_name}: Funil (Lista) concluído com sucesso.")
     db.commit()

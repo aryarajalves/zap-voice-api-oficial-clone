@@ -52,6 +52,7 @@ export function useWebhookHistory(activeClient) {
       const res = await fetchWithAuth(`${API_URL}/webhook-integrations/history/${historyId}/resend`, { method: 'POST' }, activeClient.id);
       if (res.ok) {
         toast.success('Webhook reenviado para processamento');
+        return true;
       }
     } catch (err) {
       console.error(err);
@@ -59,6 +60,7 @@ export function useWebhookHistory(activeClient) {
     } finally {
       setIsResending(false);
     }
+    return false;
   };
 
   const handleSyncHistory = async (historyId) => {

@@ -3,7 +3,7 @@ services:
   zapvoice_app:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.api
     container_name: zapvoice_app
     ports:
       - "8000:8000"
@@ -19,7 +19,8 @@ services:
       - ../backend/.env
     environment:
       - PORT=8000
-      - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
+      - DATABASE_URL=postgresql://postgres:5f90d6ef-f64a-44c7-9d68-b928d50ceb8f@zapvoice-postgres:5432/zapvoice
+      - TZ=America/Sao_Paulo
       # Carregado via env_file (backend/.env)
       # - REGISTER_API_KEY=${REGISTER_API_KEY}
 
@@ -39,7 +40,7 @@ services:
   zapvoice_worker:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.worker
     container_name: zapvoice_worker
     command: python worker.py
     networks:
@@ -51,8 +52,9 @@ services:
     env_file:
       - ../backend/.env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@zapvoice-postgres:5432/zapvoice
+      - DATABASE_URL=postgresql://postgres:5f90d6ef-f64a-44c7-9d68-b928d50ceb8f@zapvoice-postgres:5432/zapvoice
       - SECRET_KEY=${SECRET_KEY:-zapvoice_long_secret_key_for_production_validation_min_32_chars}
+      - TZ=America/Sao_Paulo
 
       # === INFRA LOCAL CONFIG (FROM .env) ===
       - RABBITMQ_HOST=${RABBITMQ_HOST:-zapvoice-rabbit}
@@ -75,6 +77,7 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8000/api
       - VITE_WS_URL=ws://localhost:8000/ws
+      - TZ=America/Sao_Paulo
 
   # === INFRASTRUCTURE SERVICES ===
   zapvoice-postgres:
@@ -84,7 +87,7 @@ services:
       - "5435:5432"
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=5f90d6ef-f64a-44c7-9d68-b928d50ceb8f
       - POSTGRES_DB=zapvoice
     volumes:
       - zapvoice_db_data:/var/lib/postgresql/data

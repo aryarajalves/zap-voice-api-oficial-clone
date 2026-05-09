@@ -1,11 +1,17 @@
 # Reload trigger 4 (Fixing hang)
-from fastapi import FastAPI, WebSocket, Request
+from fastapi import FastAPI, WebSocket, Request, Depends, Response
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 load_dotenv()
 import asyncio
 import os
+import sys
+import time
+
+# Log de depuração precoce para confirmar leitura do arquivo no servidor
+print("DEBUG: Lendo main.py - Iniciando carregamento de dependências...", flush=True)
 import json
 import sentry_sdk
 from datetime import datetime, timezone
@@ -18,6 +24,7 @@ from routers import (
     global_vars, health, webhooks_public, leads, financial
 )
 from routers.webhooks_inbound import router as webhooks_inbound_router
+from routers.webhooks_inbound.meta import meta_webhook_handler # Import direto para registro prioritário
 from routers.webhooks import router as webhooks_integrations_router
 from routers.triggers import router as triggers_router
 
@@ -28,6 +35,7 @@ from websocket_manager import manager
 
 # Security
 from core.security import limiter
+from core.deps import get_db
 from core.logger import logger
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -41,14 +49,14 @@ load_dotenv()
 
 app = FastAPI(
     title="ZapVoice API Oficial",
-    version="3.3.5",
+    version="3.5.1",
     description="""
-## 🚀 ZapVoice API v3.3.5
+## 🚀 ZapVoice API v3.5.1
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
 ### Funcionalidades
-* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.3.5** do **ZapVoice**!
+* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.5.1** do **ZapVoice**!
 * **Agendamento Inteligente:** Otimização de filas e prevenção de bloqueios.
 
 ### Autenticação
@@ -75,8 +83,12 @@ os.makedirs(os.path.join(_BASE_DIR, "static", "uploads"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=os.path.join(_BASE_DIR, "static")), name="static")
 
 # Mount Vite Assets (Production/Docker)
-if os.path.exists(os.path.join(_BASE_DIR, "static", "dist", "assets")):
-    app.mount("/assets", StaticFiles(directory=os.path.join(_BASE_DIR, "static", "dist", "assets")), name="assets")
+assets_path = os.path.join(_BASE_DIR, "static", "dist", "assets")
+if os.path.exists(assets_path):
+    logger.info(f"📂 [STATIC] Pasta assets encontrada em: {assets_path}")
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+else:
+    logger.warning(f"⚠️ [STATIC] Pasta assets NÃO encontrada em: {assets_path}")
 
 # Configuração CORS
 default_origins = [
@@ -111,6 +123,28 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 # Include Routers
+# --- Webhooks & Integrations Routers (PRIORIDADE MÁXIMA PARA RECEBIMENTO) ---
+# Registro direto no app para evitar erro 405 de roteadores aninhados
+@app.get("/api/meta")
+async def meta_webhook_verification(request: Request, db: Session = Depends(get_db)):
+    logger.info("📥 [DEBUG] GET /api/meta recebido (Verificação)")
+    return await meta_webhook_handler(request, db)
+
+@app.post("/api/meta")
+async def meta_webhook_events(request: Request, db: Session = Depends(get_db)):
+    logger.info("📥 [DEBUG] POST /api/meta recebido (Evento)")
+    return await meta_webhook_handler(request, db)
+
+# 1. Rotas de recebimento (Chatwoot, Inbound)
+app.include_router(webhooks_inbound_router, prefix="/api", tags=["Webhooks Inbound"])
+
+# 2. Endpoints Públicos de Recebimento (WordPress, Elementor, Hotmart, etc.)
+app.include_router(webhooks_public.router, prefix="/api", tags=["Webhooks Public"])
+
+# 3. Gerenciamento de Integrações (Dashboard)
+app.include_router(webhooks_integrations_router, prefix="/api", tags=["Webhooks Integrations"])
+
+# --- API Routers ---
 app.include_router(funnels.router, prefix="/api", tags=["Funnels"])
 app.include_router(schedules.router, prefix="/api", tags=["Schedules"])
 app.include_router(triggers_router, prefix="/api", tags=["Triggers"])
@@ -123,20 +157,10 @@ app.include_router(settings.router, prefix="/api", tags=["Settings"])
 app.include_router(blocked.router, prefix="/api", tags=["Blocked"])
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(global_vars.router, prefix="/api")
-
-# --- Webhooks & Integrations Routers (MOVIDOS PARA TOPO PARA PRIORIDADE) ---
-# 1. Rotas de recebimento (Chatwoot, Meta, Inbound)
-app.include_router(webhooks_inbound_router, prefix="/api", tags=["Webhooks Inbound"])
-
-# 3. Endpoints Públicos de Recebimento (WordPress, Elementor, Hotmart, etc.)
-app.include_router(webhooks_public.router, prefix="/api", tags=["Webhooks Public"])
-
-# 2. Gerenciamento de Integrações (Dashboard)
-app.include_router(webhooks_integrations_router, prefix="/api", tags=["Webhooks Integrations"])
-# --- End Webhooks ---
-
 app.include_router(leads.router, prefix="/api", tags=["Leads"])
 app.include_router(financial.router, prefix="/api", tags=["Financial"])
+
+# --- End Webhooks ---
 
 # Startup Events
 @app.middleware("http")
@@ -156,17 +180,31 @@ async def startup_event():
     
     # Seed Super Admin (Com Retry para aguardar o banco se necessário)
     try:
-        seed_super_admin()
+        # Usamos wait_for para garantir que o seed não trave o boot da API indefinidamente
+        await asyncio.wait_for(seed_super_admin(), timeout=30.0)
     except Exception as e:
         logger.error(f"❌ Falha crítica ao realizar seed do admin: {e}")
         
-    # Executa migrações críticas de banco
-    run_migrations()
-    
-    # Inicia Scheduler (Processa agendamentos)
-    asyncio.create_task(scheduler_task())
-    
-    # Inicia Consumers (Worker Interno) - DESATIVADO PARA EVITAR DUPLICIDADE COM O CONTAINER zapvoice_worker
+    # Inicia Tarefas de Background (Totalmente desacoplado do Boot)
+    async def start_all_background_tasks():
+        await asyncio.sleep(2)
+        logger.info("🔧 Iniciando tarefas de background (Scheduler, Monitor, Listener)...")
+        
+        # Scheduler condicional
+        if os.getenv("ENABLE_SCHEDULER", "true").lower() == "true":
+            logger.info("⏰ [SCHEDULER] Ativado via variável de ambiente.")
+            asyncio.create_task(scheduler_task())
+        else:
+            logger.info("🔕 [SCHEDULER] Desativado nesta instância (ENABLE_SCHEDULER=false).")
+
+        asyncio.create_task(system_monitor_task())
+        await asyncio.sleep(3)
+        try:
+            await event_listener()
+        except Exception as e:
+            logger.error(f"❌ Erro ao iniciar event_listener: {e}")
+
+    asyncio.create_task(start_all_background_tasks())
     # try:
     #     from worker import (
     #         handle_bulk_send, handle_whatsapp_event, handle_funnel_execution, 
@@ -186,13 +224,16 @@ async def startup_event():
     # except Exception as e:
     #     logger.error(f"❌ Falha ao iniciar workers internos: {e}")
 
-    # Inicia Listener de Eventos (Para WebSocket)
-    asyncio.create_task(event_listener())
-    
-    # Inicia Monitoramento de Sistema
-    asyncio.create_task(system_monitor_task())
+    # Diagnóstico de Rotas
+    logger.info("🔍 [DIAGNOSTIC] Listando todas as rotas registradas:")
+    for route in app.routes:
+        methods = getattr(route, "methods", None)
+        logger.info(f"📍 Rota: {route.path} | Métodos: {methods}")
 
-def seed_super_admin():
+    # Fim do startup
+    logger.info("✅ Startup finalizado. Servidor pronto!")
+
+async def seed_super_admin():
     """Garante que o Super Admin exista conforme o .env com lógica de retry"""
     from database import SessionLocal
     from models import User
@@ -261,7 +302,7 @@ def seed_super_admin():
             if attempt == max_retries - 1:
                 logger.error(f"❌ Não foi possível conectar ao banco após {max_retries} tentativas: {e}")
                 raise
-            asyncio.run(asyncio.sleep(retry_delay))
+            await asyncio.sleep(retry_delay)
         except Exception as e:
             logger.error(f"❌ Erro inesperado ao realizar seed do Super Admin: {e}")
             db.rollback()
@@ -385,9 +426,9 @@ def get_index_with_cache_busting():
     Lê o index.html e injeta timestamp no script de configuração
     para garantir que os navegadores não usem cache antigo.
     """
-    import time
     index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "dist", "index.html")
     if not os.path.exists(index_path):
+        logger.error(f"❌ [STATIC] Arquivo index.html não encontrado em: {index_path}")
         return None
     
     try:
@@ -423,7 +464,7 @@ async def root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "3.3.5",
+        "version": "3.5.1",
         "mode": "production"
     }
 
@@ -437,7 +478,8 @@ async def serve_env_config():
         # Disable caching for this file to ensure runtime updates take effect
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return response
-    return {"message": "Config file not found"}, 404
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Config file not found")
 
 # SPA Catch-all (Run AFTER all other routes)
 @app.get("/{full_path:path}")

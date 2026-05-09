@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import or_
 import models
 from chatwoot_client import ChatwootClient
+from config_loader import get_setting
 from .utils import apply_vars
 from .logging import log_node_execution
 from .graph_executor import execute_graph_funnel
@@ -33,7 +34,12 @@ async def execute_funnel(
     
     def apply_vars_func(text): return apply_vars(text, trigger, global_map)
 
-    # Status Lock
+    # Se o gatilho já estiver 'completed', não re-executa.
+    if trigger.status == 'completed':
+        logger.info(f"⏭️ [ENGINE] Trigger {trigger_id} já concluído. Pulando.")
+        return
+
+    # Garantir status 'processing'
     if trigger.status != 'processing':
         trigger.status = 'processing'
         trigger.updated_at = datetime.now(timezone.utc)
@@ -50,12 +56,41 @@ async def execute_funnel(
             return
 
     # Discovery Log
+    client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=trigger.client_id)
     logger.info(f"🔍 [ENGINE] Iniciando orquestração para Trigger {trigger_id} (Funil {funnel_id})")
-    log_node_execution(db, trigger, 'DISCOVERY', 'completed', 'Contexto Sincronizado', {
+    log_node_execution(db, trigger, 'DISCOVERY', 'completed', f'{client_name}: Contexto Sincronizado', {
         "account_id": chatwoot_account_id or trigger.chatwoot_account_id,
         "conversation_id": conversation_id or trigger.conversation_id,
         "contact_id": chatwoot_contact_id or trigger.chatwoot_contact_id
     })
+
+    # Apply Labels (Sync)
+    target_convo_id = conversation_id or trigger.conversation_id
+    if target_convo_id and trigger.chatwoot_label:
+        try:
+            from core.utils import robust_extract_labels
+            clean_labels = robust_extract_labels(trigger.chatwoot_label)
+            if clean_labels:
+                logger.info(f"🏷️ [ENGINE] Aplicando etiquetas {clean_labels} na conversa {target_convo_id}")
+                await chatwoot.add_label_to_conversation(target_convo_id, clean_labels)
+        except Exception as e_lbl:
+            logger.error(f"❌ [ENGINE] Erro ao aplicar etiquetas: {e_lbl}")
+
+    # Apply Private Note (Sync with delay if needed)
+    if target_convo_id and trigger.private_message:
+        try:
+            import asyncio
+            delay = trigger.private_message_delay or 0
+            if delay > 0:
+                logger.info(f"⏳ [ENGINE] Aguardando {delay}s para enviar nota privada...")
+                await asyncio.sleep(delay)
+            
+            logger.info(f"📝 [ENGINE] Enviando nota privada para conversa {target_convo_id}")
+            final_note = apply_vars_func(trigger.private_message)
+            await chatwoot.send_private_message(target_convo_id, final_note)
+            logger.info(f"✅ [ENGINE] Nota privada enviada com sucesso!")
+        except Exception as e_note:
+            logger.error(f"❌ [ENGINE] Erro ao enviar nota privada: {e_note}")
 
     try:
         if isinstance(funnel.steps, list):

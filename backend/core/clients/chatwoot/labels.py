@@ -58,24 +58,5 @@ class ChatwootLabelsMixin:
         return await self._request("POST", f"conversations/{conversation_id}/labels", json=payload)
 
     def _normalize_labels(self, labels: Union[str, List[str]]) -> List[str]:
-        if not labels: return []
-        if isinstance(labels, str):
-            if labels.startswith('[') and labels.endswith(']'):
-                try:
-                    import json
-                    parsed = json.loads(labels)
-                    if isinstance(parsed, list):
-                        return [str(l).strip() for l in parsed if l and str(l).strip()]
-                except: pass
-            return [l.strip() for l in labels.split(',') if l.strip()]
-        elif isinstance(labels, list):
-            result = []
-            for l in labels:
-                if not l: continue
-                if isinstance(l, dict):
-                    val = l.get('value') or l.get('title') or l.get('label')
-                    if val: result.append(str(val).strip())
-                else:
-                    result.append(str(l).strip())
-            return result
-        return []
+        from core.utils import robust_extract_labels
+        return robust_extract_labels(labels)

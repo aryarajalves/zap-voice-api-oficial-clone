@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiCheckCircle, FiShare2, FiSettings, FiPlus, FiTrash2, FiMaximize2 } from 'react-icons/fi';
-import MappingsConfig from './MappingsConfig';
+import MappingsConfig from './MappingsConfig/index';
 
 const IntegrationFormModal = ({ 
   isOpen, 

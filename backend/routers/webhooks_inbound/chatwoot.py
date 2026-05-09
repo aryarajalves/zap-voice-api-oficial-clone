@@ -63,12 +63,16 @@ async def chatwoot_webhook(request: Request, payload: dict = Body(...), db: Sess
                     
                     if msg_type in ["incoming", 0]:
                         now_utc = datetime.now(timezone.utc)
-                        window = db.query(models.ContactWindow).filter(models.ContactWindow.phone == clean_phone, models.ContactWindow.client_id == client_id, models.ContactWindow.chatwoot_inbox_id == inbox_id).first()
+                        logger.info(f"🕒 [WINDOW] Atualizando janela para {clean_phone} (Client: {client_id}, Inbox: {inbox_id})")
+                        window = db.query(models.ContactWindow).filter(models.ContactWindow.phone == clean_phone, models.ContactWindow.client_id == client_id).first()
                         if window:
                             window.last_interaction_at = now_utc
                             window.chatwoot_conversation_id = conversation.get("id")
+                            window.chatwoot_inbox_id = inbox_id
+                            logger.info(f"✅ [WINDOW] Janela existente atualizada para {clean_phone}")
                         else:
                             db.add(models.ContactWindow(client_id=client_id, phone=clean_phone, chatwoot_inbox_id=inbox_id, last_interaction_at=now_utc, chatwoot_conversation_id=conversation.get("id")))
+                            logger.info(f"🆕 [WINDOW] Nova janela criada para {clean_phone}")
                         db.commit()
 
                         # --- [REMOVED] GATILHO DUPLICADO ---

@@ -69,7 +69,7 @@ def list_dispatches(
         query = query.filter(models.ScheduledTrigger.status != 'cancelled', models.ScheduledTrigger.sent_as == 'TEMPLATE')
 
     if event_type:
-        query = query.filter(models.ScheduledTrigger.event_type == event_type)
+        query = query.filter(models.ScheduledTrigger.event_type.ilike(event_type))
 
     if search and search.strip():
         search = search.strip()
@@ -173,63 +173,111 @@ def backfill_dispatch_costs(
     db.commit()
     return {"status": "success", "updated": updated, "message": f"{updated} disparo(s) com custo recalculado."}
 
-@router.post("/dispatches/{dispatch_id}/play", summary="Disparar agora um agendamento")
+@router.post("/{integration_id}/dispatches/{dispatch_id}/play", summary="Disparar agora um agendamento")
 async def play_dispatch(
+    integration_id: str,
     dispatch_id: int,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid integration_id UUID")
+
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == dispatch_id,
-        models.ScheduledTrigger.client_id == x_client_id
+        models.ScheduledTrigger.client_id == x_client_id,
+        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
     ).first()
 
     if not trigger:
-        raise HTTPException(status_code=404, detail="Dispatch not found")
+        raise HTTPException(status_code=404, detail="Dispatch not found for this integration")
     
-    trigger.status = "processing"
-    trigger.scheduled_time = datetime.now(timezone.utc)
+    # Criar um novo registro (Clone) para manter o histórico íntegro
+    new_trigger = models.ScheduledTrigger(
+        client_id=trigger.client_id,
+        funnel_id=trigger.funnel_id,
+        contact_phone=trigger.contact_phone,
+        contact_name=trigger.contact_name,
+        conversation_id=trigger.conversation_id,
+        chatwoot_account_id=trigger.chatwoot_account_id,
+        chatwoot_contact_id=trigger.chatwoot_contact_id,
+        chatwoot_inbox_id=trigger.chatwoot_inbox_id,
+        status='processing',
+        scheduled_time=datetime.now(timezone.utc),
+        template_name=trigger.template_name,
+        template_language=trigger.template_language,
+        template_components=trigger.template_components,
+        private_message=trigger.private_message,
+        private_message_delay=trigger.private_message_delay,
+        private_message_concurrency=trigger.private_message_concurrency,
+        is_bulk=False, # Sempre individual ao disparar pelo histórico de um contato
+        event_type=trigger.event_type or 'manual_retry',
+        integration_id=trigger.integration_id,
+        chatwoot_label=trigger.chatwoot_label,
+        is_free_message=trigger.is_free_message,
+        parent_id=trigger.id # Referência ao disparo original
+    )
+    
+    db.add(new_trigger)
     db.commit()
+    db.refresh(new_trigger)
 
+    logger.info(f"📤 [PLAY-CLONE] Novo disparo criado: ID {new_trigger.id} (Original: {trigger.id}) | Phone {new_trigger.contact_phone}")
     await rabbitmq.publish("zapvoice_funnel_executions", {
-        "trigger_id": trigger.id,
-        "funnel_id": trigger.funnel_id,
-        "conversation_id": trigger.conversation_id,
-        "contact_phone": trigger.contact_phone
+        "trigger_id": new_trigger.id,
+        "funnel_id": new_trigger.funnel_id,
+        "conversation_id": new_trigger.conversation_id,
+        "contact_phone": new_trigger.contact_phone
     })
 
-    return {"status": "success", "message": "Disparo enviado para a fila."}
+    return {"status": "success", "message": "Novo disparo criado e enviado para a fila.", "new_id": new_trigger.id}
 
-@router.delete("/dispatches/{dispatch_id}", summary="Cancelar/Excluir um agendamento")
+@router.delete("/{integration_id}/dispatches/{dispatch_id}", summary="Cancelar/Excluir um agendamento")
 def cancel_dispatch(
+    integration_id: str,
     dispatch_id: int,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid integration_id UUID")
+
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == dispatch_id,
-        models.ScheduledTrigger.client_id == x_client_id
+        models.ScheduledTrigger.client_id == x_client_id,
+        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
     ).first()
 
     if not trigger:
-        raise HTTPException(status_code=404, detail="Dispatch not found")
+        raise HTTPException(status_code=404, detail="Dispatch not found for this integration")
     
     db.delete(trigger)
     db.commit()
     return {"status": "success"}
 
-@router.post("/dispatches/bulk-play", summary="Disparar múltiplos agendamentos em massa")
+@router.post("/{integration_id}/dispatches/bulk-play", summary="Disparar múltiplos agendamentos em massa")
 async def bulk_play_dispatches(
+    integration_id: str,
     dispatch_ids: List[int],
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid integration_id UUID")
+
     triggers = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id.in_(dispatch_ids),
-        models.ScheduledTrigger.client_id == x_client_id
+        models.ScheduledTrigger.client_id == x_client_id,
+        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
     ).all()
     
     count = 0
@@ -247,16 +295,24 @@ async def bulk_play_dispatches(
     db.commit()
     return {"status": "success", "triggered_count": count}
 
-@router.post("/dispatches/bulk-delete", summary="Excluir múltiplos agendamentos em massa")
+@router.delete("/{integration_id}/dispatches/bulk-delete", summary="Excluir múltiplos agendamentos em massa")
 async def bulk_delete_dispatches(
-    dispatch_ids: List[int],
+    integration_id: str,
+    request: schemas.BulkDeleteRequest,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    dispatch_ids = request.ids
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid integration_id UUID")
+
     valid_ids_query = db.query(models.ScheduledTrigger.id).filter(
         models.ScheduledTrigger.id.in_(dispatch_ids),
-        models.ScheduledTrigger.client_id == x_client_id
+        models.ScheduledTrigger.client_id == x_client_id,
+        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
     )
     valid_ids = [row[0] for row in valid_ids_query.all()]
     

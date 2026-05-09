@@ -10,53 +10,63 @@ from core.recurrent_logic import calculate_next_run
 
 logger = setup_logger(__name__)
 
-_last_cleanup_date: str | None = None
+_last_cleanup_log: str | None = None
+_last_cleanup_history: str | None = None
+_last_cleanup_stale: str | None = None
 
 async def run_log_file_cleanup():
     """Remove linhas antigas do zapvoice_debug.log com mais de LOG_RETENTION_DAYS dias."""
-    global _last_cleanup_date
+    global _last_cleanup_log
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    if _last_cleanup_date == today:
+    if _last_cleanup_log == today:
         return
 
     retention_days = int(os.getenv("LOG_RETENTION_DAYS", "0"))
     if retention_days <= 0:
+        _last_cleanup_log = today
         return
 
-    log_path = "zapvoice_debug.log"
-    if not os.path.exists(log_path):
-        return
+    def _sync_cleanup():
+        log_path = "zapvoice_debug.log"
+        if not os.path.exists(log_path):
+            return
+        
+        logger.info(f"🔍 [LOG CLEANUP] Iniciando limpeza do arquivo de log (retenção: {retention_days} dias)...")
+        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff_str = cutoff.strftime("%Y-%m-%d")
+        
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
 
-    logger.info(f"🔍 [LOG CLEANUP] Iniciando limpeza do arquivo de log (retenção: {retention_days} dias)...")
-    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-    cutoff_str = cutoff.strftime("%Y-%m-%d")
+            kept = [l for l in lines if (len(l) >= 10 and (l[:10] >= cutoff_str or l[3:5] == cutoff_str[5:7])) or len(l) < 10]
+            removed = len(lines) - len(kept)
+
+            if removed > 0:
+                with open(log_path, "w", encoding="utf-8") as f:
+                    f.writelines(kept)
+                logger.info(f"🧹 [LOG CLEANUP] {removed} linha(s) removidas do log (>{retention_days} dias).")
+        except Exception as e:
+            logger.error(f"❌ [LOG CLEANUP] Erro na limpeza síncrona: {e}")
 
     try:
-        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-
-        kept = [l for l in lines if l[:10] >= cutoff_str or len(l) < 10]
-        removed = len(lines) - len(kept)
-
-        if removed > 0:
-            with open(log_path, "w", encoding="utf-8") as f:
-                f.writelines(kept)
-            logger.info(f"🧹 [LOG CLEANUP] {removed} linha(s) removidas do log (>{retention_days} dias). {len(kept)} linha(s) mantidas.")
-        else:
-            logger.info(f"✅ [LOG CLEANUP] Nenhuma linha antiga encontrada no log. Total: {len(lines)} linha(s).")
+        await asyncio.to_thread(_sync_cleanup)
     except Exception as e:
-        logger.error(f"❌ [LOG CLEANUP] Erro na limpeza do arquivo de log: {e}")
+        logger.error(f"❌ [LOG CLEANUP] Erro ao disparar thread de limpeza: {e}")
+    finally:
+        _last_cleanup_log = today
 
 async def run_history_cleanup():
     """Remove registros de WebhookHistory mais antigos que HISTORY_RETENTION_DAYS dias."""
-    global _last_cleanup_date
+    global _last_cleanup_history
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    if _last_cleanup_date == today:
-        return  # já rodou hoje
+    if _last_cleanup_history == today:
+        return
 
     retention_days = int(os.getenv("HISTORY_RETENTION_DAYS", "0"))
     if retention_days <= 0:
-        return  # desabilitado
+        _last_cleanup_history = today
+        return
 
     logger.info(f"🔍 [HISTORY CLEANUP] Iniciando limpeza do histórico de webhooks (retenção: {retention_days} dias)...")
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
@@ -67,7 +77,7 @@ async def run_history_cleanup():
         ).delete(synchronize_session=False)
         db.commit()
         if deleted:
-            logger.info(f"🧹 [HISTORY CLEANUP] {deleted} registro(s) removidos do histórico (>{retention_days} dias).")
+            logger.info(f"🧹 [HISTORY CLEANUP] {deleted} registro(s) removidos do histórico.")
         else:
             logger.info(f"✅ [HISTORY CLEANUP] Nenhum registro antigo encontrado no histórico.")
     except Exception as e:
@@ -75,18 +85,14 @@ async def run_history_cleanup():
         db.rollback()
     finally:
         db.close()
-        _last_cleanup_date = today
+        _last_cleanup_history = today
 
 async def run_stale_triggers_cleanup():
     """Cancela Gatilhos pausados aguardando entrega por mais de 24 horas."""
-    global _last_cleanup_date
+    global _last_cleanup_stale
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    # Para o stale cleanup, podemos rodar a cada 1h para ser mais preciso, 
-    # mas o usuário quer silêncio nos logs. Vamos manter diário ou silenciar logs de "nada encontrado".
     
-    # Se já rodou hoje, pulamos o log barulhento, mas podemos rodar a lógica silenciosamente se necessário.
-    # Mas seguindo o pedido do usuário, vamos rodar apenas 1x ao dia.
-    if _last_cleanup_date == today:
+    if _last_cleanup_stale == today:
         return
 
     logger.info("🔍 [STALE CLEANUP] Verificando funis pausados há mais de 24h...")
@@ -113,11 +119,14 @@ async def run_stale_triggers_cleanup():
             )
             
         db.commit()
+        if not stale_triggers:
+            logger.info("✅ [STALE CLEANUP] Nenhum gatilho obsoleto encontrado.")
     except Exception as e:
         logger.error(f"❌ [STALE CLEANUP] Erro ao limpar gatilhos obsoletos: {e}")
         db.rollback()
     finally:
         db.close()
+        _last_cleanup_stale = today
 
 async def scheduler_task():
     logger.info("Scheduler task started (RabbitMQ Mode)")
@@ -249,12 +258,16 @@ async def scheduler_task():
             
             db.close()
             
-            # Rodar limpezas apenas se mudou o dia (respeitando as flags internas das funções)
-            await run_history_cleanup()
-            await run_stale_triggers_cleanup()
-            await run_log_file_cleanup()
+            # Rodar limpezas de forma protegida
+            try:
+                await run_history_cleanup()
+                await run_stale_triggers_cleanup()
+                await run_log_file_cleanup()
+            except Exception as clean_err:
+                logger.error(f"⚠️ Erro durante ciclo de limpeza: {clean_err}")
+
         except Exception as e:
             logger.error(f"Scheduler loop error: {e}")
 
-        # Aumentar levemente o sleep para reduzir carga e logs repetitivos se houver erros
-        await asyncio.sleep(5)
+        # Aguardar 10s para o próximo ciclo para não sobrecarregar em caso de locks
+        await asyncio.sleep(10)

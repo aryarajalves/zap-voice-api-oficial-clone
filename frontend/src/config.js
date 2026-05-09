@@ -1,7 +1,7 @@
 // Tenta pegar do ambiente dinâmico (window._env_) primeiro, depois do build (import.meta.env), depois localhost
 let raw_api_url = window._env_?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 let raw_ws_url = window._env_?.WS_URL || import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
-let raw_webhook_url = window._env_?.WEBHOOK_BASE_URL || import.meta.env.VITE_WEBHOOK_BASE_URL || window.location.origin;
+let raw_webhook_url = window._env_?.WEBHOOK_BASE_URL || import.meta.env.VITE_WEBHOOK_BASE_URL || raw_api_url.replace(/\/api\/*$/, '') || window.location.origin;
 
 
 // Normaliza API_URL: Garante que termine com /api e remove barras extras

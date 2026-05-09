@@ -2,6 +2,7 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 import models
+from config_loader import get_setting
 from .utils import apply_vars, get_next_node
 from .logging import log_node_execution
 from .nodes.message import handle_message_node
@@ -112,5 +113,6 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
             break
 
     trigger.status = 'completed'
-    log_node_execution(db, trigger, "FINISH", "completed", "Funil concluído com sucesso.")
+    client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=trigger.client_id)
+    log_node_execution(db, trigger, "FINISH", "completed", f"{client_name}: Funil concluído com sucesso.")
     db.commit()

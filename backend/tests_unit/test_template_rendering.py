@@ -7,7 +7,7 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_temp.db"
 # Adiciona o diretório backend ao path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from services.bulk import render_template_body
+from services.utils.bulk_helpers import render_template_body
 
 def test_render_template_body_scenarios():
     print("🧪 Iniciando testes de renderização de template...\n")

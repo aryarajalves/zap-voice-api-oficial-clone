@@ -25,6 +25,9 @@ router = APIRouter()
 
 # Centralized logic in services/webhooks.py
 
+# Trava Global de Memória para evitar Race Conditions de milissegundos nos webhooks
+GLOBAL_WEBHOOK_LOCKS = {}
+
 @router.post("/webhooks/{integration_uuid}")
 @router.get("/webhooks/{integration_uuid}")
 async def handle_external_webhook(
@@ -43,6 +46,23 @@ async def handle_external_webhook(
             "message": "Este é um endpoint de webhook. Por favor, envie uma requisição POST com o payload JSON da sua plataforma.",
             "integration_id": integration_uuid
         }
+    
+    # 0. Front Shield (Atomic Lock)
+    # Evita que a mesma plataforma envie o mesmo payload 2x em menos de 5s
+    body = await request.body()
+    import hashlib
+    payload_hash = hashlib.sha256(body).hexdigest()
+    lock_key = f"webhook_{integration_uuid}_{payload_hash}"
+    now = datetime.now(timezone.utc)
+    
+    if lock_key in GLOBAL_WEBHOOK_LOCKS:
+        last_time = GLOBAL_WEBHOOK_LOCKS[lock_key]
+        if now - last_time < timedelta(seconds=5):
+            logger.warning(f"🚫 [WEBHOOK_LOCK] Payload duplicado detectado para {integration_uuid}. Ignorando.")
+            return {"status": "ignored", "reason": "duplicate_payload_lock"}
+    
+    GLOBAL_WEBHOOK_LOCKS[lock_key] = now
+    
     # 1. Identify Integration
     integration = None
     try:
@@ -69,7 +89,8 @@ async def handle_external_webhook(
     # 2. Extract and Normalize Data
     payload = {}
     try:
-        payload = await request.json()
+        if body:
+            payload = json.loads(body)
         
         # Detect event type from payload
         extracted_data = parse_webhook_payload(integration.platform, payload)

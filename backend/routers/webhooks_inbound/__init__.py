@@ -9,8 +9,8 @@ router = APIRouter()
 # Rotas do Chatwoot
 router.include_router(chatwoot_router, tags=["Chatwoot Webhooks"])
 
-# Rotas da Meta (WhatsApp)
-router.include_router(meta_router, tags=["Meta Webhooks"])
+# Rotas da Meta (WhatsApp) - Removido daqui para ser direto no main.py para evitar 405
+# router.include_router(meta_router, tags=["Meta Webhooks"])
 
 # Rotas de Sistemas Externos (Slug, N8N, Ping)
 router.include_router(external_router, tags=["External Webhooks"])

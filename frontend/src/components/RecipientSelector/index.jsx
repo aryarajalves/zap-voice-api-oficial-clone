@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { useRecipientSelector } from './hooks/useRecipientSelector';
+import { useRecipientSelector } from './hooks/useRecipientSelector/index';
 import Tabs from './components/Tabs';
 import ManualInput from './components/ManualInput';
 import FileUpload from './components/FileUpload';

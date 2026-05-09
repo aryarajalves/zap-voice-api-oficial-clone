@@ -1,6 +1,8 @@
+from typing import Union, List, Optional, Any, Dict
 from datetime import datetime, timezone, timedelta
 import re
 from core.logger import logger
+from core.utils import robust_extract_labels
 
 def get_brasilia_now():
     # Simplificado: UTC-3. Idealmente usaria pytz, mas timedelta resolve aqui.
@@ -348,7 +350,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
     friendly_map = {
         "APPROVED": "Compra Aprovada", "SALE_APPROVED": "Compra Aprovada", "PAID": "Compra Aprovada",
         "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso", 
-        "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado",
+        "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado", "ABANDONED": "Carrinho Abandonado",
         "WAITING": "Aguardando", "CANCELED": "Cancelado", "EXPIRED": "Expirado"
     }
     result['raw_status'] = friendly_map.get(raw_val, raw_val.capitalize())
@@ -372,17 +374,28 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
 
     return result
 
-def extract_mapped_variables(payload: dict, parsed_data: dict, mapping_config: dict, header_format: str = None) -> list:
+def extract_mapped_variables(payload: dict, parsed_data: dict, mapping_config: Union[dict, list], header_format: str = None) -> list:
     components = []
     if not mapping_config:
         return components
-    parameters = []
     
-    def extract_value(key):
-        if key in parsed_data:
-            val = parsed_data.get(key)
-            if val: return str(val)
-        parts = key.split('.')
+    body_params = []
+    header_params = []
+    button_params = []
+
+    def extract_value(key, custom_val=None):
+        # Se o valor for 'custom', usamos o custom_val (que pode ser um path ou valor fixo)
+        lookup_key = custom_val if key == 'custom' else key
+        if not lookup_key:
+            return ""
+            
+        # Tenta no parsed_data primeiro (chaves simples como 'name', 'phone')
+        if lookup_key in parsed_data:
+            val = parsed_data.get(lookup_key)
+            if val is not None: return str(val)
+            
+        # Se não achou ou é um path, tenta no payload bruto (suporta caminhos aninhados)
+        parts = str(lookup_key).split('.')
         curr = payload
         for p in parts:
             if isinstance(curr, dict) and p in curr:
@@ -390,27 +403,79 @@ def extract_mapped_variables(payload: dict, parsed_data: dict, mapping_config: d
             else:
                 curr = None
                 break
+        
         if curr is not None:
             return str(curr)
+            
+        # Se for um mapeamento customizado e não encontramos no payload
+        if key == 'custom' and lookup_key:
+            lookup_str = str(lookup_key)
+            # Se parecer uma URL ou um valor fixo sem pontos, retornamos como está
+            if lookup_str.startswith(("http://", "https://")) or "." not in lookup_str:
+                return lookup_str
+            
         return ""
 
-    body_mapping = {k: v for k, v in mapping_config.items() if k.isdigit()}
-    for index_str, key in sorted(body_mapping.items(), key=lambda x: int(x[0])):
-        val = extract_value(key)
-        parameters.append({"type": "text", "text": val if val else "-"})
-        
-    if parameters:
-        components.append({"type": "body", "parameters": parameters})
-        
-    header_url_key = mapping_config.get("header_url")
-    if header_url_key and header_format in ["IMAGE", "VIDEO", "DOCUMENT"]:
-        val = extract_value(header_url_key)
-        if val:
-            media_type = header_format.lower()
+    # Caso 1: Formato Novo (Lista de Objetos) - Vindo do Frontend atualizado
+    if isinstance(mapping_config, list):
+        for var in mapping_config:
+            key_index = var.get("key")
+            val_type = var.get("value")
+            custom_val = var.get("custom_value")
+            comp_type = var.get("type", "body")
+            
+            extracted_text = extract_value(val_type, custom_val)
+            param = {"type": "text", "text": extracted_text if extracted_text else "-"}
+            
+            if comp_type == "body":
+                body_params.append(param)
+            elif comp_type == "header":
+                # Para header, se for mídia, o formato é diferente (link)
+                if header_format in ["IMAGE", "VIDEO", "DOCUMENT"]:
+                    media_type = header_format.lower()
+                    header_params.append({"type": media_type, media_type: {"link": extracted_text}})
+                else:
+                    header_params.append(param)
+            elif comp_type == "button":
+                button_params.append(param)
+
+    # Caso 2: Formato Antigo (Dicionário) - Legado
+    elif isinstance(mapping_config, dict):
+        body_mapping = {k: v for k, v in mapping_config.items() if k.isdigit()}
+        for index_str, key in sorted(body_mapping.items(), key=lambda x: int(x[0])):
+            val = extract_value(key)
+            body_params.append({"type": "text", "text": val if val else "-"})
+            
+        header_url_key = mapping_config.get("header_url")
+        if header_url_key and header_format in ["IMAGE", "VIDEO", "DOCUMENT"]:
+            val = extract_value(header_url_key)
+            if val:
+                media_type = header_format.lower()
+                header_params.append({
+                    "type": "header",
+                    "parameters": [{"type": media_type, media_type: {"link": val}}]
+                })
+
+    # Monta os componentes finais
+    if body_params:
+        components.append({"type": "body", "parameters": body_params})
+    if header_params:
+        # Se for mídia, o componente header já vem formatado internamente no Caso 2, 
+        # mas no Caso 1 precisamos envelopar
+        if isinstance(header_params[0], dict) and "type" in header_params[0] and header_params[0]["type"] in ["image", "video", "document"]:
+             components.append({"type": "header", "parameters": header_params})
+        else:
+             components.append({"type": "header", "parameters": header_params})
+    if button_params:
+        # Botões na API da Meta costumam ser componentes separados por índice
+        for idx, btn_param in enumerate(button_params):
             components.append({
-                "type": "header",
-                "parameters": [{"type": media_type, media_type: {"link": val}}]
+                "type": "button",
+                "sub_type": "url",
+                "index": idx,
+                "parameters": [btn_param]
             })
+
     return components
 
 def extract_nested_custom_fields(payload: dict, mapping: dict) -> dict:
@@ -518,7 +583,32 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             return
 
         payload = history.payload or {}
+        phone = variables.get("phone")
         
+        # --- IDEMPOTENCY LOCK (Postgres Advisory Lock) ---
+        # Bloqueia o processamento para este telefone e mapeamento específico
+        if phone:
+            from sqlalchemy import text
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"webhook_{phone}_{mapping.id}"})
+            
+        # --- RE-CHECK após o lock (Idempotency definitiva) ---
+        # 1. Verificar se já existe um gatilho para este mapping + fone nos últimos 10 segundos
+        if phone:
+            last_st = db.query(models.ScheduledTrigger).filter(
+                models.ScheduledTrigger.client_id == client_id,
+                models.ScheduledTrigger.contact_phone == phone,
+                models.ScheduledTrigger.integration_id == mapping.integration_id,
+                models.ScheduledTrigger.event_type == history.event_type,
+                models.ScheduledTrigger.created_at >= datetime.now(timezone.utc) - timedelta(seconds=10)
+            ).first()
+            
+            if last_st:
+                logger.warning(f"🚫 [AUTO_IDEMPOTENCY] Webhook #{history_id} ignorado. Trigger #{last_st.id} já criado recentemente para {phone}")
+                history.status = "ignored"
+                history.error_message = f"Duplicidade evitada (Trigger #{last_st.id})"
+                db.commit()
+                return
+
         # Mapeamento já vem no argumento, mas vamos garantir que temos os dados
         template_name = mapping.template_name
         funnel_id = mapping.funnel_id
@@ -533,7 +623,6 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
 
         # --- LÓGICA DE INTERRUPÇÃO INTELIGENTE (CANCELAMENTO) ---
         if getattr(mapping, "cancel_pending_on_trigger", False) and mapping.cancel_event_types:
-            phone = variables.get("phone")
             event_types_to_cancel = mapping.cancel_event_types
             
             if phone and event_types_to_cancel:
@@ -568,8 +657,8 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         
         # Calcula delay
         delay_min = mapping.delay_minutes or 0
-        delay_sec = mapping.delay_seconds or 0
-        total_delay_sec = (delay_min * 60) + delay_sec
+        delay_seconds_map = mapping.delay_seconds or 0
+        total_delay_sec = (delay_min * 60) + delay_seconds_map
 
         scheduled_time = datetime.now(timezone.utc)
         if total_delay_sec > 0:
@@ -578,12 +667,17 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         else:
             status = "processing"
 
+        # Gera Chave de Idempotência Única
+        import hashlib
+        payload_str = json.dumps(payload, sort_keys=True)
+        idempotency_key = f"webhook_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
+
         # Cria o Disparo
         st = models.ScheduledTrigger(
             scheduled_time=scheduled_time,
             status=status,
             contact_name=variables.get("name"),
-            contact_phone=variables.get("phone"),
+            contact_phone=phone,
             template_name=template_name,
             template_components=components,
             template_language=mapping.template_language or "pt_BR",
@@ -591,16 +685,24 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             product_name=variables.get("product_name"),
             private_message=private_msg_text,
             publish_external_event=mapping.publish_external_event,
-            chatwoot_label=mapping.chatwoot_label,
+            chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
             is_free_message=False, # Decidido automaticamente pelo Worker via Smart Dispatch
             event_type=history.event_type,
             integration_id=mapping.integration_id,
             funnel_id=funnel_id,
-            is_bulk=False
+            is_bulk=False,
+            idempotency_key=idempotency_key
         )
         db.add(st)
-        db.commit()
-        db.refresh(st)
+        try:
+            db.commit()
+            db.refresh(st)
+        except Exception as e_st:
+            db.rollback()
+            if "UNIQUE constraint failed" in str(e_st) or "duplicate key" in str(e_st).lower():
+                logger.warning(f"🚫 [AUTO_IDEMPOTENCY] Race condition evitada via UNIQUE key para {phone}")
+                return
+            raise e_st
         
         # Se não houver delay, publica direto no RabbitMQ
         if total_delay_sec <= 0:
@@ -608,7 +710,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 "trigger_id": st.id,
                 "funnel_id": funnel_id,
                 "conversation_id": None,
-                "contact_phone": variables.get("phone"),
+                "contact_phone": phone,
                 "contact_name": variables.get("name")
             })
             

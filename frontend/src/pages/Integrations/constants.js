@@ -22,11 +22,13 @@ export const BODY_VAR_OPTIONS = [
   { value: 'phone', label: 'Telefone' },
   { value: 'email', label: 'E-mail' },
   { value: 'product_name', label: 'Nome do Produto' },
-  { value: 'payment_method', label: 'Método de Pag.' },
-  { value: 'checkout_url', label: 'URL do Checkout' },
-  { value: 'pix_qrcode', label: 'QR Code Pix' },
-  { value: 'buyer.name', label: '[Hotmart] Nome' },
-  { value: 'Customer.full_name', label: '[Kiwify] Nome' },
+  { value: 'price', label: 'Valor da Compra (R$)' },
+  { value: 'payment_method', label: 'Método de Pagamento' },
+  { value: 'status', label: 'Status do Pedido (Ex: Abandoned)' },
+  { value: 'checkout_url', label: 'URL do Checkout / Boleto / Pix' },
+  { value: 'pix_qrcode', label: 'QR Code Pix (Copia e Cola)' },
+  { value: 'buyer.name', label: '[Hotmart] Nome Completo' },
+  { value: 'Customer.full_name', label: '[Kiwify] Nome Completo' },
   { value: 'custom', label: 'Campo Personalizado / Fixo' },
 ];
 

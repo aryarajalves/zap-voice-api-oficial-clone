@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.3.5)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.5.1)
 
-Bem-vindo à versão **3.3.5** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.5.1** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -77,6 +77,13 @@ O ZapVoice utiliza uma stack moderna e escalável:
 ```bash
 docker-compose -f docker/docker-compose.local.yml up -d --build
 ```
+
+Derrubar conexão fantasma com o banco:
+
+psql -U postgres -d zapvoice -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'zapvoice' AND pid <> pg_backend_pid() AND state = 'idle';"
+
+
+
 
 O sistema estará disponível em:
 - **Frontend**: `http://localhost:5176`

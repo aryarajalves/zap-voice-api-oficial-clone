@@ -56,8 +56,8 @@ class FunnelBulkDelete(BaseModel):
 class ScheduledTriggerBase(BaseModel):
     funnel_id: Optional[int] = Field(None, description="ID do funil a ser executado")
     conversation_id: Optional[int] = Field(None, description="ID da conversa no Chatwoot")
-    scheduled_time: datetime = Field(..., description="Data/Hora agendada para execução")
-    status: str = Field(..., description="Status do agendamento (pending, queued, processing, completed, cancelled, failed)")
+    scheduled_time: Optional[datetime] = Field(None, description="Data/Hora agendada para execução")
+    status: str = Field("pending", description="Status do agendamento (pending, queued, processing, completed, cancelled, failed)")
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
 
@@ -104,12 +104,8 @@ class ScheduledTrigger(ScheduledTriggerBase):
     @field_validator('chatwoot_label', mode='before')
     @classmethod
     def parse_chatwoot_label(cls, v):
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except:
-                return []
-        return v or []
+        from core.utils import robust_extract_labels
+        return robust_extract_labels(v)
     updated_at: Optional[datetime] = None
     
     # Nested Funnels
@@ -129,6 +125,9 @@ class ScheduledTrigger(ScheduledTriggerBase):
 
     class Config:
         from_attributes = True
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., description="Lista de IDs para exclusão em massa")
 
 class MessageStatus(BaseModel):
     id: int
@@ -274,7 +273,7 @@ class WebhookEventMappingBase(BaseModel):
     template_name: Optional[str] = Field(None, description="Nome do template")
     delay_minutes: Optional[int] = Field(0, description="Minutos de atraso")
     delay_seconds: Optional[int] = Field(0, description="Segundos de atraso")
-    variables_mapping: Optional[dict] = Field({}, description="Mapeamento de variáveis {{1}}: 'nome'")
+    variables_mapping: Optional[Union[dict, list]] = Field(default_factory=list, description="Mapeamento de variáveis {{1}}: 'nome' ou lista de objetos")
     private_note: Optional[str] = Field(None, description="Nota interna para criação na conversa (Chatwoot)")
     cancel_events: Optional[List[str]] = Field(None, description="Eventos a cancelar quando este dispara (Legado)")
     cancel_pending_on_trigger: Optional[bool] = Field(False, description="Ativar interrupção inteligente")
@@ -301,21 +300,8 @@ class WebhookEventMappingBase(BaseModel):
     @field_validator('chatwoot_label', mode='before')
     @classmethod
     def validate_list_or_string(cls, v):
-        if v is None:
-            return []
-        if isinstance(v, list):
-            return v
-        if isinstance(v, str):
-            v_trimmed = v.strip()
-            if not v_trimmed:
-                return []
-            if v_trimmed.startswith('['):
-                try:
-                    return json.loads(v_trimmed)
-                except:
-                    return [v_trimmed]
-            return [v_trimmed]
-        return []
+        from core.utils import robust_extract_labels
+        return robust_extract_labels(v)
 
     @field_validator('cancel_event_types', mode='before')
     @classmethod

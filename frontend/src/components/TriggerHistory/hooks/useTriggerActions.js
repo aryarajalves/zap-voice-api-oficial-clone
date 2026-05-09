@@ -63,26 +63,27 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
     };
 
     const handleBulkDeleteAction = async () => {
-        let successCount = 0;
-        let failCount = 0;
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/bulk-delete`, { 
+                method: 'POST',
+                body: JSON.stringify({ ids: selectedIds })
+            }, activeClient?.id);
 
-        for (const id of selectedIds) {
-            try {
-                const res = await fetchWithAuth(`${API_URL}/triggers/${id}`, { method: 'DELETE' }, activeClient?.id);
-                if (res.ok) successCount++;
-                else failCount++;
-            } catch (e) {
-                failCount++;
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(`${data.deleted_count || selectedIds.length} itens excluídos com sucesso.`);
+                // Atualizar lista localmente
+                setTriggers(prev => prev.filter(t => !selectedIds.includes(t.id)));
+                setSelectedIds([]);
+            } else {
+                const errorData = await res.json().catch(() => ({}));
+                toast.error(errorData.detail || "Erro na exclusão em massa.");
             }
+        } catch (e) {
+            console.error("Bulk delete error:", e);
+            toast.error("Erro de conexão ao tentar excluir itens.");
         }
 
-        if (successCount > 0) {
-            toast.success(`${successCount} itens excluídos.`);
-            setTriggers(prev => prev.filter(t => !selectedIds.includes(t.id)));
-        }
-        if (failCount > 0) toast.error(`${failCount} falhas na exclusão.`);
-
-        setSelectedIds([]);
         fetchHistory();
         setModalConfig(prev => ({ ...prev, isOpen: false }));
     };

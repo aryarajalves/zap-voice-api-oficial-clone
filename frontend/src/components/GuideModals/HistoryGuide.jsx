@@ -6,7 +6,6 @@ const HistoryGuide = ({ isOpen, onClose }) => {
   return (
     <div
       className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
         style={{ background: 'linear-gradient(160deg, #0a1628 0%, #0c1a2e 100%)', border: '1px solid rgba(14,165,233,0.2)' }}>
@@ -24,13 +23,7 @@ const HistoryGuide = ({ isOpen, onClose }) => {
               <p className="text-sm text-gray-400">Entenda como ler, filtrar e auditar seus disparos realizados.</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-white transition-all hover:scale-110"
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          </button>
+
         </div>
 
         {/* Conteúdo */}

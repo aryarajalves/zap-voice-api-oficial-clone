@@ -7,7 +7,8 @@ from rabbitmq_client import rabbitmq
 from services.triggers_service import (
     reconcile_trigger_stats_logic, 
     cancel_trigger_with_report_logic,
-    retry_trigger_logic
+    retry_trigger_logic,
+    start_now_trigger_logic
 )
 
 router = APIRouter()
@@ -106,4 +107,11 @@ async def retry_trigger(trigger_id: int, db: Session = Depends(get_db), current_
     result = await retry_trigger_logic(trigger_id, db)
     if result is None: raise HTTPException(status_code=404, detail="Trigger not found")
     if result == "no_failures": raise HTTPException(status_code=404, detail="Nenhuma falha encontrada para repetir")
+    return result
+
+@router.post("/{trigger_id}/start-now", summary="Iniciar Disparo Imediatamente")
+async def start_now_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    result = await start_now_trigger_logic(trigger_id, db)
+    if result is None: raise HTTPException(status_code=404, detail="Trigger not found")
+    if result == "already_processing": raise HTTPException(status_code=400, detail="O disparo já está sendo processado.")
     return result

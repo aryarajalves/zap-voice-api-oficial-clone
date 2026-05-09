@@ -4,6 +4,7 @@ from typing import List
 import uuid
 import json
 import models, schemas
+from core.utils import robust_extract_labels
 from database import SessionLocal
 from core.deps import get_current_user, get_validated_client_id
 from core.logger import logger
@@ -105,7 +106,7 @@ def create_webhook_integration(
                     cancel_events=mapping.cancel_events,
                     cancel_pending_on_trigger=mapping.cancel_pending_on_trigger,
                     cancel_event_types=mapping.cancel_event_types,
-                    chatwoot_label=mapping.chatwoot_label,
+                    chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
                     internal_tags=mapping.internal_tags,
                     publish_external_event=mapping.publish_external_event,
                     send_as_free_message=True,
@@ -210,7 +211,7 @@ def update_webhook_integration(
                     cancel_events=mapping.cancel_events,
                     cancel_pending_on_trigger=mapping.cancel_pending_on_trigger,
                     cancel_event_types=mapping.cancel_event_types,
-                    chatwoot_label=mapping.chatwoot_label,
+                    chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
                     internal_tags=mapping.internal_tags,
                     publish_external_event=mapping.publish_external_event,
                     send_as_free_message=True,

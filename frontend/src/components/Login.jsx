@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { toast } from 'react-hot-toast';
-import { API_URL } from '../config';
+import { API_URL, resolveUrl } from '../config';
 import { FiGlobe } from 'react-icons/fi';
 
 const Login = () => {
@@ -10,7 +10,28 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [branding, setBranding] = useState({ name: 'ZapVoice Funnels', logo: null });
     const { login } = useAuth();
+
+    useEffect(() => {
+        const fetchBranding = async () => {
+            try {
+                const res = await fetch(`${API_URL}/settings/branding`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.APP_NAME) {
+                        setBranding({
+                            name: data.APP_NAME,
+                            logo: data.APP_LOGO || null
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Erro ao buscar branding:", err);
+            }
+        };
+        fetchBranding();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -47,17 +68,39 @@ const Login = () => {
         }
     };
 
+    // Renderiza o nome do app com o último termo em destaque (azul)
+    const renderAppName = () => {
+        const name = branding.name || 'ZapVoice Funnels';
+        const parts = name.split(' ');
+        if (parts.length === 1) return name;
+
+        const last = parts.pop();
+        return (
+            <>
+                {parts.join(' ')} <span className="text-blue-500">{last}</span>
+            </>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
             <div className="bg-[#1e293b] rounded-2xl shadow-2xl w-full max-w-md p-8 border border-gray-700">
                 {/* Logo/Header */}
                 <div className="text-center mb-8">
                     <div className="flex flex-col items-center gap-4 mb-4">
-                        <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg border-t border-blue-400">
-                            <span className="text-white text-5xl font-bold font-sans">Z</span>
-                        </div>
+                        {branding.logo ? (
+                            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg border border-gray-700">
+                                <img src={resolveUrl(branding.logo)} alt={branding.name} className="w-full h-full object-cover" />
+                            </div>
+                        ) : (
+                            <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg border-t border-blue-400">
+                                <span className="text-white text-5xl font-bold font-sans">
+                                    {(branding.name || 'Z')[0].toUpperCase()}
+                                </span>
+                            </div>
+                        )}
                         <h1 className="text-3xl font-bold text-white">
-                            ZapVoice <span className="text-blue-500">Funnels</span>
+                            {renderAppName()}
                         </h1>
                     </div>
                     <p className="text-gray-400">Entre na sua conta</p>
@@ -155,7 +198,7 @@ const Login = () => {
 
                 {/* Footer */}
                 <div className="mt-8 pt-6 border-t border-gray-700 text-center text-xs text-gray-500">
-                    <p>ZapVoice Funnels © 2026</p>
+                    <p>{branding.name} © {new Date().getFullYear()}</p>
                     <p className="mt-1">Gerencie suas sequências de mensagens WhatsApp</p>
                 </div>
             </div>
@@ -164,4 +207,5 @@ const Login = () => {
 };
 
 export default Login;
+
 

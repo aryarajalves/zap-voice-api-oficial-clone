@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from services.bulk import process_bulk_send, process_bulk_funnel, render_template_body
+from services.bulk import process_bulk_send, process_bulk_funnel
+from services.utils.bulk_helpers import render_template_body
 import asyncio
 from datetime import datetime, timezone
 

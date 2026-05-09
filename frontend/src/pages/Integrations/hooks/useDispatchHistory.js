@@ -48,7 +48,7 @@ export function useDispatchHistory(activeClient) {
   const handlePlayDispatch = async (dispatchId, integrationId) => {
     setIsPlaying(prev => ({ ...prev, [dispatchId]: true }));
     try {
-      const res = await fetchWithAuth(`${API_URL}/webhook-integrations/dispatches/${dispatchId}/play`, { method: 'POST' }, activeClient.id);
+      const res = await fetchWithAuth(`${API_URL}/webhook-integrations/${integrationId}/dispatches/${dispatchId}/play`, { method: 'POST' }, activeClient.id);
       if (res.ok) {
         toast.success('Disparo iniciado manualmente');
         fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, true);

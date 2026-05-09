@@ -89,7 +89,7 @@ export function useAppLogic() {
 
     useEffect(() => {
         if (appBranding.name) {
-            document.title = `${appBranding.name} - Chatwoot Automation`;
+            document.title = appBranding.name;
         }
     }, [appBranding]);
 

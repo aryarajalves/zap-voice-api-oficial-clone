@@ -39,6 +39,10 @@ class ChatwootBase:
         max_retries = 3
         
         for attempt in range(max_retries):
+            # Se for POST, PUT ou DELETE, não tentamos novamente para evitar duplicidade (não é idempotente)
+            if attempt > 0 and method.upper() in ["POST", "PUT", "DELETE"]:
+                break
+
             async with httpx.AsyncClient(timeout=kwargs.pop("timeout", 15.0)) as client:
                 try:
                     response = await client.request(method, url, headers=self.headers, **kwargs)

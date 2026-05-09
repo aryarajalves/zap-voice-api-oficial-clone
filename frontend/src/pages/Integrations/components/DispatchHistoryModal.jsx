@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiPlay, FiSearch, FiRefreshCw, FiChevronDown, FiTrash2, FiZap, FiCheck, FiInbox, FiEye, FiNavigation, FiMousePointer, FiActivity } from 'react-icons/fi';
 import SearchableSelect from './SearchableSelect';
@@ -43,43 +43,69 @@ const DispatchHistoryModal = ({
   fetchDispatches,
   setConfirmDeleteDispatch
 }) => {
+  useEffect(() => {
+    if (isOpen && integration?.id) {
+      fetchDispatches(
+        integration.id,
+        dispatchPage,
+        dispatchLimit,
+        dispatchSearch,
+        dispatchEventFilter,
+        dispatchStartDate,
+        dispatchEndDate,
+        dispatchTypeFilter
+      );
+    }
+  }, [
+    isOpen,
+    integration?.id,
+    dispatchPage,
+    dispatchLimit,
+    dispatchSearch,
+    dispatchEventFilter,
+    dispatchStartDate,
+    dispatchEndDate,
+    dispatchTypeFilter,
+    fetchDispatches
+  ]);
+
   if (!isOpen || !integration) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
       <div className="bg-[#1e293b] border border-white/5 rounded-[2.5rem] w-full max-w-6xl h-full max-h-[90vh] flex flex-col shadow-[0_0_100px_rgba(30,58,138,0.2)] overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-[#0f172a]/80 backdrop-blur">
+        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#0f172a]/80 backdrop-blur shrink-0">
           <div>
-            <h3 className="text-2xl font-black text-white flex items-center gap-3 tracking-tight">
-              <div className="p-2 bg-indigo-500/10 rounded-xl">
-                <FiPlay className="text-indigo-400" />
+            <h3 className="text-xl font-black text-white flex items-center gap-3 tracking-tight">
+              <div className="p-1.5 bg-indigo-500/10 rounded-lg">
+                <FiPlay className="text-indigo-400" size={18} />
               </div>
               Histórico de Disparos: {integration.name}
             </h3>
-            <p className="text-gray-500 text-xs mt-1 font-medium bg-white/5 px-2 py-0.5 rounded-lg inline-block">Acompanhe a fila de execução de templates e funis</p>
+            <p className="text-gray-500 text-[10px] mt-1 font-medium bg-white/5 px-2 py-0.5 rounded-lg inline-block">Acompanhe a fila de execução de templates e funis</p>
           </div>
         </div>
 
         <div className="p-0 flex-1 overflow-hidden relative flex flex-col">
           {/* Barra de Filtros Persistente */}
-          <div className="px-8 pt-8 pb-0 shrink-0">
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-white/[0.02] border border-white/5 p-6 rounded-3xl">
+          <div className="px-6 pt-4 pb-0 shrink-0">
+            <div className="mb-3 grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
               <div className="md:col-span-1">
-                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block px-1">Buscar</label>
+                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Buscar</label>
                 <div className="relative group">
                   <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-indigo-500 transition-colors" size={14} />
-                  <input
+                    <input
                     type="text"
                     placeholder="Telefone ou nome..."
                     value={dispatchSearch}
                     onChange={(e) => setDispatchSearch(e.target.value)}
-                    className="w-full bg-[#0b1120] border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none shadow-inner"
+                    className="w-full bg-[#0b1120] border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none shadow-inner"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block px-1">Evento</label>
+                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Evento</label>
                 <div className="relative">
                   <SearchableSelect
                     options={[
@@ -101,7 +127,7 @@ const DispatchHistoryModal = ({
               </div>
 
               <div>
-                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block px-1">Tipo</label>
+                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Tipo</label>
                 <div className="relative">
                   <SearchableSelect
                     options={[
@@ -123,7 +149,7 @@ const DispatchHistoryModal = ({
 
               <div className="md:col-span-2 flex gap-3">
                 <div className="flex-1">
-                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block px-1">Desde</label>
+                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Desde</label>
                   <input
                     type="date"
                     value={dispatchStartDate}
@@ -132,7 +158,7 @@ const DispatchHistoryModal = ({
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5 block px-1">Até</label>
+                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Até</label>
                   <input
                     type="date"
                     value={dispatchEndDate}
@@ -159,17 +185,6 @@ const DispatchHistoryModal = ({
                 </div>
               </div>
 
-              <div className="md:col-span-5 flex justify-end">
-                <button
-                  onClick={handleBackfillCosts}
-                  disabled={isBackfillingCosts}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-xl transition-all border border-amber-500/20 hover:border-amber-500/40 text-[10px] font-black tracking-widest uppercase disabled:opacity-50"
-                  title="Calcular custos históricos para disparos que mostram 'R$ —'"
-                >
-                  {isBackfillingCosts ? <FiRefreshCw size={12} className="animate-spin" /> : <FiRefreshCw size={12} />}
-                  {isBackfillingCosts ? 'Calculando...' : 'Calcular Custos'}
-                </button>
-              </div>
             </div>
           </div>
 
@@ -187,11 +202,11 @@ const DispatchHistoryModal = ({
               <p className="text-gray-500 max-w-md">Não há disparos para os filtros aplicados. Tente limpar os filtros ou selecionar outro período.</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto px-8 pb-8 custom-scrollbar">
-              <div className="pt-2">
-                {/* Bulk Actions Bar */}
-                {selectedDispatchIds.length > 0 && (
-                  <div className="mb-4 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
+            <>
+              {/* Bulk Actions Bar (Sticky/Top) */}
+              {selectedDispatchIds.length > 0 && (
+                <div className="px-8 pt-4">
+                  <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center gap-3">
                       <div className="bg-indigo-500 text-white text-[10px] font-black px-2 py-1 rounded-lg">
                         {selectedDispatchIds.length} SELECIONADOS
@@ -221,11 +236,15 @@ const DispatchHistoryModal = ({
                       </button>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
+
+              <div className="flex-1 overflow-auto px-8 pb-8 custom-scrollbar">
+                <div className="pt-2">
                 <table className="w-full text-left border-separate border-spacing-y-3">
-                  <thead>
+                  <thead className="sticky top-0 z-20 bg-[#1a1b23]/95 backdrop-blur-md shadow-sm">
                     <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-4">
-                      <th className="px-6 pb-2 w-10">
+                      <th className="px-6 py-4 w-10">
                         <input
                           type="checkbox"
                           onChange={(e) => handleSelectAllDispatches(e, Array.isArray(dispatchHistory) ? dispatchHistory : [])}
@@ -233,10 +252,10 @@ const DispatchHistoryModal = ({
                           className="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                         />
                       </th>
-                      <th className="px-6 pb-2">Destinatário</th>
-                      <th className="px-6 pb-2">Status / Ações</th>
-                      <th className="px-6 pb-2">Evento / Template</th>
-                      <th className="px-6 pb-2 text-right">Execução / Timestamps</th>
+                      <th className="px-6 py-4">Destinatário</th>
+                      <th className="px-6 py-4">Status / Ações</th>
+                      <th className="px-6 py-4">Evento / Template</th>
+                      <th className="px-6 py-4 text-right">Execução / Timestamps</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.02]">
@@ -270,13 +289,15 @@ const DispatchHistoryModal = ({
                           <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-2">
                               {getStatusBadge(item.status)}
-                              <button
-                                onClick={() => { setSelectedDispatch(item); setIsPipelineModalOpen(true); }}
-                                className="p-2 bg-indigo-500/10 hover:bg-indigo-50 text-indigo-400 hover:text-white rounded-lg transition-all active:scale-95 flex items-center gap-1.5 font-black text-[9px] uppercase tracking-wider"
-                                title="Ver Pipeline"
-                              >
-                                <FiActivity size={14} /> <span>Pipeline</span>
-                              </button>
+                              {item.funnel_id ? (
+                                <button
+                                  onClick={() => { setSelectedDispatch(item); setIsPipelineModalOpen(true); }}
+                                  className="p-2 bg-indigo-500/10 hover:bg-indigo-50 text-indigo-400 hover:text-white rounded-lg transition-all active:scale-95 flex items-center gap-1.5 font-black text-[9px] uppercase tracking-wider"
+                                  title="Ver Pipeline"
+                                >
+                                  <FiActivity size={14} /> <span>Pipeline</span>
+                                </button>
+                              ) : null}
                               <button
                                 onClick={() => handlePlayDispatch(item.id)}
                                 disabled={isPlaying[item.id]}
@@ -313,9 +334,9 @@ const DispatchHistoryModal = ({
                               <span className="text-white font-bold text-sm tracking-tight">{(item.event_type || 'disparo')?.toUpperCase().replace('_', ' ')}</span>
                               {item.status === 'cancelled' ? (
                                 <span className="text-[10px] bg-gray-600 text-gray-300 px-2 py-0.5 rounded-full font-black uppercase tracking-widest">Cancelado</span>
-                              ) : item.sent_as === 'FREE_MESSAGE' ? (
+                              ) : (item.sent_as === 'FREE_MESSAGE' || item.meta_price_category === 'service' || item.is_free_message) ? (
                                 <span className="text-[10px] bg-emerald-500 text-black px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20">GRÁTIS</span>
-                              ) : item.sent_as === 'TEMPLATE' ? (
+                              ) : (item.sent_as === 'TEMPLATE' || item.meta_price_category) ? (
                                 <span className="text-[10px] bg-amber-500 text-black px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-lg shadow-amber-500/20">PAGO</span>
                               ) : (
                                 <span className="text-[10px] bg-indigo-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20">TEMPLATE</span>
@@ -324,25 +345,21 @@ const DispatchHistoryModal = ({
                             <div className="text-[10px] text-gray-500 mt-0.5">
                               {item.template_name ? `Template: ${item.template_name}` : (item.funnel_id ? `Funil: ${item.funnel_id}` : 'Ação Interna')}
                             </div>
-                            <div className="flex items-center gap-1.5 mt-1 border-white/10">
-                              <span className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-500 px-1 rounded" title="Enviados">
-                                <FiCheck size={10} /> {item.total_sent || (item.status === 'completed' ? 1 : 0)}
+                            <div className="flex items-center gap-1.5 mt-2 bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg w-fit shadow-lg shadow-black/20">
+                              <span className="flex items-center gap-1 text-[11px] font-black text-emerald-500" title="Enviados">
+                                <FiCheck size={13} /> {item.total_sent || (item.status === 'completed' ? 1 : 0)}
                               </span>
-                              <span className="flex items-center gap-0.5 text-[9px] font-bold text-blue-400 px-1 rounded" title="Entregues">
-                                <FiInbox size={10} /> {item.total_delivered || 0}
+                              <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
+                              <span className="flex items-center gap-1 text-[11px] font-black text-blue-400" title="Entregues">
+                                <FiInbox size={13} /> {item.total_delivered || 0}
                               </span>
-                              <span className="flex items-center gap-0.5 text-[9px] font-bold text-purple-400 px-1 rounded" title="Lidos">
-                                <FiEye size={10} /> {item.total_read || 0}
+                              <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
+                              <span className="flex items-center gap-1 text-[11px] font-black text-purple-400" title="Lidos">
+                                <FiEye size={13} /> {item.total_read || 0}
                               </span>
-                              <button 
-                                onClick={() => { setSelectedDispatch(item); setIsPipelineModalOpen(true); }}
-                                className="flex items-center gap-0.5 text-[9px] font-bold text-indigo-400 hover:text-white hover:bg-indigo-500/20 px-1 rounded transition-all group/rocket" 
-                                title="Ver Pipeline do Funil"
-                              >
-                                <FiNavigation size={10} className="rotate-45 text-indigo-400 group-hover/rocket:text-white" /> {item.funnel_id ? 'Funil' : 'Log'}
-                              </button>
-                              <span className="flex items-center gap-0.5 text-[9px] font-bold text-orange-400 px-1 rounded" title="Interações (Cliques)">
-                                <FiMousePointer size={10} /> {item.total_clicks || (item.is_interaction ? 1 : 0)}
+                              <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
+                              <span className="flex items-center gap-1 text-[11px] font-black text-orange-400" title="Interações (Cliques)">
+                                <FiMousePointer size={13} /> {item.total_clicks || (item.is_interaction ? 1 : 0)}
                               </span>
                             </div>
                           </div>
@@ -442,10 +459,11 @@ const DispatchHistoryModal = ({
                 </div>
               </div>
             </div>
-          )}
+          </>
+        )}
         </div>
 
-        <div className="p-6 border-t border-white/5 bg-[#0f172a]/50 flex justify-between items-center px-12 shrink-0">
+        <div className="p-4 border-t border-white/5 bg-[#0f172a]/50 flex justify-between items-center px-8 shrink-0">
           <div className="text-xs text-gray-500 flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
             Monitoramento em tempo real ativo

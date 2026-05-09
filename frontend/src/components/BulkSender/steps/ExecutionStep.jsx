@@ -171,7 +171,7 @@ const ExecutionStep = ({
                         <div className="flex flex-col gap-4 pt-6">
                             <button
                                 onClick={handleSend}
-                                disabled={isSending || finalContacts.length === 0}
+                                disabled={isSending}
                                 className={`w-full py-7 rounded-[2rem] font-black text-xl uppercase tracking-[0.4em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-6 group relative overflow-hidden ${isSending ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-emerald-900/40'}`}
                             >
                                 <div className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 skew-x-12"></div>

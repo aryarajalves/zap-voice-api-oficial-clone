@@ -1,6 +1,18 @@
 import logging
 import sys
-from datetime import datetime
+import time
+from datetime import datetime, timedelta, timezone
+
+def br_time_converter(*args):
+    """Converte o timestamp para o fuso horário de Brasília (GMT-3)"""
+    # args[1] se fornecido é o timestamp, se não usamos time.time()
+    ts = args[1] if len(args) > 1 else time.time()
+    utc_dt = datetime.fromtimestamp(ts, timezone.utc)
+    br_dt = utc_dt.astimezone(timezone(timedelta(hours=-3)))
+    return br_dt.timetuple()
+
+# Aplica o conversor globalmente para o logging
+logging.Formatter.converter = br_time_converter
 
 # Configuração de cores para terminal (opcional)
 class ColoredFormatter(logging.Formatter):
@@ -23,7 +35,7 @@ class ColoredFormatter(logging.Formatter):
 
     def format(self, record):
         log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt, datefmt='%Y-%m-%d %H:%M:%S')
+        formatter = logging.Formatter(log_fmt, datefmt='%d/%m/%y %H:%M:%S')
         return formatter.format(record)
 
 
@@ -58,7 +70,7 @@ def setup_logger(name: str = "zapvoice", level: str = "INFO") -> logging.Logger:
     # Handler para arquivo (Novo)
     file_handler = logging.FileHandler("zapvoice_debug.log", encoding="utf-8")
     file_handler.setLevel(log_level)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt='%Y-%m-%d %H:%M:%S'))
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt='%d/%m/%y %H:%M:%S'))
     logger.addHandler(file_handler)
     
     return logger

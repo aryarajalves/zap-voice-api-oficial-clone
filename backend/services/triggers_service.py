@@ -213,6 +213,63 @@ async def retry_trigger_logic(trigger_id: int, db: Session):
 
     return {"status": "success", "message": f"Retry iniciado para {len(failed_phones)} contatos"}
 
+async def start_now_trigger_logic(trigger_id: int, db: Session):
+    """
+    Força o início imediato de um disparo que está em fila ou falhou.
+    """
+    trigger = db.query(models.ScheduledTrigger).get(trigger_id)
+    if not trigger:
+        return None
+
+    if trigger.status == "processing":
+        return "already_processing"
+
+    logger.info(f"⚡ Forçando início imediato do trigger {trigger_id}")
+    
+    # Resetar para estado inicial de execução
+    trigger.status = "queued"
+    trigger.scheduled_time = datetime.now(timezone.utc)
+    trigger.failure_reason = None
+    
+    # Se for bulk, garante que temos contatos pendentes
+    if trigger.is_bulk:
+        if not trigger.pending_contacts and trigger.contacts_list:
+            trigger.pending_contacts = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or '')) for c in trigger.contacts_list]
+    
+    db.commit()
+
+    # Enviar para a fila correta
+    if trigger.is_bulk:
+        if trigger.funnel_id:
+            await rabbitmq.publish("zapvoice_funnel_executions", {
+                "trigger_id": trigger.id,
+                "funnel_id": trigger.funnel_id,
+                "contacts": trigger.contacts_list,
+                "delay": trigger.delay_seconds,
+                "concurrency": trigger.concurrency_limit,
+                "type": "funnel_bulk"
+            })
+        else:
+            await rabbitmq.publish("zapvoice_bulk_sends", {
+                "trigger_id": trigger.id,
+                "template_name": trigger.template_name,
+                "contacts": trigger.contacts_list,
+                "delay": trigger.delay_seconds,
+                "concurrency": trigger.concurrency_limit,
+                "language": trigger.template_language,
+                "components": trigger.template_components
+            })
+    else:
+        await rabbitmq.publish("zapvoice_funnel_executions", {
+            "trigger_id": trigger.id,
+            "funnel_id": trigger.funnel_id,
+            "conversation_id": trigger.conversation_id,
+            "contact_phone": trigger.contact_phone,
+            "contact_name": trigger.contact_name
+        })
+
+    return {"status": "success", "message": "Disparo iniciado com sucesso"}
+
 def process_bulk_csv_logic(csv_content: str):
     """
     Processa conteúdo de CSV e extrai contatos válidos.

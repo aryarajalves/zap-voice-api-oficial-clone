@@ -43,6 +43,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [delayUnit, setDelayUnit] = useState("seconds");
     const [concurrency, setConcurrency] = useState(4); // Padrão solicitado: 4 jobs
     const [scheduledTime, setScheduledTime] = useState("");
+    const [isValidated, setIsValidated] = useState(false);
 
     // Exclusion List
     const [exclusionList, setExclusionList] = useState([]);
@@ -145,6 +146,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const handleRecipientSelect = useCallback((contacts, metadata) => {
         setFinalContacts(contacts);
         setSelectionMetadata(metadata);
+        setIsValidated(metadata?.isValidated || false);
     }, []);
 
     const handleReset = () => {
@@ -216,7 +218,24 @@ export const useBulkSender = (onViewChange, onSuccess) => {
 
     const handleSend = async () => {
         if (!activeClient) return;
-        if (finalContacts.length === 0) return toast.error("Selecione os contatos primeiro");
+        
+        // Validações de pré-requisitos
+        if (finalContacts.length === 0) {
+            return toast.error("Você precisa carregar os leads antes de iniciar o disparo!", {
+                duration: 5000,
+                icon: '📂',
+                style: { borderRadius: '15px', background: '#1e293b', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }
+            });
+        }
+        
+        if (!isValidated) {
+            return toast.error("Por favor, clique em 'VALIDAR CANAIS & JANELAS' antes de iniciar o disparo.", {
+                duration: 5000,
+                icon: '🛡️',
+                style: { borderRadius: '15px', background: '#1e293b', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }
+            });
+        }
+
         const selectedTemplateObj = templates.find(t => t.name === selectedTemplate);
         if (!selectedTemplateObj) return toast.error("Selecione um template");
 

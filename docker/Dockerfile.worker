@@ -1,0 +1,47 @@
+# ========== ESTÁGIO 1: Builder Python (Compilação) ==========
+FROM python:3.11-slim as backend-builder
+
+WORKDIR /app
+
+# Instalar ferramentas de compilação
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc-dev \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ========== ESTÁGIO 2: Imagem Final (Worker Otimizado) ==========
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libmagic1 \
+    dos2unix \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=backend-builder /install /usr/local
+COPY backend/ .
+
+# Criar diretórios necessários (Uploads são compartilhados via volume)
+RUN mkdir -p /app/static/uploads
+
+# --- FIX ENTRYPOINT ---
+COPY docker/entrypoint.sh /app/docker_entrypoint.sh
+
+RUN ls -la /app/docker_entrypoint.sh && \
+    dos2unix /app/docker_entrypoint.sh && \
+    chmod +x /app/docker_entrypoint.sh
+
+# Variáveis (Worker não roda scheduler por padrão)
+ENV ENABLE_SCHEDULER=false
+ENV PYTHONUNBUFFERED=1
+
+# O Worker não expõe portas, mas mantemos o entrypoint padrão se necessário
+ENTRYPOINT ["/app/docker_entrypoint.sh"]
+CMD ["python", "worker.py"]

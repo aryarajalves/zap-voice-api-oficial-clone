@@ -1,5 +1,7 @@
 import re
 import logging
+import json
+from typing import Any, List
 
 logger = logging.getLogger("CoreUtils")
 
@@ -52,62 +54,76 @@ def find_name_in_payload(payload, key):
     """
     val = get_nested(payload, key)
     return val, key if val is not None else (None, None)
-def robust_extract_labels(label_data):
-    """
-    Extracts a list of labels from various formats recursively.
-    Handles: List of strings, JSON strings (single/double escaped), comma-separated strings.
-    """
-    if not label_data:
-        return []
 
-    import json
-    curr = label_data
+def robust_extract_labels(value: Any) -> list:
+    """
+    Extrai uma lista de etiquetas de diversos formatos recursivamente.
+    Resolve problemas de múltiplas serializações/escapamentos do SQLAlchemy.
+    """
+    if not value:
+        return []
     
-    # Recursive unescaping (up to 5 levels)
-    max_depth = 5
-    while max_depth > 0:
-        if isinstance(curr, list):
-            return [str(l).strip() for l in curr if l]
-        
-        if not isinstance(curr, str):
-            break
-            
-        lb_str = curr.strip()
-        if not lb_str:
+    # Se já for lista, apenas garantir que são strings limpas
+    if isinstance(value, list):
+        return [str(l).strip() for l in value if l and str(l).strip()]
+    
+    # Se for string, tentar parsear JSON sucessivamente
+    if isinstance(value, str):
+        curr = value.strip()
+        # Se for string vazia ou nula em formato string
+        if not curr or curr.lower() in ["null", "none", "[]"]:
             return []
             
-        # Case 1: JSON-like array or string
-        if (lb_str.startswith('[') and lb_str.endswith(']')) or (lb_str.startswith('"') and lb_str.endswith('"')):
+        # Tentar até 10 níveis de decodificação para casos de banco de dados extremos
+        for _ in range(10):
             try:
-                # Handle single-quoted pseudo-JSON common in Python stringification
-                if "'" in lb_str and '"' not in lb_str:
-                    lb_str = lb_str.replace("'", '"')
-                
-                parsed = json.loads(lb_str)
-                if parsed == curr: # Infinite loop protection
-                    break
-                curr = parsed
-            except Exception:
-                # If JSON fails but it looks like a comma-list inside brackets, try splitting
-                if lb_str.startswith('[') and lb_str.endswith(']'):
-                    content = lb_str[1:-1]
-                    if ',' in content:
-                        curr = content.split(',')
+                # Remover aspas extras externas antes do json.loads
+                if curr.startswith('"') and curr.endswith('"') and len(curr) > 2:
+                    # Tenta carregar para ver se é uma string JSON contendo JSON
+                    temp = json.loads(curr)
+                    if isinstance(temp, str):
+                        curr = temp.strip()
                     else:
+                        curr = temp
                         break
                 else:
+                    curr = json.loads(curr)
+                
+                if isinstance(curr, list):
+                    return [str(l).strip() for l in curr if l and str(l).strip()]
+                if not isinstance(curr, str):
                     break
-        else:
-            # Case 2: Comma-separated or single string
-            if ',' in lb_str:
-                return [l.strip() for l in lb_str.split(',') if l.strip()]
-            return [lb_str]
+                curr = curr.strip()
+            except:
+                # Se falhar o JSON parse, mas parece uma lista simples separada por vírgula
+                if "," in curr and not curr.startswith("["):
+                    return [s.strip() for s in curr.split(",") if s.strip()]
+                break
         
-        max_depth -= 1
-
-    # Fallback
-    if isinstance(curr, list):
-        return [str(l).strip() for l in curr if l]
-    if isinstance(curr, str) and curr:
-        return [curr.strip()]
+        # Fallback: se sobrou uma string que não é JSON, mas não é vazia
+        if isinstance(curr, str) and curr.strip() and not curr.startswith("["):
+             return [curr.strip()]
+    
     return []
+
+async def update_node_history_extra(db, trigger_id: int, node_id: str, key: str, value: Any):
+    """
+    Utility to update the execution history with extra data.
+    """
+    import models
+    trigger = db.query(models.ScheduledTrigger).get(trigger_id)
+    if not trigger: return
+    
+    history = list(trigger.execution_history or [])
+    updated = False
+    for node in history:
+        if node.get("node_id") == node_id:
+            if "extra_data" not in node:
+                node["extra_data"] = {}
+            node["extra_data"][key] = value
+            updated = True
+            break
+            
+    if updated:
+        trigger.execution_history = history
+        db.commit()

@@ -12,6 +12,7 @@ from services.webhooks import (
     replace_variables_in_string,
     compute_dynamic_manychat_tag
 )
+from core.utils import robust_extract_labels
 
 async def execute_webhook_resend_logic(
     history_id: int,
@@ -58,13 +59,21 @@ async def execute_webhook_resend_logic(
         models.WebhookEventMapping.event_type == event_type
     ).all()
     
+    # Fallback para mapeamento 'outros' se não houver mapeamento específico
+    if not mappings and event_type != "outros":
+        logger.info(f"RESEND_FALLBACK | Webhook #{history_id} | Tentando fallback para 'outros'")
+        mappings = db.query(models.WebhookEventMapping).filter(
+            models.WebhookEventMapping.integration_id == integration.id,
+            models.WebhookEventMapping.event_type == "outros"
+        ).all()
+    
     logger.info(f"RESEND_SEARCH | Webhook #{history_id} | Evento: '{event_type}' | Mapeamentos: {len(mappings)}")
 
     if not mappings:
-        logger.info(f"RESEND_SKIP | Webhook #{history_id} ignorado: Nenhum mapeamento para '{event_type}'")
+        logger.info(f"RESEND_SKIP | Webhook #{history_id} ignorado: Nenhum mapeamento encontrado.")
         return {
             "status": "ignored", 
-            "message": f"O evento '{event_type}' foi ignorado porque não existe nenhum mapeamento configurado."
+            "message": f"O evento '{event_type}' foi ignorado porque não existe nenhum mapeamento configurado (nem mesmo o fallback 'outros')."
         }
 
     # Executar disparos
@@ -172,12 +181,13 @@ async def execute_webhook_resend_logic(
             product_name=parsed_data.get("product_name"),
             private_message=private_msg_text,
             publish_external_event=mapping.publish_external_event,
-            chatwoot_label=mapping.chatwoot_label,
+            chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
             is_free_message=False, # Decidido automaticamente pelo Worker via Smart Dispatch
             event_type=event_type,
             integration_id=integration.id,
             funnel_id=funnel_id,
-            is_bulk=False
+            is_bulk=False,
+            skip_block_check=True # Forçar envio manual ignorando travas de supressão
         )
         db.add(st)
         db.commit()

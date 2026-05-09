@@ -62,7 +62,7 @@ async def test_interactive_message_fallback_to_text():
             'id': 100, 
             'last_incoming_at': (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         }])
-        instance.send_interactive_message = AsyncMock()
+        instance.send_interactive_buttons = AsyncMock()
         instance.send_text_direct = AsyncMock(return_value={"messages": [{"id": "wamid.test"}]})
         
         # Execute
@@ -70,8 +70,8 @@ async def test_interactive_message_fallback_to_text():
         await handle_funnel_execution({"trigger_id": trigger_id, "client_id": client_id})
         
         # Verify
-        # 1. send_interactive_message should NOT be called because there are no buttons
-        instance.send_interactive_message.assert_not_called()
+        # 1. send_interactive_buttons should NOT be called because there are no buttons
+        instance.send_interactive_buttons.assert_not_called()
         
         # 2. send_text_direct SHOULD be called as fallback
         instance.send_text_direct.assert_called_once_with(

@@ -2,8 +2,8 @@ import pytest
 from backend.main import app
 
 def test_app_version():
-    """Verifica se a versão da aplicação está correta conforme o planejado (3.0.3)."""
-    assert app.version == "3.0.3"
+    """Verifica se a versão da aplicação está correta conforme o planejado (3.5.0)."""
+    assert app.version == "3.5.0"
 
 def test_root_endpoint_version():
     """Verifica se o endpoint root retorna a versão correta."""
@@ -14,7 +14,7 @@ def test_root_endpoint_version():
     # O endpoint root pode retornar HTML (frontend built) ou JSON (API only)
     if response.headers.get("content-type") == "application/json":
         data = response.json()
-        assert data["version"] == "3.0.3"
+        assert data["version"] == "3.5.0"
     else:
         # Se retornar HTML, é o shell do frontend. 
         # Não necessariamente contém a versão em texto puro.

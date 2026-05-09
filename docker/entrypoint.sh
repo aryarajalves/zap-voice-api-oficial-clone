@@ -16,7 +16,7 @@ fi
 # Nota: Aceita tanto VITE_API_URL quanto API_URL
 API_URL="${API_URL:-${VITE_API_URL:-http://localhost:8000}}"
 WS_URL="${WS_URL:-${VITE_WS_URL:-ws://localhost:8000}}"
-WEBHOOK_BASE_URL="${WEBHOOK_BASE_URL:-${VITE_WEBHOOK_BASE_URL:-http://localhost:8000}}"
+WEBHOOK_BASE_URL="${WEBHOOK_BASE_URL:-${VITE_WEBHOOK_BASE_URL}}"
 
 
 # Remove aspas se existirem (comum ao copiar do .env para o Portainer)
