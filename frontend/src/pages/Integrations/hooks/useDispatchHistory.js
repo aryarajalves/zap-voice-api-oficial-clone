@@ -22,6 +22,7 @@ export function useDispatchHistory(activeClient) {
   const [contactsModal, setContactsModal] = useState({ isOpen: false, triggerId: null, contacts: [], counts: {}, title: '' });
   const [contactsFilter, setContactsFilter] = useState('all');
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [childrenModal, setChildrenModal] = useState({ isOpen: false, triggerId: null, triggerName: '', children: [], isLoading: false });
 
   const fetchDispatches = useCallback(async (integrationId, page = 1, limit = 20, search = '', event = '', start = '', end = '', type = '', isSilent = false) => {
     if (!activeClient || !integrationId) return;
@@ -132,6 +133,24 @@ export function useDispatchHistory(activeClient) {
       setLoadingContacts(false);
     }
   };
+  
+  const fetchChildren = useCallback(async (trigger) => {
+    setChildrenModal({ isOpen: true, triggerId: trigger.id, triggerName: trigger.template_name || trigger.funnel?.name || 'Disparo', children: [], isLoading: true });
+    try {
+      const res = await fetchWithAuth(`${API_URL}/triggers/${trigger.id}/children`, {}, activeClient?.id);
+      if (res.ok) {
+        const data = await res.json();
+        setChildrenModal(prev => ({ ...prev, children: data, isLoading: false }));
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(`Erro ${res.status}: ${errorData.detail || "Falha ao buscar funis iniciados"}`);
+        setChildrenModal(prev => ({ ...prev, isLoading: false }));
+      }
+    } catch (err) {
+      toast.error("Erro de conexão ao buscar funis iniciados");
+      setChildrenModal(prev => ({ ...prev, isLoading: false }));
+    }
+  }, [activeClient]);
 
   return {
     dispatchHistory,
@@ -163,11 +182,14 @@ export function useDispatchHistory(activeClient) {
     contactsFilter,
     setContactsFilter,
     loadingContacts,
+    childrenModal,
+    setChildrenModal,
     fetchDispatches,
     handlePlayDispatch,
     handleDeleteDispatch,
     handleBulkDispatchPlay,
     handleBackfillCosts,
-    fetchDispatchContacts
+    fetchDispatchContacts,
+    fetchChildren
   };
 }

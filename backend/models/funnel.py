@@ -16,6 +16,7 @@ class Funnel(Base):
     allowed_phone = Column(String, nullable=True)
     allowed_phones = Column(JSON, nullable=True)
     blocked_phones = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True)
 
     business_hours_start = Column(String, nullable=True, default="08:00")
     business_hours_end = Column(String, nullable=True, default="18:00")

@@ -52,9 +52,17 @@ async def handle_funnel_execution(data: dict):
 
             chatwoot_cl = ChatwootClient(client_id=client_id)
             
+            # Inbox ID Efetivo (Trigger > Config Global)
+            effective_inbox_id = trigger.chatwoot_inbox_id
+            if not effective_inbox_id:
+                from config_loader import get_setting
+                inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=client_id)
+                if inbox_id_str and str(inbox_id_str).isdigit():
+                    effective_inbox_id = int(inbox_id_str)
+
             # CASO 1: TEMPLATE DIRETO (Sem Funil Grafo)
             if not trigger.funnel_id and trigger.template_name:
-                logger.info(f"📄 Gatilho de Template Direto: {trigger.template_name} para {contact_phone}")
+                logger.info(f"📄 Gatilho de Template Direto: {trigger.template_name} para {contact_phone} | Inbox: {effective_inbox_id}")
                 
                 # 1. Aplicar Etiquetas (Labels) se existirem
                 if trigger.chatwoot_label:
@@ -62,8 +70,19 @@ async def handle_funnel_execution(data: dict):
                         from core.utils import robust_extract_labels
                         clean_labels = robust_extract_labels(trigger.chatwoot_label)
                         if clean_labels:
-                            logger.info(f"🏷️ [DIRECT] Aplicando etiquetas {clean_labels} na conversa {trigger.conversation_id}")
-                            await chatwoot_cl.add_label_to_conversation(trigger.conversation_id, clean_labels)
+                            # Tentar encontrar a conversa se estiver ausente
+                            if not trigger.conversation_id:
+                                logger.info(f"🔍 [DIRECT] Buscando conversa para {contact_phone} para aplicar etiquetas")
+                                conv = await chatwoot_cl.ensure_conversation(contact_phone, trigger.contact_name, effective_inbox_id)
+                                if conv:
+                                    trigger.conversation_id = conv.get("conversation_id")
+                                    db.commit()
+
+                            if trigger.conversation_id:
+                                logger.info(f"🏷️ [DIRECT] Aplicando etiquetas {clean_labels} na conversa {trigger.conversation_id}")
+                                await chatwoot_cl.add_label_to_conversation(trigger.conversation_id, clean_labels)
+                            else:
+                                logger.warning(f"⚠️ [DIRECT] Não foi possível encontrar conversa para aplicar etiquetas para {contact_phone}")
                     except Exception as e_lbl:
                         logger.error(f"❌ [DIRECT] Erro ao aplicar etiquetas: {e_lbl}")
 
@@ -90,6 +109,7 @@ async def handle_funnel_execution(data: dict):
                     ))
                     trigger.total_sent = (trigger.total_sent or 0) + 1
                     trigger.status = 'completed'
+                    db.commit() # Commit IMEDIATO para liberar o message_id para o webhook de entrega
                     logger.info(f"✅ Template enviado com sucesso para {contact_phone}")
                     
                     # 3. Enviar Nota Privada (Private Note) se existir
@@ -108,8 +128,31 @@ async def handle_funnel_execution(data: dict):
                             global_map = {v.name: v.value for v in global_vars}
                             
                             final_note = apply_vars(trigger.private_message, trigger, global_map)
-                            await chatwoot_cl.send_private_message(trigger.conversation_id, final_note)
-                            logger.info(f"✅ [DIRECT] Nota privada enviada com sucesso!")
+                            
+                            # Se a nota for "true" (vinda do checkbox), buscamos o conteúdo real do template no cache
+                            if trigger.private_message == "true" or not final_note:
+                                template_cache = db.query(models.WhatsAppTemplateCache).filter(
+                                    models.WhatsAppTemplateCache.client_id == client_id,
+                                    models.WhatsAppTemplateCache.name == trigger.template_name
+                                ).first()
+                                if template_cache and template_cache.body:
+                                    final_note = apply_vars(template_cache.body, trigger, global_map)
+                                else:
+                                    final_note = f"[Template: {trigger.template_name}]"
+
+                            # Tentar encontrar a conversa se estiver ausente
+                            if not trigger.conversation_id:
+                                logger.info(f"🔍 [DIRECT] Buscando conversa para {contact_phone} para enviar nota privada")
+                                conv = await chatwoot_cl.ensure_conversation(contact_phone, trigger.contact_name, effective_inbox_id)
+                                if conv:
+                                    trigger.conversation_id = conv.get("conversation_id")
+                                    db.commit()
+
+                            if trigger.conversation_id:
+                                await chatwoot_cl.create_private_note(trigger.conversation_id, final_note)
+                                logger.info(f"✅ [DIRECT] Nota privada enviada com sucesso!")
+                            else:
+                                logger.warning(f"⚠️ [DIRECT] Não foi possível encontrar conversa para enviar nota privada para {contact_phone}")
                         except Exception as e_note:
                             logger.error(f"❌ [DIRECT] Erro ao enviar nota privada: {e_note}")
 

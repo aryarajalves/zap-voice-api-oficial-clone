@@ -33,6 +33,12 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 01/05/2026 | Delay em Disparos Aprovados | `scheduled_triggers` | `delay_seconds`, `concurrency_limit` | `add_approved_delay_columns.py` |
 | 02/05/2026 | Suporte a Múltiplas Etiquetas JSONB | `webhook_event_mappings` | `chatwoot_label` (Type change to JSONB) | `migrate_labels_to_jsonb.py` |
 | 07/05/2026 | Interrupção Inteligente | `webhook_event_mappings` | `cancel_pending_on_trigger`, `cancel_event_types` | `add_cancel_columns.py` |
+| 09/05/2026 | Correção Geral de Webhooks | `webhook_event_mappings` | 17 colunas (Cancelamento, ManyChat, Custos) | `fix_missing_webhook_columns.py` |
+| 09/05/2026 | Sincronização Global (Super Fix) | **Todas as Tabelas** | Qualquer coluna faltante nos modelos | `super_db_fix.py` |
+| 09/05/2026 | Rastreamento de Interações (Clicks) | `message_status` | `interaction_counted` | `add_interaction_counted_column.py` |
+| 14/05/2026 | Adição de is_active em Funnels | `funnels` | `is_active` | `backend/scripts/add_is_active_to_funnels.py` |
+
+
 
 ---
 

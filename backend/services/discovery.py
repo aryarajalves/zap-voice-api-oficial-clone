@@ -33,7 +33,17 @@ async def discover_or_create_chatwoot_conversation(client_id: int, phone: str, n
                     break
         
         if not contact_id:
-            logger.warning(f"⚠️ [DISCOVERY] Contato não localizado para {phone}")
+            logger.info(f"🔄 [DISCOVERY] Contato não localizado para {phone}. Criando...")
+            inbox_id = await cw.get_default_whatsapp_inbox()
+            res = await cw.ensure_conversation(phone, name or phone, inbox_id)
+            if res:
+                logger.info(f"✅ [DISCOVERY] Contato e Conversa criados com sucesso para {phone}")
+                return {
+                    "conversation_id": res.get("conversation_id"),
+                    "contact_id": res.get("contact_id"),
+                    "account_id": res.get("account_id"),
+                    "contact_name": name or phone
+                }
             return None
 
         # 2. Buscar conversas para este contato

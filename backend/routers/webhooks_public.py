@@ -164,7 +164,7 @@ async def handle_external_webhook(
 
             "custom_fields": custom_vars,
             "manychat_enabled": getattr(mapping, "manychat_active", False),
-            "private_note_enabled": getattr(mapping, "private_note", "false") == "true",
+            "private_note_enabled": bool(getattr(mapping, "private_note", None)),
             "chatwoot_label": getattr(mapping, "chatwoot_label", []),
             "free_message_enabled": getattr(mapping, "send_as_free_message", False)
         }

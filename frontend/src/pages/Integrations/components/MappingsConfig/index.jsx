@@ -160,6 +160,7 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
               addVariable={addVariable}
               removeVariable={removeVariable}
               templateVars={getTemplateVars(mapping.template_id)}
+              customFieldsMapping={formData.custom_fields_mapping}
             />
           ))
         )}

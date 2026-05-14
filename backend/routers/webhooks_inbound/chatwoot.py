@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Request, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func, or_
 import models
 from datetime import datetime, timezone, timedelta
 import os
 import json
+import asyncio
+from fastapi import APIRouter, Request, Body, Depends, HTTPException, BackgroundTasks
 from core.deps import get_db
 from core.security import limiter
 from core.logger import setup_logger
@@ -19,7 +20,7 @@ router = APIRouter()
 @router.post("/chatwoot_events")
 @router.post("/webhooks/chatwoot_events")
 @limiter.limit("5000/minute")
-async def chatwoot_webhook(request: Request, payload: dict = Body(...), db: Session = Depends(get_db)):
+async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, payload: dict = Body(...), db: Session = Depends(get_db)):
     chatwoot_secret = os.getenv("CHATWOOT_WEBHOOK_SECRET", "")
     if chatwoot_secret:
         body = await request.body()
@@ -75,9 +76,22 @@ async def chatwoot_webhook(request: Request, payload: dict = Body(...), db: Sess
                             logger.info(f"🆕 [WINDOW] Nova janela criada para {clean_phone}")
                         db.commit()
 
-                        # --- [REMOVED] GATILHO DUPLICADO ---
-                        # Funis de WhatsApp são processados diretamente via Meta (whatsapp.py)
-                        # para evitar disparos duplos e garantir metadados completos (nome do perfil).
+                        # --- [NOVO] GATILHO DE FUNIL COM HIERARQUIA E DELAY ---
+                        # Movido do whatsapp.py para garantir estabilidade da conversa no Chatwoot.
+                        # O delay de 7 segundos permite que o Chatwoot processe a mensagem.
+                        user_input = payload.get("content", "").strip()
+                        if user_input:
+                            background_tasks.add_task(
+                                process_funnel_trigger_with_delay,
+                                client_id,
+                                clean_phone,
+                                user_input,
+                                conversation.get("id"),
+                                account_id,
+                                inbox_id,
+                                payload.get("sender", {}).get("name") or "Contato"
+                            )
+                        # -----------------------------------------------------
                         pass
             except Exception as e:
                 logger.error(f"❌ Erro no processamento de webhook Chatwoot: {e}")
@@ -95,5 +109,72 @@ async def chatwoot_webhook(request: Request, payload: dict = Body(...), db: Sess
                     message_record.updated_at = datetime.now(timezone.utc)
                     db.commit()
                     return {"status": "updated", "msg_id": msg_id, "new_status": status}
-    
     return {"status": "ok"}
+    
+async def process_funnel_trigger_with_delay(client_id: int, phone: str, text_input: str, conversation_id: int, account_id: int, inbox_id: int, contact_name: str):
+    """
+    Executa o gatilho do funil após um delay de segurança para garantir sincronia com Chatwoot.
+    Também identifica e vincula o disparo pai (parent_id) se houver uma interação recente.
+    """
+    await asyncio.sleep(7)
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        text_clean = text_input.strip().lower()
+        matched_funnel = db.query(models.Funnel).filter(
+            models.Funnel.client_id == client_id,
+            models.Funnel.is_active == True,
+            or_(
+                func.lower(models.Funnel.trigger_phrase) == text_clean,
+                models.Funnel.trigger_phrase.ilike(f"%,{text_clean},%"),
+                models.Funnel.trigger_phrase.ilike(f"{text_clean},%"),
+                models.Funnel.trigger_phrase.ilike(f"%,{text_clean}")
+            )
+        ).first()
+
+        if matched_funnel:
+            # Busca o último disparo interagido para este telefone nos últimos 60 segundos
+            # para estabelecer a hierarquia (parent_id)
+            parent_msg = db.query(models.MessageStatus).filter(
+                models.MessageStatus.phone_number == phone,
+                models.MessageStatus.interaction_counted == True,
+                models.MessageStatus.updated_at >= datetime.now(timezone.utc) - timedelta(seconds=60)
+            ).order_by(models.MessageStatus.updated_at.desc()).first()
+
+            parent_id = parent_msg.trigger_id if parent_msg else None
+
+            # Evita disparos duplicados para a mesma interação (idempotência básica)
+            # Como não temos o msg_id da Meta aqui facilmente, usamos o conversation_id + funnel_id + timestamp (curto prazo)
+            # Mas o melhor é confiar que o webhook do Chatwoot só chama uma vez por mensagem.
+            
+            new_trigger = models.ScheduledTrigger(
+                client_id=client_id,
+                funnel_id=matched_funnel.id,
+                contact_phone=phone,
+                contact_name=contact_name,
+                conversation_id=conversation_id,
+                chatwoot_account_id=account_id,
+                chatwoot_inbox_id=inbox_id,
+                status='processing',
+                scheduled_time=datetime.now(timezone.utc),
+                is_bulk=False,
+                is_interaction=True,
+                parent_id=parent_id # Vínculo hierárquico
+            )
+            db.add(new_trigger)
+            db.commit()
+            db.refresh(new_trigger)
+
+            await rabbitmq.publish("zapvoice_funnel_executions", {
+                "trigger_id": new_trigger.id,
+                "funnel_id": matched_funnel.id,
+                "contact_phone": phone,
+                "conversation_id": conversation_id
+            })
+            logger.info(f"🚀 [CH-TRIGGER] Funil {matched_funnel.id} ({matched_funnel.name}) iniciado para {phone} (Parent: {parent_id})")
+        else:
+            logger.warning(f"⚠️ [CH-TRIGGER] Nenhum funil ativo encontrado para a palavra-chave: '{text_clean}' (Phone: {phone})")
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar gatilho de funil no Chatwoot: {e}")
+    finally:
+        db.close()

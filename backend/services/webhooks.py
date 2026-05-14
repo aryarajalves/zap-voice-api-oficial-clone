@@ -1,6 +1,7 @@
 from typing import Union, List, Optional, Any, Dict
 from datetime import datetime, timezone, timedelta
 import re
+import json
 from core.logger import logger
 from core.utils import robust_extract_labels
 
@@ -147,13 +148,38 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             "card_pix": "Cartão de Crédito",
             "pix": "Pix",
             "billet": "Boleto",
-            "free": "Gratuito"
+            "bank_transfer": "Transferência",
+            "direct_debit": "Débito"
         }
         result['payment_method'] = kiwify_pm_map.get(payload_pm.lower(), payload_pm)
-        result['price'] = get_val(["Commissions", "charge_amount"])
-        result['raw_status'] = order_status
-        result['status'] = order_status # Keep both for safety
+        
+        result['raw_status'] = order_status.upper()
 
+    elif platform_lower in ['elementor', 'generic', 'outra', 'outros']:
+        # Tenta capturar campos comuns em payloads desconhecidos
+        result['name'] = (
+            get_val(["name"]) or get_val(["first_name"]) or get_val(["full_name"]) or 
+            get_val(["nome"]) or get_val(["buyer_name"]) or get_val(["customer_name"]) or
+            get_val(["data", "name"]) or get_val(["data", "customer", "name"])
+        )
+        result['email'] = (
+            get_val(["email"]) or get_val(["email_address"]) or 
+            get_val(["data", "email"]) or get_val(["customer", "email"])
+        )
+        result['phone'] = (
+            get_val(["phone"]) or get_val(["telephone"]) or get_val(["cellphone"]) or 
+            get_val(["whatsapp"]) or get_val(["phone_number"]) or get_val(["mobile"]) or
+            get_val(["celular"]) or get_val(["telefone"]) or
+            get_val(["data", "phone"]) or get_val(["customer", "phone"]) or
+            get_val(["fields", "whatsapp"]) or get_val(["form", "phone"])
+        )
+        result['product_name'] = (
+            get_val(["product"]) or get_val(["product_name"]) or get_val(["item_name"]) or
+            get_val(["data", "product", "name"]) or get_val(["form_name"])
+        )
+        result['event_type'] = (
+            get_val(["event"]) or get_val(["event_type"]) or get_val(["status"]) or "outros"
+        )
 
     elif platform_lower == 'eduzz':
         is_orbita = "buyer" in payload or "student" in payload or "items" in payload or (
@@ -652,8 +678,8 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         # Extrai variáveis para o template
         components = extract_mapped_variables(payload, variables, mapping.variables_mapping or {})
         
-        # Nota privada
-        private_msg_text = mapping.private_note if mapping.private_note else None
+        # Nota privada (Tratando legado "true"/"false" do checkbox)
+        private_msg_text = mapping.private_note if mapping.private_note and mapping.private_note not in ["true", "false"] else None
         
         # Calcula delay
         delay_min = mapping.delay_minutes or 0

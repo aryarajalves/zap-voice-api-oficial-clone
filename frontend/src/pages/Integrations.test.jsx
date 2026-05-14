@@ -45,7 +45,7 @@ vi.mock('../contexts/ClientContext', () => ({
   useClient: () => ({ activeClient: { id: 1, name: 'Test Client' } }),
 }));
 
-vi.mock('../config', () => ({ API_URL: '/api', WS_URL: 'ws://localhost/api/ws' }));
+vi.mock('../config', () => ({ API_URL: '/api', WS_URL: 'ws://localhost/api/ws', WEBHOOK_BASE_URL: 'http://localhost' }));
 vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../components/ConfirmModal', () => ({ default: () => null }));
 vi.mock('react-icons/fi', () => ({
@@ -67,6 +67,12 @@ vi.mock('react-icons/fi', () => ({
   FiCheck: () => <span />,
   FiHistory: () => <span />,
   FiCheckSquare: () => <span />,
+  FiActivity: () => <span />,
+  FiEye: () => <span />,
+  FiUsers: () => <span />,
+  FiClock: () => <span />,
+  FiUpload: () => <span />,
+  FiDownload: () => <span />,
 }));
 
 describe('Integrations Page Interactions', () => {

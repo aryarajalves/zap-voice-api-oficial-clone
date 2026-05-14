@@ -26,7 +26,7 @@ export default function AppContent() {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-[#0f172a] dark:text-gray-100 overflow-hidden">
-      <Toaster position="top-right" reverseOrder={false} containerStyle={{ zIndex: 100000 }} />
+      <Toaster position="top-right" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
 
       <AppModals logic={logic} />
 

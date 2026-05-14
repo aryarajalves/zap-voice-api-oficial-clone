@@ -39,6 +39,7 @@ class ChatwootClient:
     async def send_message(self, *args, **kwargs): return await self._cw.send_message(*args, **kwargs)
     async def send_private_note(self, *args, **kwargs): return await self._cw.send_private_note(*args, **kwargs)
     async def create_private_note(self, *args, **kwargs): return await self._cw.create_private_note(*args, **kwargs)
+    async def send_private_message(self, *args, **kwargs): return await self._cw.send_private_note(*args, **kwargs)
     async def send_attachment(self, *args, **kwargs): return await self._cw.send_attachment(*args, **kwargs)
     async def toggle_typing(self, *args, **kwargs): return await self._cw.toggle_typing(*args, **kwargs)
     

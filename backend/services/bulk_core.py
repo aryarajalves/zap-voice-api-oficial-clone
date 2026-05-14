@@ -19,10 +19,23 @@ async def send_smart_message(
     last_interaction: datetime = None,
     template_body_cache: str = None,
     template_btn_info: dict = None,
-    contact_name: str = None
+    contact_name: str = None,
+    chatwoot_label: list = None,
+    private_message: str = None,
+    conversation_id: int = None
 ):
     try:
+        from core.utils import robust_extract_labels
+        from core.engine.utils import apply_vars
+        
         effective_components = components # No engine, components ja sao por contato se necessario
+        
+        # 0. Aplicação de Etiquetas (Opcional)
+        if chatwoot_label and conversation_id:
+            clean_labels = robust_extract_labels(chatwoot_label)
+            if clean_labels:
+                logger.info(f"🏷️ [BULK] Aplicando etiquetas {clean_labels} na conversa {conversation_id}")
+                asyncio.create_task(chatwoot.apply_labels(conversation_id, clean_labels))
         
         # 1. Verificação Local da Janela 24h
         can_use_smart_send = True
@@ -88,6 +101,17 @@ async def send_smart_message(
             clean_components = sanitize_template_components(effective_components or [], contact_name=contact_name)
             res = await chatwoot.send_template(phone, template_name, language, components=clean_components)
             if res and not res.get("error"):
+                # Aplicação de Nota Privada (Opcional)
+                if private_message and conversation_id:
+                    # Preparar variáveis para o apply_vars
+                    vars_map = {"nome": contact_name or ""}
+                    # Adicionar vars se components for uma lista de parâmetros simples
+                    # (No Bulk, vars1..5 costumam ser passados)
+                    
+                    note_text = apply_vars(private_message, vars_map)
+                    logger.info(f"📝 [BULK] Enviando nota privada para conversa {conversation_id}")
+                    asyncio.create_task(chatwoot.send_private_note(conversation_id, note_text))
+                
                 return {"result": res, "type": "TEMPLATE"}
             
             return res

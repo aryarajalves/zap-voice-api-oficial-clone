@@ -238,7 +238,7 @@ const HistoryItemCard = ({
               )}
 
               {/* --- Chatwoot Integrations --- */}
-              {(item.processed_data?.private_note_enabled || (item.processed_data?.chatwoot_label && (Array.isArray(item.processed_data.chatwoot_label) ? item.processed_data.chatwoot_label.length > 0 : String(item.processed_data.chatwoot_label).length > 0)) || item.processed_data?.free_message_enabled) && (
+              {(item.processed_data?.private_note_enabled || (item.processed_data?.chatwoot_label && (Array.isArray(item.processed_data.chatwoot_label) ? item.processed_data.chatwoot_label.length > 0 : String(item.processed_data.chatwoot_label).length > 0)) || (item.processed_data?.free_message_enabled && (item.template_name || item.funnel_id))) && (
                 <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl relative overflow-hidden group/cw">
                   <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none group-hover/cw:scale-110 transition-transform duration-700">
                     <FiSettings size={60} className="text-blue-400" />

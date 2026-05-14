@@ -18,7 +18,8 @@ const MappingItem = ({
   updateVariable,
   addVariable,
   removeVariable,
-  templateVars
+  templateVars,
+  customFieldsMapping
 }) => {
   return (
     <div className="group bg-white dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden hover:border-blue-500/30 transition-all duration-300">
@@ -124,6 +125,7 @@ const MappingItem = ({
             addVariable={addVariable}
             removeVariable={removeVariable}
             templateVars={templateVars}
+            customFieldsMapping={customFieldsMapping}
           />
 
           {/* Configurações Avançadas de Gatilho */}
@@ -133,7 +135,7 @@ const MappingItem = ({
                 <div className="flex items-center justify-between p-2.5 bg-gray-50/50 dark:bg-white/[0.02] rounded-xl border border-gray-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-300">
                   <div>
                     <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300">Nota Privada Chatwoot</span>
-                    <p className="text-[8px] text-gray-500">Log na conversa</p>
+                    <p className="text-[8px] text-gray-500">Enviar conteúdo do template como nota</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input

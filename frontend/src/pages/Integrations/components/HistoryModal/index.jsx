@@ -5,6 +5,7 @@ import HistoryHeader from './HistoryHeader';
 import HistoryControls from './HistoryControls';
 import HistoryItemCard from './HistoryItemCard';
 import SyncAllProgressPopup from './SyncAllProgressPopup';
+import ResendProgressPopup from './ResendProgressPopup';
 
 const HistoryModal = ({
   isOpen,
@@ -36,6 +37,8 @@ const HistoryModal = ({
   setEditJsonModal,
   setMaximizedJson,
   fetchHistory,
+  bulkResendProgress,
+  setBulkResendProgress,
   toast
 }) => {
   if (!isOpen || !integration) return null;
@@ -183,6 +186,7 @@ export default function HistoryModalWithProgress(props) {
     <>
       <HistoryModal {...props} />
       <SyncAllProgressPopup isSyncingAll={props.isSyncingAll} />
+      <ResendProgressPopup progress={props.bulkResendProgress} />
     </>
   );
 }

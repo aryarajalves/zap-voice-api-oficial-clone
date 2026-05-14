@@ -104,17 +104,22 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
     };
 
     const handleRetry = async (id) => {
+        const loadingToast = toast.loading('Preparando reenvio...');
         try {
             const res = await fetchWithAuth(`${API_URL}/triggers/${id}/retry`, { method: 'POST' }, activeClient?.id);
             if (res.ok) {
-                toast.success("Reencontro iniciado com sucesso!");
+                toast.success("Reenvio iniciado com sucesso!", { 
+                    id: loadingToast,
+                    icon: '🚀',
+                    duration: 4000
+                });
                 fetchHistory();
             } else {
-                const data = await res.json();
-                toast.error(data.detail || "Erro ao tentar reenviar");
+                const data = await res.json().catch(() => ({}));
+                toast.error(data.detail || "Erro ao tentar reenviar", { id: loadingToast });
             }
         } catch (e) {
-            toast.error("Erro de conexão ao tentar reenviar");
+            toast.error("Erro de conexão ao tentar reenviar", { id: loadingToast });
         }
     };
 

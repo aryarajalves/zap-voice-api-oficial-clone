@@ -41,7 +41,8 @@ const DispatchHistoryModal = ({
   setSelectedDispatch,
   setIsPipelineModalOpen,
   fetchDispatches,
-  setConfirmDeleteDispatch
+  setConfirmDeleteDispatch,
+  fetchChildren
 }) => {
   useEffect(() => {
     if (isOpen && integration?.id) {
@@ -359,8 +360,20 @@ const DispatchHistoryModal = ({
                               </span>
                               <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
                               <span className="flex items-center gap-1 text-[11px] font-black text-orange-400" title="Interações (Cliques)">
-                                <FiMousePointer size={13} /> {item.total_clicks || (item.is_interaction ? 1 : 0)}
+                                <FiMousePointer size={13} /> {item.total_clicks || item.total_interactions || (item.is_interaction ? 1 : 0)}
                               </span>
+                              {item.child_count > 0 && (
+                                <>
+                                  <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
+                                  <button 
+                                    onClick={() => fetchChildren(item)}
+                                    className="flex items-center gap-1 hover:bg-orange-500/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket"
+                                  >
+                                    <span className="text-sm">🔄</span>
+                                    <span className="text-[9px] font-black text-orange-500 uppercase tracking-tighter">Funis Ativados</span>
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </td>

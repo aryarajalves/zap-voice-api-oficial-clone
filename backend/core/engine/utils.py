@@ -108,7 +108,7 @@ def trigger_to_dict(trigger):
     }
 
 def apply_vars(text: str, trigger, global_map: dict) -> str:
-    """Aplica substituição de variáveis no texto."""
+    """Aplica substituição de variáveis no texto, extraindo valores puros de objetos complexos."""
     if not text: return text
     
     local_vars = {
@@ -119,22 +119,39 @@ def apply_vars(text: str, trigger, global_map: dict) -> str:
     
     t_comp = trigger.template_components
     if t_comp:
+        # Se for uma lista (formato Meta/WhatsApp), extraímos os parâmetros de texto
         if isinstance(t_comp, list):
-            for i, val in enumerate(t_comp): local_vars[str(i+1)] = val
+            flat_vars = []
+            for comp in t_comp:
+                if isinstance(comp, dict) and "parameters" in comp:
+                    for p in comp["parameters"]:
+                        if isinstance(p, dict):
+                            # Prioridade para o campo 'text', senão pega o valor direto
+                            val = p.get("text") or p.get("payload") or str(p)
+                            flat_vars.append(val)
+                else:
+                    flat_vars.append(comp)
+            
+            for i, val in enumerate(flat_vars):
+                local_vars[str(i+1)] = str(val)
+        
         elif isinstance(t_comp, dict):
-            local_vars.update(t_comp)
+            local_vars.update({k: str(v) for k, v in t_comp.items()})
 
     if hasattr(trigger, 'processed_data') and trigger.processed_data:
          if isinstance(trigger.processed_data, dict):
-             local_vars.update(trigger.processed_data)
+             local_vars.update({k: str(v) for k, v in trigger.processed_data.items()})
 
     full_map = {**local_vars, **global_map}
     
+    # Substituição das variáveis {{key}}
     for key, val in full_map.items():
         str_val = str(val) if val is not None else ""
+        # Evita substituir {{1}} por vazio se for o parâmetro 1 (geralmente nome)
         if key == "1" and not str_val.strip(): continue
         text = text.replace(f"{{{{{key}}}}}", str_val)
     
+    # Fallback para {{1}} como nome se ainda estiver no texto
     if "{{1}}" in text and trigger.contact_name:
         text = text.replace("{{1}}", trigger.contact_name)
         

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List, Optional
 import models, schemas
@@ -122,7 +122,7 @@ def list_trigger_children(trigger_id: int, db: Session = Depends(get_db), curren
     trigger = query.first()
     if not trigger: raise HTTPException(status_code=404, detail="Disparo não encontrado.")
     
-    children = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger_id).order_by(models.ScheduledTrigger.created_at.desc()).all()
+    children = db.query(models.ScheduledTrigger).options(joinedload(models.ScheduledTrigger.funnel)).filter(models.ScheduledTrigger.parent_id == trigger_id).order_by(models.ScheduledTrigger.created_at.desc()).all()
     for child in children:
         if child.sent_as is None and child.messages:
             from sqlalchemy import func

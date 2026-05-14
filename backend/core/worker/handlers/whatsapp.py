@@ -129,67 +129,92 @@ async def handle_whatsapp_event(data: dict):
                             conf = db.query(models.AppConfig).filter(models.AppConfig.key == "WA_PHONE_NUMBER_ID", models.AppConfig.value == str(pnid)).first()
                             if conf: target_cid = conf.client_id
                         
-                        # Nome sugerido pela Meta (se existir)
-                        meta_profile_name = contacts_map.get(raw_from) or "Contato"
-                        
-                        user_input = ""
-                        if msg.get("type") == "text": user_input = msg.get("text", {}).get("body", "")
-                        elif msg.get("type") == "interactive":
-                            user_input = msg.get("interactive", {}).get("button_reply", {}).get("title") or \
-                                         msg.get("interactive", {}).get("list_reply", {}).get("title", "")
-                        
-                        user_input_clean = user_input.strip().lower()
-                        
-                        matched_funnel = db.query(models.Funnel).filter(
-                            models.Funnel.client_id == target_cid,
-                            or_(
-                                func.lower(models.Funnel.trigger_phrase) == user_input_clean,
-                                models.Funnel.trigger_phrase.ilike(f"%,{user_input_clean},%"),
-                                models.Funnel.trigger_phrase.ilike(f"{user_input_clean},%"),
-                                models.Funnel.trigger_phrase.ilike(f"%,{user_input_clean}")
-                            )
-                        ).first()
-                        
-                        if matched_funnel:
-                            existing = db.query(models.ScheduledTrigger).filter(
-                                models.ScheduledTrigger.client_id == target_cid,
-                                models.ScheduledTrigger.idempotency_key == msg_id
+                        # --- NOVO: Rastreamento de Interação em Mensagens Enviadas ---
+                        context = msg.get("context", {})
+                        replied_msg_id = context.get("id")
+                        if replied_msg_id:
+                            clean_replied_id = replied_msg_id.replace("wamid.", "")
+                            # Buscamos a mensagem original E o trigger pai para pegar o client_id correto
+                            message_record = db.query(models.MessageStatus).filter(
+                                models.MessageStatus.message_id == clean_replied_id
                             ).first()
                             
-                            if existing:
-                                logger.info(f"🚫 [IDEMPOTENCY] Trigger já existe para interação {msg_id}. Pulando.")
-                                continue
-                            
-                            # Tenta descobrir o contato no Chatwoot para pegar o nome real
-                            disc_res = await discover_or_create_chatwoot_conversation(target_cid, from_phone, meta_profile_name)
-                            conv_id = disc_res.get("conversation_id") if disc_res else None
-                            # Se o discovery encontrou um nome melhor (do Chatwoot), usamos ele
-                            final_name = disc_res.get("contact_name") if disc_res else meta_profile_name
-                            
-                            if conv_id:
+                            if message_record:
+                                # Prioridade: Se encontramos a mensagem original, o client_id vem do trigger dela
+                                trigger_ref = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
+                                if trigger_ref:
+                                    target_cid = trigger_ref.client_id
+                                    logger.info(f"🎯 [TARGET_CID] Identificado Client {target_cid} via MessageStatus {clean_replied_id}")
+
+                                if not getattr(message_record, 'interaction_counted', False):
+                                    # Marca como interagido
+                                    message_record.interaction_counted = True
+                                    # Incrementa o contador no trigger pai
+                                    db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
+                                    db.commit()
+                                    logger.info(f"👆 [INTERACTION_COUNT] Clique detectado para Trigger {message_record.trigger_id} via mensagem {clean_replied_id}")
+                        # ----------------------------------------------------------
+
+                        # --- [REATIVADO] GATILHO DE FUNIL VIA META ---
+                        # Voltamos a processar aqui porque o webhook do Chatwoot pode falhar ou atrasar.
+                        # O engine de execução (executor.py) já cuida de sincronizar com o Chatwoot via ensure_conversation.
+                        
+                        user_input = None
+                        msg_type = msg.get("type")
+                        if msg_type == "text":
+                            user_input = msg.get("text", {}).get("body")
+                        elif msg_type == "button":
+                            user_input = msg.get("button", {}).get("text")
+                        elif msg_type == "interactive":
+                            inter = msg.get("interactive", {})
+                            if inter.get("type") == "button_reply":
+                                user_input = inter.get("button_reply", {}).get("title")
+                            elif inter.get("type") == "list_reply":
+                                user_input = inter.get("list_reply", {}).get("title")
+
+                        if user_input:
+                            text_clean = user_input.strip().lower()
+                            matched_funnel = db.query(models.Funnel).filter(
+                                models.Funnel.client_id == target_cid,
+                                models.Funnel.is_active == True,
+                                or_(
+                                    func.lower(models.Funnel.trigger_phrase) == text_clean,
+                                    models.Funnel.trigger_phrase.ilike(f"%,{text_clean},%"),
+                                    models.Funnel.trigger_phrase.ilike(f"{text_clean},%"),
+                                    models.Funnel.trigger_phrase.ilike(f"%,{text_clean}")
+                                )
+                            ).first()
+
+                            if matched_funnel:
+                                parent_id = None
+                                # Tenta pegar o parent_id se foi uma resposta a uma mensagem rastreada
+                                try:
+                                    if 'trigger_ref' in locals() and trigger_ref:
+                                        parent_id = trigger_ref.id
+                                except: pass
+
                                 new_trigger = models.ScheduledTrigger(
                                     client_id=target_cid,
                                     funnel_id=matched_funnel.id,
                                     contact_phone=from_phone,
-                                    contact_name=final_name,
-                                    conversation_id=conv_id,
+                                    contact_name=contacts_map.get(raw_from, "Contato"),
                                     status='processing',
                                     scheduled_time=datetime.now(timezone.utc),
                                     is_bulk=False,
                                     is_interaction=True,
-                                    idempotency_key=msg_id
+                                    parent_id=parent_id
                                 )
                                 db.add(new_trigger)
                                 db.commit()
                                 db.refresh(new_trigger)
-                                
+
                                 await rabbitmq.publish("zapvoice_funnel_executions", {
                                     "trigger_id": new_trigger.id,
                                     "funnel_id": matched_funnel.id,
-                                    "contact_phone": from_phone,
-                                    "conversation_id": conv_id
+                                    "contact_phone": from_phone
                                 })
-                                logger.info(f"🚀 [INTERACTION] Funil {matched_funnel.id} disparado para {from_phone} ({final_name})")
+                                logger.info(f"🚀 [WA-TRIGGER] Funil {matched_funnel.id} ({matched_funnel.name}) iniciado para {from_phone} via Meta (Parent: {parent_id})")
+                        # ---------------------------------------------
 
                     except Exception as e_inner:
                         logger.error(f"❌ Erro ao processar mensagem individual: {e_inner}")

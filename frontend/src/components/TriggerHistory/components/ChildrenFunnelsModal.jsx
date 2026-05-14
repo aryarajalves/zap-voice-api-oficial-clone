@@ -5,7 +5,7 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
     if (!childrenModal.isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-800 animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/30">
                     <div className="flex items-center gap-4">
@@ -45,7 +45,7 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
                                                 })()}
                                             </span>
                                             <span className="font-bold text-gray-800 dark:text-gray-200 transition-colors">
-                                                {child.template_name || child.funnel?.name || 'Sem nome'}
+                                                {child.funnel?.name || child.template_name || 'Sem nome'}
                                             </span>
                                             <div className="flex items-center gap-2 mt-1">
                                                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400">

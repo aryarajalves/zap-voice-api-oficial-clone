@@ -110,6 +110,7 @@ class MessageStatus(Base):
     
     delivered_counted = Column(Boolean, default=False)
     read_counted = Column(Boolean, default=False)
+    interaction_counted = Column(Boolean, default=False)
     
     publish_external_event = Column(Boolean, default=False)
     

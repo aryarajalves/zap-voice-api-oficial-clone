@@ -10,8 +10,30 @@ const VariablesSection = ({
   updateVariable, 
   addVariable, 
   removeVariable,
-  templateVars 
+  templateVars,
+  customFieldsMapping = {}
 }) => {
+  // Converte o mapeamento de campos customizados em opções para o dropdown
+  const customOptions = Object.keys(customFieldsMapping || {}).map(key => ({
+    value: key,
+    label: `Personalizado: {{${key}}}`
+  }));
+
+  // Mescla com as opções padrão, inserindo antes do 'custom' (campo manual)
+  const getDynamicOptions = (baseOptions) => {
+    const options = [...baseOptions];
+    const customIdx = options.findIndex(opt => opt.value === 'custom');
+    
+    if (customIdx !== -1) {
+      options.splice(customIdx, 0, ...customOptions);
+    } else {
+      options.push(...customOptions);
+    }
+    return options;
+  };
+
+  const dynamicBodyOptions = getDynamicOptions(BODY_VAR_OPTIONS);
+  const dynamicHeaderOptions = getDynamicOptions(HEADER_VAR_OPTIONS);
   return (
     <div className="space-y-6">
       {/* Variáveis do Template Selecionado (Dinâmicas) */}
@@ -43,7 +65,7 @@ const VariablesSection = ({
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <SearchableSelect
-                        options={tplVar.type.includes('header') ? HEADER_VAR_OPTIONS : BODY_VAR_OPTIONS}
+                        options={tplVar.type.includes('header') ? dynamicHeaderOptions : dynamicBodyOptions}
                         value={variable.value}
                         onChange={(val) => {
                           if (existingVarIdx !== -1) {
@@ -142,7 +164,7 @@ const VariablesSection = ({
 
                   <div className="flex-1 min-w-[200px]">
                     <SearchableSelect
-                      options={variable.type === 'header' ? HEADER_VAR_OPTIONS : BODY_VAR_OPTIONS}
+                      options={variable.type === 'header' ? dynamicHeaderOptions : dynamicBodyOptions}
                       value={variable.value}
                       onChange={(val) => updateVariable(mIndex, actualVIndex, 'value', val)}
                       placeholder="Mapear para campo..."

@@ -56,6 +56,7 @@ def list_dispatches(
     query = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.client_id == x_client_id,
         cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj),
+        models.ScheduledTrigger.parent_id == None
     )
 
     if status:
@@ -114,6 +115,10 @@ def list_dispatches(
             if first_msg.message_type:
                 trigger.sent_as = first_msg.message_type
                 backfilled = True
+        
+        # Adicionar contagem de funis filhos
+        trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
+
     if backfilled:
         db.commit()
 
@@ -218,7 +223,7 @@ async def play_dispatch(
         integration_id=trigger.integration_id,
         chatwoot_label=trigger.chatwoot_label,
         is_free_message=trigger.is_free_message,
-        parent_id=trigger.id # Referência ao disparo original
+        parent_id=None # Alterado para aparecer na lista principal como um novo disparo
     )
     
     db.add(new_trigger)

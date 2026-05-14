@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.5.1)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.5.6)
 
-Bem-vindo à versão **3.5.1** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.5.6** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -97,3 +97,9 @@ O sistema estará disponível em:
 *   **Segurança**: Autenticação JWT e isolamento de banco de dados por cliente.
 
 **ZapVoice - Escalando seu negócio com a inteligência da API Oficial.** 🚀
+
+
+
+**Inicializar / Criar as tabelas faltantes manualmente no servidor caso precisse:**
+
+docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py

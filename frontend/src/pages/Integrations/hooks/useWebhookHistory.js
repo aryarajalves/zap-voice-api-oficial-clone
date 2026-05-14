@@ -48,15 +48,23 @@ export function useWebhookHistory(activeClient) {
 
   const handleResendWebhook = async (historyId) => {
     setIsResending(true);
+    const loadingToast = toast.loading('Preparando reenvio...');
     try {
       const res = await fetchWithAuth(`${API_URL}/webhook-integrations/history/${historyId}/resend`, { method: 'POST' }, activeClient.id);
       if (res.ok) {
-        toast.success('Webhook reenviado para processamento');
+        toast.success('Webhook reenviado com sucesso!', { 
+          id: loadingToast,
+          icon: '🚀',
+          duration: 4000 
+        });
         return true;
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.detail || 'Falha ao reenviar webhook', { id: loadingToast });
       }
     } catch (err) {
       console.error(err);
-      toast.error('Erro ao reenviar');
+      toast.error('Erro de conexão ao tentar reenviar', { id: loadingToast });
     } finally {
       setIsResending(false);
     }
@@ -65,16 +73,24 @@ export function useWebhookHistory(activeClient) {
 
   const handleSyncHistory = async (historyId) => {
     setIsSyncing(prev => ({ ...prev, [historyId]: true }));
+    const loadingToast = toast.loading('Sincronizando dados...');
     try {
       const res = await fetchWithAuth(`${API_URL}/webhook-integrations/history/${historyId}/sync`, { method: 'POST' }, activeClient.id);
       if (res.ok) {
-        toast.success('Dados sincronizados com as novas regras');
+        toast.success('Dados sincronizados!', { 
+          id: loadingToast,
+          icon: '🔄',
+          duration: 4000 
+        });
         const updated = await res.json();
         setWebhookHistory(prev => prev.map(item => item.id === historyId ? updated : item));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.detail || 'Falha ao sincronizar dados', { id: loadingToast });
       }
     } catch (err) {
       console.error(err);
-      toast.error('Erro ao sincronizar');
+      toast.error('Erro de conexão ao sincronizar', { id: loadingToast });
     } finally {
       setIsSyncing(prev => ({ ...prev, [historyId]: false }));
     }
@@ -82,15 +98,23 @@ export function useWebhookHistory(activeClient) {
 
   const handleSyncAllHistory = async (integrationId) => {
     setIsSyncingAll(true);
+    const loadingToast = toast.loading('Iniciando sincronização global...');
     try {
       const res = await fetchWithAuth(`${API_URL}/webhook-integrations/${integrationId}/history/sync-all`, { method: 'POST' }, activeClient.id);
       if (res.ok) {
-        toast.success('Sincronização em massa iniciada');
+        toast.success('Sincronização global iniciada!', { 
+          id: loadingToast,
+          icon: '🌐',
+          duration: 4000 
+        });
         fetchHistory(integrationId, webhookHistoryStatusFilter, webhookHistorySearch, true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.detail || 'Falha ao iniciar sincronização global', { id: loadingToast });
       }
     } catch (err) {
       console.error(err);
-      toast.error('Erro ao sincronizar todos');
+      toast.error('Erro de conexão ao sincronizar todos', { id: loadingToast });
     } finally {
       setIsSyncingAll(false);
     }
@@ -126,6 +150,33 @@ export function useWebhookHistory(activeClient) {
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleBulkResendHistory = async (integrationId, ids) => {
+    const loadingToast = toast.loading('Iniciando reenvio em massa...');
+    try {
+      const res = await fetchWithAuth(`${API_URL}/webhook-integrations/history/bulk-resend`, {
+        method: 'POST',
+        body: JSON.stringify(ids)
+      }, activeClient.id);
+
+      if (res.ok) {
+        toast.success('Reenvio em massa iniciado!', { 
+          id: loadingToast,
+          icon: '📤',
+          duration: 4000 
+        });
+        setSelectedHistoryIds([]); // Limpa seleção após iniciar
+        return true;
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.detail || 'Erro ao iniciar reenvio em massa', { id: loadingToast });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro de conexão ao tentar reenviar', { id: loadingToast });
+    }
+    return false;
   };
 
   const handleDeleteHistory = async (integrationId, type, id = null, ids = []) => {
@@ -195,6 +246,7 @@ export function useWebhookHistory(activeClient) {
     handleResendWebhook,
     handleSyncHistory,
     handleSyncAllHistory,
+    handleBulkResendHistory,
     handleExportHistory,
     handleImportHistory,
     handleDeleteHistory,

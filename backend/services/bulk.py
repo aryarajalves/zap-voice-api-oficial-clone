@@ -54,6 +54,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         init_trig.total_contacts = total
         
         p_message = init_trig.private_message
+        c_label = init_trig.chatwoot_label
         c_id = init_trig.client_id
 
         from services.engine import log_node_execution
@@ -168,7 +169,9 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 chatwoot, phone, trigger_id, template_name.split('|')[0], language,
                 components=per_contact_components, direct_message=direct_message, direct_message_params=direct_message_params,
                 last_interaction=batch_interaction_map.get(phone), template_body_cache=template_body_cache,
-                template_btn_info=template_btn_info, contact_name=name
+                template_btn_info=template_btn_info, contact_name=name,
+                chatwoot_label=c_label, private_message=p_message,
+                conversation_id=c.get('conversation_id') or c.get('id') if isinstance(c, dict) else None
             ))
 
         results = await asyncio.gather(*tasks)

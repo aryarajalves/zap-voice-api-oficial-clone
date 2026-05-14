@@ -17,6 +17,7 @@ import PipelineModal from './Integrations/components/PipelineModal';
 import ContactsViewerModal from './Integrations/components/ContactsViewerModal';
 import { MaximizedJsonModal, EditJsonModal } from './Integrations/components/JsonModals';
 import { GuideModal, MappingGuideModal } from './Integrations/components/GuideModals';
+import ChildrenFunnelsModal from '../components/TriggerHistory/components/ChildrenFunnelsModal';
 
 // Hooks
 import { useIntegrations } from './Integrations/hooks/useIntegrations';
@@ -54,6 +55,7 @@ export default function Integrations() {
     historyPageSize, setHistoryPageSize, historyCurrentPage, setHistoryCurrentPage,
     webhookHistoryStatusFilter, setWebhookHistoryStatusFilter, webhookHistorySearch, setWebhookHistorySearch,
     isSavingJson, syncProgress, fetchHistory, handleResendWebhook, handleSyncHistory, handleSyncAllHistory,
+    handleBulkResendHistory,
     handleExportHistory, handleImportHistory, handleDeleteHistory, handleSaveJson
   } = useWebhookHistory(activeClient);
 
@@ -64,8 +66,9 @@ export default function Integrations() {
     dispatchEndDate, setDispatchEndDate, dispatchPage, setDispatchPage, dispatchLimit, setDispatchLimit,
     dispatchTotal, selectedDispatchIds, setSelectedDispatchIds, isBackfillingCosts, isBulkPlayingDispatches,
     contactsModal, setContactsModal, contactsFilter, setContactsFilter, loadingContacts,
+    childrenModal, setChildrenModal,
     fetchDispatches, handlePlayDispatch, handleDeleteDispatch, handleBulkDispatchPlay,
-    handleBackfillCosts, fetchDispatchContacts
+    handleBackfillCosts, fetchDispatchContacts, fetchChildren
   } = useDispatchHistory(activeClient);
 
   // WebSocket for real-time updates
@@ -138,6 +141,16 @@ export default function Integrations() {
     };
   }, [activeClient, isPipelineModalOpen, selectedDispatch?.id, isDispatchHistoryModalOpen, fetchIntegrations]);
 
+  // Limpa o progresso de reenvio após 3 segundos de conclusão
+  useEffect(() => {
+    if (bulkResendProgress?.status === 'completed' || bulkResendProgress?.status === 'failed') {
+      const timer = setTimeout(() => {
+        setBulkResendProgress(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [bulkResendProgress?.status, setBulkResendProgress]);
+
   const wrappedResend = async (id) => {
     const success = await handleResendWebhook(id);
     if (success && historyIntegration?.id) {
@@ -151,6 +164,7 @@ export default function Integrations() {
   const handleRunTest = async (payload) => {
     if (!activeClient || !integrationToTest) return;
     setIsTesting(true);
+    const loadingToast = toast.loading('Enviando webhook de teste...');
     try {
       const res = await fetchWithAuth(`${API_URL}/webhook-integrations/${integrationToTest.id}/test`, {
         method: 'POST',
@@ -158,15 +172,19 @@ export default function Integrations() {
       }, activeClient.id);
 
       if (res.ok) {
-        toast.success('Teste enviado com sucesso!');
+        toast.success('Teste enviado com sucesso!', { 
+          id: loadingToast,
+          icon: '🧪',
+          duration: 4000 
+        });
         setIsTestModalOpen(false);
       } else {
-        const err = await res.json();
-        toast.error(err.detail || 'Erro ao enviar teste');
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || 'Erro ao enviar teste', { id: loadingToast });
       }
     } catch (err) { 
       console.error(err);
-      toast.error('Erro de conexão ao enviar teste'); 
+      toast.error('Erro de conexão ao enviar teste', { id: loadingToast }); 
     } finally { 
       setIsTesting(false); 
     }
@@ -227,7 +245,7 @@ export default function Integrations() {
               <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition-all group">
                 <td className="px-8 py-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">{item.name.charAt(0).toUpperCase()}</div>
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">{(item.name || '?').charAt(0).toUpperCase()}</div>
                     <span className="font-bold text-gray-900 dark:text-white">{item.name}</span>
                   </div>
                 </td>
@@ -284,10 +302,55 @@ export default function Integrations() {
 
       {/* Modals */}
       <IntegrationFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} formData={formData} setFormData={setFormData} isSaving={isSaving} onSave={handleSaveIntegration} editingIntegration={editingIntegration} templates={templates} chatwootLabels={chatwootLabels} setIsMappingGuideOpen={setIsMappingGuideOpen} />
-      <HistoryModal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} integration={historyIntegration} webhookHistory={webhookHistory} loadingHistory={loadingHistory} webhookHistorySearch={webhookHistorySearch} setWebhookHistorySearch={setWebhookHistorySearch} webhookHistoryStatusFilter={webhookHistoryStatusFilter} setWebhookHistoryStatusFilter={setWebhookHistoryStatusFilter} historyCurrentPage={historyCurrentPage} setHistoryCurrentPage={setHistoryCurrentPage} historyPageSize={historyPageSize} setHistoryPageSize={setHistoryPageSize} selectedHistoryIds={selectedHistoryIds} handleSelectAll={(e) => setSelectedHistoryIds(e.target.checked ? webhookHistory.map(i => i.id) : [])} handleToggleSelect={(id) => setSelectedHistoryIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} handleResendWebhook={wrappedResend} handleSyncHistory={handleSyncHistory} handleSyncAllHistory={handleSyncAllHistory} handleExportHistory={() => handleExportHistory(historyIntegration)} handleImportHistory={(f) => handleImportHistory(f, historyIntegration.id)} isSyncingAll={isSyncingAll} syncProgress={syncProgress} isSyncing={isSyncing} isResending={isResending} setConfirmDeleteHistory={setConfirmDeleteHistory} setConfirmResendHistory={setConfirmResendHistory} setEditJsonModal={setEditJsonModal} setMaximizedJson={setMaximizedJson} fetchHistory={fetchHistory} toast={toast} />
-      <DispatchHistoryModal isOpen={isDispatchHistoryModalOpen} onClose={() => setIsDispatchHistoryModalOpen(false)} integration={dispatchIntegration} dispatchHistory={dispatchHistory} loadingDispatchHistory={loadingDispatchHistory} dispatchSearch={dispatchSearch} setDispatchSearch={setDispatchSearch} dispatchEventFilter={dispatchEventFilter} setDispatchEventFilter={setDispatchEventFilter} dispatchTypeFilter={dispatchTypeFilter} setDispatchTypeFilter={setDispatchTypeFilter} dispatchStartDate={dispatchStartDate} setDispatchStartDate={setDispatchStartDate} dispatchEndDate={dispatchEndDate} setDispatchEndDate={setDispatchEndDate} dispatchPage={dispatchPage} setDispatchPage={setDispatchPage} dispatchLimit={dispatchLimit} setDispatchLimit={setDispatchLimit} dispatchTotal={dispatchTotal} selectedDispatchIds={selectedDispatchIds} setSelectedDispatchIds={setSelectedDispatchIds} handleSelectAllDispatches={(e, list) => setSelectedDispatchIds(e.target.checked ? list.map(i => i.id) : [])} handleToggleSelectDispatch={(id) => setSelectedDispatchIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} handleBulkDispatchPlay={() => handleBulkDispatchPlay(dispatchIntegration.id)} handleBulkDispatchDelete={() => handleDeleteDispatch(dispatchIntegration.id, 'bulk', null, selectedDispatchIds)} handlePlayDispatch={(id) => handlePlayDispatch(id, dispatchIntegration.id)} handleCancelDispatch={() => {}} handleBackfillCosts={() => handleBackfillCosts(dispatchIntegration.id)} isBackfillingCosts={isBackfillingCosts} isBulkPlayingDispatches={isBulkPlayingDispatches} isPlaying={isPlaying} isCancelling={isCancelling} setSelectedDispatch={setSelectedDispatch} setIsPipelineModalOpen={setIsPipelineModalOpen} fetchDispatches={fetchDispatches} setConfirmDeleteDispatch={setConfirmDeleteDispatch} />
+      <HistoryModal 
+        isOpen={isHistoryModalOpen} 
+        onClose={() => {
+          setIsHistoryModalOpen(false);
+          setSelectedHistoryIds([]); // Limpa seleção ao fechar o painel
+        }} 
+        integration={historyIntegration} 
+        webhookHistory={webhookHistory} 
+        loadingHistory={loadingHistory} 
+        webhookHistorySearch={webhookHistorySearch} 
+        setWebhookHistorySearch={setWebhookHistorySearch} 
+        webhookHistoryStatusFilter={webhookHistoryStatusFilter} 
+        setWebhookHistoryStatusFilter={setWebhookHistoryStatusFilter} 
+        historyCurrentPage={historyCurrentPage} 
+        setHistoryCurrentPage={setHistoryCurrentPage} 
+        historyPageSize={historyPageSize} 
+        setHistoryPageSize={setHistoryPageSize} 
+        selectedHistoryIds={selectedHistoryIds} 
+        handleSelectAll={(e) => setSelectedHistoryIds(e.target.checked ? webhookHistory.map(i => i.id) : [])} 
+        handleToggleSelect={(id) => setSelectedHistoryIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} 
+        handleResendWebhook={wrappedResend} 
+        handleSyncHistory={handleSyncHistory} 
+        handleSyncAllHistory={handleSyncAllHistory} 
+        handleExportHistory={() => handleExportHistory(historyIntegration)} 
+        handleImportHistory={(f) => handleImportHistory(f, historyIntegration.id)} 
+        isSyncingAll={isSyncingAll} 
+        syncProgress={syncProgress} 
+        isSyncing={isSyncing} 
+        isResending={isResending} 
+        setConfirmDeleteHistory={setConfirmDeleteHistory} 
+        setConfirmResendHistory={setConfirmResendHistory} 
+        setEditJsonModal={setEditJsonModal} 
+        setMaximizedJson={setMaximizedJson} 
+        fetchHistory={fetchHistory} 
+        bulkResendProgress={bulkResendProgress}
+        setBulkResendProgress={setBulkResendProgress}
+        toast={toast} 
+      />
+      <DispatchHistoryModal isOpen={isDispatchHistoryModalOpen} onClose={() => setIsDispatchHistoryModalOpen(false)} integration={dispatchIntegration} dispatchHistory={dispatchHistory} loadingDispatchHistory={loadingDispatchHistory} dispatchSearch={dispatchSearch} setDispatchSearch={setDispatchSearch} dispatchEventFilter={dispatchEventFilter} setDispatchEventFilter={setDispatchEventFilter} dispatchTypeFilter={dispatchTypeFilter} setDispatchTypeFilter={setDispatchTypeFilter} dispatchStartDate={dispatchStartDate} setDispatchStartDate={setDispatchStartDate} dispatchEndDate={dispatchEndDate} setDispatchEndDate={setDispatchEndDate} dispatchPage={dispatchPage} setDispatchPage={setDispatchPage} dispatchLimit={dispatchLimit} setDispatchLimit={setDispatchLimit} dispatchTotal={dispatchTotal} selectedDispatchIds={selectedDispatchIds} setSelectedDispatchIds={setSelectedDispatchIds} handleSelectAllDispatches={(e, list) => setSelectedDispatchIds(e.target.checked ? list.map(i => i.id) : [])} handleToggleSelectDispatch={(id) => setSelectedDispatchIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} handleBulkDispatchPlay={() => handleBulkDispatchPlay(dispatchIntegration.id)} handleBulkDispatchDelete={() => handleDeleteDispatch(dispatchIntegration.id, 'bulk', null, selectedDispatchIds)} handlePlayDispatch={(id) => handlePlayDispatch(id, dispatchIntegration.id)} handleCancelDispatch={() => {}} handleBackfillCosts={() => handleBackfillCosts(dispatchIntegration.id)} isBackfillingCosts={isBackfillingCosts} isBulkPlayingDispatches={isBulkPlayingDispatches} isPlaying={isPlaying} isCancelling={isCancelling} setSelectedDispatch={setSelectedDispatch} setIsPipelineModalOpen={setIsPipelineModalOpen} fetchDispatches={fetchDispatches} setConfirmDeleteDispatch={setConfirmDeleteDispatch} fetchChildren={fetchChildren} />
       <TestWebhookModal isOpen={isTestModalOpen} onClose={() => setIsTestModalOpen(false)} integration={integrationToTest} onTest={handleRunTest} isTesting={isTesting} />
       <PipelineModal isOpen={isPipelineModalOpen} onClose={() => setIsPipelineModalOpen(false)} dispatch={selectedDispatch} />
+      <ChildrenFunnelsModal 
+        childrenModal={childrenModal} 
+        setChildrenModal={setChildrenModal} 
+        setMonitoringTrigger={(trigger) => {
+          setSelectedDispatch(trigger);
+          setIsPipelineModalOpen(true);
+        }} 
+      />
       <ContactsViewerModal isOpen={contactsModal.isOpen} onClose={() => setContactsModal(prev => ({ ...prev, isOpen: false }))} triggerId={contactsModal.triggerId} contacts={contactsModal.contacts} counts={contactsModal.counts} filter={contactsFilter} setFilter={setContactsFilter} loading={loadingContacts} title={contactsModal.title} />
       <MaximizedJsonModal isOpen={!!maximizedJson} data={maximizedJson} onClose={() => setMaximizedJson(null)} toast={toast} />
       <EditJsonModal isOpen={editJsonModal.isOpen} data={editJsonModal.data} onClose={() => setEditJsonModal({ isOpen: false, data: '', id: null })} onSave={(data) => handleSaveJson(editJsonModal.id, data, historyIntegration.id).then(success => success && setEditJsonModal({ isOpen: false, data: '', id: null }))} isSaving={isSavingJson} />
@@ -295,6 +358,23 @@ export default function Integrations() {
       <MappingGuideModal isOpen={isMappingGuideOpen} onClose={() => setIsMappingGuideOpen(false)} />
       <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteIntegration} title="Excluir Integração" message={`Tem certeza que deseja excluir "${integrationToDelete?.name}"? Esta ação não pode ser desfeita.`} />
       <ConfirmModal isOpen={confirmDeleteHistory.isOpen} onClose={() => setConfirmDeleteHistory({ ...confirmDeleteHistory, isOpen: false })} onConfirm={() => handleDeleteHistory(historyIntegration.id, confirmDeleteHistory.type, confirmDeleteHistory.id, confirmDeleteHistory.ids).then(() => setConfirmDeleteHistory({ ...confirmDeleteHistory, isOpen: false }))} title="Excluir Histórico" message="Deseja realmente excluir os registros selecionados?" />
+      <ConfirmModal 
+        isOpen={confirmResendHistory.isOpen} 
+        onClose={() => setConfirmResendHistory({ isOpen: false, ids: [] })} 
+        onConfirm={() => {
+          handleBulkResendHistory(historyIntegration.id, confirmResendHistory.ids);
+          setConfirmResendHistory({ isOpen: false, ids: [] });
+          // Inicializa o progresso visual imediatamente para dar feedback ao usuário
+          setBulkResendProgress({
+            status: 'pending',
+            current: 0,
+            total: confirmResendHistory.ids.length,
+            type: 'webhook_resend'
+          });
+        }} 
+        title="Reenviar Webhooks" 
+        message={`Deseja realmente reenviar ${confirmResendHistory.ids?.length} webhooks selecionados para processamento?`} 
+      />
       <ConfirmModal isOpen={confirmDeleteDispatch.isOpen} onClose={() => setConfirmDeleteDispatch({ ...confirmDeleteDispatch, isOpen: false })} onConfirm={() => handleDeleteDispatch(dispatchIntegration.id, confirmDeleteDispatch.type, confirmDeleteDispatch.id, confirmDeleteDispatch.ids).then(() => setConfirmDeleteDispatch({ ...confirmDeleteDispatch, isOpen: false }))} title="Excluir Disparo" message="Deseja realmente excluir os disparos selecionados?" />
     </div>
   );
