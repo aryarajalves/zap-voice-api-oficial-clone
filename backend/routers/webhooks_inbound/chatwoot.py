@@ -121,16 +121,24 @@ async def process_funnel_trigger_with_delay(client_id: int, phone: str, text_inp
     db = SessionLocal()
     try:
         text_clean = text_input.strip().lower()
-        matched_funnel = db.query(models.Funnel).filter(
+        
+        # Busca todos os funis ativos do cliente para fazer o match em Python (mais robusto com espaços e vírgulas)
+        active_funnels = db.query(models.Funnel).filter(
             models.Funnel.client_id == client_id,
-            models.Funnel.is_active == True,
-            or_(
-                func.lower(models.Funnel.trigger_phrase) == text_clean,
-                models.Funnel.trigger_phrase.ilike(f"%,{text_clean},%"),
-                models.Funnel.trigger_phrase.ilike(f"{text_clean},%"),
-                models.Funnel.trigger_phrase.ilike(f"%,{text_clean}")
-            )
-        ).first()
+            models.Funnel.is_active == True
+        ).all()
+        
+        matched_funnel = None
+        for funnel in active_funnels:
+            if not funnel.trigger_phrase:
+                continue
+            
+            # Divide por vírgula, limpa espaços extras e converte para minúsculo
+            phrases = [p.strip().lower() for p in funnel.trigger_phrase.split(",") if p.strip()]
+            
+            if text_clean in phrases:
+                matched_funnel = funnel
+                break
 
         if matched_funnel:
             # Busca o último disparo interagido para este telefone nos últimos 60 segundos
@@ -173,7 +181,9 @@ async def process_funnel_trigger_with_delay(client_id: int, phone: str, text_inp
             })
             logger.info(f"🚀 [CH-TRIGGER] Funil {matched_funnel.id} ({matched_funnel.name}) iniciado para {phone} (Parent: {parent_id})")
         else:
-            logger.warning(f"⚠️ [CH-TRIGGER] Nenhum funil ativo encontrado para a palavra-chave: '{text_clean}' (Phone: {phone})")
+            # Log de diagnóstico para ajudar a entender o motivo da falha
+            funnel_list = [f"{f.name} (ID: {f.id}, Trigger: '{f.trigger_phrase}')" for f in active_funnels]
+            logger.warning(f"⚠️ [CH-TRIGGER] Nenhum funil ativo encontrado para a palavra-chave: '{text_clean}' (Phone: {phone}) | Client ID: {client_id} | Funis Ativos Verificados: {len(active_funnels)} | Lista: {funnel_list}")
     except Exception as e:
         logger.error(f"❌ Erro ao processar gatilho de funil no Chatwoot: {e}")
     finally:
