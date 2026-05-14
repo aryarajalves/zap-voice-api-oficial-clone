@@ -97,6 +97,7 @@ async def handle_whatsapp_event(data: dict):
                                     db.execute(text("UPDATE scheduled_triggers SET total_read = COALESCE(total_read, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
 
                                 db.commit()
+                                logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id})")
                                 
                                 if status in ['delivered', 'read']:
                                     asyncio.create_task(handle_deferred_post_delivery(trigger.id, message_record.id, status, msg_id, recipient))
@@ -110,7 +111,11 @@ async def handle_whatsapp_event(data: dict):
                     msg_id = msg.get("id")
                     
                     db_lock_key = f"inbound_{from_phone}"
-                    db.execute(text("SELECT pg_advisory_lock(hashtext(:key))"), {"key": db_lock_key})
+                    # Lock não-bloqueante para evitar travar o event loop do worker
+                    while True:
+                        locked = db.execute(text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"), {"key": db_lock_key}).scalar()
+                        if locked: break
+                        await asyncio.sleep(0.05)
                     
                     try:
                         db.expire_all()
@@ -123,36 +128,46 @@ async def handle_whatsapp_event(data: dict):
                                 continue
                         GLOBAL_PROCESSING_LOCKS[mem_lock_key] = now
 
-                        target_cid = 1
+                        candidate_cids = [1]
                         pnid = metadata.get("phone_number_id")
                         if pnid:
-                            conf = db.query(models.AppConfig).filter(models.AppConfig.key == "WA_PHONE_NUMBER_ID", models.AppConfig.value == str(pnid)).first()
-                            if conf: target_cid = conf.client_id
+                            confs = db.query(models.AppConfig).filter(models.AppConfig.key == "WA_PHONE_NUMBER_ID", models.AppConfig.value == str(pnid)).all()
+                            if confs: 
+                                candidate_cids = list(set([c.client_id for c in confs]))
+                        
+                        target_cid = candidate_cids[0] if candidate_cids else 1
                         
                         # --- NOVO: Rastreamento de Interação em Mensagens Enviadas ---
                         context = msg.get("context", {})
                         replied_msg_id = context.get("id")
+                        message_record = None
+                        
                         if replied_msg_id:
                             clean_replied_id = replied_msg_id.replace("wamid.", "")
-                            # Buscamos a mensagem original E o trigger pai para pegar o client_id correto
+                            message_record = db.query(models.MessageStatus).filter(models.MessageStatus.message_id == clean_replied_id).first()
+                        else:
+                            # FALLBACK: Se não tem context.id, buscar a última mensagem enviada para este número nas últimas 24h
+                            yesterday = datetime.now(timezone.utc) - timedelta(hours=24)
                             message_record = db.query(models.MessageStatus).filter(
-                                models.MessageStatus.message_id == clean_replied_id
-                            ).first()
-                            
-                            if message_record:
-                                # Prioridade: Se encontramos a mensagem original, o client_id vem do trigger dela
-                                trigger_ref = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
-                                if trigger_ref:
-                                    target_cid = trigger_ref.client_id
-                                    logger.info(f"🎯 [TARGET_CID] Identificado Client {target_cid} via MessageStatus {clean_replied_id}")
+                                models.MessageStatus.phone_number == from_phone,
+                                models.MessageStatus.timestamp >= yesterday
+                            ).order_by(models.MessageStatus.timestamp.desc()).first()
 
-                                if not getattr(message_record, 'interaction_counted', False):
-                                    # Marca como interagido
-                                    message_record.interaction_counted = True
-                                    # Incrementa o contador no trigger pai
-                                    db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
-                                    db.commit()
-                                    logger.info(f"👆 [INTERACTION_COUNT] Clique detectado para Trigger {message_record.trigger_id} via mensagem {clean_replied_id}")
+                        if message_record:
+                            trigger_ref = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
+                            if trigger_ref:
+                                target_cid = trigger_ref.client_id
+                                # Se identificamos pelo histórico, ele é o candidato principal
+                                if target_cid not in candidate_cids:
+                                    candidate_cids.insert(0, target_cid)
+                                logger.info(f"🎯 [TARGET_CID] Identificado Client {target_cid} via histórico/contexto para {from_phone}")
+
+                            if not getattr(message_record, 'interaction_counted', False):
+                                message_record.interaction_counted = True
+                                message_record.is_interaction = True
+                                db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
+                                db.commit()
+                                logger.info(f"👆 [INTERACTION_COUNT] Clique detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
                         # ----------------------------------------------------------
 
                         # --- [REATIVADO] GATILHO DE FUNIL VIA META ---
@@ -175,7 +190,7 @@ async def handle_whatsapp_event(data: dict):
                         if user_input:
                             text_clean = user_input.strip().lower()
                             matched_funnel = db.query(models.Funnel).filter(
-                                models.Funnel.client_id == target_cid,
+                                models.Funnel.client_id.in_(candidate_cids),
                                 models.Funnel.is_active == True,
                                 or_(
                                     func.lower(models.Funnel.trigger_phrase) == text_clean,
@@ -220,7 +235,7 @@ async def handle_whatsapp_event(data: dict):
                         logger.error(f"❌ Erro ao processar mensagem individual: {e_inner}")
                         db.rollback()
                     finally:
-                        db.execute(text("SELECT pg_advisory_unlock(hashtext(:key))"), {"key": db_lock_key})
+                        # pg_advisory_xact_lock libera automaticamente no commit/rollback
                         db.commit()
 
     except Exception as e:

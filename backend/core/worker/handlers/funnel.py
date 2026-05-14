@@ -24,7 +24,13 @@ async def handle_funnel_execution(data: dict):
     # 1. Trava de Segurança (Advisory Lock) por Trigger ID
     # Usamos um namespace diferente (2000000 + ID) para evitar conflitos com outros locks
     lock_id = 2000000 + int(trigger_id)
-    db.execute(text("SELECT pg_advisory_lock(:id)"), {"id": lock_id})
+    
+    # Lock não-bloqueante para evitar travar o event loop do worker
+    while True:
+        locked = db.execute(text("SELECT pg_try_advisory_xact_lock(:id)"), {"id": lock_id}).scalar()
+        if locked: break
+        import asyncio
+        await asyncio.sleep(0.1)
     
     try:
         # Refresh do estado do trigger
@@ -192,7 +198,6 @@ async def handle_funnel_execution(data: dict):
             db.commit()
 
     finally:
-        # Liberar Advisory Lock
-        db.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id})
+        # pg_advisory_xact_lock libera automaticamente no commit/rollback
         db.commit()
         db.close()

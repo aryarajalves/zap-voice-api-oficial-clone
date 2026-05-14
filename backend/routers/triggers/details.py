@@ -38,7 +38,7 @@ def get_trigger_messages(
         elif status_filter == 'blocked':
             base_query = base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
         elif status_filter in ('interaction', 'interactions'):
-            base_query = base_query.filter(models.MessageStatus.is_interaction == True, or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'))
+            base_query = base_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True), or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'))
         elif status_filter == 'private_note':
             base_query = base_query.filter(models.MessageStatus.private_note_posted == True)
 
@@ -83,7 +83,7 @@ def get_trigger_messages(
         "free": full_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
         "template": full_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
         "blocked": full_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count(),
-        "interaction": full_query.filter(models.MessageStatus.is_interaction == True).count(),
+        "interaction": full_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True)).count(),
         "private_note": full_query.filter(models.MessageStatus.private_note_posted == True).count()
     }
 

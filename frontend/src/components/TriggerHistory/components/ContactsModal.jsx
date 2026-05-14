@@ -130,11 +130,6 @@ const ContactsModal = ({
                                                 )}
                                             </div>
                                             
-                                            {contact.content && (
-                                                <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-100 dark:border-gray-800 line-clamp-2 italic" title={contact.content}>
-                                                    "{contact.content}"
-                                                </div>
-                                            )}
 
                                             <div className="flex items-center gap-2 mt-1.5">
                                                 <div className="text-[10px] text-gray-400 font-medium">

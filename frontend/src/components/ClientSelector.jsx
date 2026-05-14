@@ -57,7 +57,7 @@ export default function ClientSelector({ onCreateClick }) {
                 className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors"
             >
                 <span className="font-semibold text-gray-800 dark:text-gray-200 truncate">
-                    {activeClient?.name || 'Sem cliente selecionado'}
+                    {activeClient?.name ? `${activeClient.name} (ID: ${activeClient.id})` : 'Sem cliente selecionado'}
                 </span>
                 <FiChevronDown className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -83,7 +83,7 @@ export default function ClientSelector({ onCreateClick }) {
                                         }}
                                         className={`flex-1 text-left transition-colors ${activeClient?.id === client.id ? 'font-semibold text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-gray-200'}`}
                                     >
-                                        {client.name}
+                                        {client.name} (ID: {client.id})
                                     </button>
 
                                     {clients.length > 1 && user?.role === 'super_admin' && (

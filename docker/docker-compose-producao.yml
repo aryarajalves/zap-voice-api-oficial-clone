@@ -5,13 +5,13 @@ services:
   # SERVIÇO PRINCIPAL (Backend + Frontend)
   # ==========================================
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:backend-3.5.3
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:backend-3.5.4
     container_name: zap-voice-api-oficial
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     ports:
       - 8000:8000
     networks:
-      - network_swarm_public
+      - docker_zapvoice_net
     volumes:
       - zapvoice_uploads:/app/static/uploads
     env_file:
@@ -39,11 +39,11 @@ services:
   # SERVIÇO WORKER (Processamento em Segundo Plano)
   # ==========================================
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:worker-3.5.3
+    image: aryarajalves/zap-voice-funil-api-oficial-zap:worker-3.5.4
     command: python worker.py
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
-      - network_swarm_public
+      - docker_zapvoice_net
     volumes:
       - zapvoice_uploads:/app/static/uploads
     env_file:
@@ -68,6 +68,6 @@ volumes:
     name: zapvoice_uploads
 
 networks:
-  network_swarm_public:
-    name: network_swarm_public
+  docker_zapvoice_net:
+    name: docker_zapvoice_net
     external: true

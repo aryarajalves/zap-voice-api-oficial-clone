@@ -7,6 +7,14 @@ def normalize_phone(phone: str) -> str:
     clean = "".join(filter(str.isdigit, str(phone)))
     
     # Normalização BR: 55 + DDD + Número
+    # Se tem 55 + DDD + 8 dígitos (Total 12), adiciona o 9
+    if clean.startswith("55") and len(clean) == 12:
+        ddd = clean[2:4]
+        number = clean[4:]
+        # DDDs brasileiros (11 a 99)
+        if 11 <= int(ddd) <= 99:
+            clean = f"55{ddd}9{number}"
+    
     # Se começar com 55 e tiver mais de 13 dígitos, tenta ajustar
     if clean.startswith("55") and len(clean) > 13:
         clean = clean[-13:]

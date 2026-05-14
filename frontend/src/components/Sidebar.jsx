@@ -74,7 +74,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                 </div>
                 {clientName && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed pl-1">
-                        Api Oficial do WhatsApp do cliente <span className="font-semibold text-gray-700 dark:text-gray-300">{clientName}</span>
+                        Api Oficial do WhatsApp do cliente <span className="font-semibold text-gray-700 dark:text-gray-300">{clientName} (ID: {activeClient?.id})</span>
                     </p>
                 )}
             </div>

@@ -14,13 +14,13 @@ class Client(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    funnels = relationship("Funnel", back_populates="client")
-    triggers = relationship("ScheduledTrigger", back_populates="client")
-    configs = relationship("AppConfig", back_populates="client")
-    blocked_contacts = relationship("BlockedContact", back_populates="client")
-    webhooks = relationship("WebhookConfig", back_populates="client")
-    contact_windows = relationship("ContactWindow", back_populates="client")
-    recurring_triggers = relationship("RecurringTrigger", back_populates="client")
+    funnels = relationship("Funnel", back_populates="client", cascade="all, delete-orphan")
+    triggers = relationship("ScheduledTrigger", back_populates="client", cascade="all, delete-orphan")
+    configs = relationship("AppConfig", back_populates="client", cascade="all, delete-orphan")
+    blocked_contacts = relationship("BlockedContact", back_populates="client", cascade="all, delete-orphan")
+    webhooks = relationship("WebhookConfig", back_populates="client", cascade="all, delete-orphan")
+    contact_windows = relationship("ContactWindow", back_populates="client", cascade="all, delete-orphan")
+    recurring_triggers = relationship("RecurringTrigger", back_populates="client", cascade="all, delete-orphan")
 
 
 class AppConfig(Base):

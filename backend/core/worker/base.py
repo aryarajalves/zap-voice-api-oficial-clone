@@ -29,10 +29,19 @@ async def start_worker():
     await rabbitmq.connect()
     
     # Define os consumidores
+    logger.info("📡 Configurando consumidor: zapvoice_bulk_sends")
     await rabbitmq.consume("zapvoice_bulk_sends", handle_bulk_send, prefetch_count=1)
+    
+    logger.info("📡 Configurando consumidor: agent_memory_webhook_queue")
     await rabbitmq.consume("agent_memory_webhook_queue", handle_agent_memory_webhook, prefetch_count=1)
-    await rabbitmq.consume("whatsapp_events", handle_whatsapp_event, prefetch_count=50)
-    await rabbitmq.consume("zapvoice_funnel_executions", handle_funnel_execution, prefetch_count=PREFETCH_COUNT)
+    
+    logger.info("📡 Configurando consumidor: whatsapp_events")
+    await rabbitmq.consume("whatsapp_events", handle_whatsapp_event, prefetch_count=10)
+    
+    logger.info("📡 Configurando consumidor: zapvoice_funnel_executions")
+    await rabbitmq.consume("zapvoice_funnel_executions", handle_funnel_execution, prefetch_count=5)
+    
+    logger.info("📡 Configurando consumidor: chatwoot_private_messages")
     await rabbitmq.consume("chatwoot_private_messages", handle_chatwoot_private_message, prefetch_count=50, requeue_on_error=True)
 
     logger.info("🚀 Worker rodando e aguardando processamento...")

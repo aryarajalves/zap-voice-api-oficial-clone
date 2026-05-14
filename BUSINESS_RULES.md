@@ -113,6 +113,11 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
 
 - [x] **Regras de Cancelamento Cruzado:** Se um cliente compra o "Produto A", devemos cancelar funis pendentes do "Produto B" ou apenas os funis relacionados ao "Produto A"?
     - **Resposta**: Apenas os funis do mesmo produto. Além disso, o sistema deve respeitar a configuração do dropdown que indica quais eventos específicos devem disparar o cancelamento.
+- [x] [NOVO] Como o sistema deve se comportar se o Worker cair durante um disparo em massa? Deve haver um botão de "Retomar" automático?
+    - **Resposta**: Sim, deve haver um botão "Retomar" que continue o envio exatamente de onde parou (utilizando a lista de contatos pendentes).
+- [x] [NOVO] No histórico, disparos que ficam "travados" por mais de X horas devem ser marcados como falha automaticamente?
+    - **Resposta**: Sim. Disparos travados em `processing` ou `queued` por mais de 2 horas serão marcados como falha pelo Scheduler, com a mensagem: "Disparo travado: O tempo limite de processamento (2h) foi excedido".
+
 ## 📋 Histórico de Decisões
 As perguntas iniciais sobre regras de negócio foram todas respondidas e integradas às seções acima. O sistema segue o modelo de isolamento total entre clientes e automação robusta com retentativas configuradas.
 

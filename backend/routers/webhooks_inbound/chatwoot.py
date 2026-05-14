@@ -58,9 +58,14 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
                 
                 if phone_number:
                     clean_phone = "".join(filter(str.isdigit, str(phone_number)))
-                    client_id = 1 
-                    config = db.query(models.AppConfig).filter(models.AppConfig.key == 'CHATWOOT_ACCOUNT_ID', models.AppConfig.value == str(account_id)).first()
-                    if config: client_id = config.client_id
+                    
+                    client_id_param = request.query_params.get("client_id")
+                    if client_id_param and client_id_param.isdigit():
+                        client_id = int(client_id_param)
+                    else:
+                        client_id = 1 
+                        config = db.query(models.AppConfig).filter(models.AppConfig.key == 'CHATWOOT_ACCOUNT_ID', models.AppConfig.value == str(account_id)).first()
+                        if config: client_id = config.client_id
                     
                     if msg_type in ["incoming", 0]:
                         now_utc = datetime.now(timezone.utc)

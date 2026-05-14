@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from core.logger import logger
 from rabbitmq_client import rabbitmq
+from services.utils.phone_utils import normalize_phone
 
 async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Session):
     """
@@ -221,7 +222,7 @@ async def start_now_trigger_logic(trigger_id: int, db: Session):
     if not trigger:
         return None
 
-    if trigger.status == "processing":
+    if trigger.status == "processing" and not trigger.is_bulk:
         return "already_processing"
 
     logger.info(f"⚡ Forçando início imediato do trigger {trigger_id}")

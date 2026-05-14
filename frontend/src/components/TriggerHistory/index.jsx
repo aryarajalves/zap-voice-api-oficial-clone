@@ -28,7 +28,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType:
         if (modalConfig.type === 'bulk_delete') {
             handleBulkDeleteAction();
         } else {
-            handleAction();
+            handleAction(modalConfig);
         }
     };
 

@@ -88,39 +88,51 @@ async def run_history_cleanup():
         _last_cleanup_history = today
 
 async def run_stale_triggers_cleanup():
-    """Cancela Gatilhos pausados aguardando entrega por mais de 24 horas."""
+    """Cancela Gatilhos travados ou aguardando entrega por muito tempo."""
     global _last_cleanup_stale
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d %H") # Rodar de hora em hora
     
     if _last_cleanup_stale == today:
         return
 
-    logger.info("🔍 [STALE CLEANUP] Verificando funis pausados há mais de 24h...")
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     db = SessionLocal()
     try:
-        stale_triggers = db.query(models.ScheduledTrigger).filter(
+        # 1. Gatilhos pausados aguardando entrega por mais de 24 horas (Meta window)
+        logger.info("🔍 [STALE CLEANUP] Verificando funis pausados há mais de 24h...")
+        cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        stale_waiting = db.query(models.ScheduledTrigger).filter(
             models.ScheduledTrigger.status == 'paused_waiting_delivery',
-            models.ScheduledTrigger.updated_at < cutoff
+            models.ScheduledTrigger.updated_at < cutoff_24h
         ).all()
         
-        for tr in stale_triggers:
+        for tr in stale_waiting:
             logger.warning(f"🧟 [REAPER] Cancelando Trigger {tr.id}: tempo de espera (24h) excedido.")
             tr.status = 'failed'
             tr.failure_reason = "Mensagem não entregue ao WhatsApp do cliente em 24h (aparelho offline ou impossibilitado)."
-            
-            # Registrar falha no histórico para a UI
             from services.engine import log_node_execution
-            log_node_execution(
-                db, tr, 
-                node_id=tr.current_node_id, 
-                status="failed", 
-                details=tr.failure_reason
-            )
+            log_node_execution(db, tr, node_id=tr.current_node_id, status="failed", details=tr.failure_reason)
+
+        # 2. Gatilhos travados em 'processing' ou 'queued' por mais de 2 horas (Worker crash / RabbitMQ issue)
+        logger.info("🔍 [STALE CLEANUP] Verificando disparos travados há mais de 2h...")
+        cutoff_2h = datetime.now(timezone.utc) - timedelta(hours=2)
+        stale_processing = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.status.in_(['processing', 'queued']),
+            models.ScheduledTrigger.updated_at < cutoff_2h
+        ).all()
+
+        for tr in stale_processing:
+            logger.warning(f"🧟 [REAPER] Falhando Trigger {tr.id}: travado em {tr.status} por mais de 2h.")
+            tr.status = 'failed'
+            tr.failure_reason = f"Disparo travado: O tempo limite de processamento (2h) foi excedido. Possível queda do sistema ou erro crítico no worker durante o status {tr.status}."
+            from services.engine import log_node_execution
+            log_node_execution(db, tr, node_id=tr.current_node_id or 'DELIVERY', status="failed", details=tr.failure_reason)
             
         db.commit()
-        if not stale_triggers:
+        if not stale_waiting and not stale_processing:
             logger.info("✅ [STALE CLEANUP] Nenhum gatilho obsoleto encontrado.")
+        else:
+            logger.info(f"🧹 [STALE CLEANUP] Limpeza concluída: {len(stale_waiting)} expirados, {len(stale_processing)} travados.")
+            
     except Exception as e:
         logger.error(f"❌ [STALE CLEANUP] Erro ao limpar gatilhos obsoletos: {e}")
         db.rollback()
