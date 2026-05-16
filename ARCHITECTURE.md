@@ -1,4 +1,4 @@
-# 🏗️ Arquitetura do Sistema - ZapVoice (v3.5.6)
+# 🏗️ Arquitetura do Sistema - ZapVoice (v3.5.7)
 
 Este documento descreve a infraestrutura técnica, os fluxos de dados e a organização do código do ZapVoice.
 

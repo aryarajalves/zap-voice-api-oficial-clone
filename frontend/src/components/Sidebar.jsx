@@ -129,7 +129,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                 </button>
                 <div className="px-4 py-1 mt-1 border-t border-gray-100 dark:border-white/5 opacity-50">
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium tracking-widest uppercase text-center">
-                        ZapVoice v3.3.1
+                        ZapVoice v3.5.7
                     </p>
                 </div>
             </div>
