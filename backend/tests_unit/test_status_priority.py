@@ -9,7 +9,15 @@ from unittest.mock import patch
 
 @pytest.mark.asyncio
 async def test_status_priority_delivered_after_read(db_session):
-    with patch("worker.SessionLocal", return_value=db_session):
+    orig_execute = db_session.execute
+    def mock_execute(statement, params=None, *args, **kwargs):
+        if "pg_advisory_xact_lock" in str(statement):
+            from unittest.mock import MagicMock
+            return MagicMock()
+        return orig_execute(statement, params, *args, **kwargs)
+    db_session.execute = mock_execute
+
+    with patch("core.worker.handlers.whatsapp.SessionLocal", return_value=db_session):
         # 1. Create a trigger and a message
         trigger = models.ScheduledTrigger(
             client_id=1,
@@ -48,8 +56,8 @@ async def test_status_priority_delivered_after_read(db_session):
             }]
         }
         
-        # We need to mock notify_ai_memory to avoid external calls
-        with patch("worker.notify_ai_memory", return_value=asyncio.sleep(0)):
+        # We need to mock handle_deferred_post_delivery to avoid sleep
+        with patch("core.worker.handlers.whatsapp.handle_deferred_post_delivery", return_value=asyncio.sleep(0)):
             await handle_whatsapp_event(read_event)
         
         db_session.commit()
@@ -76,7 +84,8 @@ async def test_status_priority_delivered_after_read(db_session):
                 }]
             }]
         }
-        await handle_whatsapp_event(delivered_event)
+        with patch("core.worker.handlers.whatsapp.handle_deferred_post_delivery", return_value=asyncio.sleep(0)):
+            await handle_whatsapp_event(delivered_event)
         
         db_session.commit()
         message = db_session.query(models.MessageStatus).filter_by(message_id=msg_id).first()
@@ -89,7 +98,15 @@ async def test_status_priority_delivered_after_read(db_session):
 
 @pytest.mark.asyncio
 async def test_status_priority_failed_overwrites_all(db_session):
-    with patch("worker.SessionLocal", return_value=db_session):
+    orig_execute = db_session.execute
+    def mock_execute(statement, params=None, *args, **kwargs):
+        if "pg_advisory_xact_lock" in str(statement):
+            from unittest.mock import MagicMock
+            return MagicMock()
+        return orig_execute(statement, params, *args, **kwargs)
+    db_session.execute = mock_execute
+
+    with patch("core.worker.handlers.whatsapp.SessionLocal", return_value=db_session):
         msg_id = f"test_{uuid.uuid4()}"
         trigger = models.ScheduledTrigger(client_id=1, template_name="Test", status="active")
         db_session.add(trigger)

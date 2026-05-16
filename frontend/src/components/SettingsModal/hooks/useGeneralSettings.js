@@ -105,7 +105,13 @@ export function useGeneralSettings(activeClient, refreshClients) {
             if (result.success) {
                 toast.success(`Sucesso! Status: ${result.status}`, { id: loadingToast });
             } else {
-                toast.error(`Falha no teste: ${result.error || result.status}`, { id: loadingToast, duration: 5000 });
+                let errorMsg = `Falha no teste: ${result.status}`;
+                if (result.response_body) {
+                    errorMsg += `\nResposta: ${result.response_body.substring(0, 150)}`;
+                } else if (result.error) {
+                    errorMsg += `\nErro: ${result.error}`;
+                }
+                toast.error(errorMsg, { id: loadingToast, duration: 8000 });
             }
         } catch (error) {
             toast.error("Erro de conexão", { id: loadingToast });

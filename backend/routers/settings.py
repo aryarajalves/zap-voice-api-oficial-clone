@@ -296,12 +296,67 @@ async def test_memory_webhook(
     if not req.url:
         raise HTTPException(status_code=400, detail="URL do webhook é obrigatória.")
 
+    # 1. Buscar o ID da conta Chatwoot e um contato real de forma dinâmica
+    from database import SessionLocal
+    from config_loader import get_setting
+    
+    db_session = SessionLocal()
+    chatwoot_account_id = None
+    real_phone = "5511999999999"
+    real_name = "João Silva"
+    
+    try:
+        # Obter CHATWOOT_ACCOUNT_ID do cliente
+        cw_acc_str = get_setting("CHATWOOT_ACCOUNT_ID", "", client_id=x_client_id)
+        if cw_acc_str:
+            try:
+                chatwoot_account_id = int(cw_acc_str)
+            except ValueError:
+                chatwoot_account_id = cw_acc_str
+                
+        # Obter um contato real
+        from models import WebhookLead
+        lead = db_session.query(WebhookLead).filter(WebhookLead.client_id == x_client_id).order_by(WebhookLead.id.desc()).first()
+        if lead:
+            real_phone = lead.phone
+            real_name = lead.name or f"Cliente_{real_phone}"
+        else:
+            from models import MessageStatus
+            msg = db_session.query(MessageStatus).filter(MessageStatus.phone_number != None).order_by(MessageStatus.id.desc()).first()
+            if msg:
+                real_phone = msg.phone_number
+                real_name = f"Cliente_{real_phone}"
+    except Exception as db_err:
+        print(f"Error fetching real values for test payload: {db_err}")
+    finally:
+        db_session.close()
+
+    # Fallback/Default conta_id se não configurado
+    resolved_conta_id = chatwoot_account_id if chatwoot_account_id is not None else x_client_id
+
     test_payload = {
-        "contact_name": "João Silva",
-        "contact_phone": "5511999999999",
+        "contact_name": real_name,
+        "contact_phone": real_phone,
+        "name": real_name,
+        "phone": real_phone,
+        "contact_id": 9999,
         "template_name": "template_teste",
         "template_content": "Esta é uma mensagem de teste do ZapVoice para validar sua memória IA.",
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        "Dono": "agente",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "client_id": x_client_id,
+        "conta_id": resolved_conta_id,
+        "account_id": resolved_conta_id,
+        "chatwoot_account_id": chatwoot_account_id,
+        "account": {
+            "id": resolved_conta_id,
+            "conta_id": resolved_conta_id
+        },
+        "conta": {
+            "id": resolved_conta_id
+        },
+        "trigger_id": 9999,
+        "node_id": "test_node_uuid"
     }
 
 

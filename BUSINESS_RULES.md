@@ -13,6 +13,7 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 - **Slugs Customizados**: Cada integração possui uma URL única (ex: `/api/webhooks/venda-vip`).
 - **Mapeamento de Eventos**: O usuário define qual Funil ou Template dispara para cada status (Boleto, Aprovado, Reembolso).
 - **Filtro de Produtos**: Possibilidade de ignorar eventos de produtos que não estão na "White List".
+- **Webhook de Memória em Disparos em Massa**: Quando o Webhook de Memória do Agente está configurado, o sistema envia automaticamente para essa URL todas as mensagens de disparos em massa (Bulk) que são de fato entregues (status delivered/read) no WhatsApp do contato.
 
 ### 3. Regras de Cancelamento
 - Se um novo evento chega para o mesmo contato (ex: "Compra Aprovada"), o sistema deve ser capaz de cancelar execuções pendentes de eventos anteriores (ex: "Boleto Gerado").

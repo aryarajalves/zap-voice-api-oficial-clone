@@ -56,15 +56,37 @@ async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = No
         # Limpar o número do telefone (apenas dígitos)
         clean_phone = "".join(filter(str.isdigit, str(phone)))
         
+        chatwoot_account_id = None
+        cw_acc_str = get_setting("CHATWOOT_ACCOUNT_ID", "", client_id=client_id)
+        if cw_acc_str:
+            try:
+                chatwoot_account_id = int(cw_acc_str)
+            except ValueError:
+                chatwoot_account_id = cw_acc_str
+                
+        resolved_conta_id = chatwoot_account_id if chatwoot_account_id is not None else client_id
+
         payload = {
             "contact_phone": clean_phone,
             "contact_name": name or f"Cliente_{clean_phone}",
+            "phone": clean_phone,
+            "name": name or f"Cliente_{clean_phone}",
             "contact_id": internal_contact_id, # Vincular ao ID interno do sistema
             "template_name": template_name or "Mensagem",
             "template_content": content or "",
             "Dono": "agente", # Novo campo solicitado
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "client_id": client_id,
+            "conta_id": resolved_conta_id,
+            "account_id": resolved_conta_id,
+            "chatwoot_account_id": chatwoot_account_id,
+            "account": {
+                "id": resolved_conta_id,
+                "conta_id": resolved_conta_id
+            },
+            "conta": {
+                "id": resolved_conta_id
+            },
             "trigger_id": trigger_id,
             "node_id": node_id
         }

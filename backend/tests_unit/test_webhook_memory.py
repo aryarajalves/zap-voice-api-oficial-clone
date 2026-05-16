@@ -18,18 +18,19 @@ def anyio_backend():
     return 'asyncio'
 
 @pytest.mark.anyio
-@patch("services.ai_memory.httpx.AsyncClient")
+@patch("services.ai_memory.rabbitmq")
 @patch("services.ai_memory.get_setting")
-async def test_notify_agent_memory_webhook_success(mock_get_setting, mock_client_class):
+async def test_notify_agent_memory_webhook_success(mock_get_setting, mock_rabbitmq):
     # Setup
     test_url = "https://webhook.site/test"
-    mock_get_setting.return_value = test_url
-    
-    mock_client = MagicMock()
-    mock_client.post = AsyncMock()
-    mock_client.post.return_value.status_code = 200
-    mock_client.__aenter__.return_value = mock_client
-    mock_client_class.return_value = mock_client
+    def side_effect(key, default="", client_id=None):
+        if key == "AGENT_MEMORY_WEBHOOK_URL":
+            return test_url
+        if key == "CHATWOOT_ACCOUNT_ID":
+            return "1"
+        return default
+    mock_get_setting.side_effect = side_effect
+    mock_rabbitmq.publish = AsyncMock()
     
     # Execute
     await notify_agent_memory_webhook(
@@ -41,27 +42,32 @@ async def test_notify_agent_memory_webhook_success(mock_get_setting, mock_client
     )
     
     # Verify
-    mock_client.post.assert_called_once()
-    args, kwargs = mock_client.post.call_args
-    url = args[0]
-    payload = kwargs["json"]
+    mock_rabbitmq.publish.assert_called_once()
+    args, kwargs = mock_rabbitmq.publish.call_args
+    queue_name = args[0]
+    payload = args[1]
     
-    assert url == test_url
+    assert queue_name == "agent_memory_webhook_queue"
     assert payload["contact_name"] == "John Doe"
     assert payload["contact_phone"] == "5511999999999"
+    assert payload["name"] == "John Doe"
+    assert payload["phone"] == "5511999999999"
     assert payload["template_name"] == "welcome_msg"
     assert payload["template_content"] == "Welcome to ZapVoice!"
+    assert payload["conta_id"] == 1
+    assert payload["account_id"] == 1
+    assert payload["chatwoot_account_id"] == 1
+    assert payload["account"]["id"] == 1
+    assert payload["conta"]["id"] == 1
     assert "timestamp" in payload
 
 @pytest.mark.anyio
-@patch("services.ai_memory.httpx.AsyncClient")
+@patch("services.ai_memory.rabbitmq")
 @patch("services.ai_memory.get_setting")
-async def test_notify_agent_memory_webhook_no_url(mock_get_setting, mock_client_class):
+async def test_notify_agent_memory_webhook_no_url(mock_get_setting, mock_rabbitmq):
     # Setup
     mock_get_setting.return_value = ""
-    mock_client = MagicMock()
-    mock_client.post = AsyncMock() # Need to define post even if not called
-    mock_client_class.return_value = mock_client
+    mock_rabbitmq.publish = AsyncMock()
     
     # Execute
     await notify_agent_memory_webhook(
@@ -72,19 +78,15 @@ async def test_notify_agent_memory_webhook_no_url(mock_get_setting, mock_client_
     )
     
     # Verify
-    mock_client.post.assert_not_called()
+    mock_rabbitmq.publish.assert_not_called()
 
 @pytest.mark.anyio
-@patch("services.ai_memory.httpx.AsyncClient")
+@patch("services.ai_memory.rabbitmq")
 @patch("services.ai_memory.get_setting")
-async def test_notify_agent_memory_webhook_error_handling(mock_get_setting, mock_client_class):
+async def test_notify_agent_memory_webhook_error_handling(mock_get_setting, mock_rabbitmq):
     # Setup
     mock_get_setting.return_value = "https://error-url.com"
-    
-    mock_client = MagicMock()
-    mock_client.post = AsyncMock(side_effect=Exception("Connection Failed"))
-    mock_client.__aenter__.return_value = mock_client
-    mock_client_class.return_value = mock_client
+    mock_rabbitmq.publish = AsyncMock(side_effect=Exception("RabbitMQ Failed"))
     
     # Execute (Should not raise exception)
     await notify_agent_memory_webhook(
@@ -94,4 +96,5 @@ async def test_notify_agent_memory_webhook_error_handling(mock_get_setting, mock
     )
     
     # Verify
-    mock_client.post.assert_called_once()
+    mock_rabbitmq.publish.assert_called_once()
+

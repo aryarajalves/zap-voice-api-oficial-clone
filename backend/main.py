@@ -49,14 +49,14 @@ load_dotenv()
 
 app = FastAPI(
     title="ZapVoice API Oficial",
-    version="3.5.3",
+    version="3.5.6",
     description="""
-## 🚀 ZapVoice API v3.5.3
+## 🚀 ZapVoice API v3.5.6
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
 ### Funcionalidades
-* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.5.1** do **ZapVoice**!
+* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.5.6** do **ZapVoice**!
 * **Agendamento Inteligente:** Otimização de filas e prevenção de bloqueios.
 
 ### Autenticação
@@ -464,7 +464,7 @@ async def root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "3.5.3",
+        "version": "3.5.6",
         "mode": "production"
     }
 

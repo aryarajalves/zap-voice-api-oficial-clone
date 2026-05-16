@@ -85,16 +85,31 @@ async def handle_whatsapp_event(data: dict):
                                 message_record.status = status
                                 message_record.updated_at = datetime.now(timezone.utc)
                                 
+                                trigger_delivered = False
                                 if status == 'delivered' and not message_record.delivered_counted:
                                     message_record.delivered_counted = True
                                     db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
+                                    trigger_delivered = True
                                 
                                 if status == 'read' and not message_record.read_counted:
                                     message_record.read_counted = True
                                     if not message_record.delivered_counted:
                                         message_record.delivered_counted = True
                                         db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
+                                        trigger_delivered = True
                                     db.execute(text("UPDATE scheduled_triggers SET total_read = COALESCE(total_read, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
+
+                                if trigger_delivered and trigger.is_bulk:
+                                    from services.ai_memory import notify_agent_memory_webhook
+                                    asyncio.create_task(notify_agent_memory_webhook(
+                                        client_id=trigger.client_id,
+                                        phone=message_record.phone_number,
+                                        name=trigger.contact_name or message_record.phone_number,
+                                        template_name=message_record.template_name or trigger.template_name or "Mensagem Bulk",
+                                        content=message_record.content or "",
+                                        trigger_id=trigger.id,
+                                        internal_contact_id=message_record.id
+                                    ))
 
                                 db.commit()
                                 logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id})")
