@@ -15,20 +15,9 @@ const ConfigurationStep = ({
     templateParams,
     handleParamChange,
     openExpansion,
-    sendPrivateMessage,
-    setSendPrivateMessage,
-    cloneToPrivateNote,
     chatwootLabels,
     selectedChatwootLabels,
     setSelectedChatwootLabels,
-    privateMessageText,
-    setPrivateMessageText,
-    privateMessageDelay,
-    setPrivateMessageDelay,
-    privateMessageDelayUnit,
-    setPrivateMessageDelayUnit,
-    privateMessageConcurrency,
-    setPrivateMessageConcurrency,
     setStep
 }) => {
     return (
@@ -62,21 +51,9 @@ const ConfigurationStep = ({
             {/* Automation Column */}
             <div className="space-y-10">
                 <AutomationSection 
-                    sendPrivateMessage={sendPrivateMessage}
-                    setSendPrivateMessage={setSendPrivateMessage}
-                    cloneToPrivateNote={cloneToPrivateNote}
                     chatwootLabels={chatwootLabels}
                     selectedChatwootLabels={selectedChatwootLabels}
                     setSelectedChatwootLabels={setSelectedChatwootLabels}
-                    privateMessageText={privateMessageText}
-                    setPrivateMessageText={setPrivateMessageText}
-                    openExpansion={openExpansion}
-                    privateMessageDelay={privateMessageDelay}
-                    setPrivateMessageDelay={setPrivateMessageDelay}
-                    privateMessageDelayUnit={privateMessageDelayUnit}
-                    setPrivateMessageDelayUnit={setPrivateMessageDelayUnit}
-                    privateMessageConcurrency={privateMessageConcurrency}
-                    setPrivateMessageConcurrency={setPrivateMessageConcurrency}
                 />
 
                 <button 

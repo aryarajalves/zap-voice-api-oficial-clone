@@ -99,25 +99,29 @@ async def handle_template_node(db, trigger, node, chatwoot, conversation_id, con
                         return "abort"
                     if not getattr(trigger, 'is_interaction', False): await asyncio.sleep(10)
 
-                new_ms = models.MessageStatus(
-                    trigger_id=trigger.id, message_id=wamid, phone_number=contact_phone,
-                    status='sent', message_type='TEMPLATE', content=f"[Template: {template_name}]",
-                    publish_external_event=data.get("publishExternalEvent", False)
-                )
-                if data.get("sendPrivateMessage") and p_msg:
-                    final_p_msg = apply_vars_func(p_msg)
-                    final_p_msg += "\n\n📢 [Sessão 24h] Enviado via Mensagem Direta (Grátis)." if fallback_sent else f"\n\n📢 Enviado via Template: {template_name}"
-                    new_ms.pending_private_note = final_p_msg
-                
-                db.add(new_ms)
-                trigger.total_sent = (trigger.total_sent or 0) + 1
-                db.commit()
-
                 template_body = None
                 try:
                     tpl_cache = db.query(models.WhatsAppTemplateCache).filter(models.WhatsAppTemplateCache.name == template_name, models.WhatsAppTemplateCache.client_id == trigger.client_id).first()
                     if tpl_cache: template_body = tpl_cache.body
                 except: pass
+
+                content_val = template_body or f"[Template: {template_name}]"
+                new_ms = models.MessageStatus(
+                    trigger_id=trigger.id, message_id=wamid, phone_number=contact_phone,
+                    status='sent', message_type='TEMPLATE', content=content_val,
+                    publish_external_event=data.get("publishExternalEvent", False)
+                )
+                # Sempre envia o conteúdo do template como nota privada para o Chatwoot automaticamente
+                final_p_msg = content_val
+                if fallback_sent:
+                    final_p_msg += "\n\n📢 [Sessão 24h] Enviado via Mensagem Direta (Grátis)."
+                else:
+                    final_p_msg += f"\n\n📢 Enviado via Template: {template_name}"
+                new_ms.pending_private_note = final_p_msg
+                
+                db.add(new_ms)
+                trigger.total_sent = (trigger.total_sent or 0) + 1
+                db.commit()
                     
                 await publish_node_external_event(db, trigger, data, template_body or f"[Template: {template_name}]", contact_phone, node_id=current_node_id, event_type="funnel_template_sent")
                 log_node_execution(db, trigger, current_node_id, "completed", f"Template: {template_name}", {"template_name": template_name, "content": template_body or f"Template: {template_name}"})

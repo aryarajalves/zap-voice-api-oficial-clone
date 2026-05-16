@@ -37,13 +37,48 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
     """
     Processa ações pós-entrega com um pequeno delay para garantir que o Chatwoot já sincronizou.
     """
-    await asyncio.sleep(2)
+    # Delay de 7 segundos para dar tempo do webhook do Chatwoot criar/vincular a conversa
+    await asyncio.sleep(7)
     try:
         db = SessionLocal()
         trigger = db.query(models.ScheduledTrigger).get(trigger_id)
         if not trigger:
+            logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] Trigger {trigger_id} não encontrado.")
             db.close()
             return
+            
+        message_record = db.query(models.MessageStatus).get(message_id)
+        if not message_record:
+            logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] MessageStatus {message_id} não encontrado.")
+            db.close()
+            return
+
+        note_text = message_record.pending_private_note
+        if note_text and not message_record.private_note_posted:
+            logger.info(f"📝 [DEFERRED_POST_DELIVERY] Postando nota privada pendente para {phone} (Trigger {trigger_id})")
+            
+            disc = await discover_or_create_chatwoot_conversation(
+                client_id=trigger.client_id,
+                phone=phone,
+                name=trigger.contact_name or phone
+            )
+            
+            if disc and disc.get("conversation_id"):
+                conversation_id = disc["conversation_id"]
+                cw = ChatwootClient(client_id=trigger.client_id)
+                
+                try:
+                    await cw.send_private_note(conversation_id, note_text)
+                    message_record.private_note_posted = True
+                    message_record.chatwoot_conversation_id = conversation_id
+                    message_record.chatwoot_account_id = disc.get("account_id")
+                    db.commit()
+                    logger.info(f"✅ [DEFERRED_POST_DELIVERY] Nota privada postada com sucesso na conversa {conversation_id}")
+                except Exception as cw_err:
+                    logger.error(f"❌ [DEFERRED_POST_DELIVERY] Erro ao enviar nota privada para a conversa {conversation_id}: {cw_err}")
+            else:
+                logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] Não foi possível encontrar/criar conversa para {phone}")
+                
         db.close()
     except Exception as e:
         logger.error(f"❌ Erro no processamento adiado (Trigger {trigger_id}): {e}")
@@ -114,7 +149,7 @@ async def handle_whatsapp_event(data: dict):
                                 db.commit()
                                 logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id})")
                                 
-                                if status in ['delivered', 'read']:
+                                if status == 'delivered':
                                     asyncio.create_task(handle_deferred_post_delivery(trigger.id, message_record.id, status, msg_id, recipient))
 
                 # 2. PROCESS INBOUND MESSAGES (INTERACTION)

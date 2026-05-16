@@ -28,25 +28,7 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
         if (key.startsWith('param_')) {
             const paramKey = key.replace('param_', '');
             handleParamChange(paramKey, value);
-        } else if (key === 'privateMessageText') {
-            bulk.setPrivateMessageText(value);
         }
-    };
-
-    const cloneToPrivateNote = () => {
-        const t = bulk.templates.find(x => x.name === bulk.selectedTemplate);
-        if (!t) return toast.error("Selecione um template primeiro");
-        const body = t.components.find(c => c.type === 'BODY')?.text || "";
-        let finalBody = body;
-        Object.entries(bulk.templateParams).forEach(([k, v]) => {
-            if (k.startsWith('BODY_')) {
-                const idx = parseInt(k.split('_')[1]) + 1;
-                finalBody = finalBody.replace(`{{${idx}}}`, v || `{{${idx}}}`);
-            }
-        });
-        bulk.setPrivateMessageText(finalBody);
-        bulk.setSendPrivateMessage(true);
-        toast.success("Template clonado para nota privada!");
     };
 
     return (
@@ -106,7 +88,6 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
                     selectedTemplateObj={selectedTemplateObj}
                     handleParamChange={handleParamChange}
                     openExpansion={(title, key, value) => bulk.setExpansionModal({ isOpen: true, title, key, value })}
-                    cloneToPrivateNote={cloneToPrivateNote}
                 />
             ) : (
                 <ExecutionStep 

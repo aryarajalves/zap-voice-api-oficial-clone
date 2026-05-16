@@ -201,8 +201,8 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                         status='sent', message_type=msg_type, content=content, template_name=template_name,
                         **meta["vars"]
                     )
-                    if p_message:
-                        msg_status.pending_private_note = render_template_body(p_message, meta["components"] or [], contact_name=meta["name"], **meta["vars"])
+                    # Sempre envia o conteúdo da mensagem como nota privada para o Chatwoot automaticamente
+                    msg_status.pending_private_note = content
                     
                     db_msg.add(msg_status)
                     update_trigger_stats(db_msg, trigger_id, sent=1)

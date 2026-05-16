@@ -62,7 +62,7 @@ const ExecutionStep = ({
                 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-4 relative z-10">
                     <h2 className="text-2xl font-black text-white flex items-center gap-4">
-                        <span className="p-3 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20 shadow-xl shadow-blue-500/10">03</span>
+                        <span className="p-3 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20 shadow-xl shadow-blue-500/10">02</span>
                         Base de Contatos
                     </h2>
                     <div className="flex items-center gap-4">
@@ -114,7 +114,7 @@ const ExecutionStep = ({
                     <div className="absolute -top-12 -right-12 w-32 h-32 bg-emerald-500/5 blur-3xl rounded-full"></div>
                     
                     <h2 className="text-2xl font-black text-white flex items-center gap-4 mb-10 relative z-10">
-                        <span className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 shadow-xl shadow-emerald-500/10">04</span>
+                        <span className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 shadow-xl shadow-emerald-500/10">03</span>
                         Configuração de Envio
                     </h2>
 
