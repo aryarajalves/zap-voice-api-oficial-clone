@@ -332,7 +332,8 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             payload.get("net_value") or payload.get("total_amount") or 
             payload.get("price") or payload.get("valor") or
             get_val(["fiscal", "total_value"]) or
-            get_val(["data", "amount"]) or get_val(["payment", "amount"])
+            get_val(["data", "amount"]) or get_val(["payment", "amount"]) or
+            get_val(["Commissions", "charge_amount"])
         )
         if val: result['price'] = val
 
@@ -679,7 +680,12 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         components = extract_mapped_variables(payload, variables, mapping.variables_mapping or {})
         
         # Nota privada (Tratando legado "true"/"false" do checkbox)
-        private_msg_text = mapping.private_note if mapping.private_note and mapping.private_note not in ["true", "false"] else None
+        private_msg_text = None
+        if mapping.private_note:
+            if mapping.private_note == "true":
+                private_msg_text = "true"
+            elif mapping.private_note != "false":
+                private_msg_text = mapping.private_note
         
         # Calcula delay
         delay_min = mapping.delay_minutes or 0

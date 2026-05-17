@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from routers.webhooks_public import receive_external_webhook
+from routers.webhooks_public import handle_external_webhook as receive_external_webhook
 import uuid
 import models
 
@@ -31,21 +31,17 @@ async def test_receive_external_webhook_ignored_when_mapping_inactive(mock_db, m
     
     # ── DB CHAIN TERMINAL CALLS ───────────────────────────────────────────────
     # 1. Integration lookup
-    # 2. Lead lookup (in upsert_webhook_lead)
+    # 2. Mapping lookup (event_type)
+    # 3. Mapping lookup (outros)
     mock_db.query.return_value.filter.return_value.first.side_effect = [
-        mock_integration, # Integration lookup
-        None,             # Lead lookup
-    ]
-    
-    # ── MAPPINGS CONFIG (EMPTY because of is_active == True filter) ───────────
-    # 1. Mappings for event (will be filtered by is_active=True in the query)
-    mock_db.query.return_value.filter.return_value.all.side_effect = [
-        [], # No active mappings found
-        []  # Suppressor check
+        mock_integration,
+        None,
+        None
     ]
     
     # ── MOCK REQUEST ──────────────────────────────────────────────────────────
     mock_request = MagicMock()
+    mock_request.body = AsyncMock(return_value=b'{"event": "PURCHASE_APPROVED"}')
     mock_request.json = AsyncMock(return_value={
         "event": "PURCHASE_APPROVED",
         "data": {
@@ -63,9 +59,9 @@ async def test_receive_external_webhook_ignored_when_mapping_inactive(mock_db, m
         db=mock_db
     )
     
-    # Should be ignored because no ACTIVE mapping was found
-    assert response["status"] == "ignored"
-    assert "no_mapping_for_event" in response["reason"]
+    # Should be skipped because no ACTIVE mapping was found
+    assert response["status"] == "skipped"
+    assert "no_mapping_found" in response["reason"]
     assert mock_rabbitmq.publish.call_count == 0
 
 @pytest.mark.anyio
@@ -89,26 +85,22 @@ async def test_receive_external_webhook_active_mapping_works(mock_db, mock_rabbi
         mock_active_mapping.cancel_events = None
         mock_active_mapping.private_note = None
         mock_active_mapping.template_id = None
+        mock_active_mapping.manychat_active = False
+        mock_active_mapping.chatwoot_label = []
         
         # 1. Integration lookup
         # 2. Blocked check
         # 3. Superior trigger check
         # 4. Template cache lookup
+        # 1. Integration lookup
+        # 2. Mapping lookup
         mock_db.query.return_value.filter.return_value.first.side_effect = [
-            mock_integration, # Integration lookup (line 641)
-            None,             # Blocked check (line 801)
-            None,             # Superior trigger check (line 852)
-            None              # Template cache lookup (line 889)
-        ]
-        
-        # 1. Mappings for event
-        # 2. All integration mappings for suppression check
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
-            [mock_active_mapping], # Mappings for event (line 758)
-            [mock_active_mapping]  # Suppressor check (line 839)
+            mock_integration,
+            mock_active_mapping
         ]
         
         mock_request = MagicMock()
+        mock_request.body = AsyncMock(return_value=b'{"event": "PURCHASE_APPROVED"}')
         mock_request.json = AsyncMock(return_value={
             "event": "PURCHASE_APPROVED",
             "data": {
@@ -118,13 +110,13 @@ async def test_receive_external_webhook_active_mapping_works(mock_db, mock_rabbi
         
         bg_tasks = MagicMock()
         
-        response = await receive_external_webhook(
-            integration_uuid=str(integration_id),
-            request=mock_request,
-            background_tasks=bg_tasks,
-            db=mock_db
-        )
+        with patch("routers.webhooks_public.process_webhook_automation") as mock_process:
+            response = await receive_external_webhook(
+                integration_uuid=str(integration_id),
+                request=mock_request,
+                background_tasks=bg_tasks,
+                db=mock_db
+            )
         
         assert response["status"] == "success"
-        assert mock_rabbitmq.publish.call_count == 1
-        assert mock_upsert.call_count == 1
+        assert bg_tasks.add_task.call_count == 2

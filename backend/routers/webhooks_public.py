@@ -114,14 +114,16 @@ async def handle_external_webhook(
         # First priority: Specific event type mapping
         mapping = db.query(models.WebhookEventMapping).filter(
             models.WebhookEventMapping.integration_id == integration.id,
-            models.WebhookEventMapping.event_type == event_type
+            models.WebhookEventMapping.event_type == event_type,
+            models.WebhookEventMapping.is_active == True
         ).first()
         
         # Second priority: 'outros' (catch-all) mapping if no specific match
         if not mapping and event_type != "outros":
             mapping = db.query(models.WebhookEventMapping).filter(
                 models.WebhookEventMapping.integration_id == integration.id,
-                models.WebhookEventMapping.event_type == "outros"
+                models.WebhookEventMapping.event_type == "outros",
+                models.WebhookEventMapping.is_active == True
             ).first()
             
         if not mapping:

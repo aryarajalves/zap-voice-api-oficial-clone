@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from routers.webhooks_public import parse_webhook_payload, extract_mapped_variables, receive_external_webhook
+from services.webhooks import parse_webhook_payload, extract_mapped_variables
+from routers.webhooks_public import handle_external_webhook as receive_external_webhook
 import uuid
 
 @pytest.fixture
@@ -108,30 +109,21 @@ async def test_receive_external_webhook_success(mock_db, mock_rabbitmq):
     mock_mapping.cancel_events = None
     mock_mapping.private_note = None
     mock_mapping.template_id = None
+    mock_mapping.manychat_active = False
+    mock_mapping.chatwoot_label = []
     
     # ── DB CHAIN TERMINAL CALLS ───────────────────────────────────────────────
     # .first() calls in order:
-    # 1. Integration lookup (Step 481)
-    # 2. Blocked check (Step 576)
-    # 3. Superior trigger check (Step 630)
-    # 4. Template cache lookup (Step 660)
+    # 1. Integration lookup
+    # 2. Mapping lookup
     mock_db.query.return_value.filter.return_value.first.side_effect = [
-        mock_integration, # Step 481
-        None,             # Step 576
-        None,             # Step 630
-        None              # Step 660
-    ]
-    
-    # .all() calls in order:
-    # 1. Mappings for event (Step 552)
-    # 2. All integration mappings for suppression check (Step 617)
-    mock_db.query.return_value.filter.return_value.all.side_effect = [
-        [mock_mapping], # Step 552
-        [mock_mapping]  # Step 617
+        mock_integration,
+        mock_mapping
     ]
     
     # ── MOCK REQUEST ──────────────────────────────────────────────────────────
     mock_request = MagicMock()
+    mock_request.body = AsyncMock(return_value=b'{"event": "PURCHASE_APPROVED"}')
     mock_request.json = AsyncMock(return_value={
         "event": "PURCHASE_APPROVED",
         "data": {
@@ -142,12 +134,14 @@ async def test_receive_external_webhook_success(mock_db, mock_rabbitmq):
     bg_tasks = MagicMock()
     
     # Call endpoint directly
-    response = await receive_external_webhook(
-        integration_uuid=str(integration_id),
-        request=mock_request,
-        background_tasks=bg_tasks,
-        db=mock_db
-    )
+    with patch("routers.webhooks_public.process_webhook_automation") as mock_process, \
+         patch("routers.webhooks_public.upsert_webhook_lead") as mock_upsert:
+        response = await receive_external_webhook(
+            integration_uuid=str(integration_id),
+            request=mock_request,
+            background_tasks=bg_tasks,
+            db=mock_db
+        )
     
     assert response["status"] == "success"
-    assert mock_rabbitmq.publish.call_count == 1
+    assert bg_tasks.add_task.call_count == 2
