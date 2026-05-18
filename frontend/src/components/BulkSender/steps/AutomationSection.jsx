@@ -13,7 +13,6 @@ const AutomationSection = ({
 
             <div className="flex items-center gap-4 mb-10 relative z-10">
                 <h2 className="text-2xl font-black text-white flex items-center gap-4">
-                    <span className="p-3 bg-orange-500/10 text-orange-400 rounded-2xl border border-orange-500/20 shadow-xl shadow-orange-500/10">02</span>
                     Fluxo Automático Pós-Envio
                 </h2>
             </div>
