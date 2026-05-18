@@ -221,6 +221,41 @@ async def handle_whatsapp_event(data: dict):
                         
                         target_cid = candidate_cids[0] if candidate_cids else 1
                         
+                        # --- NOVO: Sincronização em tempo real do ContactWindow via Meta ---
+                        cw = ChatwootClient(client_id=target_cid)
+                        resolved_convo_id = None
+                        try:
+                            # Sincroniza conversa para garantir que ela exista no Chatwoot
+                            conv_res = await cw.ensure_conversation(from_phone, contacts_map.get(raw_from, "Contato"))
+                            if isinstance(conv_res, dict):
+                                resolved_convo_id = conv_res.get("id")
+                            elif isinstance(conv_res, int) or (isinstance(conv_res, str) and conv_res.isdigit()):
+                                resolved_convo_id = int(conv_res)
+                        except Exception as e_conv:
+                            logger.error(f"⚠️ [WINDOW-META] Erro ao sincronizar conversa com Chatwoot: {e_conv}")
+
+                        now_utc = datetime.now(timezone.utc)
+                        window = db.query(models.ContactWindow).filter(
+                            models.ContactWindow.phone == from_phone,
+                            models.ContactWindow.client_id == target_cid
+                        ).first()
+                        
+                        if window:
+                            window.last_interaction_at = now_utc
+                            if resolved_convo_id:
+                                window.chatwoot_conversation_id = resolved_convo_id
+                            logger.info(f"🕒 [WINDOW-META] Janela existente atualizada para {from_phone} (Client: {target_cid}, Convo: {resolved_convo_id})")
+                        else:
+                            new_window = models.ContactWindow(
+                                client_id=target_cid,
+                                phone=from_phone,
+                                last_interaction_at=now_utc,
+                                chatwoot_conversation_id=resolved_convo_id
+                            )
+                            db.add(new_window)
+                            logger.info(f"🆕 [WINDOW-META] Nova janela criada para {from_phone} (Client: {target_cid}, Convo: {resolved_convo_id})")
+                        db.commit()
+                        
                         # --- NOVO: Rastreamento de Interação em Mensagens Enviadas ---
                         context = msg.get("context", {})
                         replied_msg_id = context.get("id")

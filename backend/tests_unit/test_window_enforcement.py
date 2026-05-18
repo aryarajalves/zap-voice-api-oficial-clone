@@ -69,7 +69,11 @@ class MockSession:
     def flush(self): pass
     def close(self): pass
     def rollback(self): self.rolled_back = True
-    def execute(self, *args, **kwargs): pass
+    def expire_all(self): pass
+    def execute(self, *args, **kwargs):
+        mock_res = MagicMock()
+        mock_res.scalar.return_value = True
+        return mock_res
 
 @pytest.fixture
 def mock_db():
@@ -120,8 +124,8 @@ async def test_worker_syncs_window_id_after_resolution(mock_db):
         }]
     }
 
-    with patch("worker.SessionLocal", return_value=mock_db):
-        with patch("worker.ChatwootClient") as MockCW:
+    with patch("core.worker.handlers.whatsapp.SessionLocal", return_value=mock_db):
+        with patch("core.worker.handlers.whatsapp.ChatwootClient") as MockCW:
             cw_inst = MockCW.return_value
             cw_inst.get_default_whatsapp_inbox = AsyncMock(return_value=1)
             cw_inst.ensure_conversation = AsyncMock(return_value=19)
