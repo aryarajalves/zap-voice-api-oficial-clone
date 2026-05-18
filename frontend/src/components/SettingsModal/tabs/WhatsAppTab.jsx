@@ -250,42 +250,6 @@ const WhatsAppTab = ({
                                             disabled={isUpdatingWaLogo}
                                         />
                                     </label>
-
-                                    {whatsappProfile && (
-                                        <div className="mt-5 space-y-4">
-                                            {/* Limite de Mensagens */}
-                                            <div className="p-3 bg-gray-50/50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800/50">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div className={`w-2 h-2 rounded-full animate-pulse ${
-                                                            whatsappProfile.quality_rating === 'GREEN' ? 'bg-emerald-500' :
-                                                            whatsappProfile.quality_rating === 'YELLOW' ? 'bg-amber-500' :
-                                                            whatsappProfile.quality_rating === 'RED' ? 'bg-red-500' : 'bg-gray-400'
-                                                        }`}></div>
-                                                        <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400">Limite de Mensagens</span>
-                                                    </div>
-                                                    <span className="text-[11px] font-mono font-bold text-gray-700 dark:text-gray-300">
-                                                        {whatsappProfile.current_usage || 0} / {tierMapping[whatsappProfile.messaging_limit_tier] || '250'}
-                                                    </span>
-                                                </div>
-                                                <div className="w-full h-1.5 bg-gray-200 dark:bg-[#1f2937]/80 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className={`h-full transition-all duration-1000 ease-out rounded-full ${
-                                                            ((whatsappProfile.current_usage || 0) / (parseInt(tierMapping[whatsappProfile.messaging_limit_tier]?.replace('.', '') || 250) || 1)) > 0.9 
-                                                            ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 
-                                                            ((whatsappProfile.current_usage || 0) / (parseInt(tierMapping[whatsappProfile.messaging_limit_tier]?.replace('.', '') || 250) || 1)) > 0.7
-                                                            ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                                                        }`}
-                                                        style={{ width: `${Math.min(100, ((whatsappProfile.current_usage || 0) / (parseInt(tierMapping[whatsappProfile.messaging_limit_tier]?.replace('.', '') || 250) || 1)) * 100)}%` }}
-                                                    ></div>
-                                                </div>
-                                                <div className="flex justify-between mt-1.5">
-                                                    <span className="text-[9px] text-gray-400 dark:text-gray-500">Uso diário (hoje)</span>
-                                                    <span className="text-[9px] text-gray-400 dark:text-gray-500 italic">Meta API v25.0</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>

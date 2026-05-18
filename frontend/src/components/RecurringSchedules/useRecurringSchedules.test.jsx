@@ -101,4 +101,32 @@ describe('useRecurringSchedules Hook', () => {
         );
         expect(result.current.selectedSchedule).toBeNull();
     });
+
+    it('inicializa novos estados de mensagens e templates corretamente', () => {
+        const { result } = renderHook(() => useRecurringSchedules(mockClient));
+        expect(result.current.viewingMessageSchedule).toBeNull();
+        expect(result.current.templates).toEqual([]);
+        expect(result.current.funnels).toEqual([]);
+        expect(result.current.isUpdatingMessage).toBe(false);
+    });
+
+    it('atualiza mensagem de agendamento com sucesso via handleUpdateMessage', async () => {
+        fetchWithAuth.mockResolvedValue({ ok: true });
+        const { result } = renderHook(() => useRecurringSchedules(mockClient));
+
+        let success;
+        await act(async () => {
+            success = await result.current.handleUpdateMessage(1, { direct_message: 'Nova mensagem de teste' });
+        });
+
+        expect(success).toBe(true);
+        expect(fetchWithAuth).toHaveBeenCalledWith(
+            expect.stringContaining('/schedules/recurring/1'),
+            expect.objectContaining({
+                method: 'PATCH',
+                body: JSON.stringify({ direct_message: 'Nova mensagem de teste' })
+            }),
+            1
+        );
+    });
 });

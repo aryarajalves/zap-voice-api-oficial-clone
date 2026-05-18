@@ -34,7 +34,15 @@ describe('RecurringSchedules Component', () => {
         handleUpdate: vi.fn(),
         fetchContacts: vi.fn(),
         openEdit: vi.fn(),
-        handleManualTrigger: vi.fn()
+        handleManualTrigger: vi.fn(),
+        
+        // Novos mocks
+        viewingMessageSchedule: null,
+        setViewingMessageSchedule: vi.fn(),
+        templates: [],
+        funnels: [],
+        isUpdatingMessage: false,
+        handleUpdateMessage: vi.fn()
     };
 
     beforeEach(() => {

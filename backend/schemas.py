@@ -198,6 +198,12 @@ class RecurringTriggerUpdate(BaseModel):
     is_active: Optional[bool] = None
     direct_message: Optional[str] = None
     direct_message_params: Optional[List[dict]] = None
+    
+    # Novos campos para suportar a troca de template/funnel
+    template_name: Optional[str] = None
+    template_language: Optional[str] = None
+    template_components: Optional[List[dict]] = None
+    funnel_id: Optional[int] = None
 
 class RecurringTriggerCreate(RecurringTriggerBase):
     pass

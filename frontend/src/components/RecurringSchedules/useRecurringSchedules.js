@@ -12,6 +12,14 @@ export function useRecurringSchedules(activeClient) {
     const [viewingContacts, setViewingContacts] = useState(null);
     const [selectedSchedule, setSelectedSchedule] = useState(null);
     
+    // Novo estado para visualização/edição de mensagem
+    const [viewingMessageSchedule, setViewingMessageSchedule] = useState(null);
+    const [templates, setTemplates] = useState([]);
+    const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+    const [funnels, setFunnels] = useState([]);
+    const [isLoadingFunnels, setIsLoadingFunnels] = useState(false);
+    const [isUpdatingMessage, setIsUpdatingMessage] = useState(false);
+    
     // Edit States
     const [editFreq, setEditFreq] = useState('weekly');
     const [editDays, setEditDays] = useState([]); // [{day, time}]
@@ -36,9 +44,43 @@ export function useRecurringSchedules(activeClient) {
         }
     }, [activeClient?.id]);
 
+    const fetchTemplates = useCallback(async () => {
+        if (!activeClient?.id) return;
+        setIsLoadingTemplates(true);
+        try {
+            const response = await fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id);
+            if (response.ok) {
+                const data = await response.json();
+                setTemplates(data || []);
+            }
+        } catch (err) {
+            console.error("Erro ao buscar templates:", err);
+        } finally {
+            setIsLoadingTemplates(false);
+        }
+    }, [activeClient?.id]);
+
+    const fetchFunnels = useCallback(async () => {
+        if (!activeClient?.id) return;
+        setIsLoadingFunnels(true);
+        try {
+            const response = await fetchWithAuth(`${API_URL}/funnels`, {}, activeClient.id);
+            if (response.ok) {
+                const data = await response.json();
+                setFunnels(data || []);
+            }
+        } catch (err) {
+            console.error("Erro ao buscar funis:", err);
+        } finally {
+            setIsLoadingFunnels(false);
+        }
+    }, [activeClient?.id]);
+
     useEffect(() => {
         fetchSchedules();
-    }, [fetchSchedules]);
+        fetchTemplates();
+        fetchFunnels();
+    }, [fetchSchedules, fetchTemplates, fetchFunnels]);
 
     const handleToggleStatus = async (schedule) => {
         try {
@@ -106,6 +148,33 @@ export function useRecurringSchedules(activeClient) {
             toast.error('Erro ao atualizar agendamento');
         } finally {
             setIsEditing(false);
+        }
+    };
+
+    const handleUpdateMessage = async (id, payload) => {
+        setIsUpdatingMessage(true);
+        try {
+            const response = await fetchWithAuth(`${API_URL}/schedules/recurring/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }, activeClient.id);
+
+            if (response.ok) {
+                toast.success('Mensagem do agendamento atualizada!');
+                setViewingMessageSchedule(null);
+                fetchSchedules();
+                return true;
+            } else {
+                const err = await response.json();
+                toast.error(err.detail || 'Erro ao atualizar mensagem do agendamento');
+                return false;
+            }
+        } catch (err) {
+            toast.error('Erro de conexão ao salvar alterações');
+            return false;
+        } finally {
+            setIsUpdatingMessage(false);
         }
     };
 
@@ -188,6 +257,16 @@ export function useRecurringSchedules(activeClient) {
         handleUpdate,
         fetchContacts,
         openEdit,
-        handleManualTrigger
+        handleManualTrigger,
+        
+        // Novos retornos
+        viewingMessageSchedule,
+        setViewingMessageSchedule,
+        templates,
+        isLoadingTemplates,
+        funnels,
+        isLoadingFunnels,
+        isUpdatingMessage,
+        handleUpdateMessage
     };
 }

@@ -1,7 +1,7 @@
 import React from 'react';
-import { FiClock, FiCalendar, FiUsers, FiEdit2, FiXCircle, FiPlay, FiTrash2, FiZap, FiFilter } from 'react-icons/fi';
+import { FiClock, FiCalendar, FiUsers, FiEdit2, FiXCircle, FiPlay, FiTrash2, FiZap, FiFilter, FiEye } from 'react-icons/fi';
 
-export function ScheduleCard({ schedule, onTrigger, onFetchContacts, onOpenEdit, onToggleStatus, onConfirmDelete, isTriggering }) {
+export function ScheduleCard({ schedule, onTrigger, onFetchContacts, onOpenEdit, onToggleStatus, onConfirmDelete, onViewMessage, isTriggering }) {
     const getScheduleSummary = (schedule) => {
         const { frequency, days_of_week, day_of_month, scheduled_time } = schedule;
         const isWeekly = frequency === 'weekly';
@@ -48,6 +48,13 @@ export function ScheduleCard({ schedule, onTrigger, onFetchContacts, onOpenEdit,
                     </div>
                     <div className="flex flex-col gap-2 shrink-0">
                         <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => onViewMessage(schedule)}
+                                className="w-10 h-10 bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-white rounded-xl flex items-center justify-center transition-all active:scale-90 border border-purple-500/20 shadow-lg"
+                                title="Ver Conteúdo / Alterar Template"
+                            >
+                                <FiEye size={16} />
+                            </button>
                             <button 
                                 onClick={() => onTrigger(schedule)}
                                 className="w-10 h-10 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-white rounded-xl flex items-center justify-center transition-all active:scale-90 border border-amber-500/20 shadow-lg"

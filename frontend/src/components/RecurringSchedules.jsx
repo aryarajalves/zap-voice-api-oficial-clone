@@ -3,7 +3,7 @@ import { FiClock, FiRefreshCw } from 'react-icons/fi';
 import { useClient } from '../contexts/ClientContext';
 import { useRecurringSchedules } from './RecurringSchedules/useRecurringSchedules';
 import { ScheduleCard } from './RecurringSchedules/ScheduleCard';
-import { ViewContactsModal, ConfirmActionModal, EditScheduleModal } from './RecurringSchedules/Modals';
+import { ViewContactsModal, ConfirmActionModal, EditScheduleModal, ViewMessageModal } from './RecurringSchedules/Modals';
 
 export default function RecurringSchedules() {
     const { activeClient } = useClient();
@@ -31,7 +31,15 @@ export default function RecurringSchedules() {
         handleUpdate,
         fetchContacts,
         openEdit,
-        handleManualTrigger
+        handleManualTrigger,
+        
+        // Novos retornos do hook
+        viewingMessageSchedule,
+        setViewingMessageSchedule,
+        templates,
+        funnels,
+        isUpdatingMessage,
+        handleUpdateMessage
     } = useRecurringSchedules(activeClient);
 
     if (isLoading && schedules.length === 0) {
@@ -79,6 +87,7 @@ export default function RecurringSchedules() {
                                 onOpenEdit={openEdit}
                                 onToggleStatus={handleToggleStatus}
                                 onConfirmDelete={() => setSelectedSchedule({ ...schedule, type: 'delete' })}
+                                onViewMessage={setViewingMessageSchedule}
                                 isTriggering={isTriggering}
                             />
                         ))}
@@ -118,6 +127,15 @@ export default function RecurringSchedules() {
                 onCancel={() => setSelectedSchedule(null)}
                 onSave={handleUpdate}
                 isEditing={isEditing}
+            />
+
+            <ViewMessageModal 
+                viewingMessageSchedule={viewingMessageSchedule}
+                onClose={() => setViewingMessageSchedule(null)}
+                onSave={handleUpdateMessage}
+                templates={templates}
+                funnels={funnels}
+                isUpdating={isUpdatingMessage}
             />
         </>
     );
