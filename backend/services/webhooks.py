@@ -718,7 +718,9 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             private_message=private_msg_text,
             publish_external_event=mapping.publish_external_event,
             chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
-            is_free_message=False, # Decidido automaticamente pelo Worker via Smart Dispatch
+            is_free_message=getattr(mapping, 'send_as_free_message', False),
+            cost_per_unit=0.0 if getattr(mapping, 'send_as_free_message', False) else (getattr(mapping, 'cost_per_message', 0.0) or 0.35),
+            sent_as="FREE_MESSAGE" if getattr(mapping, 'send_as_free_message', False) else "TEMPLATE",
             event_type=history.event_type,
             integration_id=mapping.integration_id,
             funnel_id=funnel_id,

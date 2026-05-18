@@ -157,17 +157,17 @@ def backfill_dispatch_costs(
 
         if sent_as != 'TEMPLATE': continue
 
-        cost_per_msg = 0.0
+        cost_per_msg = None
         for msg in trigger.messages:
             if msg.meta_price_category and msg.meta_price_category in META_CATEGORY_PRICES_BRL:
                 cost_per_msg = META_CATEGORY_PRICES_BRL[msg.meta_price_category]
                 break
 
-        if cost_per_msg == 0.0 and trigger.event_type in mapping_costs:
-            cost_per_msg = mapping_costs[trigger.event_type]
-
-        if cost_per_msg == 0.0:
-            cost_per_msg = META_CATEGORY_PRICES_BRL["marketing"]
+        if cost_per_msg is None:
+            if trigger.event_type in mapping_costs:
+                cost_per_msg = mapping_costs[trigger.event_type]
+            else:
+                cost_per_msg = META_CATEGORY_PRICES_BRL["marketing"]
 
         new_total = round(cost_per_msg * (trigger.total_delivered or 1), 4)
         trigger.total_cost = new_total

@@ -49,7 +49,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         
         # Custo (Apenas se entregue ou lido)
         if ms.status in ['delivered', 'read'] or ms.is_interaction:
-            if ms.meta_price_brl:
+            if ms.meta_price_brl is not None:
                 total_cost += float(ms.meta_price_brl)
                 if ms.meta_price_brl > 0:
                     paid_templates += 1

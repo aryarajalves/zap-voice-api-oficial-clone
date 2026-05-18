@@ -121,10 +121,13 @@ async def handle_whatsapp_event(data: dict):
                                 message_record.updated_at = datetime.now(timezone.utc)
                                 
                                 trigger_delivered = False
+                                is_first_charge = False
+                                
                                 if status == 'delivered' and not message_record.delivered_counted:
                                     message_record.delivered_counted = True
                                     db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
                                     trigger_delivered = True
+                                    is_first_charge = True
                                 
                                 if status == 'read' and not message_record.read_counted:
                                     message_record.read_counted = True
@@ -132,7 +135,38 @@ async def handle_whatsapp_event(data: dict):
                                         message_record.delivered_counted = True
                                         db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
                                         trigger_delivered = True
+                                        is_first_charge = True
                                     db.execute(text("UPDATE scheduled_triggers SET total_read = COALESCE(total_read, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
+
+                                if is_first_charge:
+                                    # Extrair pricing da Meta
+                                    pricing = status_data.get("pricing", {})
+                                    category = pricing.get("category")
+                                    
+                                    if pricing:
+                                        from routers.webhooks.dispatches import META_CATEGORY_PRICES_BRL
+                                        price_brl = META_CATEGORY_PRICES_BRL.get(category, 0.0)
+                                        if not pricing.get("billable", True) or category == "service":
+                                            price_brl = 0.0
+                                        message_record.meta_price_category = category
+                                        message_record.meta_price_brl = price_brl
+                                    else:
+                                        if not trigger.is_free_message:
+                                            price_brl = trigger.cost_per_unit or 0.35
+                                            message_record.meta_price_brl = price_brl
+                                            message_record.meta_price_category = "marketing"
+                                        else:
+                                            price_brl = 0.0
+                                            message_record.meta_price_brl = 0.0
+                                            message_record.meta_price_category = "service"
+                                            
+                                    cost_to_add = price_brl
+                                    paid_increment = 1 if price_brl > 0 else 0
+                                    
+                                    db.execute(
+                                        text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :tid"),
+                                        {"cost": cost_to_add, "paid": paid_increment, "tid": trigger.id}
+                                    )
 
                                 if trigger_delivered and trigger.is_bulk:
                                     from services.ai_memory import notify_agent_memory_webhook
