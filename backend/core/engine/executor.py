@@ -67,6 +67,21 @@ async def execute_funnel(
     # Apply Labels (Sync)
     target_convo_id = conversation_id or trigger.conversation_id
     
+    if not target_convo_id:
+        try:
+            window = db.query(models.ContactWindow).filter(
+                models.ContactWindow.phone == clean_phone,
+                models.ContactWindow.client_id == trigger.client_id
+            ).first()
+            if window and window.chatwoot_conversation_id:
+                target_convo_id = window.chatwoot_conversation_id
+                trigger.conversation_id = target_convo_id
+                conversation_id = target_convo_id
+                db.commit()
+                logger.info(f"🎯 [ENGINE] Conversa {target_convo_id} recuperada via ContactWindow para {clean_phone}")
+        except Exception as e_win:
+            logger.error(f"❌ [ENGINE] Erro ao recuperar conversa via ContactWindow: {e_win}")
+    
     if trigger.chatwoot_label:
         try:
             from core.utils import robust_extract_labels

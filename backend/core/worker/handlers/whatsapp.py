@@ -332,6 +332,7 @@ async def handle_whatsapp_event(data: dict):
                                 new_trigger = models.ScheduledTrigger(
                                     client_id=target_cid,
                                     funnel_id=matched_funnel.id,
+                                    conversation_id=resolved_convo_id,
                                     contact_phone=from_phone,
                                     contact_name=contacts_map.get(raw_from, "Contato"),
                                     status='processing',
@@ -347,6 +348,7 @@ async def handle_whatsapp_event(data: dict):
                                 await rabbitmq.publish("zapvoice_funnel_executions", {
                                     "trigger_id": new_trigger.id,
                                     "funnel_id": matched_funnel.id,
+                                    "conversation_id": resolved_convo_id,
                                     "contact_phone": from_phone
                                 })
                                 logger.info(f"🚀 [WA-TRIGGER] Funil {matched_funnel.id} ({matched_funnel.name}) iniciado para {from_phone} via Meta (Parent: {parent_id})")

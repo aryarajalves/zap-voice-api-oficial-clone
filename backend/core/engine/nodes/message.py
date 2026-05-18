@@ -90,6 +90,28 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
             await asyncio.sleep(10)
         if res and not res.get("error"):
             msg_id = res.get("messages", [{}])[0].get("id", "direct_meta")
+            
+            # --- NOVO: Sincronizar o envio com o Chatwoot ---
+            try:
+                logger.info(f"🔄 [SYNC_CHATWOOT] Sincronizando mensagem de texto enviada via Meta Direto para {contact_phone}")
+                effective_inbox_id = trigger.chatwoot_inbox_id
+                if not effective_inbox_id:
+                    from config_loader import get_setting
+                    inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
+                    if inbox_id_str and str(inbox_id_str).isdigit():
+                        effective_inbox_id = int(inbox_id_str)
+                
+                conv = await chatwoot.ensure_conversation(contact_phone, name=trigger.contact_name or contact_phone, inbox_id=effective_inbox_id)
+                if conv and conv.get("conversation_id"):
+                    conversation_id = conv.get("conversation_id")
+                    trigger.conversation_id = conversation_id
+                    db.commit()
+                    
+                    # Postar a cópia da mensagem no Chatwoot
+                    await chatwoot.send_message(conversation_id, final_content)
+                    logger.info(f"✅ [SYNC_CHATWOOT] Cópia da mensagem de texto postada no Chatwoot (Conversa {conversation_id})")
+            except Exception as e_sync:
+                logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar cópia no Chatwoot: {e_sync}")
         else:
             trigger.status = 'failed'
             trigger.failure_reason = f"Meta API: {res.get('error') if res else 'Unknown'}"

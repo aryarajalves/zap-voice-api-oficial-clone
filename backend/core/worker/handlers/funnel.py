@@ -181,7 +181,7 @@ async def handle_funnel_execution(data: dict):
                     skip_block_check=getattr(trigger, 'skip_block_check', False),
                     chatwoot_contact_id=trigger.chatwoot_contact_id, 
                     chatwoot_account_id=trigger.chatwoot_account_id, 
-                    chatwoot_inbox_id=trigger.chatwoot_inbox_id
+                    chatwoot_inbox_id=effective_inbox_id
                 )
                 logger.info(f"✅ Execução de funil concluída para {contact_phone} (Trigger: {trigger_id})")
             
