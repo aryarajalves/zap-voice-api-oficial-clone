@@ -246,12 +246,14 @@ async def handle_whatsapp_event(data: dict):
                                     candidate_cids.insert(0, target_cid)
                                 logger.info(f"🎯 [TARGET_CID] Identificado Client {target_cid} via histórico/contexto para {from_phone}")
 
-                            if not getattr(message_record, 'interaction_counted', False):
+                            # Apenas incrementa se for de fato um clique em botão ou resposta interativa
+                            is_button_click = msg.get("type") in ["button", "interactive"]
+                            if is_button_click and not getattr(message_record, 'interaction_counted', False):
                                 message_record.interaction_counted = True
                                 message_record.is_interaction = True
                                 db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
                                 db.commit()
-                                logger.info(f"👆 [INTERACTION_COUNT] Clique detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
+                                logger.info(f"👆 [INTERACTION_COUNT] Clique em botão detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
                         # ----------------------------------------------------------
 
                         # --- [REATIVADO] GATILHO DE FUNIL VIA META ---
