@@ -53,7 +53,6 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         init_trig.total_sent = init_trig.total_failed = init_trig.total_blocked = 0
         init_trig.total_contacts = total
         
-        p_message = init_trig.private_message
         c_label = init_trig.chatwoot_label
         c_id = init_trig.client_id
 
@@ -170,7 +169,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 components=per_contact_components, direct_message=direct_message, direct_message_params=direct_message_params,
                 last_interaction=batch_interaction_map.get(phone), template_body_cache=template_body_cache,
                 template_btn_info=template_btn_info, contact_name=name,
-                chatwoot_label=c_label, private_message=p_message,
+                chatwoot_label=c_label,
                 conversation_id=c.get('conversation_id') or c.get('id') if isinstance(c, dict) else None
             ))
 

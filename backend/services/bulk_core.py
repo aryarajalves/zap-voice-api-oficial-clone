@@ -7,9 +7,43 @@ from services.utils.bulk_helpers import render_template_body, sanitize_template_
 logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
 
+
+async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, note_content: str, chatwoot_label):
+    """Após envio bem-sucedido: garante conversa, envia nota privada e aplica etiquetas."""
+    try:
+        resolved_conv_id = conversation_id
+        if not resolved_conv_id:
+            try:
+                conv = await chatwoot.ensure_conversation(phone, contact_name or "")
+                if conv:
+                    resolved_conv_id = conv.get("conversation_id")
+            except Exception as e_conv:
+                logger.warning(f"⚠️ [BULK] Não foi possível resolver conversa para {phone}: {e_conv}")
+
+        if not resolved_conv_id:
+            logger.warning(f"⚠️ [BULK] Conversa não encontrada para {phone}, pulando nota e etiquetas")
+            return
+
+        # Nota privada com o conteúdo da mensagem enviada
+        if note_content:
+            logger.info(f"📝 [BULK] Enviando nota privada na conversa {resolved_conv_id}")
+            await chatwoot.send_private_note(resolved_conv_id, note_content)
+
+        # Etiquetas (se configuradas)
+        if chatwoot_label:
+            from core.utils import robust_extract_labels
+            clean_labels = robust_extract_labels(chatwoot_label)
+            if clean_labels:
+                logger.info(f"🏷️ [BULK] Aplicando etiquetas {clean_labels} na conversa {resolved_conv_id}")
+                await chatwoot.add_label_to_conversation(resolved_conv_id, clean_labels)
+
+    except Exception as e:
+        logger.error(f"❌ [BULK] Erro no pós-envio para {phone}: {e}")
+
+
 async def send_smart_message(
-    chatwoot, 
-    phone: str, 
+    chatwoot,
+    phone: str,
     trigger_id: int,
     template_name: str,
     language: str,
@@ -21,22 +55,11 @@ async def send_smart_message(
     template_btn_info: dict = None,
     contact_name: str = None,
     chatwoot_label: list = None,
-    private_message: str = None,
     conversation_id: int = None
 ):
     try:
-        from core.utils import robust_extract_labels
-        from core.engine.utils import apply_vars
-        
-        effective_components = components # No engine, components ja sao por contato se necessario
-        
-        # 0. Aplicação de Etiquetas (Opcional)
-        if chatwoot_label and conversation_id:
-            clean_labels = robust_extract_labels(chatwoot_label)
-            if clean_labels:
-                logger.info(f"🏷️ [BULK] Aplicando etiquetas {clean_labels} na conversa {conversation_id}")
-                asyncio.create_task(chatwoot.apply_labels(conversation_id, clean_labels))
-        
+        effective_components = components
+
         # 1. Verificação Local da Janela 24h
         can_use_smart_send = True
         if template_btn_info and template_btn_info.get("has_special_buttons"):
@@ -55,7 +78,7 @@ async def send_smart_message(
                 logger.info(f"🟢 [Smart Send] Janela ABERTA para {phone} (Última: {diff.total_seconds()/3600:.2f}h atrás).")
 
                 free_text = render_template_body(direct_message, effective_components or [], contact_name=contact_name) if direct_message else None
-                
+
                 if not free_text and template_body_cache:
                     try:
                         free_text = render_template_body(template_body_cache, effective_components or [], contact_name=contact_name)
@@ -70,7 +93,7 @@ async def send_smart_message(
                         buttons = direct_message_params if isinstance(direct_message_params, list) else direct_message_params.get("buttons", [])
                         for b in buttons:
                             btn_texts.append(b if isinstance(b, str) else b.get("text", "Botão"))
-                    
+
                     if not btn_texts and template_btn_info and template_btn_info.get("quick_replies"):
                         btn_texts = template_btn_info["quick_replies"][:3]
 
@@ -85,6 +108,7 @@ async def send_smart_message(
                     if is_success:
                         now_br = datetime.now(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M:%S")
                         logger.info(f"🚀 [DISPARO] [Trigger {trigger_id}] [{now_br}] [{phone}] Tipo: LIVRE (Sessão) | Sucesso")
+                        asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, free_text, chatwoot_label))
                         return {"result": res, "type": "FREE_MESSAGE", "success": True}
 
                     err_msg = str(res.get("detail", "")).lower() if isinstance(res, dict) else str(res).lower()
@@ -97,25 +121,16 @@ async def send_smart_message(
         if template_name:
             now_br = datetime.now(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M:%S")
             logger.info(f"🚀 [DISPARO] [Trigger {trigger_id}] [{now_br}] [{phone}] Tipo: TEMPLATE ({template_name})")
-            
+
             clean_components = sanitize_template_components(effective_components or [], contact_name=contact_name, contact_phone=phone)
             res = await chatwoot.send_template(phone, template_name, language, components=clean_components)
             if res and not res.get("error"):
-                # Aplicação de Nota Privada (Opcional)
-                if private_message and conversation_id:
-                    # Preparar variáveis para o apply_vars
-                    vars_map = {"nome": contact_name or ""}
-                    # Adicionar vars se components for uma lista de parâmetros simples
-                    # (No Bulk, vars1..5 costumam ser passados)
-                    
-                    note_text = apply_vars(private_message, vars_map)
-                    logger.info(f"📝 [BULK] Enviando nota privada para conversa {conversation_id}")
-                    asyncio.create_task(chatwoot.send_private_note(conversation_id, note_text))
-                
+                note_content = render_template_body(template_body_cache, effective_components or [], contact_name=contact_name) if template_body_cache else f"[Template: {template_name}]"
+                asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, note_content, chatwoot_label))
                 return {"result": res, "type": "TEMPLATE"}
-            
+
             return res
-        
+
         return {"error": True, "detail": "Nenhum conteúdo configurado"}
     except Exception as e:
         logger.error(f"❌ [Smart Send CRITICAL] Exceção inesperada: {e}")

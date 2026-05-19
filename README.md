@@ -117,4 +117,5 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 - **Melhorias de Resiliência na Eduzz**: Parsing inteligente com suporte a DDI automático, captura de campos de telefone aninhados no checkout Órbita/MyEduzz.
 - **Correção de UnboundLocalError**: Correção de escopo de variáveis no processamento de webhooks inbound do Chatwoot.
 - **Histórico de Webhook Aprimorado**: Busca textual dinâmica por Nome e Telefone no painel de logs do histórico de webhook.
+- **Sincronização de Histórico no Chatwoot**: Envio assíncrono de notas privadas com o conteúdo renderizado do template e etiquetas pós-disparo em massa.
 - **Estabilidade nos Testes Unitários**: Adaptação da infraestrutura de testes SQLite in-memory para rodar com 100% de sucesso.
