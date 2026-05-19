@@ -7,7 +7,54 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_temp.db"
 # Adiciona o diretório backend ao path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from services.utils.bulk_helpers import render_template_body
+from services.utils.bulk_helpers import render_template_body, sanitize_template_components
+
+def test_sanitize_template_components_dynamic_vars():
+    print("🧪 Iniciando testes de sanitização de template com variáveis dinâmicas...\n")
+    
+    # 1. Substituição de {{nome}} e {{telefone}}
+    components = [
+        {
+            "type": "body",
+            "parameters": [
+                {"type": "text", "text": "Olá {{nome}}!"},
+                {"type": "text", "text": "Seu telefone é {{telefone}}."}
+            ]
+        }
+    ]
+    
+    sanitized = sanitize_template_components(
+        components, 
+        contact_name="Arya", 
+        contact_phone="5511999999999"
+    )
+    
+    body_params = sanitized[0]["parameters"]
+    assert body_params[0]["text"] == "Olá Arya!", f"Falha var dinamica 1: {body_params[0]['text']}"
+    assert body_params[1]["text"] == "Seu telefone é 5511999999999.", f"Falha var dinamica 2: {body_params[1]['text']}"
+    print("✅ Teste 1: Substituição de {{nome}} e {{telefone}} com sucesso.")
+
+    # 2. Substituição com {{name}} e {{phone}}
+    components_en = [
+        {
+            "type": "body",
+            "parameters": [
+                {"type": "text", "text": "Hello {{name}}!"},
+                {"type": "text", "text": "Phone: {{phone}}"}
+            ]
+        }
+    ]
+    sanitized_en = sanitize_template_components(
+        components_en, 
+        contact_name="John", 
+        contact_phone="123456789"
+    )
+    body_params_en = sanitized_en[0]["parameters"]
+    assert body_params_en[0]["text"] == "Hello John!", f"Falha var dinamica 3: {body_params_en[0]['text']}"
+    assert body_params_en[1]["text"] == "Phone: 123456789", f"Falha var dinamica 4: {body_params_en[1]['text']}"
+    print("✅ Teste 2: Substituição de {{name}} e {{phone}} com sucesso.")
+    
+    print("\n🎉 Todos os testes de sanitização dinâmica passaram!")
 
 def test_render_template_body_scenarios():
     print("🧪 Iniciando testes de renderização de template...\n")
@@ -57,4 +104,5 @@ def test_render_template_body_scenarios():
     print("\n🎉 Todos os testes de renderização passaram!")
 
 if __name__ == "__main__":
+    test_sanitize_template_components_dynamic_vars()
     test_render_template_body_scenarios()

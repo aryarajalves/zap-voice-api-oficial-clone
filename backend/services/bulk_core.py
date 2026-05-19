@@ -98,7 +98,7 @@ async def send_smart_message(
             now_br = datetime.now(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M:%S")
             logger.info(f"🚀 [DISPARO] [Trigger {trigger_id}] [{now_br}] [{phone}] Tipo: TEMPLATE ({template_name})")
             
-            clean_components = sanitize_template_components(effective_components or [], contact_name=contact_name)
+            clean_components = sanitize_template_components(effective_components or [], contact_name=contact_name, contact_phone=phone)
             res = await chatwoot.send_template(phone, template_name, language, components=clean_components)
             if res and not res.get("error"):
                 # Aplicação de Nota Privada (Opcional)

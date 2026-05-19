@@ -57,11 +57,11 @@ def render_template_body(body: str, components: list, contact_name: str = None, 
     return body
 
 
-def sanitize_template_components(components: list, contact_name: str = None) -> list:
+def sanitize_template_components(components: list, contact_name: str = None, contact_phone: str = None) -> list:
     """
     Remove ou substitui valores inválidos (como '1') nos componentes do template
-    antes de enviar para a Meta API. Isso evita o erro "Ei 1" quando o CRM
-    manda dados inconsistentes.
+    antes de enviar para a Meta API. Também realiza a substituição dinâmica
+    de variáveis como {{nome}} e {{telefone}} pelos dados reais do contato.
     """
     if not components:
         return []
@@ -77,6 +77,17 @@ def sanitize_template_components(components: list, contact_name: str = None) -> 
                         if val == "1":
                             # Substitui pelo nome do contato se disponível, senão vazio
                             param["text"] = contact_name if contact_name else ""
+                        else:
+                            # Substituição dinâmica de variáveis escolhidas
+                            if "{{nome}}" in val:
+                                val = val.replace("{{nome}}", contact_name or "")
+                            if "{{name}}" in val:
+                                val = val.replace("{{name}}", contact_name or "")
+                            if "{{telefone}}" in val:
+                                val = val.replace("{{telefone}}", contact_phone or "")
+                            if "{{phone}}" in val:
+                                val = val.replace("{{phone}}", contact_phone or "")
+                            param["text"] = val
         return new_components
     except Exception as e:
         print(f"Erro ao sanitizar componentes: {e}")

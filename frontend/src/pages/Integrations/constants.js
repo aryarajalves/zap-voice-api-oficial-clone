@@ -7,6 +7,7 @@ export const EVENT_TYPES = [
   { value: 'carrinho_abandonado', label: 'Carrinho Abandonado' },
   { value: 'cartao_recusado', label: 'Cartão Recusado' },
   { value: 'form_submission', label: 'Formulário / Elementor' },
+  { value: 'evento_aluno', label: 'Evento de Aluno' },
   { value: 'outros', label: 'Qualquer / Outro' }
 ];
 

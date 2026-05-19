@@ -20,8 +20,12 @@ O **ZapVoice** é a solução definitiva para escalar seu marketing e atendiment
 ## 📺 Funcionalidades de Destaque
 
 ### **1. Webhook Integrations (Novo!)**
-Conecte suas plataformas de vendas em segundos. O sistema processa eventos de checkout, boleto gerado e compra aprovada automaticamente.
-- **Mapeamento Flexível**: Defina qual funil disparar para cada tipo de evento.
+Conecte suas plataformas de vendas em segundos. O sistema processa eventos de checkout, abandono de carrinho, boleto gerado, comissões financeiras e compras aprovadas automaticamente.
+- **Mapeamento Flexível**: Defina qual funil disparar para cada tipo de evento (incluindo o novo tipo de **Evento de Aluno**).
+- **Eduzz / Nutror / Sun / MyEduzz**: Suporte completo a múltiplos formatos de webhook da Eduzz:
+  - **Nutror**: Eventos de alunos (visualização de aulas, conclusão de cursos, etc.) exibidos de forma simplificada como `"Evento do Aluno"`.
+  - **Sun Checkout**: Captura automática de dados de leads de carrinhos abandonados (`sun.cart_abandonment`) a partir do objeto `customer`.
+  - **MyEduzz**: Processamento resiliente de comissões de coprodução (`myeduzz.commission_processed`) sem conflito com disparos de venda.
 - **Filtro de Produtos**: Escolha processar webhooks apenas de produtos específicos.
 - **URLs Amigáveis**: Use slugs customizados para suas integrações.
 

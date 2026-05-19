@@ -107,5 +107,13 @@
 - **Rate Limit:** Limite de requisições em rotas críticas (Login/Envio).
 - **IDOR:** Sempre filtre consultas pelo `client_id` do usuário.
 
+---
+
+## 16. Repositório GitHub e Atualização de Documentação
+- **Repositório Oficial:** `https://github.com/aryarajalves/zap-voice-api-oficial-clone.git`.
+- **Protocolo de Commits:** Sempre utilize o padrão Conventional Commits em português do Brasil.
+- **Atualização Obrigatória:** Sempre que realizar alterações, criar ou atualizar funcionalidades no repositório, você deve atualizar o `README.md` refletindo as novas funcionalidades, guias ou modificações efetuadas.
+
+
 
 

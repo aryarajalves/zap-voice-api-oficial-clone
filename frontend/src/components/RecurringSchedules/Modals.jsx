@@ -246,7 +246,7 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
     if (!viewingMessageSchedule) return null;
 
     const [isEditing, setIsEditing] = useState(false);
-    const [sendType, setSendType] = useState('direct_message');
+    const [sendType, setSendType] = useState('template');
     const [selectedTemplateName, setSelectedTemplateName] = useState('');
     const [selectedFunnelId, setSelectedFunnelId] = useState('');
     const [directMessage, setDirectMessage] = useState('');
@@ -286,16 +286,13 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
         if (viewingMessageSchedule) {
             setIsEditing(false);
             setSearchQuery('');
+            setSendType('template');
             if (viewingMessageSchedule.template_name) {
-                setSendType('template');
                 setSelectedTemplateName(viewingMessageSchedule.template_name);
                 setTemplateParams(convertComponentsToParams(viewingMessageSchedule.template_components));
-            } else if (viewingMessageSchedule.funnel_id) {
-                setSendType('funnel');
-                setSelectedFunnelId(viewingMessageSchedule.funnel_id);
             } else {
-                setSendType('direct_message');
-                setDirectMessage(viewingMessageSchedule.direct_message || '');
+                setSelectedTemplateName('');
+                setTemplateParams({});
             }
         }
     }, [viewingMessageSchedule]);
@@ -408,13 +405,10 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
                         </h3>
                         <p className="text-slate-400 text-xs mt-1">
                             {isEditing 
-                                ? 'Altere o tipo de mensagem, template e preencha as variáveis.' 
+                                ? 'Altere o template e preencha as variáveis dinamicamente.' 
                                 : 'Esta é a mensagem que será disparada automaticamente para os contatos.'}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-3 hover:bg-white/5 rounded-2xl transition-colors">
-                        <FiX className="text-slate-400" />
-                    </button>
                 </div>
 
                 {/* Conteúdo Central */}
@@ -423,164 +417,147 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
                     {/* Modo Edição */}
                     {isEditing ? (
                         <div className="space-y-6">
-                            {/* Tipo de Envio Selector */}
-                            <div className="space-y-2">
-                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Tipo de Envio</label>
-                                <div className="grid grid-cols-3 gap-3">
-                                    {[
-                                        { id: 'template', label: 'Template Oficial', icon: FiCheck },
-                                        { id: 'direct_message', label: 'Mensagem Direta', icon: FiMessageSquare },
-                                        { id: 'funnel', label: 'Funil ZapVoice', icon: FiFolder }
-                                    ].map(type => (
-                                        <button
-                                            key={type.id}
-                                            onClick={() => setSendType(type.id)}
-                                            className={`py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-wider border transition-all flex items-center justify-center gap-2 ${sendType === type.id ? 'bg-purple-600 border-purple-500 text-white shadow-xl shadow-purple-900/20 translate-y-[-1px]' : 'bg-black/20 border-white/5 text-slate-500 hover:bg-black/40'}`}
-                                        >
-                                            <type.icon size={12} />
-                                            {type.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Conteúdo Dinâmico com base no Tipo de Envio */}
-                            {sendType === 'direct_message' && (
-                                <div className="space-y-3">
-                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Texto da Mensagem</label>
-                                    <textarea
-                                        rows={6}
-                                        value={directMessage}
-                                        onChange={(e) => setDirectMessage(e.target.value)}
-                                        placeholder="Digite a mensagem de texto livre..."
-                                        className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-white font-medium text-sm outline-none focus:border-purple-500/50 shadow-inner"
-                                    />
-                                </div>
-                            )}
-
-                            {sendType === 'funnel' && (
-                                <div className="space-y-3">
-                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Selecione o Funil</label>
-                                    <select
-                                        value={selectedFunnelId}
-                                        onChange={(e) => setSelectedFunnelId(e.target.value)}
-                                        className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-white font-bold text-sm outline-none focus:border-purple-500/50 cursor-pointer shadow-inner"
+                            <div className="space-y-6">
+                                {/* Dropdown de Seleção de Template */}
+                                <div className="space-y-2 relative">
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Template do WhatsApp</label>
+                                    <div 
+                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                        className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white outline-none cursor-pointer flex justify-between items-center shadow-inner"
                                     >
-                                        <option value="">-- Escolha um Funil --</option>
-                                        {funnels.map(f => (
-                                            <option key={f.id} value={f.id}>{f.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            {sendType === 'template' && (
-                                <div className="space-y-6">
-                                    {/* Dropdown de Seleção de Template */}
-                                    <div className="space-y-2 relative">
-                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Template do WhatsApp</label>
-                                        <div 
-                                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                            className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white outline-none cursor-pointer flex justify-between items-center shadow-inner"
-                                        >
-                                            <span className={selectedTemplateName ? 'text-white' : 'text-slate-500'}>
-                                                {selectedTemplateName || '-- Selecione um Template --'}
-                                            </span>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className={`text-slate-500 transition-all ${isDropdownOpen ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
-                                        </div>
-
-                                        {isDropdownOpen && (
-                                            <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[130] overflow-hidden">
-                                                <div className="p-3 border-b border-white/5 bg-black/20">
-                                                    <div className="relative">
-                                                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
-                                                        <input 
-                                                            autoFocus
-                                                            type="text"
-                                                            placeholder="Filtrar templates..."
-                                                            className="w-full bg-slate-800 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-xs font-medium text-white outline-none focus:border-purple-500/30 transition-all"
-                                                            value={searchQuery}
-                                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="max-h-52 overflow-y-auto premium-scrollbar">
-                                                    {templates
-                                                        .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                                                        .map(t => (
-                                                            <div 
-                                                                key={t.name}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedTemplateName(t.name);
-                                                                    setTemplateParams({});
-                                                                    setIsDropdownOpen(false);
-                                                                    setSearchQuery('');
-                                                                }}
-                                                                className={`px-6 py-2.5 hover:bg-purple-500/10 cursor-pointer transition-colors text-xs font-bold text-white ${selectedTemplateName === t.name ? 'bg-purple-500/5' : ''}`}
-                                                            >
-                                                                {t.name}
-                                                            </div>
-                                                        ))
-                                                    }
-                                                </div>
-                                            </div>
-                                        )}
+                                        <span className={selectedTemplateName ? 'text-white' : 'text-slate-500'}>
+                                            {selectedTemplateName || '-- Selecione um Template --'}
+                                        </span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className={`text-slate-500 transition-all ${isDropdownOpen ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
                                     </div>
 
-                                    {/* Inputs de Mídia e Variáveis do Template */}
-                                    {selectedTemplateObj && (
-                                        <div className="space-y-6 pt-4 border-t border-white/5">
-                                            
-                                            {/* Cabeçalho de Mídia se aplicável */}
-                                            {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(getHeaderFormat(selectedTemplateObj)) && (
-                                                <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl space-y-3">
-                                                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                        <FiLink className="text-purple-400" />
-                                                        URL da Mídia do Cabeçalho ({getHeaderFormat(selectedTemplateObj)})
-                                                    </label>
+                                    {isDropdownOpen && (
+                                        <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[130] overflow-hidden">
+                                            <div className="p-3 border-b border-white/5 bg-black/20">
+                                                <div className="relative">
+                                                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
                                                     <input 
+                                                        autoFocus
                                                         type="text"
-                                                        value={templateParams['HEADER_0'] || ''}
-                                                        onChange={(e) => handleParamChange('HEADER_0', e.target.value)}
-                                                        placeholder={`Cole o link público da ${getHeaderFormat(selectedTemplateObj).toLowerCase()}...`}
-                                                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-white font-medium text-xs outline-none focus:border-purple-500/50 shadow-inner"
+                                                        placeholder="Filtrar templates..."
+                                                        className="w-full bg-slate-800 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-xs font-medium text-white outline-none focus:border-purple-500/30 transition-all"
+                                                        value={searchQuery}
+                                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
                                                     />
-                                                    <p className="text-[10px] text-slate-500 italic">Preencha com uma URL de imagem/vídeo direta para envio (ex: https://site.com/imagem.jpg).</p>
                                                 </div>
-                                            )}
-
-                                            {/* Variáveis do Corpo */}
-                                            {extractTemplateVariables(selectedTemplateObj).length > 0 && (
-                                                <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl space-y-4">
-                                                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Variáveis Dinâmicas do Corpo</label>
-                                                    <div className="grid grid-cols-1 gap-4">
-                                                        {extractTemplateVariables(selectedTemplateObj).map(v => (
-                                                            <div key={v.key} className="space-y-1.5">
-                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1">{v.label}</span>
-                                                                <input 
-                                                                    type="text"
-                                                                    value={templateParams[v.key] || ''}
-                                                                    onChange={(e) => handleParamChange(v.key, e.target.value)}
-                                                                    placeholder={`Preencha o valor de ${v.label}...`}
-                                                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-white font-medium text-xs outline-none focus:border-purple-500/50 shadow-inner"
-                                                                />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Pré-visualização ao vivo */}
-                                            <div className="space-y-3">
-                                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Visualização em Tempo Real</label>
-                                                <TemplatePreview template={selectedTemplateObj} params={templateParams} />
+                                            </div>
+                                            <div className="max-h-52 overflow-y-auto premium-scrollbar">
+                                                {templates
+                                                    .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                                                    .map(t => (
+                                                        <div 
+                                                            key={t.name}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedTemplateName(t.name);
+                                                                setTemplateParams({});
+                                                                setIsDropdownOpen(false);
+                                                                setSearchQuery('');
+                                                            }}
+                                                            className={`px-6 py-2.5 hover:bg-purple-500/10 cursor-pointer transition-colors text-xs font-bold text-white ${selectedTemplateName === t.name ? 'bg-purple-500/5' : ''}`}
+                                                        >
+                                                            {t.name}
+                                                        </div>
+                                                    ))
+                                                }
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                            )}
+
+                                {/* Inputs de Mídia e Variáveis do Template */}
+                                {selectedTemplateObj && (
+                                    <div className="space-y-6 pt-4 border-t border-white/5">
+                                        
+                                        {/* Cabeçalho de Mídia se aplicável */}
+                                        {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(getHeaderFormat(selectedTemplateObj)) && (
+                                            <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl space-y-3">
+                                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <FiLink className="text-purple-400" />
+                                                    URL da Mídia do Cabeçalho ({getHeaderFormat(selectedTemplateObj)})
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    value={templateParams['HEADER_0'] || ''}
+                                                    onChange={(e) => handleParamChange('HEADER_0', e.target.value)}
+                                                    placeholder={`Cole o link público da ${getHeaderFormat(selectedTemplateObj).toLowerCase()}...`}
+                                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-white font-medium text-xs outline-none focus:border-purple-500/50 shadow-inner"
+                                                />
+                                                <p className="text-[10px] text-slate-500 italic">Preencha com uma URL de imagem/vídeo direta para envio (ex: https://site.com/imagem.jpg).</p>
+                                            </div>
+                                        )}
+
+                                        {/* Variáveis do Corpo */}
+                                        {extractTemplateVariables(selectedTemplateObj).length > 0 && (
+                                            <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl space-y-4">
+                                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Variáveis Dinâmicas do Corpo</label>
+                                                <div className="grid grid-cols-1 gap-4">
+                                                    {extractTemplateVariables(selectedTemplateObj).map(v => {
+                                                        const currentValue = templateParams[v.key] || '';
+                                                        const isDynamic = ['{{nome}}', '{{name}}', '{{telefone}}', '{{phone}}'].includes(currentValue);
+                                                        const selectValue = isDynamic 
+                                                            ? (['{{nome}}', '{{name}}'].includes(currentValue) ? '{{nome}}' : '{{telefone}}')
+                                                            : (currentValue ? 'custom' : '');
+
+                                                        return (
+                                                            <div key={v.key} className="space-y-2 bg-black/20 p-4 rounded-2xl border border-white/5">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[10px] font-black text-purple-400 uppercase tracking-wider pl-1">{v.label}</span>
+                                                                    <span className="text-[7px] font-bold text-slate-600 uppercase tracking-widest">Parâmetro de Corpo</span>
+                                                                </div>
+                                                                <div className="flex flex-col md:flex-row gap-3">
+                                                                    <div className="flex-1">
+                                                                        <select
+                                                                            value={selectValue}
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                if (val === 'custom') {
+                                                                                    handleParamChange(v.key, '');
+                                                                                } else {
+                                                                                    handleParamChange(v.key, val);
+                                                                                }
+                                                                            }}
+                                                                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none cursor-pointer focus:border-purple-500/50 shadow-inner"
+                                                                        >
+                                                                            <option value="">-- Mapear dinamicamente... --</option>
+                                                                            <option value="{{nome}}">Nome do Contato ({"{{nome}}"})</option>
+                                                                            <option value="{{telefone}}">Telefone do Contato ({"{{telefone}}"})</option>
+                                                                            <option value="custom">Texto Fixo / Personalizado</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    {selectValue === 'custom' && (
+                                                                        <div className="flex-1 animate-in slide-in-from-right duration-200">
+                                                                            <input 
+                                                                                type="text"
+                                                                                value={isDynamic ? '' : currentValue}
+                                                                                onChange={(e) => handleParamChange(v.key, e.target.value)}
+                                                                                placeholder="Digite o texto personalizado fixo..."
+                                                                                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-600 outline-none focus:border-purple-500/50 shadow-inner"
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Pré-visualização ao vivo */}
+                                        <div className="space-y-3">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Visualização em Tempo Real</label>
+                                            <TemplatePreview template={selectedTemplateObj} params={templateParams} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         /* Modo Visualização Simples */

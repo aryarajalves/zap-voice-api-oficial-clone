@@ -182,17 +182,70 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         )
 
     elif platform_lower == 'eduzz':
-        is_orbita = "buyer" in payload or "student" in payload or "items" in payload or (
-            isinstance(payload.get("data"), dict) and ("buyer" in payload["data"] or "items" in payload["data"] or "student" in payload["data"])
+        event_raw = payload.get("event") or ""
+        is_nutror = str(event_raw).startswith("nutror.") or (
+            isinstance(payload.get("data"), dict) and "learner" in payload["data"]
+        )
+        is_myeduzz = str(event_raw).startswith("myeduzz.")
+        
+        is_orbita = "buyer" in payload or "student" in payload or "items" in payload or "customer" in payload or (
+            isinstance(payload.get("data"), dict) and ("buyer" in payload["data"] or "items" in payload["data"] or "student" in payload["data"] or "customer" in payload["data"])
         )
         
-        if is_orbita:
-            if "data" in payload and isinstance(payload["data"], dict) and not ("buyer" in payload or "student" in payload or "items" in payload):
+        if is_nutror:
+            data_ctx = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+            result['event_type'] = "evento_aluno"
+            
+            learner = data_ctx.get("learner") or {}
+            result['name'] = learner.get("name")
+            result['email'] = learner.get("email")
+            result['phone'] = learner.get("phone") or learner.get("cellphone")
+            
+            course = data_ctx.get("course") or {}
+            result['product_name'] = course.get("title")
+            
+            result['raw_status'] = "EVENTO_ALUNO"
+            result['payment_method'] = None
+            result['price'] = None
+
+        elif is_myeduzz:
+            data_ctx = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+            result['event_type'] = "outros"
+            
+            result['name'] = f"Fatura #{data_ctx.get('invoiceId')}"
+            result['email'] = None
+            result['phone'] = None
+            
+            price_info = data_ctx.get("price") or {}
+            result['price'] = str(price_info.get("value")) if price_info.get("value") is not None else None
+            result['currency'] = str(price_info.get("currency") or "BRL").upper()
+            
+            result['product_name'] = f"Fatura #{data_ctx.get('invoiceId')}"
+            result['payment_method'] = None
+            result['raw_status'] = "COMMISSION_PROCESSED"
+
+        elif is_orbita:
+            if "data" in payload and isinstance(payload["data"], dict) and not ("buyer" in payload or "student" in payload or "items" in payload or "customer" in payload):
                 data_ctx = payload["data"]
             else:
                 data_ctx = payload
 
+            # Detect sun/orbit event and resolve status
             status = str(data_ctx.get("status") or "").lower()
+            event_name = str(payload.get("event") or "").lower()
+            if event_name.startswith("sun."):
+                sub_event = event_name.replace("sun.", "")
+                if sub_event == "cart_abandonment":
+                    status = "abandoned_cart"
+                elif sub_event == "order_paid":
+                    status = "paid"
+                elif sub_event == "order_refunded":
+                    status = "refunded"
+                elif sub_event == "order_canceled":
+                    status = "canceled"
+                else:
+                    status = sub_event
+
             if status == "paid": result['event_type'] = "compra_aprovada"
             elif status == "waiting_payment":
                 pm = str(data_ctx.get("paymentMethod") or "").lower()
@@ -202,11 +255,12 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             elif status == "abandoned_cart": result['event_type'] = "carrinho_abandonado"
             elif status == "canceled": result['event_type'] = "cartao_recusado"
 
-            buyer = data_ctx.get("buyer") or data_ctx.get("student") or {}
+            buyer = data_ctx.get("buyer") or data_ctx.get("student") or data_ctx.get("customer") or {}
             result['name'] = buyer.get("name")
             result['email'] = buyer.get("email")
             result['phone'] = buyer.get("cellphone") or buyer.get("phone")
             
+            # Extract product name
             items_list = data_ctx.get("items", [])
             if items_list:
                 currency_code = str(data_ctx.get("price", {}).get("currency") or data_ctx.get("paid", {}).get("currency") or "BRL").upper()
@@ -223,6 +277,25 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
                 total_price = data_ctx.get("price", {}).get("value") or data_ctx.get("paid", {}).get("value")
                 if total_price:
                     result['price'] = total_price
+            else:
+                # If no items list, try to get from productId or href
+                prod_ids = data_ctx.get("productId")
+                if prod_ids:
+                    if isinstance(prod_ids, list) and len(prod_ids) > 0:
+                        result['product_name'] = f"Produto {prod_ids[0]}"
+                    else:
+                        result['product_name'] = f"Produto {prod_ids}"
+                else:
+                    from urllib.parse import urlparse, parse_qs
+                    href = data_ctx.get("href")
+                    if href:
+                        try:
+                            parsed_href = urlparse(href)
+                            queries = parse_qs(parsed_href.query)
+                            if "produto" in queries:
+                                result['product_name'] = f"Produto {queries['produto'][0]}"
+                        except:
+                            pass
 
             result['payment_method'] = data_ctx.get("paymentMethod")
             result['raw_status'] = status
@@ -378,7 +451,9 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "APPROVED": "Compra Aprovada", "SALE_APPROVED": "Compra Aprovada", "PAID": "Compra Aprovada",
         "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso", 
         "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado", "ABANDONED": "Carrinho Abandonado",
-        "WAITING": "Aguardando", "CANCELED": "Cancelado", "EXPIRED": "Expirado"
+        "WAITING": "Aguardando", "CANCELED": "Cancelado", "EXPIRED": "Expirado",
+        "EVENTO_ALUNO": "Evento do Aluno",
+        "COMMISSION_PROCESSED": "Comissão Processada"
     }
     result['raw_status'] = friendly_map.get(raw_val, raw_val.capitalize())
 
