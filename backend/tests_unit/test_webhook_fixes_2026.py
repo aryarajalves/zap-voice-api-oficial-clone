@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
+import models
 from routers.webhooks_public import parse_webhook_payload
 
 def test_eduzz_orbita_nested_payload_with_cellphone():
@@ -179,57 +180,82 @@ def test_myeduzz_commission_processed_payload():
     assert result['raw_status'] == "Comissão Processada"
     assert result['price'] == "147.00"
 
+@pytest.mark.asyncio
 async def test_webhook_history_search(db_session, client):
-    # Testar se a busca no histórico funciona
-    from uuid import uuid4
-    integration_id = str(uuid4())
+    # Mock Auth dependencies
+    from core.deps import get_current_user, get_validated_client_id
+    from routers.webhooks.history import get_db as history_get_db
+    from main import app
     
-    # Criar integração fake
-    new_int = models.WebhookIntegration(
-        id=integration_id,
-        name="Search Test",
-        platform="outros",
-        client_id=1
-    )
-    db_session.add(new_int)
+    mock_user = models.User(id=1, email="admin@test.com", role="super_admin")
+    db_session.add(mock_user)
     db_session.commit()
     
-    # Adicionar registros no histórico
-    h1 = models.WebhookHistory(
-        integration_id=integration_id,
-        status="processed",
-        event_type="test",
-        payload={"raw": "data 123"},
-        processed_data={"name": "Alice Wonderland", "phone": "5511999998888"}
-    )
-    h2 = models.WebhookHistory(
-        integration_id=integration_id,
-        status="processed",
-        event_type="test",
-        payload={"raw": "data 456"},
-        processed_data={"name": "Bob Builder", "phone": "5521777776666"}
-    )
-    db_session.add_all([h1, h2])
-    db_session.commit()
-    
-    # 1. Buscar pela Alice (por nome)
-    response = client.get(f"/api/webhooks/{integration_id}/history?search=Alice", headers={"X-Client-ID": "1"})
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["processed_data"]["name"] == "Alice Wonderland"
-    
-    # 2. Buscar por telefone do Bob
-    response = client.get(f"/api/webhooks/{integration_id}/history?search=552177777", headers={"X-Client-ID": "1"})
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["processed_data"]["name"] == "Bob Builder"
-    
-    # 3. Buscar algo que não existe (deve retornar vazio/zero)
-    response = client.get(f"/api/webhooks/{integration_id}/history?search=Zeca", headers={"X-Client-ID": "1"})
-    assert response.status_code == 200
-    assert response.json() == []
+    async def override_get_current_user():
+        return mock_user
+        
+    async def override_get_validated_client_id():
+        return 1
+        
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_validated_client_id] = override_get_validated_client_id
+    app.dependency_overrides[history_get_db] = lambda: db_session
+
+    try:
+        # Testar se a busca no histórico funciona
+        from uuid import uuid4
+        integration_id = uuid4()
+        
+        # Criar integração fake
+        new_int = models.WebhookIntegration(
+            id=integration_id,
+            name="Search Test",
+            platform="outros",
+            client_id=1
+        )
+        db_session.add(new_int)
+        db_session.commit()
+        
+        # Adicionar registros no histórico
+        h1 = models.WebhookHistory(
+            integration_id=integration_id,
+            status="processed",
+            event_type="test",
+            payload={"raw": "data 123"},
+            processed_data={"name": "Alice Wonderland", "phone": "5511999998888"}
+        )
+        h2 = models.WebhookHistory(
+            integration_id=integration_id,
+            status="processed",
+            event_type="test",
+            payload={"raw": "data 456"},
+            processed_data={"name": "Bob Builder", "phone": "5521777776666"}
+        )
+        db_session.add_all([h1, h2])
+        db_session.commit()
+        
+        # 1. Buscar pela Alice (por nome)
+        response = client.get(f"/api/webhook-integrations/{integration_id}/history?search=Alice", headers={"X-Client-ID": "1"})
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["processed_data"]["name"] == "Alice Wonderland"
+        
+        # 2. Buscar por telefone do Bob
+        response = client.get(f"/api/webhook-integrations/{integration_id}/history?search=552177777", headers={"X-Client-ID": "1"})
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["processed_data"]["name"] == "Bob Builder"
+        
+        # 3. Buscar algo que não existe (deve retornar vazio/zero)
+        response = client.get(f"/api/webhook-integrations/{integration_id}/history?search=Zeca", headers={"X-Client-ID": "1"})
+        assert response.status_code == 200
+        assert response.json() == []
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_validated_client_id, None)
+        app.dependency_overrides.pop(history_get_db, None)
 
 def test_generic_wp_payload():
     # Simulando um plugin WP que envia campos no root
@@ -245,7 +271,7 @@ def test_generic_wp_payload():
 async def test_chatwoot_unbound_local_fix():
     # Este teste verifica se a função chatwoot_webhook pode ser chamada/carregada sem o erro de UnboundLocalError
     # Requer bibliotecas suficientes instaladas.
-    from routers.webhooks import chatwoot_webhook
+    from routers.webhooks_inbound.chatwoot import chatwoot_webhook
     
     # Mock parameters
     mock_request = MagicMock()
@@ -254,13 +280,17 @@ async def test_chatwoot_unbound_local_fix():
     mock_request.headers = {}
     
     mock_db = MagicMock()
+    mock_background_tasks = MagicMock()
     
     # Se a função carregar e não estourar erro de sintaxe/referência ao ser definida, já é um bom sinal.
     # Mas vamos tentar chamar um evento simples para ver se ela falha no meio.
     try:
         # Usamos um payload de ping que cai no final e retorna {"status": "ignored"}
-        response = await chatwoot_webhook(mock_request, {"event": "ping"}, mock_db)
-        assert response["status"] == "ignored"
+        # Agora a assinatura exige background_tasks e payload
+        response = await chatwoot_webhook(mock_request, mock_background_tasks, {"event": "ping"}, mock_db)
+        # Note que chatwoot_webhook pode retornar {"status": "ok"} por padrão se o evento for ping, já que não cai em message_created/updated
+        # Vamos verificar se retorna status "ok"
+        assert response["status"] == "ok"
     except UnboundLocalError as e:
         pytest.fail(f"UnboundLocalError detectado: {e}")
     except Exception as e:

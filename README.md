@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.5.9)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.6.0)
 
-Bem-vindo à versão **3.5.9** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.6.0** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -107,3 +107,14 @@ O sistema estará disponível em:
 **Inicializar / Criar as tabelas faltantes manualmente no servidor caso precisse:**
 
 docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
+
+---
+
+## 📝 Changelog
+
+### v3.6.0
+- **Suporte a Eventos de Aluno**: Integração simplificada e exibição de eventos do tipo "Evento do Aluno" (Nutror, etc.) na interface e logs.
+- **Melhorias de Resiliência na Eduzz**: Parsing inteligente com suporte a DDI automático, captura de campos de telefone aninhados no checkout Órbita/MyEduzz.
+- **Correção de UnboundLocalError**: Correção de escopo de variáveis no processamento de webhooks inbound do Chatwoot.
+- **Histórico de Webhook Aprimorado**: Busca textual dinâmica por Nome e Telefone no painel de logs do histórico de webhook.
+- **Estabilidade nos Testes Unitários**: Adaptação da infraestrutura de testes SQLite in-memory para rodar com 100% de sucesso.

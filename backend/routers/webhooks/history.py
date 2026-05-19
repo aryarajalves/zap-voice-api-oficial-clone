@@ -45,7 +45,7 @@ def list_webhook_history(
         raise HTTPException(status_code=404, detail="Integration not found")
 
     query = db.query(models.WebhookHistory).filter(
-        cast(models.WebhookHistory.integration_id, String) == str(uuid_obj)
+        models.WebhookHistory.integration_id == uuid_obj
     )
     
     if search and search.strip():

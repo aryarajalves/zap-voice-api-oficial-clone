@@ -208,22 +208,6 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             result['payment_method'] = None
             result['price'] = None
 
-        elif is_myeduzz:
-            data_ctx = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-            result['event_type'] = "outros"
-            
-            result['name'] = f"Fatura #{data_ctx.get('invoiceId')}"
-            result['email'] = None
-            result['phone'] = None
-            
-            price_info = data_ctx.get("price") or {}
-            result['price'] = str(price_info.get("value")) if price_info.get("value") is not None else None
-            result['currency'] = str(price_info.get("currency") or "BRL").upper()
-            
-            result['product_name'] = f"Fatura #{data_ctx.get('invoiceId')}"
-            result['payment_method'] = None
-            result['raw_status'] = "COMMISSION_PROCESSED"
-
         elif is_orbita:
             if "data" in payload and isinstance(payload["data"], dict) and not ("buyer" in payload or "student" in payload or "items" in payload or "customer" in payload):
                 data_ctx = payload["data"]
@@ -299,6 +283,22 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
 
             result['payment_method'] = data_ctx.get("paymentMethod")
             result['raw_status'] = status
+
+        elif is_myeduzz:
+            data_ctx = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+            result['event_type'] = "outros"
+            
+            result['name'] = f"Fatura #{data_ctx.get('invoiceId')}"
+            result['email'] = None
+            result['phone'] = None
+            
+            price_info = data_ctx.get("price") or {}
+            result['price'] = str(price_info.get("value")) if price_info.get("value") is not None else None
+            result['currency'] = str(price_info.get("currency") or "BRL").upper()
+            
+            result['product_name'] = f"Fatura #{data_ctx.get('invoiceId')}"
+            result['payment_method'] = None
+            result['raw_status'] = "COMMISSION_PROCESSED"
         else:
             status_name = str(get_val(["transacao_status", "nome"]) or "").lower()
             if "pago" in status_name: result['event_type'] = "compra_aprovada"
