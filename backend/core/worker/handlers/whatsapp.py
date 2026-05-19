@@ -10,6 +10,7 @@ from chatwoot_client import ChatwootClient
 from services.discovery import discover_or_create_chatwoot_conversation
 from rabbitmq_client import rabbitmq
 from config_loader import get_setting
+from core.engine.business_hours import is_within_business_hours, get_next_business_hour_start
 
 logger = logging.getLogger("Worker.WhatsApp")
 
@@ -309,6 +310,79 @@ async def handle_whatsapp_event(data: dict):
                                 user_input = inter.get("list_reply", {}).get("title")
 
                         if user_input:
+                            # --- NOVO: Verificar se o contato possui um funil pausado em botões ---
+                            suspended_trigger = db.query(models.ScheduledTrigger).filter(
+                                models.ScheduledTrigger.contact_phone == from_phone,
+                                models.ScheduledTrigger.status == "suspended",
+                                models.ScheduledTrigger.current_node_id != None
+                            ).order_by(models.ScheduledTrigger.updated_at.desc()).first()
+
+                            if suspended_trigger:
+                                funnel_obj = suspended_trigger.funnel
+                                if funnel_obj and funnel_obj.steps:
+                                    graph_data = funnel_obj.steps
+                                    nodes = {str(n["id"]): n for n in graph_data.get("nodes", [])}
+                                    edges = graph_data.get("edges", [])
+                                    
+                                    current_node = nodes.get(suspended_trigger.current_node_id)
+                                    if current_node and current_node.get("type") in ["message", "messageNode"]:
+                                        buttons = [b.strip() for b in current_node.get("data", {}).get("buttons", []) if b.strip()]
+                                        
+                                        target_node_id = None
+                                        source_handle = None
+                                        
+                                        input_clean = user_input.strip().lower()
+                                        matched_btn_idx = -1
+                                        for idx, btn_text in enumerate(buttons):
+                                            if btn_text.strip().lower() == input_clean:
+                                                matched_btn_idx = idx
+                                                break
+                                                
+                                        if matched_btn_idx != -1:
+                                            # Seguir a conexão do botão específico
+                                            source_handle = f"button_{matched_btn_idx}"
+                                            edge = next((e for e in edges if e.get("source") == suspended_trigger.current_node_id and e.get("sourceHandle") == source_handle), None)
+                                            if edge:
+                                                target_node_id = edge.get("target")
+                                                logger.info(f"👆 [WA-RESUME] Clique em botão '{user_input}' (índice {matched_btn_idx}) mapeado para o Nó {target_node_id}")
+                                        else:
+                                            # Tenta seguir o caminho padrão (sem sourceHandle ou default)
+                                            edge = next((e for e in edges if e.get("source") == suspended_trigger.current_node_id and (not e.get("sourceHandle") or e.get("sourceHandle") == "default" or not str(e.get("sourceHandle", "")).startswith("button_"))), None)
+                                            if edge:
+                                                target_node_id = edge.get("target")
+                                                logger.info(f"💬 [WA-RESUME] Resposta de texto/desconhecida '{user_input}' mapeada para o caminho padrão (Nó {target_node_id})")
+
+                                        if target_node_id:
+                                            # Verificar se o nó de destino tem horário comercial ativo e estamos fora do horário
+                                            is_outside_hours = False
+                                            target_node = nodes.get(target_node_id)
+                                            if target_node:
+                                                target_data = target_node.get("data", {})
+                                                if target_data.get("onlyBusinessHours") and not is_within_business_hours(funnel_obj):
+                                                    is_outside_hours = True
+
+                                            if is_outside_hours:
+                                                next_run = get_next_business_hour_start(funnel_obj)
+                                                suspended_trigger.current_node_id = target_node_id
+                                                suspended_trigger.status = "queued"
+                                                suspended_trigger.scheduled_time = next_run
+                                                db.commit()
+                                                logger.info(f"⏳ [WA-RESUME] Fora do horário comercial. Agendando Funil {funnel_obj.id} ({funnel_obj.name}) para {next_run} no nó {target_node_id}")
+                                            else:
+                                                suspended_trigger.current_node_id = target_node_id
+                                                suspended_trigger.status = "processing"
+                                                suspended_trigger.scheduled_time = datetime.now(timezone.utc)
+                                                db.commit()
+                                                
+                                                await rabbitmq.publish("zapvoice_funnel_executions", {
+                                                    "trigger_id": suspended_trigger.id,
+                                                    "funnel_id": funnel_obj.id,
+                                                    "conversation_id": resolved_convo_id or suspended_trigger.conversation_id,
+                                                    "contact_phone": from_phone
+                                                })
+                                                logger.info(f"🔄 [WA-RESUME] Retomando Funil {funnel_obj.id} ({funnel_obj.name}) para {from_phone} no nó {target_node_id}")
+                                            continue
+
                             text_clean = user_input.strip().lower()
                             matched_funnel = db.query(models.Funnel).filter(
                                 models.Funnel.client_id.in_(candidate_cids),

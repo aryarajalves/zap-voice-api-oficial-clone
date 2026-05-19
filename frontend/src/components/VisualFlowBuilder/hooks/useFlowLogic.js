@@ -158,13 +158,18 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             const newNodes = nds.concat(newNode);
 
             if (menu.sourceNodeId) {
-                setEdges((eds) => addEdge({
-                    id: `e${menu.sourceNodeId}-${newNode.id}`,
-                    source: menu.sourceNodeId,
-                    sourceHandle: menu.sourceHandleId,
-                    target: newNode.id,
-                    animated: true
-                }, eds));
+                setEdges((eds) => {
+                    const filtered = eds.filter(e =>
+                        !(e.source === menu.sourceNodeId && e.sourceHandle === menu.sourceHandleId)
+                    );
+                    return addEdge({
+                        id: `e${menu.sourceNodeId}-${newNode.id}`,
+                        source: menu.sourceNodeId,
+                        sourceHandle: menu.sourceHandleId,
+                        target: newNode.id,
+                        animated: true
+                    }, filtered);
+                });
             }
 
             return newNodes;
@@ -180,7 +185,8 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     const onConnect = useCallback((params) => {
         setEdges((eds) => {
             const filteredEdges = eds.filter(e =>
-                !(e.source === params.source && e.sourceHandle === params.sourceHandle)
+                !(e.source === params.source && e.sourceHandle === params.sourceHandle) &&
+                !(e.target === params.target && e.targetHandle === params.targetHandle)
             );
             return addEdge({ ...params, animated: true }, filteredEdges);
         });

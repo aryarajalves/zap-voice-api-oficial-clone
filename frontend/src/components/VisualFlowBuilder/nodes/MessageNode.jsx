@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position } from 'reactflow';
-import { FiMessageSquare, FiPlus, FiCpu, FiClock } from 'react-icons/fi';
+import { FiMessageSquare, FiPlus, FiCpu, FiClock, FiTrash2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import NodeHeader from '../components/NodeHeader';
 import VariableSelector from '../components/VariableSelector';
@@ -86,6 +86,56 @@ const MessageNode = ({ id, data }) => {
                     </button>
                 )}
 
+                {/* Seção de Botões Interativos */}
+                <div className="pt-2 mt-1 border-t border-gray-100 dark:border-gray-700 space-y-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Botões Interativos (Opcional - Máx. 3)</span>
+                    
+                    {(data.buttons || []).map((btn, idx) => (
+                        <div key={idx} className="flex gap-1 group animate-fade-in relative items-center">
+                            <input
+                                type="text"
+                                className="nodrag nopan flex-1 text-[11px] p-1.5 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-gray-200 dark:border-gray-700 outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                                placeholder={`Texto do Botão ${idx + 1}`}
+                                value={btn}
+                                onChange={(e) => {
+                                    const newButtons = [...(data.buttons || [])];
+                                    newButtons[idx] = e.target.value;
+                                    data.onChange(id, { buttons: newButtons });
+                                }}
+                                maxLength={20}
+                            />
+                            <button
+                                onClick={() => {
+                                    const newButtons = (data.buttons || []).filter((_, i) => i !== idx);
+                                    data.onChange(id, { buttons: newButtons });
+                                }}
+                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition nodrag animate-fade-in mr-1"
+                                title="Remover Botão"
+                            >
+                                <FiTrash2 size={12} />
+                            </button>
+                            <Handle
+                                type="source"
+                                position={Position.Right}
+                                id={`button_${idx}`}
+                                className="w-3 h-3 bg-blue-500 hover:bg-blue-600 hover:scale-125 transition border-2 border-white dark:border-gray-800 !-right-[20px]"
+                            />
+                        </div>
+                    ))}
+                    
+                    {(data.buttons || []).length < 3 && (
+                        <button
+                            onClick={() => {
+                                const newButtons = [...(data.buttons || []), ''];
+                                data.onChange(id, { buttons: newButtons });
+                            }}
+                            className="w-full py-1.5 border border-dashed border-blue-200 dark:border-blue-800 rounded text-[10px] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition flex items-center justify-center gap-1 nodrag font-bold"
+                        >
+                            <FiPlus size={12} /> Adicionar Botão
+                        </button>
+                    )}
+                </div>
+
                 <div className="pt-2 mt-1 border-t border-gray-100 dark:border-gray-700 space-y-2">
                     <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
                         <div className="relative inline-flex items-center cursor-pointer">
@@ -120,6 +170,13 @@ const MessageNode = ({ id, data }) => {
                     </label>
                 </div>
             </div>
+
+            {/* Legenda para o conector inferior */}
+            {(data.buttons || []).length > 0 && (
+                <div className="text-[9px] text-gray-400 dark:text-gray-500 text-center mt-1 mb-2 font-bold select-none uppercase tracking-wider">
+                    Outra resposta / Texto ⬇️
+                </div>
+            )}
 
             <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-blue-500" />
         </div>

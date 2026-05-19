@@ -112,6 +112,16 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 
 ## 📝 Changelog
 
+### v3.6.3
+- **Restrição de Conexão Única por Handle/Nó**: Limitação robusta no ReactFlow e na persistência para garantir que cada alça de saída (source) e cada nó de destino (target) possuam no máximo 1 ligação correspondente, evitando fluxos sobrepostos.
+- **Validação de Horário Comercial na Retomada de Funis**: Webhook do WhatsApp valida o horário comercial ao retomar execuções suspensas. Caso o nó de destino tenha `onlyBusinessHours` habilitado e a interação aconteça fora do horário, a execução é automaticamente agendada para o próximo período comercial disponível.
+
+### v3.6.2
+- **Mensagens com Botões Interativos e Ramificação (Branching)**: Suporte completo à configuração de até 3 botões interativos nas mensagens do funil.
+- **Conectores de Botões no Flow Builder**: Visualização premium com alças (handles) específicas para cada botão na lateral do nó, permitindo ligar cada resposta a nós diferentes, além de rótulo claro indicando a rota padrão.
+- **Suspensão e Retomada de Funis**: Pausa automática na execução do funil quando botões são enviados, aguardando clique de botão ou mensagem do contato para prosseguir pela ramificação selecionada.
+- **Notas Privadas de Fallback**: Sincronização automática em formato de nota privada no Chatwoot contendo cópia da mensagem e botões enviados.
+
 ### v3.6.1
 - **Sincronização de Histórico no Chatwoot**: Envio assíncrono de notas privadas com o conteúdo renderizado do template e etiquetas pós-disparo em massa nos disparos em massa.
 
