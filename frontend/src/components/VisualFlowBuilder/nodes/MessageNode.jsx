@@ -178,7 +178,7 @@ const MessageNode = ({ id, data }) => {
                 </div>
             )}
 
-            <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-blue-500" />
+            <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-blue-500" />
         </div>
     );
 };
