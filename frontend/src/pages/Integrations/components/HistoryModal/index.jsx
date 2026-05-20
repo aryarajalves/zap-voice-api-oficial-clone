@@ -17,6 +17,8 @@ const HistoryModal = ({
   setWebhookHistorySearch,
   webhookHistoryStatusFilter,
   setWebhookHistoryStatusFilter,
+  webhookHistoryMappingFilter,
+  setWebhookHistoryMappingFilter,
   historyCurrentPage,
   setHistoryCurrentPage,
   historyPageSize,
@@ -45,8 +47,20 @@ const HistoryModal = ({
 
   const historyArray = Array.isArray(webhookHistory) ? webhookHistory : [];
   const filtered = historyArray.filter(item => {
-    if (!webhookHistoryStatusFilter) return true;
-    return item?.processed_data?.raw_status === webhookHistoryStatusFilter;
+    // 1. Filtro por status
+    if (webhookHistoryStatusFilter && item?.processed_data?.raw_status !== webhookHistoryStatusFilter) {
+      return false;
+    }
+    // 2. Filtro por mapeamento
+    if (webhookHistoryMappingFilter) {
+      const isUnmapped = item.status === 'skipped' && (
+        item.error_message?.toLowerCase().includes('mapeamento') ||
+        item.error_message?.toLowerCase().includes('mapping')
+      );
+      if (webhookHistoryMappingFilter === 'mapped' && isUnmapped) return false;
+      if (webhookHistoryMappingFilter === 'unmapped' && !isUnmapped) return false;
+    }
+    return true;
   });
   const totalPages = Math.ceil(filtered.length / (historyPageSize || 20));
   const paginated = filtered.slice((historyCurrentPage - 1) * historyPageSize, historyCurrentPage * historyPageSize);
@@ -78,6 +92,8 @@ const HistoryModal = ({
           handleSyncAllHistory={handleSyncAllHistory}
           isSyncingAll={isSyncingAll}
           setWebhookHistoryStatusFilter={setWebhookHistoryStatusFilter}
+          webhookHistoryMappingFilter={webhookHistoryMappingFilter}
+          setWebhookHistoryMappingFilter={setWebhookHistoryMappingFilter}
           webhookHistory={webhookHistory}
         />
 
@@ -98,7 +114,12 @@ const HistoryModal = ({
               </div>
               {webhookHistorySearch && (
                 <button
-                  onClick={() => { setWebhookHistorySearch(''); fetchHistory(integration.id, '', ''); }}
+                  onClick={() => {
+                    setWebhookHistorySearch('');
+                    setWebhookHistoryStatusFilter('');
+                    setWebhookHistoryMappingFilter('');
+                    fetchHistory(integration.id, '', '');
+                  }}
                   className="mt-4 text-xs font-bold bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                 >
                   Limpar Busca

@@ -25,15 +25,30 @@ def test_duplicate_name():
         print("Erro ao obter token")
         return
 
+    # Buscar/Criar clientes dinamicamente
+    res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+    if res_clients.status_code != 200:
+        print(f"❌ Erro ao buscar clientes: {res_clients.status_code}")
+        return
+    clients = res_clients.json()
+    if len(clients) < 2:
+        for i in range(len(clients), 2):
+            requests.post(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"}, json={"name": f"Cliente de Teste {i+1}"})
+        res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+        clients = res_clients.json()
+
+    client_id_1 = clients[0]['id']
+    client_id_2 = clients[1]['id']
+
     headers_1 = {
         "Authorization": f"Bearer {token}",
-        "X-Client-ID": "1",
+        "X-Client-ID": str(client_id_1),
         "Content-Type": "application/json"
     }
 
     headers_2 = {
         "Authorization": f"Bearer {token}",
-        "X-Client-ID": "2",
+        "X-Client-ID": str(client_id_2),
         "Content-Type": "application/json"
     }
 

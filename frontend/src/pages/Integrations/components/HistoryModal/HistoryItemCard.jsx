@@ -29,7 +29,13 @@ const HistoryItemCard = ({
                 item.status === 'skipped' ? 'bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400' :
                   'bg-gray-100 text-gray-700 dark:bg-gray-400/10 dark:text-gray-400'
             }`}>
-            {item.status}
+            {item.status === 'processed' ? 'Processado' :
+             item.status === 'error' ? 'Erro' :
+             item.status === 'skipped' ? 'Sem Mapeamento' :
+             item.status === 'pending' ? 'Pendente' :
+             item.status === 'ignored' ? 'Ignorado' :
+             item.status === 'received' ? 'Recebido' :
+             item.status}
           </span>
           <span className="text-xs text-gray-500 font-mono font-medium">
             {new Date(item.created_at).toLocaleString()}

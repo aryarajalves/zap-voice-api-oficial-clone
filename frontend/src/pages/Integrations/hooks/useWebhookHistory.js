@@ -13,6 +13,7 @@ export function useWebhookHistory(activeClient) {
   const [historyPageSize, setHistoryPageSize] = useState(20);
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [webhookHistoryStatusFilter, setWebhookHistoryStatusFilter] = useState('');
+  const [webhookHistoryMappingFilter, setWebhookHistoryMappingFilter] = useState('');
   const [webhookHistorySearch, setWebhookHistorySearch] = useState('');
   const [isSavingJson, setIsSavingJson] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
@@ -238,6 +239,8 @@ export function useWebhookHistory(activeClient) {
     setHistoryCurrentPage,
     webhookHistoryStatusFilter,
     setWebhookHistoryStatusFilter,
+    webhookHistoryMappingFilter,
+    setWebhookHistoryMappingFilter,
     webhookHistorySearch,
     setWebhookHistorySearch,
     isSavingJson,

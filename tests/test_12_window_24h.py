@@ -27,8 +27,21 @@ def test_window_24h_logic():
         print("Erro ao obter token")
         return
 
+    # Buscar clientes dinamicamente
+    res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+    if res_clients.status_code != 200:
+        print(f"❌ Erro ao buscar clientes: {res_clients.status_code}")
+        return
+    clients = res_clients.json()
+    if not clients:
+        requests.post(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"}, json={"name": "Cliente de Teste Automatizado"})
+        res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+        clients = res_clients.json()
+    client_id = clients[0]['id']
+
     headers = {
         "Authorization": f"Bearer {token}",
+        "X-Client-ID": str(client_id),
         "Content-Type": "application/json"
     }
 
@@ -38,15 +51,15 @@ def test_window_24h_logic():
     print(f"Validando janela de 24h para o número: {test_phone}")
     
     payload = {
-        "contacts": [test_phone]
+        "phones": [test_phone]
     }
 
     try:
-        res = requests.post(f"{BASE_URL}/chatwoot/validate_contacts", headers=headers, json=payload)
+        res = requests.post(f"{BASE_URL}/chatwoot/validate-contacts", headers=headers, json=payload)
         if res.status_code == 200:
             results = res.json()
-            if results:
-                data = results[0]
+            if results and test_phone in results:
+                data = results[test_phone]
                 exists = data.get("exists")
                 window_open = data.get("window_open")
                 last_activity = data.get("last_activity")

@@ -14,6 +14,8 @@ const HistoryControls = ({
   handleSyncAllHistory,
   isSyncingAll,
   setWebhookHistoryStatusFilter,
+  webhookHistoryMappingFilter,
+  setWebhookHistoryMappingFilter,
   webhookHistory
 }) => {
   if (webhookHistoryLength === 0) return null;
@@ -55,6 +57,19 @@ const HistoryControls = ({
           <FiRefreshCw size={14} className={`${isSyncingAll ? 'animate-spin' : 'group-hover:rotate-180'} transition-transform duration-500`} />
           {isSyncingAll ? 'SINCRONIZANDO TUDO...' : 'SINCRONIZAR TUDO'}
         </button>
+
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-black text-gray-500 tracking-widest uppercase">Mapeamento:</span>
+          <select
+            value={webhookHistoryMappingFilter}
+            onChange={(e) => { setWebhookHistoryMappingFilter(e.target.value); setHistoryCurrentPage(1); }}
+            className="bg-[#0b1120] border border-white/5 rounded-xl px-4 py-2 text-xs font-bold text-gray-200 focus:ring-2 focus:ring-blue-500/30 transition-all cursor-pointer outline-none hover:border-white/10"
+          >
+            <option value="">TODOS</option>
+            <option value="mapped">COM MAPEAMENTO</option>
+            <option value="unmapped">SEM MAPEAMENTO</option>
+          </select>
+        </div>
 
         <div className="flex items-center gap-3">
           <span className="text-[10px] font-black text-gray-500 tracking-widest uppercase">Filtrar por Status:</span>

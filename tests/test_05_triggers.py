@@ -37,10 +37,20 @@ def test_individual_trigger(token):
         return False, f"❌ Triggers - Erro ao buscar funis: {response.status_code}"
     
     funnels = response.json()
+    created_funnel_id = None
     if not isinstance(funnels, list) or not funnels:
-        return False, "❌ Triggers - Nenhum funil encontrado para este cliente"
-    
-    funnel_id = funnels[0]['id']
+        # Limpar qualquer funil órfão com o mesmo nome para evitar 400
+        requests.delete(f"{BASE_URL}/funnels", headers=headers, json={"name": "Funil Temporario Triggers Test"})
+        res_create = requests.post(f"{BASE_URL}/funnels", headers=headers, json={
+            "name": "Funil Temporario Triggers Test",
+            "steps": []
+        })
+        if res_create.status_code != 200:
+            return False, f"❌ Triggers - Falha ao criar funil temporário: {res_create.text}"
+        funnel_id = res_create.json()["id"]
+        created_funnel_id = funnel_id
+    else:
+        funnel_id = funnels[0]['id']
     
     # 3. Agendar disparo individual
     trigger_data = {
@@ -49,16 +59,23 @@ def test_individual_trigger(token):
         "conversation_id": "12345" # Simulado
     }
     
+    success = False
+    msg = ""
     try:
         # Endpoint: POST /api/funnels/{id}/trigger
         response = requests.post(f"{BASE_URL}/funnels/{funnel_id}/trigger", headers=headers, json=trigger_data)
         if response.status_code == 201 or response.status_code == 200:
             trigger_id = response.json().get("id")
             print(f"✅ Agendamento - Criado OK (ID: {trigger_id})")
-            return True, "✅ Agendamento individual simulado com sucesso"
-        return False, f"❌ Agendamento - Erro: {response.status_code} - {response.text}"
+            success, msg = True, "✅ Agendamento individual simulado com sucesso"
+        else:
+            success, msg = False, f"❌ Agendamento - Erro: {response.status_code} - {response.text}"
     except Exception as e:
-        return False, f"❌ Agendamento - Erro de conexão: {e}"
+        success, msg = False, f"❌ Agendamento - Erro de conexão: {e}"
+    finally:
+        if created_funnel_id:
+            requests.delete(f"{BASE_URL}/funnels/{created_funnel_id}", headers=headers)
+    return success, msg
 
 def test_bulk_trigger(token):
     headers = {"Authorization": f"Bearer {token}"}
@@ -77,9 +94,24 @@ def test_bulk_trigger(token):
     
     # 2. Obter primeiro funil disponível
     funnels_res = requests.get(f"{BASE_URL}/funnels", headers=headers)
-    if funnels_res.status_code != 200 or not funnels_res.json():
-         return False, "❌ Bulk - Nenhum funil encontrado para teste de bulk"
-    funnel_id = funnels_res.json()[0]['id']
+    if funnels_res.status_code != 200:
+        return False, f"❌ Bulk - Erro ao buscar funis: {funnels_res.status_code}"
+    
+    funnels = funnels_res.json()
+    created_funnel_id = None
+    if not isinstance(funnels, list) or not funnels:
+        # Limpar qualquer funil órfão com o mesmo nome para evitar 400
+        requests.delete(f"{BASE_URL}/funnels", headers=headers, json={"name": "Funil Temporario Triggers Test Bulk"})
+        res_create = requests.post(f"{BASE_URL}/funnels", headers=headers, json={
+            "name": "Funil Temporario Triggers Test Bulk",
+            "steps": []
+        })
+        if res_create.status_code != 200:
+            return False, f"❌ Bulk - Falha ao criar funil temporário: {res_create.text}"
+        funnel_id = res_create.json()["id"]
+        created_funnel_id = funnel_id
+    else:
+        funnel_id = funnels[0]['id']
     
     # 3. Simulação de disparo em massa (JSON)
     # Endpoint: POST /api/funnels/{id}/trigger-bulk
@@ -90,14 +122,21 @@ def test_bulk_trigger(token):
         ]
     }
     
+    success = False
+    msg = ""
     try:
         response = requests.post(f"{BASE_URL}/funnels/{funnel_id}/trigger-bulk", headers=headers, json=bulk_data)
         if response.status_code in [200, 201, 202]:
             print("✅ Disparo em Massa - Requisição aceita")
-            return True, "✅ Disparo em massa simulado com sucesso"
-        return False, f"❌ Disparo em Massa - Erro: {response.status_code} - {response.text}"
+            success, msg = True, "✅ Disparo em massa simulado com sucesso"
+        else:
+            success, msg = False, f"❌ Disparo em Massa - Erro: {response.status_code} - {response.text}"
     except Exception as e:
-        return False, f"❌ Disparo em Massa - Erro de conexão: {e}"
+        success, msg = False, f"❌ Disparo em Massa - Erro de conexão: {e}"
+    finally:
+        if created_funnel_id:
+            requests.delete(f"{BASE_URL}/funnels/{created_funnel_id}", headers=headers)
+    return success, msg
 
 def run_trigger_tests():
     print("\n--- [05] Testes de Agendamentos e Disparos ---")

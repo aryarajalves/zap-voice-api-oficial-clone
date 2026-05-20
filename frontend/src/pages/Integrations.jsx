@@ -53,7 +53,9 @@ export default function Integrations() {
   const {
     webhookHistory, loadingHistory, isResending, isSyncing, isSyncingAll, selectedHistoryIds, setSelectedHistoryIds,
     historyPageSize, setHistoryPageSize, historyCurrentPage, setHistoryCurrentPage,
-    webhookHistoryStatusFilter, setWebhookHistoryStatusFilter, webhookHistorySearch, setWebhookHistorySearch,
+    webhookHistoryStatusFilter, setWebhookHistoryStatusFilter,
+    webhookHistoryMappingFilter, setWebhookHistoryMappingFilter,
+    webhookHistorySearch, setWebhookHistorySearch,
     isSavingJson, syncProgress, fetchHistory, handleResendWebhook, handleSyncHistory, handleSyncAllHistory,
     handleBulkResendHistory,
     handleExportHistory, handleImportHistory, handleDeleteHistory, handleSaveJson
@@ -315,6 +317,8 @@ export default function Integrations() {
         setWebhookHistorySearch={setWebhookHistorySearch} 
         webhookHistoryStatusFilter={webhookHistoryStatusFilter} 
         setWebhookHistoryStatusFilter={setWebhookHistoryStatusFilter} 
+        webhookHistoryMappingFilter={webhookHistoryMappingFilter}
+        setWebhookHistoryMappingFilter={setWebhookHistoryMappingFilter} 
         historyCurrentPage={historyCurrentPage} 
         setHistoryCurrentPage={setHistoryCurrentPage} 
         historyPageSize={historyPageSize} 

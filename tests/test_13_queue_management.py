@@ -16,7 +16,20 @@ def get_token():
 
 def test_queue_management():
     token = get_token()
-    headers = {"Authorization": f"Bearer {token}", "X-Client-ID": "1"}
+    
+    # Buscar clientes dinamicamente
+    res_clients = requests.get(f"{API_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+    if res_clients.status_code != 200:
+        print(f"❌ Erro ao buscar clientes: {res_clients.status_code}")
+        return
+    clients = res_clients.json()
+    if not clients:
+        requests.post(f"{API_URL}/clients/", headers={"Authorization": f"Bearer {token}"}, json={"name": "Cliente de Teste Automatizado"})
+        res_clients = requests.get(f"{API_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+        clients = res_clients.json()
+
+    client_id = clients[0]['id']
+    headers = {"Authorization": f"Bearer {token}", "X-Client-ID": str(client_id)}
     
     print("\n--- [13] Teste de Gestão de Filas (Super Monitor) ---")
     
@@ -38,12 +51,14 @@ def test_queue_management():
     res = requests.post(f"{API_URL}/triggers/{trigger_id}/pause", headers=headers)
     assert res.status_code == 200
     
-    # Verificar no monitor
-    res = requests.get(f"{API_URL}/admin/monitor", headers=headers)
-    active_ids = [t["id"] for t in res.json()]
+    # Verificar no monitor (usando /triggers filtrando por itens ativos)
+    res = requests.get(f"{API_URL}/triggers", headers=headers)
+    assert res.status_code == 200
+    triggers_list = res.json()["items"]
+    active_ids = [t["id"] for t in triggers_list if t["status"] in ["pending", "queued", "processing", "paused"]]
     assert trigger_id in active_ids
     
-    trigger_data = next(t for t in res.json() if t["id"] == trigger_id)
+    trigger_data = next(t for t in triggers_list if t["id"] == trigger_id)
     assert trigger_data["status"] == "paused"
     print("✅ Status 'paused' verificado no Monitor")
 
@@ -52,8 +67,10 @@ def test_queue_management():
     res = requests.post(f"{API_URL}/triggers/{trigger_id}/resume", headers=headers)
     assert res.status_code == 200
     
-    res = requests.get(f"{API_URL}/admin/monitor", headers=headers)
-    trigger_data = next(t for t in res.json() if t["id"] == trigger_id)
+    res = requests.get(f"{API_URL}/triggers", headers=headers)
+    assert res.status_code == 200
+    triggers_list = res.json()["items"]
+    trigger_data = next(t for t in triggers_list if t["id"] == trigger_id)
     assert trigger_data["status"] == "processing"
     print("✅ Status 'processing' verificado após retomar")
 
@@ -72,10 +89,11 @@ def test_queue_management():
     res = requests.post(f"{API_URL}/triggers/{trigger_id}/cancel", headers=headers)
     assert res.status_code == 200
     
-    res = requests.get(f"{API_URL}/admin/monitor", headers=headers)
-    active_ids = [t["id"] for t in res.json()]
-    # No nosso monitor, 'cancelled' não aparece se filtrarmos apenas ativos.
-    # Mas o endpoint /triggers deve mostrar.
+    res = requests.get(f"{API_URL}/triggers", headers=headers)
+    assert res.status_code == 200
+    triggers_list = res.json()["items"]
+    active_ids = [t["id"] for t in triggers_list if t["status"] in ["pending", "queued", "processing", "paused"]]
+    # No nosso monitor de ativos, 'cancelled' não aparece.
     assert trigger_id not in active_ids
     print("✅ Trigger removido do Monitor de Ativos (Super Monitor)")
 
@@ -86,7 +104,8 @@ def test_queue_management():
     
     # Verificar se sumiu do histórico tambem
     res = requests.get(f"{API_URL}/triggers", headers=headers)
-    all_ids = [t["id"] for t in res.json()]
+    assert res.status_code == 200
+    all_ids = [t["id"] for t in res.json()["items"]]
     assert trigger_id not in all_ids
     print("✅ Trigger excluído permanentemente do Banco e do Histórico")
 

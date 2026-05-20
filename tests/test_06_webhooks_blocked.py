@@ -24,6 +24,16 @@ def test_blocked_contacts(token):
     
     phone = "5511988888888"
     
+    # 1.5. Limpar bloqueio anterior se existir para garantir idempotência
+    try:
+        response = requests.get(f"{BASE_URL}/blocked/", headers=headers)
+        if response.status_code == 200:
+            for item in response.json():
+                if item.get("phone") == phone:
+                    requests.delete(f"{BASE_URL}/blocked/{item.get('id')}", headers=headers)
+    except Exception as e:
+        print(f"⚠️ Erro ao limpar bloqueio anterior: {e}")
+    
     # 2. Bloquear contato
     try:
         # Nota: blocked.py tem prefix="/blocked" e @router.post("/"). Total: /api/blocked/

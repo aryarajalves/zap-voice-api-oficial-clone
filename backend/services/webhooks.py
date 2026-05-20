@@ -154,6 +154,13 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
                     else:
                         result['phone'] = sub_phone
                         
+            subscription_user = data.get("subscription", {}).get("user", {})
+            if subscription_user:
+                if not result['email']:
+                    result['email'] = subscription_user.get("email")
+                if not result['name']:
+                    result['name'] = subscription_user.get("name")
+                        
             checkout_phone = buyer.get("checkout_phone", "")
             if checkout_phone:
                 result['phone'] = checkout_phone
@@ -219,13 +226,19 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             
         # 6. Extração de Preço e Moeda
         price_val = purchase.get("price") or purchase.get("full_price")
+        currency_val = purchase.get("currency_value")
+        
+        if isinstance(price_val, dict):
+            if not currency_val:
+                currency_val = price_val.get("currency_value")
+            price_val = price_val.get("value")
+            
         if price_val is None and event == "SUBSCRIPTION_CANCELLATION":
             price_val = data.get("actual_recurrence_value")
             
         if price_val is not None:
             result['price'] = price_val
             
-        currency_val = purchase.get("currency_value")
         if currency_val:
             result['currency'] = currency_val
 

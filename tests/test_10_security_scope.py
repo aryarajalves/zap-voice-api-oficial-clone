@@ -25,39 +25,56 @@ def test_security_isolation():
         print("Erro ao obter token")
         return
 
-    # 1. Criar um funil para o Cliente A (ID: 1)
+    # Buscar/Criar clientes dinamicamente
+    res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+    if res_clients.status_code != 200:
+        print(f"❌ Erro ao buscar clientes: {res_clients.status_code}")
+        return
+    clients = res_clients.json()
+    if len(clients) < 2:
+        for i in range(len(clients), 2):
+            requests.post(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"}, json={"name": f"Cliente de Teste {i+1}"})
+        res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+        clients = res_clients.json()
+
+    client_id_a = clients[0]['id']
+    client_id_b = clients[1]['id']
+
     headers_a = {
         "Authorization": f"Bearer {token}",
-        "X-Client-ID": "1",
+        "X-Client-ID": str(client_id_a),
         "Content-Type": "application/json"
     }
+
+    headers_b = {
+        "Authorization": f"Bearer {token}",
+        "X-Client-ID": str(client_id_b),
+        "Content-Type": "application/json"
+    }
+
+    # Limpar funis antigos com mesmo nome
+    for h, cid, name in [(headers_a, client_id_a, "Funil Cliente A"), (headers_b, client_id_b, "Funil Cliente B")]:
+        res = requests.get(f"{BASE_URL}/funnels", headers=h, params={"client_id": cid})
+        if res.status_code == 200:
+            for f in res.json():
+                if f.get("name") == name:
+                    requests.delete(f"{BASE_URL}/funnels/{f['id']}", headers=h)
+
+    # 1. Criar um funil para o Cliente A
     res = requests.post(f"{BASE_URL}/funnels", headers=headers_a, json={
         "name": "Funil Cliente A",
         "steps": []
     })
     funnel_id_a = res.json()["id"]
-    print(f"Funil do Cliente 1 criado: ID {funnel_id_a}")
+    print(f"Funil do Cliente {client_id_a} criado: ID {funnel_id_a}")
 
-    # 2. Criar um funil para o Cliente B (ID: 2 - Supondo que exista)
-    headers_b = {
-        "Authorization": f"Bearer {token}",
-        "X-Client-ID": "2",
-        "Content-Type": "application/json"
-    }
-    # Primeiro garantimos que o cliente 2 existe ou tentamos buscar/criar
-    # Simplificando: vamos apenas tentar criar o funil com ID 2
+    # 2. Criar um funil para o Cliente B
     res = requests.post(f"{BASE_URL}/funnels", headers=headers_b, json={
         "name": "Funil Cliente B",
         "steps": []
     })
-    if res.status_code != 200:
-        print("Cliente 2 nao encontrado ou erro ao criar funil B. Abortando teste de isolamento real.")
-        # Se nao tiver cliente 2, o teste perde o sentido de cross-client real, 
-        # mas ainda podemos testar se o Cliente 1 consegue apagar um ID que nao existe ou de outro.
-        funnel_id_b = 999999 
-    else:
-        funnel_id_b = res.json()["id"]
-        print(f"Funil do Cliente 2 criado: ID {funnel_id_b}")
+    funnel_id_b = res.json()["id"]
+    print(f"Funil do Cliente {client_id_b} criado: ID {funnel_id_b}")
 
     # 3. TENTATIVA MALICIOSA: Cliente 1 tenta apagar o funil do Cliente 2 via Bulk
     print(f"Tentativa Maliciosa: Cliente 1 tentando apagar funil do Cliente 2 (ID {funnel_id_b})...")

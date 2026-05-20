@@ -92,13 +92,19 @@ class TestWebhookParser(unittest.TestCase):
             "data": {
                 "buyer": {"name": "Test Complete", "email": "complete@test.com", "phone": "11999999999"},
                 "product": {"name": "Test Product"},
-                "purchase": {"status": "COMPLETE", "payment": {"type": "CREDIT_CARD"}}
+                "purchase": {
+                    "status": "COMPLETE",
+                    "payment": {"type": "CREDIT_CARD"},
+                    "price": {"value": 59.9, "currency_value": "BRL"}
+                }
             }
         }
         res = parse_webhook_payload('hotmart', payload)
         self.assertEqual(res['event_type'], "compra_aprovada")
         self.assertEqual(res['raw_status'], "Compra Aprovada")
         self.assertEqual(res['payment_method'], "Cartão de Crédito")
+        self.assertEqual(res['price'], "59.90")
+        self.assertEqual(res['currency'], "BRL")
 
     def test_hotmart_billet_printed_pix(self):
         payload = {

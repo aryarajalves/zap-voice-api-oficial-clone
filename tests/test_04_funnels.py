@@ -29,6 +29,13 @@ def test_funnels_crud(token):
     client_id = clients[0]['id']
     headers["X-Client-ID"] = str(client_id)
     
+    # 1.5. Limpar funis com esse nome se existirem para evitar conflitos de nome
+    res_list = requests.get(f"{BASE_URL}/funnels", headers=headers, params={"client_id": client_id})
+    if res_list.status_code == 200:
+        for f in res_list.json():
+            if f.get("name") == "Funil de Teste Automatizado":
+                requests.delete(f"{BASE_URL}/funnels/{f['id']}", headers=headers)
+
     # 2. Criar funil
     funnel_data = {
         "name": "Funil de Teste Automatizado",

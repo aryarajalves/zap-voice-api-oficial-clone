@@ -11,7 +11,13 @@ from jose import jwt
 logger = logging.getLogger("security")
 
 # ── Rate Limiter ──────────────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address, default_limits=["20/minute"])
+# [OPCIONAL] Habilitar/Desabilitar o limitador de requisições. Útil desativar em testes.
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true" and os.getenv("TESTING") != "true"
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["20/minute"],
+    enabled=RATE_LIMIT_ENABLED
+)
 
 # ── Auth Configuration ────────────────────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY", "").strip('"').strip("'").strip()

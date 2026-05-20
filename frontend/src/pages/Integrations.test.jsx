@@ -41,14 +41,26 @@ vi.mock('../AuthContext', () => ({
   fetchWithAuth: vi.fn(),
 }));
 
+const mockActiveClient = { id: 1, name: 'Test Client' };
 vi.mock('../contexts/ClientContext', () => ({
-  useClient: () => ({ activeClient: { id: 1, name: 'Test Client' } }),
+  useClient: () => ({ activeClient: mockActiveClient }),
 }));
 
 vi.mock('../config', () => ({ API_URL: '/api', WS_URL: 'ws://localhost/api/ws', WEBHOOK_BASE_URL: 'http://localhost' }));
-vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('../components/ConfirmModal', () => ({ default: () => null }));
+vi.mock('react-hot-toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'mock-toast-id'), dismiss: vi.fn() } }));
+vi.mock('../components/ConfirmModal', () => ({
+  default: ({ isOpen, onConfirm, title, confirmText = 'Confirmar' }) => {
+    if (!isOpen) return null;
+    return (
+      <div>
+        <h3>{title}</h3>
+        <button onClick={onConfirm}>{confirmText}</button>
+      </div>
+    );
+  }
+}));
 vi.mock('react-icons/fi', () => ({
+  FiAlertTriangle: () => <span />,
   FiZap: () => <span />,
   FiPlus: () => <span />,
   FiEdit2: () => <span data-testid="edit-icon" />,
@@ -78,7 +90,6 @@ vi.mock('react-icons/fi', () => ({
 describe('Integrations Page Interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
     
     // Default mock behavior
     vi.mocked(fetchWithAuth).mockImplementation((url) => {
@@ -100,9 +111,7 @@ describe('Integrations Page Interactions', () => {
       render(<Integrations />);
     });
 
-    await act(async () => {
-      vi.runAllTimers();
-    });
+    // Removido runOnlyPendingTimers para usar real timers
 
     await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
   });
@@ -131,14 +140,12 @@ describe('Integrations Page Interactions', () => {
       render(<Integrations />);
     });
 
-    await act(async () => {
-      vi.runAllTimers();
-    });
+    // Removido runOnlyPendingTimers para usar real timers
 
     await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
 
     // Abrir histórico
-    const historicoBtn = screen.getByTitle(/Histórico/i);
+    const historicoBtn = screen.getByText(/Histórico/i);
     fireEvent.click(historicoBtn);
 
     await waitFor(() => expect(screen.getByText(/Selecionar Todos os Registros/i)).toBeInTheDocument(), { timeout: 20000 });
@@ -155,10 +162,10 @@ describe('Integrations Page Interactions', () => {
     fireEvent.click(resendBulkBtn);
 
     // Verificar se o modal premium apareceu
-    await waitFor(() => expect(screen.getByText(/Reenviar Webhooks\?/i)).toBeInTheDocument(), { timeout: 20000 });
+    await waitFor(() => expect(screen.getByText(/Reenviar Webhooks/i)).toBeInTheDocument(), { timeout: 20000 });
 
     // Confirmar reenvio
-    const confirmBtn = screen.getByText(/SIM, REENVIAR/i);
+    const confirmBtn = screen.getByText(/Confirmar/i);
     fireEvent.click(confirmBtn);
 
     // Verificar se a API foi chamada
@@ -168,5 +175,63 @@ describe('Integrations Page Interactions', () => {
         expect(bulkResendCall).toBeDefined();
         expect(JSON.parse(bulkResendCall[1].body)).toEqual([101, 102]);
     }, { timeout: 20000 });
+  });
+
+  it('filtra o histórico de webhooks por mapeamento (com/sem mapeamento)', async () => {
+    const mockHistory = [
+      { id: 101, event_type: 'compra_aprovada', status: 'processed', created_at: new Date().toISOString(), payload: {}, processed_data: { raw_status: 'approved' } },
+      { id: 102, event_type: 'evento_desconhecido', status: 'skipped', error_message: 'Nenhum mapeamento encontrado para o evento: evento_desconhecido', created_at: new Date().toISOString(), payload: {}, processed_data: { raw_status: 'unknown' } },
+    ];
+
+    vi.mocked(fetchWithAuth).mockImplementation((url) => {
+      if (url.includes('history')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockHistory,
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => mockIntegrations,
+      });
+    });
+
+    await act(async () => {
+      render(<Integrations />);
+    });
+
+    // Removido runOnlyPendingTimers para usar real timers
+
+    await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
+
+    const historicoBtn = screen.getByText(/Histórico/i);
+    fireEvent.click(historicoBtn);
+
+    await waitFor(() => expect(screen.getByText(/Mapeamento:/i)).toBeInTheDocument(), { timeout: 20000 });
+
+    const selects = screen.getAllByRole('combobox');
+    const mappingDropdown = selects.find(select => {
+      return Array.from(select.options).some(opt => opt.text.includes('COM MAPEAMENTO'));
+    });
+    expect(mappingDropdown).toBeDefined();
+
+    await waitFor(() => {
+      expect(screen.getByText('compra_aprovada')).toBeInTheDocument();
+      expect(screen.getByText('evento_desconhecido')).toBeInTheDocument();
+    }, { timeout: 20000 });
+
+    fireEvent.change(mappingDropdown, { target: { value: 'mapped' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('compra_aprovada')).toBeInTheDocument();
+      expect(screen.queryByText('evento_desconhecido')).not.toBeInTheDocument();
+    });
+
+    fireEvent.change(mappingDropdown, { target: { value: 'unmapped' } });
+
+    await waitFor(() => {
+      expect(screen.queryByText('compra_aprovada')).not.toBeInTheDocument();
+      expect(screen.getByText('evento_desconhecido')).toBeInTheDocument();
+    });
   });
 });

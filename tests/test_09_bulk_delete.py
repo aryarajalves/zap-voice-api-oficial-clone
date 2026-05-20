@@ -27,9 +27,23 @@ def test_bulk_delete():
     if not token:
         return
 
+    # Buscar clientes dinamicamente
+    res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+    if res_clients.status_code != 200:
+        print(f"❌ Erro ao buscar clientes: {res_clients.status_code}")
+        return
+    clients = res_clients.json()
+    if not clients:
+        # Criar um cliente se não houver
+        requests.post(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"}, json={"name": "Cliente de Teste Automatizado"})
+        res_clients = requests.get(f"{BASE_URL}/clients/", headers={"Authorization": f"Bearer {token}"})
+        clients = res_clients.json()
+
+    client_id = clients[0]['id']
+
     headers = {
         "Authorization": f"Bearer {token}",
-        "X-Client-ID": str(CLIENT_ID),
+        "X-Client-ID": str(client_id),
         "Content-Type": "application/json"
     }
 

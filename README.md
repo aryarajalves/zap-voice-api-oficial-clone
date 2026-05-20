@@ -114,6 +114,7 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 
 ### v3.7.3
 - **Mapeamento Completo de Webhooks Hotmart**: Implementação de suporte para 12 tipos de payloads e eventos da Hotmart (incluindo `PURCHASE_COMPLETE`, `PURCHASE_BILLET_PRINTED` via PIX/Boleto, `PURCHASE_CHARGEBACK`, `PURCHASE_PROTEST`, `PURCHASE_DELAYED`, `PURCHASE_EXPIRED`, `PURCHASE_OUT_OF_SHOPPING_CART`, `SUBSCRIPTION_CANCELLATION`, `SWITCH_PLAN`, `UPDATE_SUBSCRIPTION_CHARGE_DATE` e eventos do Club/Área de Membros), convertendo-os para os respectivos status e tipos de eventos apropriados (`compra_aprovada`, `reembolso`, `boleto_impresso`, `pix_gerado`, `cartao_recusado`, `carrinho_abandonado`, `pix_expirado`, `outros`, e `evento_aluno`).
+- **Resiliência no parsing da Hotmart**: Adição de extração alternativa a partir de `subscription.user` (para recuperar e-mail e nome) em webhooks como `SWITCH_PLAN` que não contêm o objeto `buyer` ou `subscriber`.
 - **Tradução Global de Métodos de Pagamento**: Normalização e tradução no final do parser para padronizar todos os métodos de pagamento recebidos das plataformas em português do Brasil (ex: "Cartão de Crédito", "Boleto", "Pix").
 - **Correção de Parser de Itens Eduzz**: Resolução de bug na extração de múltiplos itens no checkout da Eduzz para popular corretamente a chave `items` com os preços numéricos associados.
 - **Suíte de Testes Unitários de Integração**: Adição de 12 novos testes unitários que garantem a cobertura e funcionamento ideal de todos os fluxos de webhooks da Hotmart e Eduzz.
