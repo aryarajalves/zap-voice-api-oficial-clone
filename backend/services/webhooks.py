@@ -97,31 +97,137 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
 
     if platform_lower == 'hotmart':
         event = payload.get("event", "")
-        if event == "PURCHASE_APPROVED": result['event_type'] = "compra_aprovada"
-        elif event == "PURCHASE_CANCELED" or event == "PURCHASE_REFUNDED": result['event_type'] = "reembolso"
-        elif event == "PURCHASE_BILLET_PRINTED": result['event_type'] = "boleto_impresso"
-        elif event == "PURCHASE_DELAYED": result['event_type'] = "cartao_recusado"
-        elif event == "ABANDONED_CART": result['event_type'] = "carrinho_abandonado"
-        
         data = payload.get("data", {})
         buyer = data.get("buyer", {})
         product = data.get("product", {})
         purchase = data.get("purchase", {})
         
-        result['name'] = buyer.get("name")
-        result['email'] = buyer.get("email")
-        checkout_phone = buyer.get("checkout_phone", "")
-        if checkout_phone: result['phone'] = checkout_phone
-        else: result['phone'] = get_val(["buyer", "phone"])
-
-        result['country'] = get_val(["buyer", "address", "country"])
+        # 1. Mapeamento de Evento Base
+        if event in ["PURCHASE_APPROVED", "PURCHASE_COMPLETE"]:
+            result['event_type'] = "compra_aprovada"
+        elif event in ["PURCHASE_CANCELED", "PURCHASE_REFUNDED"]:
+            result['event_type'] = "reembolso"
+        elif event == "PURCHASE_BILLET_PRINTED":
+            result['event_type'] = "boleto_impresso"
+        elif event == "PURCHASE_DELAYED":
+            result['event_type'] = "cartao_recusado"
+        elif event == "ABANDONED_CART":
+            result['event_type'] = "carrinho_abandonado"
+        elif event == "PURCHASE_CHARGEBACK":
+            result['event_type'] = "reembolso"
+        elif event == "PURCHASE_PROTEST":
+            result['event_type'] = "reembolso"
+        elif event == "PURCHASE_EXPIRED":
+            result['event_type'] = "pix_expirado"
+        elif event == "PURCHASE_OUT_OF_SHOPPING_CART":
+            result['event_type'] = "carrinho_abandonado"
+        elif event == "SUBSCRIPTION_CANCELLATION":
+            result['event_type'] = "reembolso"
+        elif event in ["SWITCH_PLAN", "UPDATE_SUBSCRIPTION_CHARGE_DATE"]:
+            result['event_type'] = "outros"
+        elif str(event).startswith("CLUB_"):
+            result['event_type'] = "evento_aluno"
+            
+        # 2. Extração de Informações do Comprador/Aluno
+        if str(event).startswith("CLUB_"):
+            user_data = data.get("user", {})
+            result['name'] = user_data.get("name")
+            result['email'] = user_data.get("email")
+            result['phone'] = user_data.get("phone")
+        else:
+            result['name'] = buyer.get("name")
+            result['email'] = buyer.get("email")
+            
+            subscriber = data.get("subscriber", {})
+            if subscriber:
+                if not result['name']:
+                    result['name'] = subscriber.get("name")
+                if not result['email']:
+                    result['email'] = subscriber.get("email")
+                if subscriber.get("phone"):
+                    sub_phone = subscriber.get("phone")
+                    if isinstance(sub_phone, dict):
+                        cell = sub_phone.get("cell") or sub_phone.get("phone") or ""
+                        ddd = sub_phone.get("dddCell") or sub_phone.get("dddPhone") or ""
+                        if cell:
+                            result['phone'] = f"{ddd}{cell}"
+                    else:
+                        result['phone'] = sub_phone
+                        
+            checkout_phone = buyer.get("checkout_phone", "")
+            if checkout_phone:
+                result['phone'] = checkout_phone
+            elif not result.get('phone'):
+                result['phone'] = buyer.get("phone")
+                
+        result['country'] = buyer.get("address", {}).get("country") or buyer.get("address", {}).get("country_iso")
+        
+        # 3. Nome do Produto / Assinatura
         result['product_name'] = product.get("name")
+        if event == "SWITCH_PLAN":
+            plans = data.get("plans", [])
+            active_plan = next((p for p in plans if p.get("current") is True), None)
+            if active_plan:
+                result['product_name'] = active_plan.get("name")
+            elif plans:
+                result['product_name'] = plans[0].get("name")
+                
+        # 4. Dados de Pagamento
         result['payment_method'] = purchase.get("payment", {}).get("type")
         result['order_bump'] = purchase.get("is_order_bump", False)
-        result['raw_status'] = purchase.get("status")
         
+        payment_info = purchase.get("payment", {})
+        if payment_info:
+            result['pix_code'] = payment_info.get("pix_code")
+            result['pix_qrcode'] = payment_info.get("pix_qrcode")
+            
+        # 5. Resolução de Status (para friendly_map)
+        if event == "PURCHASE_CHARGEBACK":
+            result['raw_status'] = "CHARGEBACK"
+        elif event == "PURCHASE_PROTEST":
+            result['raw_status'] = "DISPUTE"
+        elif event == "PURCHASE_DELAYED":
+            result['raw_status'] = "DELAYED"
+        elif event == "PURCHASE_EXPIRED":
+            result['raw_status'] = "EXPIRED"
+        elif event == "PURCHASE_OUT_OF_SHOPPING_CART":
+            result['raw_status'] = "PURCHASE_OUT_OF_SHOPPING_CART"
+        elif event == "SUBSCRIPTION_CANCELLATION":
+            result['raw_status'] = "SUBSCRIPTION_CANCELLATION"
+        elif event == "SWITCH_PLAN":
+            result['raw_status'] = "SWITCH_PLAN"
+        elif event == "UPDATE_SUBSCRIPTION_CHARGE_DATE":
+            result['raw_status'] = "UPDATE_SUBSCRIPTION_CHARGE_DATE"
+        elif str(event).startswith("CLUB_"):
+            result['raw_status'] = event
+        else:
+            result['raw_status'] = purchase.get("status") or event
+            
+        # Trata PURCHASE_BILLET_PRINTED condicionalmente se for PIX
+        if event == "PURCHASE_BILLET_PRINTED":
+            if result['payment_method'] == "PIX":
+                result['event_type'] = "pix_gerado"
+                result['raw_status'] = "PENDING"
+            else:
+                result['event_type'] = "boleto_impresso"
+                result['raw_status'] = "BOLETO_IMPRESSO"
+                
+        # Fallback de PIX com status WAITING_PAYMENT
         if result['payment_method'] == "PIX" and result['raw_status'] == "WAITING_PAYMENT":
             result['event_type'] = "pix_gerado"
+            result['raw_status'] = "PENDING"
+            
+        # 6. Extração de Preço e Moeda
+        price_val = purchase.get("price") or purchase.get("full_price")
+        if price_val is None and event == "SUBSCRIPTION_CANCELLATION":
+            price_val = data.get("actual_recurrence_value")
+            
+        if price_val is not None:
+            result['price'] = price_val
+            
+        currency_val = purchase.get("currency_value")
+        if currency_val:
+            result['currency'] = currency_val
 
     elif platform_lower == 'kiwify':
         order_status = payload.get("order_status") or payload.get("status", "")
@@ -253,9 +359,16 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
                 main_symbol = symbol_map.get(currency_code, "$")
 
                 formatted_items = []
+                parsed_items = []
                 for i in items_list:
                     p_name = i.get("name", "Produto Desconhecido")
                     formatted_items.append(p_name)
+                    item_price = i.get("price", {}).get("value") if isinstance(i.get("price"), dict) else i.get("price")
+                    parsed_items.append({
+                        "name": p_name,
+                        "price": item_price
+                    })
+                result['items'] = parsed_items
                 
                 result['product_name'] = " | ".join(formatted_items)
                 total_price = data_ctx.get("price", {}).get("value") or data_ctx.get("paid", {}).get("value")
@@ -431,7 +544,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             if is_cents and platform_lower == 'kiwify':
                 f_val = f_val / 100
             
-            currency = str(payload.get("currency") or get_val(["Commissions", "currency"]) or "BRL").upper()
+            currency = str(result.get('currency') or payload.get("currency") or get_val(["Commissions", "currency"]) or "BRL").upper()
             result['currency'] = currency
             rates = {"USD": 5.45, "EUR": 5.85, "GBP": 6.80, "MXN": 0.30}
             if currency != "BRL" and currency in rates:
@@ -449,13 +562,24 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
     raw_val = str(result.get('raw_status') or result.get('status') or payload.get("status") or payload.get("event") or "outros").upper()
     friendly_map = {
         "APPROVED": "Compra Aprovada", "SALE_APPROVED": "Compra Aprovada", "PAID": "Compra Aprovada",
+        "COMPLETED": "Compra Aprovada", "COMPLETE": "Compra Aprovada",
         "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso", 
         "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado", "ABANDONED": "Carrinho Abandonado",
         "WAITING": "Aguardando", "CANCELED": "Cancelado", "EXPIRED": "Expirado",
         "EVENTO_ALUNO": "Evento do Aluno",
         "COMMISSION_PROCESSED": "Comissão Processada",
         "OPEN": "Aguardando o Pagamento",
-        "WAITING_REFUND": "Aguardando Reembolso"
+        "WAITING_REFUND": "Aguardando Reembolso",
+        "BOLETO_IMPRESSO": "Boleto Impresso",
+        "CHARGEBACK": "Reembolso",
+        "DELAYED": "Cartão Recusado",
+        "DISPUTE": "Em Disputa",
+        "CLUB_FIRST_ACCESS": "Primeiro Acesso ao Club",
+        "CLUB_MODULE_COMPLETED": "Módulo Concluído",
+        "PURCHASE_OUT_OF_SHOPPING_CART": "Carrinho Abandonado",
+        "SUBSCRIPTION_CANCELLATION": "Assinatura Cancelada",
+        "SWITCH_PLAN": "Troca de Plano",
+        "UPDATE_SUBSCRIPTION_CHARGE_DATE": "Alteração de Vencimento"
     }
     result['raw_status'] = friendly_map.get(raw_val, raw_val.capitalize())
 
@@ -475,6 +599,27 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         name_val = str(result["name"]).strip()
         if name_val.isdigit() or len(name_val) <= 1:
              result["name"] = None
+
+    # Tradução Global de Forma de Pagamento
+    if result.get("payment_method"):
+        pm_clean = str(result["payment_method"]).strip().lower().replace("_", "").replace("-", "").replace(" ", "")
+        pm_map = {
+            "creditcard": "Cartão de Crédito",
+            "credit_card": "Cartão de Crédito",
+            "cardpix": "Cartão de Crédito",
+            "card_pix": "Cartão de Crédito",
+            "pix": "Pix",
+            "billet": "Boleto",
+            "boleto": "Boleto",
+            "banktransfer": "Transferência",
+            "directdebit": "Débito",
+            "paypal": "PayPal",
+            "transferencia": "Transferência",
+            "debito": "Débito",
+            "cartao": "Cartão de Crédito",
+            "cartaodecredito": "Cartão de Crédito"
+        }
+        result["payment_method"] = pm_map.get(pm_clean, result["payment_method"])
 
     return result
 
@@ -617,6 +762,7 @@ def replace_variables_in_string(text: str, payload: dict, parsed_data: dict) -> 
         "payment_method": "payment_method",
         "checkout_url": "checkout_url",
         "pix_qrcode": "pix_qrcode",
+        "pix_code": "pix_code",
     }
 
     # 1. Se o texto for uma chave simples conhecida (sem {{ }}), resolve direto
