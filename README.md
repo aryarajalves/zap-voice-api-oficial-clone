@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.1)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.2)
 
-Bem-vindo à versão **3.7.1** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.2** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,11 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.7.2
+- **Tradução e Ajuste de Status de Webhook (Eduzz)**: Correção e tradução dos novos status da Eduzz (`open` para `"Aguardando o Pagamento"` e `waiting_refund` para `"Aguardando Reembolso"`), garantindo consistência na normalização do payload pelo backend.
+- **Alertas Amigáveis de Erro no Frontend**: Atualização do componente de logs do histórico de webhook para tratar falhas e alertas de processamento como avisos visuais amigáveis (em português) em vez de logs de erro em inglês, mantendo a experiência do usuário clara e premium.
+- **Testes Unitários de Tradução**: Suíte de testes unitários do backend atualizada com cobertura completa para os novos estados traduzidos do checkout Eduzz/Órbita.
 
 ### v3.7.1
 - **Correção de Duplicação de Mensagens no WhatsApp**: Refatoração e tratamento robusto do parâmetro `ensure_conversation` no processamento de mensagens e execuções de funis (nos arquivos `whatsapp.py` e `executor.py`), aceitando inputs tanto em string JSON serializada quanto em dicionários de dados nativos.

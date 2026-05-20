@@ -453,7 +453,9 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado", "ABANDONED": "Carrinho Abandonado",
         "WAITING": "Aguardando", "CANCELED": "Cancelado", "EXPIRED": "Expirado",
         "EVENTO_ALUNO": "Evento do Aluno",
-        "COMMISSION_PROCESSED": "Comissão Processada"
+        "COMMISSION_PROCESSED": "Comissão Processada",
+        "OPEN": "Aguardando o Pagamento",
+        "WAITING_REFUND": "Aguardando Reembolso"
     }
     result['raw_status'] = friendly_map.get(raw_val, raw_val.capitalize())
 

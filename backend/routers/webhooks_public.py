@@ -129,7 +129,7 @@ async def handle_external_webhook(
         if not mapping:
             logger.info(f"⏭️ [SKIP] Nenhum mapeamento configurado para {event_type} na integração {integration.name}")
             history.status = "skipped"
-            history.error_message = f"No mapping found for event: {event_type}"
+            history.error_message = f"Nenhum mapeamento encontrado para o evento: {event_type}"
             db.commit()
             return {"status": "skipped", "reason": "no_mapping_found"}
 
