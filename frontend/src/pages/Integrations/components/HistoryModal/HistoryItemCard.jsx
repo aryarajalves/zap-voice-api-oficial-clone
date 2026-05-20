@@ -333,11 +333,11 @@ const HistoryItemCard = ({
         {item.error_message && (
           item.status === 'skipped' ? (
             <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-400/5 rounded-xl border border-amber-100 dark:border-amber-400/20 text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-2">
-              <FiAlertTriangle size={14} /> <strong>Alerta:</strong> {String(item.error_message).replace("No mapping found for event:", "Nenhum mapeamento encontrado para o evento:")}
+              <FiAlertTriangle size={14} /> <strong>Alerta:</strong> {String(item.error_message).replace(/No mapping found for event:/gi, "Nenhum mapeamento encontrado para o evento:")}
             </div>
           ) : (
             <div className="mt-4 p-3 bg-red-50 dark:bg-red-400/5 rounded-xl border border-red-100 dark:border-red-400/20 text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-2">
-              <FiXCircle size={14} /> <strong>Erro:</strong> {String(item.error_message).replace("No mapping found for event:", "Nenhum mapeamento encontrado para o evento:")}
+              <FiXCircle size={14} /> <strong>Erro:</strong> {String(item.error_message).replace(/No mapping found for event:/gi, "Nenhum mapeamento encontrado para o evento:")}
             </div>
           )
         )}
