@@ -85,7 +85,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
         });
 
         return createPortal(
-            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-300">
+            <div className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-300">
                 <div className="bg-white dark:bg-gray-900 w-full max-w-2xl max-h-[90vh] rounded-[2.5rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
                     
                     <div className="p-8 pb-6 flex justify-between items-start">
@@ -334,7 +334,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
     } catch (e) {
         console.error("Critical Render Error in Modal:", e);
         return createPortal(
-            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/80 backdrop-blur-sm">
                 <div className="bg-white p-8 rounded-3xl max-w-md text-center">
                     <FiAlertCircle size={48} className="mx-auto text-red-500 mb-4" />
                     <h2 className="text-xl font-black mb-2">Erro de Visualização</h2>

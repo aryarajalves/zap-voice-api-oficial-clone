@@ -5,6 +5,7 @@ import { EVENT_TYPES } from '../../constants';
 import ManyChatSection from './ManyChatSection';
 import SmartCancelSection from './SmartCancelSection';
 import VariablesSection from './VariablesSection';
+import FollowUpSection from './FollowUpSection';
 
 const MappingItem = ({ 
   mapping, 
@@ -19,7 +20,11 @@ const MappingItem = ({
   addVariable,
   removeVariable,
   templateVars,
-  customFieldsMapping
+  customFieldsMapping,
+  followupTemplateVars,
+  addFollowupVariable,
+  removeFollowupVariable,
+  updateFollowupVariable
 }) => {
   return (
     <div className="group bg-white dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden hover:border-blue-500/30 transition-all duration-300">
@@ -129,44 +134,8 @@ const MappingItem = ({
           />
 
           {/* Configurações Avançadas de Gatilho */}
-          <div className="pt-6 border-t border-gray-50 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-            <div className="space-y-4">
-              {mapping.template_id && (
-                <div className="flex items-center justify-between p-2.5 bg-gray-50/50 dark:bg-white/[0.02] rounded-xl border border-gray-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-300">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300">Nota Privada Chatwoot</span>
-                    <p className="text-[8px] text-gray-500">Enviar conteúdo do template como nota</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      checked={mapping.private_note === "true"}
-                      onChange={(e) => updateMapping(mIndex, 'private_note', e.target.checked ? "true" : "false")}
-                    />
-                    <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
-                  </label>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between p-2.5 bg-blue-500/5 dark:bg-blue-500/10 rounded-xl border border-blue-500/10">
-                <div>
-                  <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400">Disparar Memória</span>
-                  <p className="text-[8px] text-gray-500">Sincronizar com IA</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={mapping.publish_external_event}
-                    onChange={(e) => updateMapping(mIndex, 'publish_external_event', e.target.checked)}
-                  />
-                  <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-            </div>
-
-            <div className="space-y-2">
+          <div className="pt-6 border-t border-gray-50 dark:border-slate-800">
+            <div className="space-y-2 max-w-xl">
               <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
                 <FiSettings size={12} /> Etiquetas a aplicar no Chatwoot
               </label>
@@ -186,6 +155,19 @@ const MappingItem = ({
 
           {/* Smart Interruption */}
           <SmartCancelSection mapping={mapping} mIndex={mIndex} updateMapping={updateMapping} />
+
+          {/* Follow-up / Recorrência de Template */}
+          <FollowUpSection 
+            mapping={mapping}
+            mIndex={mIndex}
+            updateMapping={updateMapping}
+            templates={templates}
+            followupTemplateVars={followupTemplateVars}
+            addFollowupVariable={addFollowupVariable}
+            removeFollowupVariable={removeFollowupVariable}
+            updateFollowupVariable={updateFollowupVariable}
+            customFieldsMapping={customFieldsMapping}
+          />
         </div>
       )}
     </div>

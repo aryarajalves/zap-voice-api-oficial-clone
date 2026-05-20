@@ -33,13 +33,7 @@ const IntegrationFormModal = ({
               <p className="text-[10px] text-gray-500 font-medium mt-0.5 uppercase tracking-widest">Automação para {formData.platform}</p>
             </div>
           </div>
-          <button 
-            type="button"
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"
-          >
-            <FiX size={24} />
-          </button>
+          {/* O botão X de fechar foi removido para evitar ações de fechamento acidentais, conforme solicitado pelo usuário */}
         </div>
 
         {/* Scrollable Content */}

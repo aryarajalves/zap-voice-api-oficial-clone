@@ -1,12 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { FiMessageSquare, FiPlus, FiCpu, FiClock, FiTrash2 } from 'react-icons/fi';
+import { FiMessageSquare, FiPlus, FiCpu, FiClock, FiTrash2, FiMaximize2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import NodeHeader from '../components/NodeHeader';
 import VariableSelector from '../components/VariableSelector';
+import ExpandTextModal from '../../BulkSender/common/ExpandTextModal';
 
 const MessageNode = ({ id, data }) => {
     const variations = data.variations || [];
+    const [activeModalKey, setActiveModalKey] = useState(null); // null, 'content', ou 'variation_index'
+
+    const handleSaveModal = (key, val) => {
+        if (key === 'content') {
+            data.onChange(id, { content: val });
+        } else if (key.startsWith('variation_')) {
+            const idx = parseInt(key.split('_')[1], 10);
+            handleVariationChange(idx, val);
+        }
+    };
 
     const handleAddVariation = () => {
         if (variations.length >= 4) {
@@ -42,7 +53,17 @@ const MessageNode = ({ id, data }) => {
             <div className="space-y-3">
                 <div className="relative">
                     <div className="flex justify-between items-center mb-1">
-                        <span className="text-[10px] font-bold text-blue-500 uppercase">Versão 1 (Principal)</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-blue-500 uppercase">Versão 1 (Principal)</span>
+                            <button
+                                onClick={() => setActiveModalKey('content')}
+                                className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors nodrag p-0.5"
+                                title="Maximizar Texto"
+                                type="button"
+                            >
+                                <FiMaximize2 size={11} />
+                            </button>
+                        </div>
                         <VariableSelector onSelect={(v) => data.onChange(id, { content: (data.content || '') + v })} />
                     </div>
                     <textarea
@@ -56,8 +77,16 @@ const MessageNode = ({ id, data }) => {
                 {variations.map((v, idx) => (
                     <div key={idx} className="relative animate-fade-in group">
                         <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase">Versão {idx + 2}</span>
+                                <button
+                                    onClick={() => setActiveModalKey(`variation_${idx}`)}
+                                    className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors nodrag p-0.5"
+                                    title="Maximizar Texto"
+                                    type="button"
+                                >
+                                    <FiMaximize2 size={11} />
+                                </button>
                                 <VariableSelector onSelect={(v) => handleVariationChange(idx, (variations[idx] || '') + v)} />
                             </div>
                             <button
@@ -179,6 +208,18 @@ const MessageNode = ({ id, data }) => {
             )}
 
             <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-blue-500" />
+
+            {/* Modal de Texto Expandido */}
+            {activeModalKey && (
+                <ExpandTextModal
+                    isOpen={!!activeModalKey}
+                    onClose={() => setActiveModalKey(null)}
+                    title={activeModalKey === 'content' ? "Mensagem Principal (Versão 1)" : `Mensagem Variação (Versão ${parseInt(activeModalKey.split('_')[1], 10) + 2})`}
+                    value={activeModalKey === 'content' ? (data.content || '') : (variations[parseInt(activeModalKey.split('_')[1], 10)] || '')}
+                    onSave={handleSaveModal}
+                    fieldKey={activeModalKey}
+                />
+            )}
         </div>
     );
 };

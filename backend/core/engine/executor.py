@@ -142,7 +142,7 @@ async def execute_funnel(
             
         db.refresh(trigger)
         logger.info(f"🏁 [ENGINE] Execução finalizada. Status final: {trigger.status}")
-        if trigger.status not in ('queued', 'failed', 'cancelled'):
+        if trigger.status not in ('queued', 'failed', 'cancelled', 'suspended'):
             trigger.status = 'completed'
             db.commit()
             

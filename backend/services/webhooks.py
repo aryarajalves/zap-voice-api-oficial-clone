@@ -723,6 +723,40 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             if tpl_cache:
                 template_name = tpl_cache.name
 
+        # --- VALIDAÇÃO DE UNICIDADE DO LEAD POR INTEGRAÇÃO E TEMPLATE/FUNIL ---
+        if phone:
+            if template_name:
+                existing_trigger = db.query(models.ScheduledTrigger).filter(
+                    models.ScheduledTrigger.client_id == client_id,
+                    models.ScheduledTrigger.contact_phone == phone,
+                    models.ScheduledTrigger.integration_id == mapping.integration_id,
+                    models.ScheduledTrigger.template_name == template_name,
+                    models.ScheduledTrigger.status.notin_(["failed", "cancelled"])
+                ).first()
+                
+                if existing_trigger:
+                    logger.warning(f"🚫 [DUPLICITY_CHECK] Webhook #{history_id} ignorado. O lead {phone} já possui um disparo ativo/enviado para o template '{template_name}' nesta integração (Trigger #{existing_trigger.id}).")
+                    history.status = "ignored"
+                    history.error_message = f"Disparo duplicado evitado. Lead já possui disparo para este template nesta integração (Trigger #{existing_trigger.id})"
+                    db.commit()
+                    return
+            
+            elif funnel_id:
+                existing_trigger = db.query(models.ScheduledTrigger).filter(
+                    models.ScheduledTrigger.client_id == client_id,
+                    models.ScheduledTrigger.contact_phone == phone,
+                    models.ScheduledTrigger.integration_id == mapping.integration_id,
+                    models.ScheduledTrigger.funnel_id == funnel_id,
+                    models.ScheduledTrigger.status.notin_(["failed", "cancelled"])
+                ).first()
+                
+                if existing_trigger:
+                    logger.warning(f"🚫 [DUPLICITY_CHECK] Webhook #{history_id} ignorado. O lead {phone} já possui um disparo ativo/enviado para o funil #{funnel_id} nesta integração (Trigger #{existing_trigger.id}).")
+                    history.status = "ignored"
+                    history.error_message = f"Disparo duplicado evitado. Lead já possui disparo para este funil nesta integração (Trigger #{existing_trigger.id})"
+                    db.commit()
+                    return
+
         # --- LÓGICA DE INTERRUPÇÃO INTELIGENTE (CANCELAMENTO) ---
         if getattr(mapping, "cancel_pending_on_trigger", False) and mapping.cancel_event_types:
             event_types_to_cancel = mapping.cancel_event_types
@@ -754,13 +788,11 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         # Extrai variáveis para o template
         components = extract_mapped_variables(payload, variables, mapping.variables_mapping or {})
         
-        # Nota privada (Tratando legado "true"/"false" do checkbox)
-        private_msg_text = None
-        if mapping.private_note:
-            if mapping.private_note == "true":
-                private_msg_text = "true"
-            elif mapping.private_note != "false":
-                private_msg_text = mapping.private_note
+        # Nota privada (Forçando ativo por padrão, a não ser que seja nota customizada no legado)
+        private_msg_text = "true"
+        mapping_note = getattr(mapping, "private_note", None)
+        if mapping_note and mapping_note.lower() not in ("true", "false", ""):
+            private_msg_text = mapping_note
         
         # Calcula delay
         delay_min = mapping.delay_minutes or 0
@@ -791,7 +823,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             client_id=client_id,
             product_name=variables.get("product_name"),
             private_message=private_msg_text,
-            publish_external_event=mapping.publish_external_event,
+            publish_external_event=True,
             chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
             is_free_message=getattr(mapping, 'send_as_free_message', False),
             cost_per_unit=0.0 if getattr(mapping, 'send_as_free_message', False) else (getattr(mapping, 'cost_per_message', 0.0) or 0.35),
@@ -806,6 +838,56 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         try:
             db.commit()
             db.refresh(st)
+            
+            # --- AGENDAMENTO DO GATILHO DE FOLLOW-UP ---
+            if getattr(mapping, "followup_active", False) and mapping.followup_template_name:
+                fu_value = getattr(mapping, "followup_delay_value", 0) or 0
+                fu_unit = getattr(mapping, "followup_delay_unit", "minutes") or "minutes"
+                
+                fu_delay_sec = fu_value * 60
+                if fu_unit == "hours":
+                    fu_delay_sec = fu_value * 3600
+                    
+                total_fu_delay = total_delay_sec + fu_delay_sec
+                fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=total_fu_delay)
+                
+                fu_components = extract_mapped_variables(payload, variables, mapping.followup_variables_mapping or {})
+                
+                fu_idempotency_key = f"fu_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
+                
+                fu_st = models.ScheduledTrigger(
+                    scheduled_time=fu_scheduled_time,
+                    status="queued",
+                    contact_name=st.contact_name,
+                    contact_phone=st.contact_phone,
+                    template_name=mapping.followup_template_name,
+                    template_components=fu_components,
+                    template_language=mapping.template_language or "pt_BR",
+                    client_id=client_id,
+                    product_name=st.product_name,
+                    private_message=None,
+                    publish_external_event=True,
+                    chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
+                    is_free_message=False,
+                    cost_per_unit=mapping.cost_per_message or 0.35,
+                    sent_as="TEMPLATE",
+                    event_type=st.event_type,
+                    integration_id=mapping.integration_id,
+                    funnel_id=None,
+                    is_bulk=False,
+                    is_followup=True,
+                    parent_id=st.id,
+                    idempotency_key=fu_idempotency_key,
+                    skip_block_check=True
+                )
+                db.add(fu_st)
+                try:
+                    db.commit()
+                    logger.info(f"⏳ [FOLLOW-UP] Agendado follow-up #{fu_st.id} para #{st.id} as {fu_scheduled_time}")
+                except Exception as fu_err:
+                    db.rollback()
+                    logger.error(f"⚠️ [FOLLOW-UP] Erro ao salvar follow-up para trigger #{st.id}: {fu_err}")
+                    
         except Exception as e_st:
             db.rollback()
             if "UNIQUE constraint failed" in str(e_st) or "duplicate key" in str(e_st).lower():

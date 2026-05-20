@@ -25,17 +25,22 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
           template_id: '',
           delay_minutes: 0,
           is_active: true,
-          private_note: "false",
+          private_note: "true",
           note_template: '',
           chatwoot_label: [],
           cancel_pending_on_trigger: false,
           cancel_event_types: [],
-          publish_external_event: false,
+          publish_external_event: true,
           variables_mapping: [],
           manychat_active: false,
           manychat_name: '',
           manychat_phone: '',
-          manychat_tag: ''
+          manychat_tag: '',
+          followup_active: false,
+          followup_template_id: '',
+          followup_delay_value: 0,
+          followup_delay_unit: 'minutes',
+          followup_variables_mapping: []
         }
       ]
     });
@@ -50,6 +55,12 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
   const updateMapping = (index, field, value) => {
     const newMappings = [...formData.mappings];
     newMappings[index] = { ...newMappings[index], [field]: value };
+    
+    if (field === 'followup_template_id') {
+      const selectedTpl = templates.find(t => t.id === value || String(t.id) === String(value));
+      newMappings[index].followup_template_name = selectedTpl ? selectedTpl.name : '';
+    }
+    
     setFormData({ ...formData, mappings: newMappings });
   };
 
@@ -77,6 +88,34 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
     const newVars = [...mapping.variables_mapping];
     newVars[vIndex] = { ...newVars[vIndex], [field]: value };
     mapping.variables_mapping = newVars;
+    newMappings[mIndex] = mapping;
+    setFormData({ ...formData, mappings: newMappings });
+  };
+
+  const addFollowupVariable = (mIndex) => {
+    const newMappings = [...formData.mappings];
+    const mapping = { ...newMappings[mIndex] };
+    mapping.followup_variables_mapping = [...(mapping.followup_variables_mapping || []), { key: '', value: '', type: 'body' }];
+    newMappings[mIndex] = mapping;
+    setFormData({ ...formData, mappings: newMappings });
+  };
+
+  const removeFollowupVariable = (mIndex, vIndex) => {
+    const newMappings = [...formData.mappings];
+    const mapping = { ...newMappings[mIndex] };
+    const newVars = [...(mapping.followup_variables_mapping || [])];
+    newVars.splice(vIndex, 1);
+    mapping.followup_variables_mapping = newVars;
+    newMappings[mIndex] = mapping;
+    setFormData({ ...formData, mappings: newMappings });
+  };
+
+  const updateFollowupVariable = (mIndex, vIndex, field, value) => {
+    const newMappings = [...formData.mappings];
+    const mapping = { ...newMappings[mIndex] };
+    const newVars = [...(mapping.followup_variables_mapping || [])];
+    newVars[vIndex] = { ...newVars[vIndex], [field]: value };
+    mapping.followup_variables_mapping = newVars;
     newMappings[mIndex] = mapping;
     setFormData({ ...formData, mappings: newMappings });
   };
@@ -161,6 +200,10 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
               removeVariable={removeVariable}
               templateVars={getTemplateVars(mapping.template_id)}
               customFieldsMapping={formData.custom_fields_mapping}
+              followupTemplateVars={getTemplateVars(mapping.followup_template_id)}
+              addFollowupVariable={addFollowupVariable}
+              removeFollowupVariable={removeFollowupVariable}
+              updateFollowupVariable={updateFollowupVariable}
             />
           ))
         )}

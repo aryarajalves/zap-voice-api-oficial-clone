@@ -68,6 +68,7 @@ class ScheduledTrigger(Base):
     sent_as = Column(String, nullable=True)
     
     parent_id = Column(Integer, ForeignKey("scheduled_triggers.id", ondelete="CASCADE"), nullable=True, index=True)
+    is_followup = Column(Boolean, default=False)
     
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -175,6 +176,13 @@ class WebhookEventMapping(Base):
     manychat_tag_prefix = Column(String, nullable=True)
     manychat_tag_rotation_time = Column(String, default="08:00")
     manychat_tag_rotation_day = Column(Integer, default=4)
+    
+    followup_active = Column(Boolean, default=False)
+    followup_template_name = Column(String, nullable=True)
+    followup_template_id = Column(BigInteger, nullable=True)
+    followup_delay_value = Column(Integer, default=0)
+    followup_delay_unit = Column(String, default="minutes")
+    followup_variables_mapping = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     
     is_active = Column(Boolean, default=True)
     cost_per_message = Column(Float, default=0.0)

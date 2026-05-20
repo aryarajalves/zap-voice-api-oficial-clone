@@ -91,6 +91,24 @@ def create_webhook_integration(
                     if tid_raw.isdigit():
                         safe_template_id = int(tid_raw)
 
+                # Resolver nome do template de follow-up a partir do cache se necessário
+                safe_followup_template_id = None
+                followup_template_name = getattr(mapping, 'followup_template_name', None)
+                
+                if mapping.followup_template_id:
+                    fu_tid_raw = str(mapping.followup_template_id).strip().lower()
+                    if fu_tid_raw and fu_tid_raw not in ["null", "undefined", "none"]:
+                        try:
+                            safe_followup_template_id = int(fu_tid_raw)
+                            if not followup_template_name:
+                                fu_tpl = db.query(models.WhatsAppTemplateCache).filter(
+                                    models.WhatsAppTemplateCache.id == safe_followup_template_id
+                                ).first()
+                                if fu_tpl:
+                                    followup_template_name = fu_tpl.name
+                        except:
+                            pass
+
                 db_mapping = models.WebhookEventMapping(
                     integration_id=db_integration.id,
                     event_type=mapping.event_type,
@@ -121,7 +139,13 @@ def create_webhook_integration(
                     manychat_tag_rotation_time=getattr(mapping, 'manychat_tag_rotation_time', "08:00"),
                     manychat_tag_rotation_day=getattr(mapping, 'manychat_tag_rotation_day', 0),
                     product_name=getattr(mapping, 'product_name', None),
-                    is_active=mapping.is_active
+                    is_active=mapping.is_active,
+                    followup_active=getattr(mapping, 'followup_active', False),
+                    followup_template_id=safe_followup_template_id,
+                    followup_template_name=followup_template_name,
+                    followup_delay_value=getattr(mapping, 'followup_delay_value', 0),
+                    followup_delay_unit=getattr(mapping, 'followup_delay_unit', 'minutes'),
+                    followup_variables_mapping=getattr(mapping, 'followup_variables_mapping', [])
                 )
                 db.add(db_mapping)
             
@@ -195,6 +219,24 @@ def update_webhook_integration(
                             safe_template_id = None
                 
                 active_status = mapping.is_active if mapping.is_active is not None else True
+
+                # Resolver nome do template de follow-up a partir do cache se necessário
+                safe_followup_template_id = None
+                followup_template_name = getattr(mapping, 'followup_template_name', None)
+                
+                if mapping.followup_template_id:
+                    fu_tid_raw = str(mapping.followup_template_id).strip().lower()
+                    if fu_tid_raw and fu_tid_raw not in ["null", "undefined", "none"]:
+                        try:
+                            safe_followup_template_id = int(fu_tid_raw)
+                            if not followup_template_name:
+                                fu_tpl = db.query(models.WhatsAppTemplateCache).filter(
+                                    models.WhatsAppTemplateCache.id == safe_followup_template_id
+                                ).first()
+                                if fu_tpl:
+                                    followup_template_name = fu_tpl.name
+                        except:
+                            pass
                 
                 db_mapping = models.WebhookEventMapping(
                     integration_id=uuid_obj,
@@ -226,7 +268,13 @@ def update_webhook_integration(
                     manychat_tag_rotation_time=getattr(mapping, 'manychat_tag_rotation_time', "08:00"),
                     manychat_tag_rotation_day=getattr(mapping, 'manychat_tag_rotation_day', 0),
                     product_name=getattr(mapping, 'product_name', None),
-                    is_active=active_status
+                    is_active=active_status,
+                    followup_active=getattr(mapping, 'followup_active', False),
+                    followup_template_id=safe_followup_template_id,
+                    followup_template_name=followup_template_name,
+                    followup_delay_value=getattr(mapping, 'followup_delay_value', 0),
+                    followup_delay_unit=getattr(mapping, 'followup_delay_unit', 'minutes'),
+                    followup_variables_mapping=getattr(mapping, 'followup_variables_mapping', [])
                 )
                 db.add(db_mapping)
 

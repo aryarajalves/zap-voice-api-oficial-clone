@@ -205,6 +205,10 @@ async def handle_whatsapp_event(data: dict):
                     try:
                         db.expire_all()
                         
+                        # Cancelar follow-ups pendentes devido a interacao detectada no WhatsApp
+                        from services.triggers_service import cancel_pending_followups_for_phone
+                        cancel_pending_followups_for_phone(db, from_phone)
+                        
                         mem_lock_key = f"mem_lock_{from_phone}_{msg_id}"
                         now = datetime.now(timezone.utc)
                         if mem_lock_key in GLOBAL_PROCESSING_LOCKS:

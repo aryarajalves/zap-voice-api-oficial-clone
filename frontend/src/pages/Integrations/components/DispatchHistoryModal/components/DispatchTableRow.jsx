@@ -2,6 +2,39 @@ import React from 'react';
 import { FiPlay, FiTrash2, FiCheck, FiInbox, FiEye, FiMousePointer, FiActivity, FiRefreshCw } from 'react-icons/fi';
 import { getStatusBadge } from '../../../helpers';
 
+const getFollowupConfig = (status, scheduledTime) => {
+  const timeStr = scheduledTime 
+    ? new Date(scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    : '';
+  switch (status) {
+    case 'completed':
+      return {
+        text: 'Follow-up Disparado',
+        className: 'text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/20 border border-emerald-500/20',
+        icon: '✅'
+      };
+    case 'cancelled':
+    case 'canceled':
+      return {
+        text: 'Follow-up Cancelado',
+        className: 'text-gray-400 bg-white/5 hover:bg-white/[0.08] border border-white/10',
+        icon: '🚫'
+      };
+    case 'failed':
+      return {
+        text: 'Follow-up Falhou',
+        className: 'text-red-500 bg-red-500/5 hover:bg-red-500/20 border border-red-500/20',
+        icon: '⚠️'
+      };
+    default:
+      return {
+        text: `Follow-up Ativo (${timeStr})`,
+        className: 'text-orange-500 bg-orange-500/5 hover:bg-orange-500/20 border border-orange-500/20 animate-pulse',
+        icon: '⏳'
+      };
+  }
+};
+
 const DispatchTableRow = ({
   item,
   selectedDispatchIds,
@@ -123,14 +156,31 @@ const DispatchTableRow = ({
             {item.child_count > 0 && (
               <>
                 <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
-                <button 
-                  type="button"
-                  onClick={() => fetchChildren(item)}
-                  className="flex items-center gap-1 hover:bg-orange-500/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket"
-                >
-                  <span className="text-sm">🔄</span>
-                  <span className="text-[9px] font-black text-orange-500 uppercase tracking-tighter">Funis Ativados</span>
-                </button>
+                {(() => {
+                  if (item.followup_status) {
+                    const config = getFollowupConfig(item.followup_status, item.followup_scheduled_time);
+                    return (
+                      <button 
+                        type="button"
+                        onClick={() => fetchChildren(item)}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded transition cursor-pointer ${config.className}`}
+                      >
+                        <span className="text-sm">{config.icon}</span>
+                        <span className="text-[9px] font-black uppercase tracking-tighter">{config.text}</span>
+                      </button>
+                    );
+                  }
+                  return (
+                    <button 
+                      type="button"
+                      onClick={() => fetchChildren(item)}
+                      className="flex items-center gap-1 hover:bg-orange-500/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket text-orange-500"
+                    >
+                      <span className="text-sm">🔄</span>
+                      <span className="text-[9px] font-black uppercase tracking-tighter">Funis Ativados</span>
+                    </button>
+                  );
+                })()}
               </>
             )}
           </div>

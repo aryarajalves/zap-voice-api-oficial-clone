@@ -55,7 +55,7 @@ def list_dispatches(
 
     query = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.client_id == x_client_id,
-        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj),
+        models.ScheduledTrigger.integration_id == uuid_obj,
         models.ScheduledTrigger.parent_id == None
     )
 
@@ -118,6 +118,15 @@ def list_dispatches(
         
         # Adicionar contagem de funis filhos
         trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
+        
+        # Buscar follow-up filho associado
+        followup = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.parent_id == trigger.id,
+            models.ScheduledTrigger.is_followup == True
+        ).first()
+        if followup:
+            trigger.followup_status = followup.status
+            trigger.followup_scheduled_time = followup.scheduled_time
 
     if backfilled:
         db.commit()
@@ -138,13 +147,13 @@ def backfill_dispatch_costs(
 
     triggers = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.client_id == x_client_id,
-        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj),
+        models.ScheduledTrigger.integration_id == uuid_obj,
         or_(models.ScheduledTrigger.total_cost == None, models.ScheduledTrigger.total_cost == 0),
         models.ScheduledTrigger.total_sent > 0
     ).options(joinedload(models.ScheduledTrigger.messages)).all()
 
     mappings = db.query(models.WebhookEventMapping).filter(
-        cast(models.WebhookEventMapping.integration_id, String) == str(uuid_obj)
+        models.WebhookEventMapping.integration_id == uuid_obj
     ).all()
     mapping_costs = {m.event_type: (m.cost_per_message or 0.0) for m in mappings}
 
@@ -194,7 +203,7 @@ async def play_dispatch(
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == dispatch_id,
         models.ScheduledTrigger.client_id == x_client_id,
-        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
+        models.ScheduledTrigger.integration_id == uuid_obj
     ).first()
 
     if not trigger:
@@ -230,6 +239,75 @@ async def play_dispatch(
     db.commit()
     db.refresh(new_trigger)
 
+    # Reagendamento de follow-up configurado
+    import hashlib
+    original_followup = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.parent_id == trigger.id,
+        models.ScheduledTrigger.is_followup == True
+    ).first()
+
+    mapping = db.query(models.WebhookEventMapping).filter(
+        models.WebhookEventMapping.integration_id == trigger.integration_id,
+        models.WebhookEventMapping.event_type == trigger.event_type,
+        models.WebhookEventMapping.is_active == True
+    ).first()
+
+    has_followup_config = False
+    if original_followup:
+        has_followup_config = True
+    elif mapping and getattr(mapping, "followup_active", False) and mapping.followup_template_name:
+        has_followup_config = True
+
+    if has_followup_config:
+        fu_delay_sec = 1800  # padrão 30 minutos
+        if mapping:
+            fu_value = getattr(mapping, "followup_delay_value", 0) or 0
+            fu_unit = getattr(mapping, "followup_delay_unit", "minutes") or "minutes"
+            fu_delay_sec = fu_value * 60
+            if fu_unit == "hours":
+                fu_delay_sec = fu_value * 3600
+        elif original_followup and original_followup.scheduled_time and trigger.scheduled_time:
+            t1_naive = original_followup.scheduled_time.replace(tzinfo=None)
+            t2_naive = trigger.scheduled_time.replace(tzinfo=None)
+            diff = t1_naive - t2_naive
+            fu_delay_sec = max(int(diff.total_seconds()), 0)
+
+        fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=fu_delay_sec)
+        fu_template_name = mapping.followup_template_name if mapping else (original_followup.template_name if original_followup else None)
+        fu_components = original_followup.template_components if original_followup else (mapping.followup_variables_mapping if mapping else None)
+        fu_cost = mapping.cost_per_message if mapping else (original_followup.cost_per_unit if original_followup else 0.35)
+
+        if fu_template_name:
+            fu_idempotency_key = f"fu_play_{new_trigger.id}_{hashlib.md5(str(fu_scheduled_time).encode()).hexdigest()[:8]}"
+            new_followup = models.ScheduledTrigger(
+                scheduled_time=fu_scheduled_time,
+                status="queued",
+                contact_name=new_trigger.contact_name,
+                contact_phone=new_trigger.contact_phone,
+                template_name=fu_template_name,
+                template_components=fu_components,
+                template_language=new_trigger.template_language or "pt_BR",
+                client_id=new_trigger.client_id,
+                product_name=new_trigger.product_name,
+                private_message=None,
+                publish_external_event=True,
+                chatwoot_label=new_trigger.chatwoot_label,
+                is_free_message=False,
+                cost_per_unit=fu_cost or 0.35,
+                sent_as="TEMPLATE",
+                event_type=new_trigger.event_type,
+                integration_id=new_trigger.integration_id,
+                funnel_id=None,
+                is_bulk=False,
+                is_followup=True,
+                parent_id=new_trigger.id,
+                idempotency_key=fu_idempotency_key,
+                skip_block_check=True
+            )
+            db.add(new_followup)
+            db.commit()
+            logger.info(f"⏳ [PLAY-FOLLOWUP] Novo follow-up #{new_followup.id} criado para clone #{new_trigger.id} as {fu_scheduled_time}")
+
     logger.info(f"📤 [PLAY-CLONE] Novo disparo criado: ID {new_trigger.id} (Original: {trigger.id}) | Phone {new_trigger.contact_phone}")
     await rabbitmq.publish("zapvoice_funnel_executions", {
         "trigger_id": new_trigger.id,
@@ -256,7 +334,7 @@ def cancel_dispatch(
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == dispatch_id,
         models.ScheduledTrigger.client_id == x_client_id,
-        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
+        models.ScheduledTrigger.integration_id == uuid_obj
     ).first()
 
     if not trigger:
@@ -282,10 +360,11 @@ async def bulk_play_dispatches(
     triggers = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id.in_(dispatch_ids),
         models.ScheduledTrigger.client_id == x_client_id,
-        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
+        models.ScheduledTrigger.integration_id == uuid_obj
     ).all()
     
     count = 0
+    import hashlib
     for trigger in triggers:
         trigger.status = "processing"
         trigger.scheduled_time = datetime.now(timezone.utc)
@@ -296,7 +375,81 @@ async def bulk_play_dispatches(
             "contact_phone": trigger.contact_phone
         })
         count += 1
-        
+
+        # Reagendar ou criar o follow-up
+        followup = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.parent_id == trigger.id,
+            models.ScheduledTrigger.is_followup == True
+        ).first()
+
+        mapping = db.query(models.WebhookEventMapping).filter(
+            models.WebhookEventMapping.integration_id == trigger.integration_id,
+            models.WebhookEventMapping.event_type == trigger.event_type,
+            models.WebhookEventMapping.is_active == True
+        ).first()
+
+        has_followup_config = False
+        if followup:
+            has_followup_config = True
+        elif mapping and getattr(mapping, "followup_active", False) and mapping.followup_template_name:
+            has_followup_config = True
+
+        if has_followup_config:
+            fu_delay_sec = 1800
+            if mapping:
+                fu_value = getattr(mapping, "followup_delay_value", 0) or 0
+                fu_unit = getattr(mapping, "followup_delay_unit", "minutes") or "minutes"
+                fu_delay_sec = fu_value * 60
+                if fu_unit == "hours":
+                    fu_delay_sec = fu_value * 3600
+            elif followup and followup.scheduled_time and trigger.scheduled_time:
+                t1_naive = followup.scheduled_time.replace(tzinfo=None)
+                t2_naive = trigger.scheduled_time.replace(tzinfo=None)
+                diff = t1_naive - t2_naive
+                fu_delay_sec = max(int(diff.total_seconds()), 0)
+
+            fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=fu_delay_sec)
+
+            if followup:
+                # Atualizar existente
+                followup.status = "queued"
+                followup.scheduled_time = fu_scheduled_time
+                logger.info(f"⏳ [BULK-PLAY-FOLLOWUP] Reagendado follow-up #{followup.id} para trigger #{trigger.id} as {fu_scheduled_time}")
+            else:
+                # Criar novo
+                fu_template_name = mapping.followup_template_name if mapping else None
+                fu_components = mapping.followup_variables_mapping if mapping else None
+                fu_cost = mapping.cost_per_message if mapping else 0.35
+                if fu_template_name:
+                    fu_idempotency_key = f"fu_bulk_{trigger.id}_{hashlib.md5(str(fu_scheduled_time).encode()).hexdigest()[:8]}"
+                    new_followup = models.ScheduledTrigger(
+                        scheduled_time=fu_scheduled_time,
+                        status="queued",
+                        contact_name=trigger.contact_name,
+                        contact_phone=trigger.contact_phone,
+                        template_name=fu_template_name,
+                        template_components=fu_components,
+                        template_language=trigger.template_language or "pt_BR",
+                        client_id=trigger.client_id,
+                        product_name=trigger.product_name,
+                        private_message=None,
+                        publish_external_event=True,
+                        chatwoot_label=trigger.chatwoot_label,
+                        is_free_message=False,
+                        cost_per_unit=fu_cost or 0.35,
+                        sent_as="TEMPLATE",
+                        event_type=trigger.event_type,
+                        integration_id=trigger.integration_id,
+                        funnel_id=None,
+                        is_bulk=False,
+                        is_followup=True,
+                        parent_id=trigger.id,
+                        idempotency_key=fu_idempotency_key,
+                        skip_block_check=True
+                    )
+                    db.add(new_followup)
+                    logger.info(f"⏳ [BULK-PLAY-FOLLOWUP] Criado novo follow-up #{new_followup.id} para trigger #{trigger.id} as {fu_scheduled_time}")
+
     db.commit()
     return {"status": "success", "triggered_count": count}
 
@@ -317,7 +470,7 @@ async def bulk_delete_dispatches(
     valid_ids_query = db.query(models.ScheduledTrigger.id).filter(
         models.ScheduledTrigger.id.in_(dispatch_ids),
         models.ScheduledTrigger.client_id == x_client_id,
-        cast(models.ScheduledTrigger.integration_id, String) == str(uuid_obj)
+        models.ScheduledTrigger.integration_id == uuid_obj
     )
     valid_ids = [row[0] for row in valid_ids_query.all()]
     

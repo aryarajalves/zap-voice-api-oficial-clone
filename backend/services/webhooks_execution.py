@@ -99,31 +99,36 @@ async def execute_webhook_resend_logic(
         private_msg_text = None
         mapping_note = getattr(mapping, "private_note", None)
         
-        if mapping_note:
-            if mapping_note.lower() == "true":
-                # Nota automática baseada no corpo do template
-                if template_name:
-                    template = db.query(models.WhatsAppTemplateCache).filter(
-                        models.WhatsAppTemplateCache.name == template_name,
-                        models.WhatsAppTemplateCache.client_id == integration.client_id
-                    ).first()
-                    if template:
-                        private_msg_text = template.body
-                        
-                        body_params = []
-                        for comp in components:
-                            if comp.get("type") == "body":
-                                body_params = comp.get("parameters", [])
-                                break
-                        
-                        for idx, p in enumerate(body_params):
-                            text_val = p.get("text", "-")
-                            private_msg_text = private_msg_text.replace(f"{{{{{idx+1}}}}}", str(text_val))
-                        
-                        private_msg_text = f"🔐 NOTA PRIVADA AUTOMÁTICA:\n{private_msg_text}"
-            else:
-                # Nota customizada direta
-                private_msg_text = mapping_note
+        # Como o usuário quer Nota Privada ativa por padrão, se mapping_note for nulo, vazio, "true" ou "false",
+        # interpretamos como "true" (automática). Senão, usamos a nota customizada direta.
+        mapping_note_val = "true"
+        if mapping_note and mapping_note.lower() not in ("true", "false", ""):
+            mapping_note_val = mapping_note
+
+        if mapping_note_val.lower() == "true":
+            # Nota automática baseada no corpo do template
+            if template_name:
+                template = db.query(models.WhatsAppTemplateCache).filter(
+                    models.WhatsAppTemplateCache.name == template_name,
+                    models.WhatsAppTemplateCache.client_id == integration.client_id
+                ).first()
+                if template:
+                    private_msg_text = template.body
+                    
+                    body_params = []
+                    for comp in components:
+                        if comp.get("type") == "body":
+                            body_params = comp.get("parameters", [])
+                            break
+                    
+                    for idx, p in enumerate(body_params):
+                        text_val = p.get("text", "-")
+                        private_msg_text = private_msg_text.replace(f"{{{{{idx+1}}}}}", str(text_val))
+                    
+                    private_msg_text = f"🔐 NOTA PRIVADA AUTOMÁTICA:\n{private_msg_text}"
+        else:
+            # Nota customizada direta
+            private_msg_text = mapping_note_val
         
         # Calcular atraso
         delay_min = mapping.delay_minutes or 0
@@ -180,7 +185,7 @@ async def execute_webhook_resend_logic(
             client_id=integration.client_id,
             product_name=parsed_data.get("product_name"),
             private_message=private_msg_text,
-            publish_external_event=mapping.publish_external_event,
+            publish_external_event=True,
             chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
             is_free_message=False, # Decidido automaticamente pelo Worker via Smart Dispatch
             event_type=event_type,
@@ -192,6 +197,58 @@ async def execute_webhook_resend_logic(
         db.add(st)
         db.commit()
         db.refresh(st)
+        
+        # --- AGENDAMENTO DO GATILHO DE FOLLOW-UP ---
+        if getattr(mapping, "followup_active", False) and mapping.followup_template_name:
+            fu_value = getattr(mapping, "followup_delay_value", 0) or 0
+            fu_unit = getattr(mapping, "followup_delay_unit", "minutes") or "minutes"
+            
+            fu_delay_sec = fu_value * 60
+            if fu_unit == "hours":
+                fu_delay_sec = fu_value * 3600
+                
+            total_fu_delay = total_delay_sec + fu_delay_sec
+            fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=total_fu_delay)
+            
+            # Nota: usamos parsed_data pois é a representação do payload processado nesta função
+            fu_components = extract_mapped_variables(payload, parsed_data, mapping.followup_variables_mapping or {})
+            
+            import hashlib
+            payload_str = json.dumps(payload, sort_keys=True)
+            fu_idempotency_key = f"fu_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
+            
+            fu_st = models.ScheduledTrigger(
+                scheduled_time=fu_scheduled_time,
+                status="queued",
+                contact_name=st.contact_name,
+                contact_phone=st.contact_phone,
+                template_name=mapping.followup_template_name,
+                template_components=fu_components,
+                template_language=mapping.template_language or "pt_BR",
+                client_id=integration.client_id,
+                product_name=st.product_name,
+                private_message=None,
+                publish_external_event=True,
+                chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
+                is_free_message=False,
+                cost_per_unit=mapping.cost_per_message or 0.35,
+                sent_as="TEMPLATE",
+                event_type=st.event_type,
+                integration_id=mapping.integration_id,
+                funnel_id=None,
+                is_bulk=False,
+                is_followup=True,
+                parent_id=st.id,
+                idempotency_key=fu_idempotency_key,
+                skip_block_check=True
+            )
+            db.add(fu_st)
+            try:
+                db.commit()
+                logger.info(f"⏳ [FOLLOW-UP-RESEND] Agendado follow-up #{fu_st.id} para #{st.id} as {fu_scheduled_time}")
+            except Exception as fu_err:
+                db.rollback()
+                logger.error(f"⚠️ [FOLLOW-UP-RESEND] Erro ao salvar follow-up para trigger #{st.id}: {fu_err}")
         
         # Publicar no RabbitMQ se for imediato
         if total_delay_sec <= 0:

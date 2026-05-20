@@ -43,6 +43,39 @@ const getStatusBadge = (trigger) => {
     }
 };
 
+const getFollowupConfig = (status, scheduledTime) => {
+    const timeStr = scheduledTime 
+        ? new Date(scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+        : '';
+    switch (status) {
+        case 'completed':
+            return {
+                text: 'Follow-up Disparado',
+                className: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/20 border border-green-200 dark:border-green-800/30',
+                icon: '✅'
+            };
+        case 'cancelled':
+        case 'canceled':
+            return {
+                text: 'Follow-up Cancelado',
+                className: 'text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-700/20 border border-gray-200 dark:border-gray-700/30',
+                icon: '🚫'
+            };
+        case 'failed':
+            return {
+                text: 'Follow-up Falhou',
+                className: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-800/30',
+                icon: '⚠️'
+            };
+        default:
+            return {
+                text: `Follow-up Ativo (${timeStr})`,
+                className: 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 hover:bg-orange-100 dark:hover:bg-orange-900/20 border border-orange-200 dark:border-orange-800/30 animate-pulse',
+                icon: '⏳'
+            };
+    }
+};
+
 const TriggerTableRow = ({ 
     trigger, selectedIds, handleSelectOne, handleViewContacts, 
     fetchChildren, fetchErrors, handleViewPipeline, handleEditParams, 
@@ -121,10 +154,29 @@ const TriggerTableRow = ({
                         )}
                         {trigger.child_count > 0 && (
                             <div className="flex items-center gap-3 mt-2 border-t border-gray-100 dark:border-gray-800/50 pt-2">
-                                <button onClick={() => fetchChildren(trigger)} className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket">
-                                    <span className="text-sm">🔄</span>
-                                    <span className="text-[10px] font-black text-orange-600 uppercase tracking-tighter">Funis Ativados</span>
-                                </button>
+                                {(() => {
+                                    if (trigger.followup_status) {
+                                        const config = getFollowupConfig(trigger.followup_status, trigger.followup_scheduled_time);
+                                        return (
+                                            <button 
+                                                onClick={() => fetchChildren(trigger)} 
+                                                className={`flex items-center gap-1 px-2 py-0.5 rounded transition cursor-pointer ${config.className}`}
+                                            >
+                                                <span className="text-sm">{config.icon}</span>
+                                                <span className="text-[10px] font-black uppercase tracking-tighter">{config.text}</span>
+                                            </button>
+                                        );
+                                    }
+                                    return (
+                                        <button 
+                                            onClick={() => fetchChildren(trigger)} 
+                                            className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400"
+                                        >
+                                            <span className="text-sm">🔄</span>
+                                            <span className="text-[10px] font-black uppercase tracking-tighter">Funis Ativados</span>
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         )}
                         {trigger.total_failed > 0 && (
@@ -171,10 +223,31 @@ const TriggerTableRow = ({
                         )}
                         <div className="flex items-center gap-3 mt-2 border-t border-gray-100 dark:border-gray-800/50 pt-2">
                             {trigger.child_count > 0 && (
-                                <button onClick={() => fetchChildren(trigger)} className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket">
-                                    <span className="text-sm">🔄</span>
-                                    <span className="text-[10px] font-black text-orange-600 uppercase tracking-tighter">Funis Ativados</span>
-                                </button>
+                                <>
+                                    {(() => {
+                                        if (trigger.followup_status) {
+                                            const config = getFollowupConfig(trigger.followup_status, trigger.followup_scheduled_time);
+                                            return (
+                                                <button 
+                                                    onClick={() => fetchChildren(trigger)} 
+                                                    className={`flex items-center gap-1 px-2 py-0.5 rounded transition cursor-pointer ${config.className}`}
+                                                >
+                                                    <span className="text-sm">{config.icon}</span>
+                                                    <span className="text-[10px] font-black uppercase tracking-tighter">{config.text}</span>
+                                                </button>
+                                            );
+                                        }
+                                        return (
+                                            <button 
+                                                onClick={() => fetchChildren(trigger)} 
+                                                className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400"
+                                            >
+                                                <span className="text-sm">🔄</span>
+                                                <span className="text-[10px] font-black uppercase tracking-tighter">Funis Ativados</span>
+                                            </button>
+                                        );
+                                    })()}
+                                </>
                             )}
                             <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400">
                                 <FiMousePointer size={10} />

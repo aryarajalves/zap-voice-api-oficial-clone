@@ -2,6 +2,7 @@
 import asyncio
 import os
 import models
+from sqlalchemy import and_, or_
 from database import SessionLocal
 from datetime import datetime, timezone, timedelta
 from rabbitmq_client import rabbitmq
@@ -87,15 +88,15 @@ async def run_history_cleanup():
         db.close()
         _last_cleanup_history = today
 
-async def run_stale_triggers_cleanup():
+async def run_stale_triggers_cleanup(db_session=None):
     """Cancela Gatilhos travados ou aguardando entrega por muito tempo."""
     global _last_cleanup_stale
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d %H") # Rodar de hora em hora
     
-    if _last_cleanup_stale == today:
+    if _last_cleanup_stale == today and db_session is None:
         return
 
-    db = SessionLocal()
+    db = db_session if db_session is not None else SessionLocal()
     try:
         # 1. Gatilhos pausados aguardando entrega por mais de 24 horas (Meta window)
         logger.info("🔍 [STALE CLEANUP] Verificando funis pausados há mais de 24h...")
@@ -113,11 +114,20 @@ async def run_stale_triggers_cleanup():
             log_node_execution(db, tr, node_id=tr.current_node_id, status="failed", details=tr.failure_reason)
 
         # 2. Gatilhos travados em 'processing' ou 'queued' por mais de 2 horas (Worker crash / RabbitMQ issue)
+        # Nota: Gatilhos 'queued' com agendamento futuro (scheduled_time > now) NÃO devem ser limpos.
         logger.info("🔍 [STALE CLEANUP] Verificando disparos travados há mais de 2h...")
         cutoff_2h = datetime.now(timezone.utc) - timedelta(hours=2)
         stale_processing = db.query(models.ScheduledTrigger).filter(
-            models.ScheduledTrigger.status.in_(['processing', 'queued']),
-            models.ScheduledTrigger.updated_at < cutoff_2h
+            or_(
+                and_(
+                    models.ScheduledTrigger.status == 'queued',
+                    models.ScheduledTrigger.scheduled_time < cutoff_2h
+                ),
+                and_(
+                    models.ScheduledTrigger.status == 'processing',
+                    models.ScheduledTrigger.updated_at < cutoff_2h
+                )
+            )
         ).all()
 
         for tr in stale_processing:
@@ -137,7 +147,8 @@ async def run_stale_triggers_cleanup():
         logger.error(f"❌ [STALE CLEANUP] Erro ao limpar gatilhos obsoletos: {e}")
         db.rollback()
     finally:
-        db.close()
+        if db_session is None:
+            db.close()
         _last_cleanup_stale = today
 
 async def scheduler_task():

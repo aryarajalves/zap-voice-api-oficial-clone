@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.6.1)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.6.2)
 
-Bem-vindo à versão **3.6.1** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.6.2** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -121,6 +121,8 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 - **Conectores de Botões no Flow Builder**: Visualização premium com alças (handles) específicas para cada botão na lateral do nó, permitindo ligar cada resposta a nós diferentes, além de rótulo claro indicando a rota padrão.
 - **Suspensão e Retomada de Funis**: Pausa automática na execução do funil quando botões são enviados, aguardando clique de botão ou mensagem do contato para prosseguir pela ramificação selecionada.
 - **Notas Privadas de Fallback**: Sincronização automática em formato de nota privada no Chatwoot contendo cópia da mensagem e botões enviados.
+- **Suporte a Follow-up e Normalização de Status Cancelado**: Implementada a automação de follow-up pós-disparo. O sistema agora reconhece e renderiza adequadamente os status de cancelamento `cancelled` (dois Ls) e `canceled` (um L) na tabela do histórico principal e no histórico de webhook com a legenda **"🚫 FOLLOW-UP CANCELADO"**.
+- **Tradução e Ajuste de Modais**: Tradução amigável dos status de follow-up no modal para português brasileiro ("DISPARADO", "AGENDADO", "CANCELADO") e remoção do botão de monitoramento ao vivo para disparos do tipo follow-up.
 
 ### v3.6.1
 - **Sincronização de Histórico no Chatwoot**: Envio assíncrono de notas privadas com o conteúdo renderizado do template e etiquetas pós-disparo em massa nos disparos em massa.

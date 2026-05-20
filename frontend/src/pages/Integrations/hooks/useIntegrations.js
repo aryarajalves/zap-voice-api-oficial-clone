@@ -148,7 +148,9 @@ export function useIntegrations(activeClient) {
         ...m,
         id: m.id || Date.now() + Math.random(),
         chatwoot_label: normalizeChatwootLabel(m.chatwoot_label || m.chatwoot_labels),
-        variables_mapping: Array.isArray(m.variables_mapping) ? m.variables_mapping : []
+        variables_mapping: Array.isArray(m.variables_mapping) ? m.variables_mapping : [],
+        private_note: "true",
+        publish_external_event: true
       })),
       product_filtering: integration.product_filtering || false,
       product_whitelist: integration.product_whitelist || [],

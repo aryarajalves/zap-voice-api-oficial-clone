@@ -80,6 +80,10 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
                             db.add(models.ContactWindow(client_id=client_id, phone=clean_phone, chatwoot_inbox_id=inbox_id, last_interaction_at=now_utc, chatwoot_conversation_id=conversation.get("id")))
                             logger.info(f"🆕 [WINDOW] Nova janela criada para {clean_phone}")
                         db.commit()
+                        
+                        # Cancelar follow-ups pendentes devido a interacao detectada no Chatwoot
+                        from services.triggers_service import cancel_pending_followups_for_phone
+                        cancel_pending_followups_for_phone(db, clean_phone)
 
                         # Gatilho de funil removido daqui para evitar duplicidade. 
                         # O Meta Webhook (whatsapp.py) é a fonte de verdade para interações e funis,

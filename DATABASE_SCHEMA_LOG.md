@@ -37,6 +37,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 09/05/2026 | Sincronização Global (Super Fix) | **Todas as Tabelas** | Qualquer coluna faltante nos modelos | `super_db_fix.py` |
 | 09/05/2026 | Rastreamento de Interações (Clicks) | `message_status` | `interaction_counted` | `add_interaction_counted_column.py` |
 | 14/05/2026 | Adição de is_active em Funnels | `funnels` | `is_active` | `backend/scripts/add_is_active_to_funnels.py` |
+| 20/05/2026 | Automação de Follow-up | `webhook_event_mappings`, `scheduled_triggers` | `followup_active`, `followup_template_name`, `followup_template_id`, `followup_delay_value`, `followup_delay_unit`, `followup_variables_mapping`, `is_followup` | `backend/scripts/add_followup_columns.py` |
 
 
 

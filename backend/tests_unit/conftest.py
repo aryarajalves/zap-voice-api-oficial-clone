@@ -15,6 +15,7 @@ from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from database import Base
+import models
 from core.deps import get_db
 from main import app
 

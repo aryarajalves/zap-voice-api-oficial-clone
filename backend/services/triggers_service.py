@@ -311,3 +311,32 @@ def increment_private_note_stats(db: Session, trigger_id: int):
     except Exception as e:
         logger.error(f"Erro ao incrementar estatísticas de nota privada: {e}")
         db.rollback()
+
+
+def cancel_pending_followups_for_phone(db: Session, phone: str):
+    """
+    Cancela qualquer ScheduledTrigger de follow-up que esteja pendente de envio
+    para o telefone especificado, pois houve interação do usuário.
+    """
+    if not phone:
+        return
+    
+    clean_phone = "".join(filter(str.isdigit, phone))
+    
+    try:
+        pending_followups = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.contact_phone == clean_phone,
+            models.ScheduledTrigger.status == "queued",
+            models.ScheduledTrigger.is_followup == True
+        ).all()
+        
+        for fu in pending_followups:
+            fu.status = "canceled"
+            fu.failure_reason = "Cancelado por interacao do usuario detectada."
+            logger.info(f"🚫 [FOLLOW-UP] Cancelando trigger de follow-up #{fu.id} para {clean_phone} devido a interacao.")
+        
+        if pending_followups:
+            db.commit()
+    except Exception as e:
+        logger.error(f"Erro ao cancelar follow-ups pendentes para {clean_phone}: {e}")
+        db.rollback()

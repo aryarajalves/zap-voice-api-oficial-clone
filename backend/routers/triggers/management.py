@@ -102,6 +102,15 @@ def list_triggers(
                 trigger.sent_as = first_msg.message_type
         
         trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
+        
+        # Buscar follow-up filho associado
+        followup = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.parent_id == trigger.id,
+            models.ScheduledTrigger.is_followup == True
+        ).first()
+        if followup:
+            trigger.followup_status = followup.status
+            trigger.followup_scheduled_time = followup.scheduled_time
 
     return {"items": triggers, "total": total}
 

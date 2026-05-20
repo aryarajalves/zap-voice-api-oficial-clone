@@ -4,14 +4,20 @@ import { FiActivity, FiNavigation } from 'react-icons/fi';
 const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTrigger }) => {
     if (!childrenModal.isOpen) return null;
 
+    const isFollowup = childrenModal.children.some(child => child.is_followup);
+
     return (
         <div className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-800 animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/30">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center text-2xl">🚀</div>
+                        <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center text-2xl">
+                            {isFollowup ? '⏳' : '🚀'}
+                        </div>
                         <div>
-                            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight">Funis Iniciados</h3>
+                            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight">
+                                {isFollowup ? 'Follow-up Ativado' : 'Funis Iniciados'}
+                            </h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                                 A partir de: <span className="text-orange-600 dark:text-orange-400 font-bold">{childrenModal.triggerName}</span>
                             </p>
@@ -58,14 +64,31 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
                                     <div className="flex flex-col items-end gap-2">
                                         <div className="flex items-center gap-3">
                                             <div className="flex flex-col items-center px-3 py-1 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg shadow-sm">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-1">Status Funil</span>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-1">
+                                                    {child.is_followup ? 'Status Follow-up' : 'Status Funil'}
+                                                </span>
                                                 <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
                                                     child.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                                                     child.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
                                                     child.status === 'processing' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 animate-pulse' :
+                                                    child.status === 'queued' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                                                    (child.status === 'cancelled' || child.status === 'canceled') ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400' :
                                                     'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
                                                 }`}>
-                                                    {child.status === 'completed' ? 'CONCLUÍDO' : child.status === 'failed' ? 'FALHA' : child.status === 'processing' ? 'EM EXECUÇÃO...' : child.status.toUpperCase()}
+                                                    {child.is_followup ? (
+                                                        child.status === 'completed' ? 'DISPARADO' :
+                                                        child.status === 'queued' ? 'AGENDADO' :
+                                                        child.status === 'processing' ? 'DISPARANDO...' :
+                                                        child.status === 'failed' ? 'FALHA' :
+                                                        (child.status === 'cancelled' || child.status === 'canceled') ? 'CANCELADO' :
+                                                        child.status.toUpperCase()
+                                                    ) : (
+                                                        child.status === 'completed' ? 'CONCLUÍDO' :
+                                                        child.status === 'failed' ? 'FALHA' :
+                                                        child.status === 'processing' ? 'EM EXECUÇÃO...' :
+                                                        (child.status === 'cancelled' || child.status === 'canceled') ? 'CANCELADO' :
+                                                        child.status.toUpperCase()
+                                                    )}
                                                 </span>
                                             </div>
                                             
@@ -80,14 +103,30 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-2 mt-3">
-                                            <button
-                                                onClick={() => setMonitoringTrigger(child)}
-                                                className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 rounded text-[10px] font-black text-gray-600 dark:text-gray-300 transition-all shadow-sm active:scale-95"
-                                            >
-                                                <FiActivity className="text-blue-500" /> MONITORAR AO VIVO
-                                            </button>
-                                        </div>
+                                        {!child.is_followup ? (
+                                            <div className="flex items-center gap-2 mt-3">
+                                                <button
+                                                    onClick={() => setMonitoringTrigger(child)}
+                                                    className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 rounded text-[10px] font-black text-gray-600 dark:text-gray-300 transition-all shadow-sm active:scale-95"
+                                                >
+                                                    <FiActivity className="text-blue-500" /> MONITORAR AO VIVO
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-end gap-1 mt-2 text-right">
+                                                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase">
+                                                    {child.status === 'completed' ? 'Horário do Disparo' : 'Agendado para'}
+                                                </span>
+                                                <span className="text-xs font-black text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 px-2.5 py-1 rounded-lg border border-orange-200/30 dark:border-orange-900/30">
+                                                    {(() => {
+                                                        try {
+                                                            const date = new Date(child.scheduled_time || child.updated_at || child.created_at);
+                                                            return isNaN(date.getTime()) ? 'Data inválida' : date.toLocaleString('pt-BR');
+                                                        } catch (e) { return 'Sem data'; }
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}

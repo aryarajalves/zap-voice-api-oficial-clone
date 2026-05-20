@@ -3,6 +3,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, AsyncMock, patch
+import pytest
 
 # Adiciona o diretório atual ao path para importar corretamente
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -27,9 +28,10 @@ def get_or_create_client(db):
         created = True
     return client, created
 
-async def test_message_node_with_buttons_session_window():
+@pytest.mark.asyncio
+async def test_message_node_with_buttons_session_window(db_session):
     print("--- 🔍 Testing Message Node with Buttons (Inside 24h Session Window) ---")
-    db = SessionLocal()
+    db = db_session
     
     client, created_client = get_or_create_client(db)
     client_id = client.id
@@ -123,11 +125,11 @@ async def test_message_node_with_buttons_session_window():
         if created_client:
             db.delete(client)
         db.commit()
-        db.close()
 
-async def test_message_node_with_buttons_direct_meta():
+@pytest.mark.asyncio
+async def test_message_node_with_buttons_direct_meta(db_session):
     print("--- 🔍 Testing Message Node with Buttons (Direct Meta - No conversation_id) ---")
-    db = SessionLocal()
+    db = db_session
     
     client, created_client = get_or_create_client(db)
     client_id = client.id
@@ -209,11 +211,24 @@ async def test_message_node_with_buttons_direct_meta():
         if created_client:
             db.delete(client)
         db.commit()
-        db.close()
 
-async def test_webhook_resume_on_button_click():
+@pytest.mark.asyncio
+async def test_webhook_resume_on_button_click(db_session):
     print("--- 🔍 Testing Webhook Resume on Button Click ---")
-    db = SessionLocal()
+    db = db_session
+    
+    # Evita que o fechamento da sessão no handler desvincule as instâncias
+    db.close = MagicMock()
+    
+    # Mock para pg_try_advisory_xact_lock no SQLite de teste
+    orig_execute = db.execute
+    def mock_execute(statement, params=None, *args, **kwargs):
+        if "pg_try_advisory_xact_lock" in str(statement):
+            mock_res = MagicMock()
+            mock_res.scalar.return_value = True
+            return mock_res
+        return orig_execute(statement, params, *args, **kwargs)
+    db.execute = mock_execute
     
     client, created_client = get_or_create_client(db)
     client_id = client.id
@@ -304,7 +319,8 @@ async def test_webhook_resume_on_button_click():
         mock_cw_instance.ensure_conversation = AsyncMock(return_value={"id": 8888})
         
         with patch('core.worker.handlers.whatsapp.rabbitmq', new_callable=AsyncMock) as mock_rabbitmq, \
-             patch('core.worker.handlers.whatsapp.ChatwootClient', return_value=mock_cw_instance):
+             patch('core.worker.handlers.whatsapp.ChatwootClient', return_value=mock_cw_instance), \
+             patch('core.worker.handlers.whatsapp.SessionLocal', return_value=db):
             await handle_whatsapp_event(payload)
             
             db.refresh(trigger)
@@ -329,11 +345,24 @@ async def test_webhook_resume_on_button_click():
         if created_client:
             db.delete(client)
         db.commit()
-        db.close()
 
-async def test_webhook_resume_on_default_fallback():
+@pytest.mark.asyncio
+async def test_webhook_resume_on_default_fallback(db_session):
     print("--- 🔍 Testing Webhook Resume on Default Fallback (Any message) ---")
-    db = SessionLocal()
+    db = db_session
+    
+    # Evita que o fechamento da sessão no handler desvincule as instâncias
+    db.close = MagicMock()
+    
+    # Mock para pg_try_advisory_xact_lock no SQLite de teste
+    orig_execute = db.execute
+    def mock_execute(statement, params=None, *args, **kwargs):
+        if "pg_try_advisory_xact_lock" in str(statement):
+            mock_res = MagicMock()
+            mock_res.scalar.return_value = True
+            return mock_res
+        return orig_execute(statement, params, *args, **kwargs)
+    db.execute = mock_execute
     
     client, created_client = get_or_create_client(db)
     client_id = client.id
@@ -419,7 +448,8 @@ async def test_webhook_resume_on_default_fallback():
         mock_cw_instance.ensure_conversation = AsyncMock(return_value={"id": 8888})
         
         with patch('core.worker.handlers.whatsapp.rabbitmq', new_callable=AsyncMock) as mock_rabbitmq, \
-             patch('core.worker.handlers.whatsapp.ChatwootClient', return_value=mock_cw_instance):
+             patch('core.worker.handlers.whatsapp.ChatwootClient', return_value=mock_cw_instance), \
+             patch('core.worker.handlers.whatsapp.SessionLocal', return_value=db):
             await handle_whatsapp_event(payload)
             
             db.refresh(trigger)
@@ -439,11 +469,24 @@ async def test_webhook_resume_on_default_fallback():
         if created_client:
             db.delete(client)
         db.commit()
-        db.close()
 
-async def test_webhook_resume_outside_business_hours():
+@pytest.mark.asyncio
+async def test_webhook_resume_outside_business_hours(db_session):
     print("--- 🔍 Testing Webhook Resume Outside Business Hours ---")
-    db = SessionLocal()
+    db = db_session
+    
+    # Evita que o fechamento da sessão no handler desvincule as instâncias
+    db.close = MagicMock()
+    
+    # Mock para pg_try_advisory_xact_lock no SQLite de teste
+    orig_execute = db.execute
+    def mock_execute(statement, params=None, *args, **kwargs):
+        if "pg_try_advisory_xact_lock" in str(statement):
+            mock_res = MagicMock()
+            mock_res.scalar.return_value = True
+            return mock_res
+        return orig_execute(statement, params, *args, **kwargs)
+    db.execute = mock_execute
     
     client, created_client = get_or_create_client(db)
     client_id = client.id
@@ -475,10 +518,7 @@ async def test_webhook_resume_outside_business_hours():
         name="Webhook Business Hours Funnel",
         steps=funnel_steps,
         is_active=True,
-        trigger_phrase="iniciar_testes",
-        business_hours_start="08:00",
-        business_hours_end="18:00",
-        business_hours_days=[0, 1, 2, 3, 4, 5, 6]
+        trigger_phrase="iniciar_testes"
     )
     db.add(funnel)
     db.commit()
@@ -496,6 +536,7 @@ async def test_webhook_resume_outside_business_hours():
     db.commit()
     db.refresh(trigger)
     
+    # Criar configuração de telefone para evitar que caia no ID=1 hardcoded
     app_config = models.AppConfig(
         client_id=client_id,
         key="WA_PHONE_NUMBER_ID",
@@ -514,7 +555,7 @@ async def test_webhook_resume_outside_business_hours():
                     },
                     "messages": [{
                         "from": "5511999999999",
-                        "id": "wamid.click_event_outside_hours",
+                        "id": "wamid.click_event_id_business",
                         "timestamp": "1672531199",
                         "type": "interactive",
                         "interactive": {
@@ -537,7 +578,8 @@ async def test_webhook_resume_outside_business_hours():
         
         with patch('core.worker.handlers.whatsapp.rabbitmq', new_callable=AsyncMock) as mock_rabbitmq, \
              patch('core.worker.handlers.whatsapp.ChatwootClient', return_value=mock_cw_instance), \
-             patch('core.worker.handlers.whatsapp.is_within_business_hours', return_value=False):
+             patch('core.worker.handlers.whatsapp.is_within_business_hours', return_value=False), \
+             patch('core.worker.handlers.whatsapp.SessionLocal', return_value=db):
             await handle_whatsapp_event(payload)
             
             db.refresh(trigger)
@@ -559,14 +601,103 @@ async def test_webhook_resume_outside_business_hours():
         if created_client:
             db.delete(client)
         db.commit()
-        db.close()
+
+@pytest.mark.asyncio
+async def test_orchestrator_preserves_suspended_status(db_session):
+    print("--- 🔍 Testing Orchestrator Preserves Suspended Status on Button Nodes ---")
+    db = db_session
+    
+    client, created_client = get_or_create_client(db)
+    client_id = client.id
+    
+    funnel = models.Funnel(
+        client_id=client_id,
+        name="Test Orchestrator Status Funnel",
+        steps={
+            "nodes": [
+                {
+                    "id": "start",
+                    "type": "messageNode",
+                    "data": {
+                        "content": "Clique em um dos botões abaixo:",
+                        "buttons": ["Opção 1", "Opção 2"],
+                        "onlyBusinessHours": False
+                    }
+                }
+            ],
+            "edges": []
+        }
+    )
+    db.add(funnel)
+    db.commit()
+    db.refresh(funnel)
+    
+    trigger = models.ScheduledTrigger(
+        client_id=client_id,
+        funnel_id=funnel.id,
+        contact_phone="5511999999999",
+        contact_name="Test Orchestrator Status User",
+        status="processing",
+        conversation_id=9999
+    )
+    db.add(trigger)
+    db.commit()
+    db.refresh(trigger)
+    
+    chatwoot_mock = MagicMock()
+    chatwoot_mock.send_interactive_buttons = AsyncMock(return_value={
+        "messages": [{"id": "wamid.interactive_status_test_id"}]
+    })
+    chatwoot_mock.send_private_note = AsyncMock(return_value={"id": 12345})
+    
+    try:
+        from core.engine.executor import execute_funnel
+        
+        with patch('core.engine.nodes.message.is_window_open_strict', new_callable=AsyncMock) as mock_window, \
+             patch('core.engine.nodes.message.get_best_conversation', new_callable=AsyncMock) as mock_get_best_conv, \
+             patch('core.engine.nodes.message.wait_for_delivery_sync', new_callable=AsyncMock) as mock_wait_delivery, \
+             patch('core.engine.executor.ChatwootClient', return_value=chatwoot_mock), \
+             patch('rabbitmq_client.rabbitmq.publish_event', new_callable=AsyncMock) as mock_publish_event:
+            
+            mock_window.return_value = True
+            mock_get_best_conv.return_value = 9999
+            mock_wait_delivery.return_value = ("completed", "delivered")
+            
+            await execute_funnel(
+                funnel_id=funnel.id,
+                conversation_id=9999,
+                trigger_id=trigger.id,
+                contact_phone="5511999999999",
+                db=db,
+                skip_block_check=True
+            )
+            
+            db.refresh(trigger)
+            # A trigger deve ter status "suspended", e NÃO "completed"
+            assert trigger.status == "suspended", f"Trigger status was overwritten to {trigger.status}!"
+            assert trigger.current_node_id == "start"
+            
+            print("✅ SUCCESS: Orchestrator preserves suspended status verified!")
+            
+    finally:
+        # Cleanup
+        db.delete(trigger)
+        db.delete(funnel)
+        if created_client:
+            db.delete(client)
+        db.commit()
 
 async def run_all():
-    await test_message_node_with_buttons_session_window()
-    await test_message_node_with_buttons_direct_meta()
-    await test_webhook_resume_on_button_click()
-    await test_webhook_resume_on_default_fallback()
-    await test_webhook_resume_outside_business_hours()
+    db = SessionLocal()
+    try:
+        await test_message_node_with_buttons_session_window(db)
+        await test_message_node_with_buttons_direct_meta(db)
+        await test_webhook_resume_on_button_click(db)
+        await test_webhook_resume_on_default_fallback(db)
+        await test_webhook_resume_outside_business_hours(db)
+        await test_orchestrator_preserves_suspended_status(db)
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     asyncio.run(run_all())

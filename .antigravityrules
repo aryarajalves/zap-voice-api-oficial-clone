@@ -31,6 +31,7 @@
 
 ## 5. Reinício Automático e Limpeza de Cache
 - **Obrigatoriedade:** Sempre que implementar uma nova mecânica, interface frontend ou código Python, reinicie os serviços pertinentes **automaticamente**.
+- **Exceção de Apenas Subir/Reiniciar:** Caso a tarefa seja apenas subir ou reiniciar os contêineres a pedido do usuário (sem alterações de código ou layout), as regras de testes complexos, prova de tela e caminhos de fluxo estão dispensadas. Basta observar se subiram de verdade e estão respondendo.
 - **Limpeza de Cache:** Force sempre a recriação/limpeza (ex: `--force-recreate`) para garantir que a versão antiga não persista.
 - **Notificação Obrigatória:** Você deve sempre listar na sua resposta quais containers foram reiniciados.
 - **Objetivo:** Sincronização imediata entre código e execução sem intervenção manual.
@@ -39,7 +40,7 @@
 
 ## 6. Validação de Saúde e Integridade (Testes)
 - **Smoke Test:** Verifique se o frontend está online (Status 200) e sem "tela branca".
-- **Fluxos:** Teste o caminho completo da tela (ex: preencher e clicar em Avançar).
+- **Fluxos:** Teste o caminho completo da tela (ex: preencher e clicar em Avançar) - *Dispensado caso seja apenas subida/reinício de contêineres*.
 - **Dados:** Valide se listas dinâmicas (ex: templates) estão sendo povoadas corretamente.
 - **Logs:** Cheque `docker logs` para garantir que não houve regressões no backend.
 - **Relatório:** Use o prefixo `[OK]` para confirmar cada validação na resposta final.

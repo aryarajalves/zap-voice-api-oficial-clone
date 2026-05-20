@@ -98,6 +98,9 @@ class ScheduledTrigger(ScheduledTriggerBase):
     integration_id: Optional[str] = None
     is_free_message: bool = False
     is_interaction: bool = False
+    is_followup: bool = Field(False, description="Indica se é um disparo de follow-up")
+    followup_status: Optional[str] = Field(None, description="Status do disparo de follow-up associado")
+    followup_scheduled_time: Optional[datetime] = Field(None, description="Horário de disparo do follow-up associado")
     sent_as: Optional[str] = None  # Resultado real: 'FREE_MESSAGE' (grátis) ou 'TEMPLATE' (pago)
     chatwoot_label: Optional[List[str]] = Field(default_factory=list)
 
@@ -301,6 +304,14 @@ class WebhookEventMappingBase(BaseModel):
     manychat_tag_prefix: Optional[str] = Field(None, description="Prefixo da tag dinâmica")
     manychat_tag_rotation_time: Optional[str] = Field("08:00", description="Horário de rotação (HH:mm)")
     manychat_tag_rotation_day: Optional[int] = Field(4, description="Dia da semana da rotação (0-6)")
+    
+    followup_active: Optional[bool] = Field(False, description="Ativar mensagem de follow-up")
+    followup_template_name: Optional[str] = Field(None, description="Nome do template de follow-up")
+    followup_template_id: Optional[Union[str, int]] = Field(None, description="ID do template de follow-up")
+    followup_delay_value: Optional[int] = Field(0, description="Valor do atraso do follow-up")
+    followup_delay_unit: Optional[str] = Field("minutes", description="Unidade do atraso do follow-up (minutes, hours)")
+    followup_variables_mapping: Optional[Union[dict, list]] = Field(default_factory=list, description="Mapeamento de variáveis do template de follow-up")
+    
     is_active: Optional[bool] = Field(True, description="Indica se o mapeamento está ativo")
 
     @field_validator('chatwoot_label', mode='before')
