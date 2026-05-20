@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiClock, FiSettings, FiZap, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiClock, FiSettings, FiZap, FiPlus, FiTrash2, FiCalendar } from 'react-icons/fi';
 import SearchableSelect from '../SearchableSelect';
 import { HEADER_VAR_OPTIONS, BODY_VAR_OPTIONS } from '../../constants';
 
@@ -112,7 +112,105 @@ const FollowUpSection = ({
                 </select>
               </div>
             </div>
+
+            {/* Restringir ao Horário Comercial */}
+            <div className="space-y-2 flex flex-col justify-end pb-3">
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={mapping.followup_business_hours_active || false}
+                  onChange={(e) => updateMapping(mIndex, 'followup_business_hours_active', e.target.checked)}
+                />
+                <div className="w-10 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+                <span className="ml-3 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                  Restringir ao Horário Comercial
+                </span>
+              </label>
+            </div>
           </div>
+
+          {/* Configurações detalhadas de Horário Comercial */}
+          {mapping.followup_business_hours_active && (
+            <div className="bg-indigo-500/[0.02] dark:bg-indigo-500/[0.03] border border-indigo-500/10 rounded-2xl p-5 space-y-4 animate-in slide-in-from-top-2 duration-300">
+              <div className="flex justify-between items-center px-1">
+                <h5 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <FiCalendar size={14} /> Definição do Horário Comercial do Follow-up
+                </h5>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Dias da Semana */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1 block">
+                    Dias da Semana Permitidos
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[
+                      { id: 0, label: 'Seg' },
+                      { id: 1, label: 'Ter' },
+                      { id: 2, label: 'Qua' },
+                      { id: 3, label: 'Qui' },
+                      { id: 4, label: 'Sex' },
+                      { id: 5, label: 'Sáb' },
+                      { id: 6, label: 'Dom' }
+                    ].map((day) => {
+                      const daysList = mapping.followup_business_hours_days || [0, 1, 2, 3, 4];
+                      const isActive = daysList.includes(day.id);
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => {
+                            let newDays;
+                            if (isActive) {
+                              newDays = daysList.filter(d => d !== day.id);
+                            } else {
+                              newDays = [...daysList, day.id].sort();
+                            }
+                            updateMapping(mIndex, 'followup_business_hours_days', newDays);
+                          }}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                            isActive 
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
+                            : 'bg-gray-50 dark:bg-[#0b1120] text-gray-400 border border-gray-100 dark:border-white/5 hover:border-indigo-500/20'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Intervalo de Horário */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1 block">
+                      Horário Inicial
+                    </label>
+                    <input
+                      type="time"
+                      value={mapping.followup_business_hours_start || '08:00'}
+                      onChange={(e) => updateMapping(mIndex, 'followup_business_hours_start', e.target.value)}
+                      className="w-full bg-gray-50 dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 transition-all outline-none shadow-inner font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1 block">
+                      Horário Final
+                    </label>
+                    <input
+                      type="time"
+                      value={mapping.followup_business_hours_end || '18:00'}
+                      onChange={(e) => updateMapping(mIndex, 'followup_business_hours_end', e.target.value)}
+                      className="w-full bg-gray-50 dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 transition-all outline-none shadow-inner font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Mapeamento de Variáveis do Template de Follow-up */}
           {mapping.followup_template_id && followupTemplateVars.length > 0 && (

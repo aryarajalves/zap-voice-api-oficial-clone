@@ -112,6 +112,11 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 
 ## 📝 Changelog
 
+### v3.7.0
+- **Horário Comercial Configurável no Follow-up**: Implementação de restrição de envio de follow-up a horários e dias da semana comerciais configuráveis por mapeamento de webhook.
+- **Validação e Reagendamento de Disparos**: Algoritmo que calcula se o horário previsto para o follow-up está dentro da janela definida. Se fora, posterga o agendamento automaticamente para o início do horário comercial do próximo dia útil permitido.
+- **Persistência Completa e Testes Unitários**: Atualizados os roteadores (POST/PUT) do FastAPI para persistir os campos, criados esquemas de banco e elaborada suíte de testes unitários integrada com sucesso.
+
 ### v3.6.3
 - **Restrição de Conexão Única por Handle/Nó**: Limitação robusta no ReactFlow e na persistência para garantir que cada alça de saída (source) e cada nó de destino (target) possuam no máximo 1 ligação correspondente, evitando fluxos sobrepostos.
 - **Validação de Horário Comercial na Retomada de Funis**: Webhook do WhatsApp valida o horário comercial ao retomar execuções suspensas. Caso o nó de destino tenha `onlyBusinessHours` habilitado e a interação aconteça fora do horário, a execução é automaticamente agendada para o próximo período comercial disponível.

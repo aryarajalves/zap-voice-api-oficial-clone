@@ -183,6 +183,10 @@ class WebhookEventMapping(Base):
     followup_delay_value = Column(Integer, default=0)
     followup_delay_unit = Column(String, default="minutes")
     followup_variables_mapping = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    followup_business_hours_active = Column(Boolean, default=False)
+    followup_business_hours_start = Column(String, nullable=True, default="08:00")
+    followup_business_hours_end = Column(String, nullable=True, default="18:00")
+    followup_business_hours_days = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=lambda: [0, 1, 2, 3, 4])
     
     is_active = Column(Boolean, default=True)
     cost_per_message = Column(Float, default=0.0)

@@ -145,7 +145,11 @@ def create_webhook_integration(
                     followup_template_name=followup_template_name,
                     followup_delay_value=getattr(mapping, 'followup_delay_value', 0),
                     followup_delay_unit=getattr(mapping, 'followup_delay_unit', 'minutes'),
-                    followup_variables_mapping=getattr(mapping, 'followup_variables_mapping', [])
+                    followup_variables_mapping=getattr(mapping, 'followup_variables_mapping', []),
+                    followup_business_hours_active=getattr(mapping, 'followup_business_hours_active', False),
+                    followup_business_hours_start=getattr(mapping, 'followup_business_hours_start', '08:00'),
+                    followup_business_hours_end=getattr(mapping, 'followup_business_hours_end', '18:00'),
+                    followup_business_hours_days=getattr(mapping, 'followup_business_hours_days', [0, 1, 2, 3, 4])
                 )
                 db.add(db_mapping)
             
@@ -274,7 +278,11 @@ def update_webhook_integration(
                     followup_template_name=followup_template_name,
                     followup_delay_value=getattr(mapping, 'followup_delay_value', 0),
                     followup_delay_unit=getattr(mapping, 'followup_delay_unit', 'minutes'),
-                    followup_variables_mapping=getattr(mapping, 'followup_variables_mapping', [])
+                    followup_variables_mapping=getattr(mapping, 'followup_variables_mapping', []),
+                    followup_business_hours_active=getattr(mapping, 'followup_business_hours_active', False),
+                    followup_business_hours_start=getattr(mapping, 'followup_business_hours_start', '08:00'),
+                    followup_business_hours_end=getattr(mapping, 'followup_business_hours_end', '18:00'),
+                    followup_business_hours_days=getattr(mapping, 'followup_business_hours_days', [0, 1, 2, 3, 4])
                 )
                 db.add(db_mapping)
 

@@ -311,6 +311,10 @@ class WebhookEventMappingBase(BaseModel):
     followup_delay_value: Optional[int] = Field(0, description="Valor do atraso do follow-up")
     followup_delay_unit: Optional[str] = Field("minutes", description="Unidade do atraso do follow-up (minutes, hours)")
     followup_variables_mapping: Optional[Union[dict, list]] = Field(default_factory=list, description="Mapeamento de variáveis do template de follow-up")
+    followup_business_hours_active: Optional[bool] = Field(False, description="Ativar restrição de horário comercial para o follow-up")
+    followup_business_hours_start: Optional[str] = Field("08:00", description="Horário inicial comercial do follow-up")
+    followup_business_hours_end: Optional[str] = Field("18:00", description="Horário final comercial do follow-up")
+    followup_business_hours_days: Optional[List[int]] = Field(default_factory=lambda: [0, 1, 2, 3, 4], description="Dias da semana permitidos para o follow-up")
     
     is_active: Optional[bool] = Field(True, description="Indica se o mapeamento está ativo")
 

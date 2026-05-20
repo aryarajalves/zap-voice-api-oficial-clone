@@ -855,6 +855,19 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 
                 fu_idempotency_key = f"fu_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
                 
+                # --- VALIDAÇÃO DE HORÁRIO COMERCIAL DO FOLLOW-UP ---
+                if getattr(mapping, "followup_business_hours_active", False):
+                    from core.engine.business_hours import is_within_business_hours_generic, get_next_business_hour_start_generic
+                    
+                    fu_days = getattr(mapping, "followup_business_hours_days", None) or [0, 1, 2, 3, 4]
+                    fu_start = getattr(mapping, "followup_business_hours_start", None) or "08:00"
+                    fu_end = getattr(mapping, "followup_business_hours_end", None) or "18:00"
+                    
+                    if not is_within_business_hours_generic(fu_scheduled_time, fu_days, fu_start, fu_end):
+                        old_time = fu_scheduled_time
+                        fu_scheduled_time = get_next_business_hour_start_generic(fu_scheduled_time, fu_days, fu_start)
+                        logger.info(f"🕒 [FOLLOW-UP-BUSINESS-HOURS] Ajustando horario de follow-up {fu_idempotency_key} de {old_time} para {fu_scheduled_time} (fora do comercial)")
+                
                 fu_st = models.ScheduledTrigger(
                     scheduled_time=fu_scheduled_time,
                     status="queued",
