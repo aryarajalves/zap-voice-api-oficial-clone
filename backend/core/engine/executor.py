@@ -92,7 +92,7 @@ async def execute_funnel(
                     logger.info(f"🔍 [ENGINE] Buscando conversa para {contact_phone} para aplicar etiquetas")
                     conv = await chatwoot.ensure_conversation(contact_phone)
                     if conv:
-                        target_convo_id = conv.get("id")
+                        target_convo_id = conv.get("conversation_id")
                         trigger.conversation_id = target_convo_id
                         db.commit()
 
@@ -118,7 +118,7 @@ async def execute_funnel(
                 logger.info(f"🔍 [ENGINE] Buscando conversa para {contact_phone} para enviar nota privada")
                 conv = await chatwoot.ensure_conversation(contact_phone)
                 if conv:
-                    target_convo_id = conv.get("id")
+                    target_convo_id = conv.get("conversation_id")
                     trigger.conversation_id = target_convo_id
                     db.commit()
 

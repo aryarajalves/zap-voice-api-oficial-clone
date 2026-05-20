@@ -233,7 +233,7 @@ async def handle_whatsapp_event(data: dict):
                             # Sincroniza conversa para garantir que ela exista no Chatwoot
                             conv_res = await cw.ensure_conversation(from_phone, contacts_map.get(raw_from, "Contato"))
                             if isinstance(conv_res, dict):
-                                resolved_convo_id = conv_res.get("id")
+                                resolved_convo_id = conv_res.get("conversation_id")
                             elif isinstance(conv_res, int) or (isinstance(conv_res, str) and conv_res.isdigit()):
                                 resolved_convo_id = int(conv_res)
                         except Exception as e_conv:

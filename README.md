@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.0)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.1)
 
-Bem-vindo à versão **3.7.0** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.1** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,10 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.7.1
+- **Correção de Duplicação de Mensagens no WhatsApp**: Refatoração e tratamento robusto do parâmetro `ensure_conversation` no processamento de mensagens e execuções de funis (nos arquivos `whatsapp.py` e `executor.py`), aceitando inputs tanto em string JSON serializada quanto em dicionários de dados nativos.
+- **Melhorias de Testes Unitários**: Ajuste do mock síncrono para assíncrono em `test_conversation_selection.py` e implementação de testes unitários dedicados à validação do parsing em `test_ensure_conversation_parsing.py`.
 
 ### v3.7.0
 - **Horário Comercial Configurável no Follow-up**: Implementação de restrição de envio de follow-up a horários e dias da semana comerciais configuráveis por mapeamento de webhook.
