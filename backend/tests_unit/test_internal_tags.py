@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from routers.webhooks_public import receive_external_webhook
+from routers.webhooks_public import handle_external_webhook
 import uuid
 
 @pytest.fixture
@@ -78,7 +78,7 @@ async def test_internal_tags_processing(mock_db, mock_rabbitmq, mock_upsert_lead
     bg_tasks = MagicMock()
     
     # Call endpoint
-    await receive_external_webhook(
+    await handle_external_webhook(
         integration_uuid=str(integration_id),
         request=mock_request,
         background_tasks=bg_tasks,

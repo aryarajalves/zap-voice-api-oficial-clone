@@ -356,6 +356,22 @@ async def sync_all_webhook_history(
             elif history.event_type not in mapping_event_types and history.status == "processed":
                 history.status = "ignored"
 
+            # --- AUTO-FIX: Registros 'pending' sem mapeamento ativo → 'skipped' ---
+            # Cobre webhooks de teste gravados antes da correção do endpoint /test
+            if history.status == "pending":
+                active_mapping = next(
+                    (m for m in mappings
+                     if m.event_type.lower() == history.event_type
+                     and getattr(m, "is_active", True)),
+                    None
+                )
+                if not active_mapping:
+                    history.status = "skipped"
+                    history.error_message = (
+                        f"Nenhum mapeamento encontrado para o evento: {history.event_type}"
+                    )
+                    logger.info(f"🔄 [SYNC-ALL] Histórico #{history.id} reclassificado: pending → skipped (sem mapeamento ativo)")
+
             if (history.status == "error" and history.error_message and "Telefone Ausente" in history.error_message and parsed_data.get("phone")):
                 if history.event_type in mapping_event_types:
                     history.status = "processed"

@@ -69,8 +69,13 @@ async def test_webhook_integration(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid integration_id UUID")
+        
     integration = db.query(models.WebhookIntegration).filter(
-        models.WebhookIntegration.id == integration_id,
+        models.WebhookIntegration.id == uuid_obj,
         models.WebhookIntegration.client_id == x_client_id
     ).first()
     
@@ -121,12 +126,20 @@ async def test_webhook_integration(
         processed_data["chatwoot_label"] = getattr(mapping, "chatwoot_label", [])
         processed_data["free_message_enabled"] = getattr(mapping, "send_as_free_message", False)
     
+    # Determina o status inicial e mensagem de erro baseados na presença do mapeamento
+    status = "pending"
+    error_message = None
+    if not mapping:
+        status = "skipped"
+        error_message = f"Nenhum mapeamento encontrado para o evento: {detected_event}"
+    
     history = models.WebhookHistory(
         integration_id=integration.id,
         payload=test_payload,
-        status="pending",
+        status=status,
         event_type=detected_event,
-        processed_data=processed_data
+        processed_data=processed_data,
+        error_message=error_message
     )
     db.add(history)
     db.commit()

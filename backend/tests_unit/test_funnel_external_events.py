@@ -10,10 +10,10 @@ if backend_dir not in sys.path:
 
 os.environ["DATABASE_URL"] = "sqlite://"
 
-from services.engine import publish_node_external_event
+from core.engine.events import publish_node_external_event
 
 @pytest.mark.asyncio
-@patch("services.engine.rabbitmq")
+@patch("core.engine.events.rabbitmq")
 async def test_publish_node_external_event_enabled(mock_rabbitmq):
     # Setup
     mock_rabbitmq.publish = AsyncMock()
@@ -55,7 +55,7 @@ async def test_publish_node_external_event_enabled(mock_rabbitmq):
     assert payload["node_id"] == "node_1"
 
 @pytest.mark.asyncio
-@patch("services.engine.rabbitmq")
+@patch("core.engine.events.rabbitmq")
 async def test_publish_node_external_event_disabled(mock_rabbitmq):
     # Setup
     mock_rabbitmq.publish = AsyncMock()
@@ -79,7 +79,7 @@ async def test_publish_node_external_event_disabled(mock_rabbitmq):
     mock_rabbitmq.publish.assert_not_called()
 
 @pytest.mark.asyncio
-@patch("services.engine.rabbitmq")
+@patch("core.engine.events.rabbitmq")
 async def test_publish_node_external_event_audio(mock_rabbitmq):
     # Setup
     mock_rabbitmq.publish = AsyncMock()

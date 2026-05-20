@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime, timezone
-from services.engine import execute_graph_funnel
+from core.engine.graph_executor import execute_graph_funnel
 import models
 
 @pytest.mark.asyncio
@@ -40,7 +40,7 @@ async def test_action_node_execution():
             conversation_id=1,
             contact_phone="5511999999999",
             db=db,
-            apply_vars=apply_vars
+            apply_vars_func=apply_vars
         )
         
         # Verify action was logged
@@ -79,8 +79,8 @@ async def test_template_node_external_event_fix():
     chatwoot.send_template = AsyncMock(return_value={"messages": [{"id": "wamid.123"}]})
     apply_vars = lambda x: x
     
-    with patch("services.engine.log_node_execution", new_callable=AsyncMock), \
-         patch("services.engine.publish_node_external_event", new_callable=AsyncMock) as mock_publish, \
+    with patch("core.engine.graph_executor.log_node_execution", new_callable=AsyncMock), \
+         patch("core.engine.graph_executor.publish_node_external_event", new_callable=AsyncMock) as mock_publish, \
          patch("services.engine.wait_for_delivery_sync", new_callable=AsyncMock) as mock_wait:
         
         mock_wait.return_value = ("delivered", "OK")
@@ -92,7 +92,7 @@ async def test_template_node_external_event_fix():
             conversation_id=1,
             contact_phone="5511999999999",
             db=db,
-            apply_vars=apply_vars
+            apply_vars_func=apply_vars
         )
         
         # Verify publish_node_external_event was called with correct arguments

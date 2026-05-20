@@ -9,7 +9,7 @@ import uuid
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database import Base
-from routers.webhooks_integrations import get_db as integrations_get_db
+from routers.webhooks.integrations import get_db as integrations_get_db
 
 engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

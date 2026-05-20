@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiX, FiZap, FiLink, FiPhone } from 'react-icons/fi';
+import { FiZap, FiLink, FiPhone } from 'react-icons/fi';
 
 const TemplateGuide = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
@@ -7,7 +7,6 @@ const TemplateGuide = ({ isOpen, onClose }) => {
     return (
         <div
             className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
-            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
                 style={{ background: 'linear-gradient(160deg, #0f1729 0%, #111827 100%)', border: '1px solid rgba(99,102,241,0.25)' }}>
@@ -25,13 +24,6 @@ const TemplateGuide = ({ isOpen, onClose }) => {
                             <p className="text-sm text-gray-400">Entenda cada campo e como criar templates aprovados pela Meta.</p>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-white transition-all hover:scale-110"
-                        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
-                    >
-                        <FiX size={18} />
-                    </button>
                 </div>
 
                 {/* Conteúdo rolável */}

@@ -9,7 +9,7 @@ import uuid
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from routers.webhooks_integrations import get_db as integrations_get_db
+from routers.webhooks.integrations import get_db as integrations_get_db
 
 # Mock Database
 engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
