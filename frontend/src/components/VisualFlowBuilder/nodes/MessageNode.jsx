@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { FiMessageSquare, FiPlus, FiCpu, FiClock, FiTrash2, FiMaximize2 } from 'react-icons/fi';
+import { FiMessageSquare, FiPlus, FiClock, FiTrash2, FiMaximize2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import NodeHeader from '../components/NodeHeader';
 import VariableSelector from '../components/VariableSelector';
@@ -166,22 +166,6 @@ const MessageNode = ({ id, data }) => {
                 </div>
 
                 <div className="pt-2 mt-1 border-t border-gray-100 dark:border-gray-700 space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
-                        <div className="relative inline-flex items-center cursor-pointer">
-                            <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={data.publishExternalEvent || false}
-                                onChange={(e) => data.onChange(id, { publishExternalEvent: e.target.checked })}
-                            />
-                            <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <FiCpu size={10} className="text-blue-500 opacity-70" />
-                            <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-blue-600 transition-colors">Enviar para Memória?</span>
-                        </div>
-                    </label>
-
                     <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
                         <div className="relative inline-flex items-center cursor-pointer">
                             <input

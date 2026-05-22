@@ -78,6 +78,21 @@ export function useIntegrations(activeClient) {
 
   const handleSaveIntegration = async () => {
     if (!formData.name.trim()) return toast.error('Nome é obrigatório');
+
+    // Validar se follow-up está ativo mas o tempo de espera é menor que 1 ou nulo/NaN
+    const hasInvalidFollowup = (formData.mappings || []).some(mapping => {
+      const active = mapping.followup_active === true || 
+                     String(mapping.followup_active).toLowerCase() === 'true' ||
+                     mapping.followup_active === 1 || 
+                     String(mapping.followup_active) === '1';
+      if (!active) return false;
+      const val = Number(mapping.followup_delay_value);
+      return isNaN(val) || val < 1;
+    });
+    if (hasInvalidFollowup) {
+      return toast.error('O tempo de espera do Follow-up deve ser no mínimo 1.');
+    }
+
     setIsSaving(true);
 
     const savePromise = new Promise(async (resolve, reject) => {

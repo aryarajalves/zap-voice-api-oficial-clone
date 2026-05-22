@@ -169,7 +169,7 @@ async def handle_whatsapp_event(data: dict):
                                         {"cost": cost_to_add, "paid": paid_increment, "tid": trigger.id}
                                     )
 
-                                if trigger_delivered and trigger.is_bulk:
+                                if trigger_delivered and (trigger.is_bulk or trigger.publish_external_event):
                                     from services.ai_memory import notify_agent_memory_webhook
                                     asyncio.create_task(notify_agent_memory_webhook(
                                         client_id=trigger.client_id,

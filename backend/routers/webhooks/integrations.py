@@ -68,6 +68,22 @@ def create_webhook_integration(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    if integration.mappings:
+        for mapping in integration.mappings:
+            is_fu_active = getattr(mapping, 'followup_active', False)
+            if is_fu_active in [True, "true", "True", 1, "1"]:
+                fu_delay = getattr(mapping, 'followup_delay_value', None)
+                try:
+                    if fu_delay is not None:
+                        fu_delay = int(fu_delay)
+                except (ValueError, TypeError):
+                    fu_delay = None
+                if fu_delay is None or fu_delay < 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="O tempo de espera do Follow-up deve ser no mínimo 1."
+                    )
+
     try:
         db_integration = models.WebhookIntegration(
             name=integration.name,
@@ -173,6 +189,22 @@ def update_webhook_integration(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    if integration_update.mappings:
+        for mapping in integration_update.mappings:
+            is_fu_active = getattr(mapping, 'followup_active', False)
+            if is_fu_active in [True, "true", "True", 1, "1"]:
+                fu_delay = getattr(mapping, 'followup_delay_value', None)
+                try:
+                    if fu_delay is not None:
+                        fu_delay = int(fu_delay)
+                except (ValueError, TypeError):
+                    fu_delay = None
+                if fu_delay is None or fu_delay < 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="O tempo de espera do Follow-up deve ser no mínimo 1."
+                    )
+
     try:
         uuid_obj = uuid.UUID(integration_id)
     except ValueError:

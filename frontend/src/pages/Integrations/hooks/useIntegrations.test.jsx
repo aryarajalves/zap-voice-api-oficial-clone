@@ -70,4 +70,66 @@ describe('useIntegrations hook', () => {
 
     expect(toast.promise).toHaveBeenCalled();
   });
+
+  it('deve validar tempo de espera do follow-up ao salvar', async () => {
+    render(<TestComponent />);
+
+    // Define dados inválidos no form (follow-up ativo com tempo 0)
+    act(() => {
+      hookResult.setFormData({
+        name: 'Hotmart Integration',
+        platform: 'hotmart',
+        mappings: [
+          {
+            event_type: 'compra_aprovada',
+            followup_active: true,
+            followup_delay_value: 0
+          }
+        ],
+        product_filtering: false,
+        product_whitelist: [],
+        discovered_products: [],
+        custom_slug: ''
+      });
+    });
+
+    await act(async () => {
+      await hookResult.handleSaveIntegration();
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('O tempo de espera do Follow-up deve ser no mínimo 1.');
+  });
+
+  it('deve permitir salvar se o tempo de espera do follow-up for válido (>= 1)', async () => {
+    fetchWithAuth.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 1, name: 'New Integration' })
+    });
+
+    render(<TestComponent />);
+
+    act(() => {
+      hookResult.setFormData({
+        name: 'Hotmart Integration',
+        platform: 'hotmart',
+        mappings: [
+          {
+            event_type: 'compra_aprovada',
+            followup_active: true,
+            followup_delay_value: 5
+          }
+        ],
+        product_filtering: false,
+        product_whitelist: [],
+        discovered_products: [],
+        custom_slug: ''
+      });
+    });
+
+    await act(async () => {
+      await hookResult.handleSaveIntegration();
+    });
+
+    expect(toast.promise).toHaveBeenCalled();
+  });
 });

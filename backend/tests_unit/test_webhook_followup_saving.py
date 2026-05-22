@@ -135,3 +135,138 @@ async def test_webhook_integration_followup_saving(db_session, client):
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(get_validated_client_id, None)
         app.dependency_overrides.pop(integrations_get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_webhook_integration_followup_saving_invalid_delay(db_session, client):
+    # 1. Configurar dependências de autenticação mockadas
+    mock_user = models.User(id=1, email="admin@test.com", role="super_admin")
+    db_session.add(mock_user)
+    db_session.commit()
+
+    async def override_get_current_user():
+        return mock_user
+        
+    async def override_get_validated_client_id():
+        return 1
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_validated_client_id] = override_get_validated_client_id
+    app.dependency_overrides[integrations_get_db] = lambda: db_session
+
+    try:
+        # Payload para criar integração com mapeamento de follow-up com delay 0 (inválido)
+        invalid_payload = {
+            "name": "Integração Teste FollowUp Inválido",
+            "platform": "outros",
+            "status": "active",
+            "mappings": [
+                {
+                    "event_type": "compra_aprovada",
+                    "template_id": None,
+                    "template_name": "template_principal",
+                    "delay_minutes": 5,
+                    "variables_mapping": [],
+                    "private_note": "true",
+                    "chatwoot_label": [],
+                    "publish_external_event": True,
+                    "is_active": True,
+                    # Novos campos de follow-up
+                    "followup_active": True,
+                    "followup_template_id": 77,
+                    "followup_delay_value": 0,  # INVÁLIDO
+                    "followup_delay_unit": "hours",
+                    "followup_variables_mapping": []
+                }
+            ]
+        }
+
+        # Enviar requisição de criação (deve retornar 400)
+        response = client.post("/api/webhook-integrations", json=invalid_payload, headers={"X-Client-ID": "1"})
+        assert response.status_code == 400
+        assert "O tempo de espera do Follow-up deve ser no mínimo 1." in response.text
+
+    finally:
+        # Limpar desvios de injeção
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_validated_client_id, None)
+        app.dependency_overrides.pop(integrations_get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_webhook_integration_followup_saving_invalid_delay_put(db_session, client):
+    # 1. Configurar dependências de autenticação mockadas
+    mock_user = models.User(id=1, email="admin@test.com", role="super_admin")
+    db_session.add(mock_user)
+    
+    # Criar um WhatsAppTemplateCache mockado no banco
+    mock_template = models.WhatsAppTemplateCache(
+        id=77,
+        client_id=1,
+        name="followup_template_test",
+        language="pt_BR",
+        body="Olá, você ainda está aí?"
+    )
+    db_session.add(mock_template)
+    
+    # Criar a integração inicial válida para podermos atualizar
+    import uuid
+    integration_id = uuid.uuid4()
+    db_integration = models.WebhookIntegration(
+        id=integration_id,
+        client_id=1,
+        name="Integração Inicial",
+        platform="outros",
+        status="active"
+    )
+    db_session.add(db_integration)
+    db_session.commit()
+
+    async def override_get_current_user():
+        return mock_user
+        
+    async def override_get_validated_client_id():
+        return 1
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_validated_client_id] = override_get_validated_client_id
+    app.dependency_overrides[integrations_get_db] = lambda: db_session
+
+    try:
+        # Payload para atualizar com mapeamento de follow-up com delay 0 (inválido)
+        invalid_update_payload = {
+            "name": "Integração Atualizada com Delay Inválido",
+            "platform": "outros",
+            "status": "active",
+            "mappings": [
+                {
+                    "event_type": "compra_aprovada",
+                    "template_id": None,
+                    "template_name": "template_principal",
+                    "delay_minutes": 5,
+                    "variables_mapping": [],
+                    "private_note": "true",
+                    "chatwoot_label": [],
+                    "publish_external_event": True,
+                    "is_active": True,
+                    "followup_active": True,
+                    "followup_template_id": 77,
+                    "followup_delay_value": 0,  # INVÁLIDO
+                    "followup_delay_unit": "hours",
+                    "followup_variables_mapping": []
+                }
+            ]
+        }
+
+        # Enviar requisição de atualização (deve retornar 400)
+        response = client.put(f"/api/webhook-integrations/{integration_id}", json=invalid_update_payload, headers={"X-Client-ID": "1"})
+        assert response.status_code == 400
+        assert "O tempo de espera do Follow-up deve ser no mínimo 1." in response.text
+
+    finally:
+        # Limpar desvios de injeção
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_validated_client_id, None)
+        app.dependency_overrides.pop(integrations_get_db, None)
+
+

@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.9)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.0)
 
-Bem-vindo à versão **3.7.9** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.0** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,15 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.8.0
+- **Validação de Tempo de Espera do Follow-up (Novo!)**:
+  - **Frontend**: Validação no hook `useIntegrations.js` que impede o salvamento de integrações se o follow-up estiver ativo com valor de atraso inválido (vazio, nulo ou menor que 1).
+  - **Backend**: Validação robusta nos roteadores `POST` e `PUT` da API (`integrations.py`) retornando HTTP 400 em caso de valores inválidos.
+  - **Suíte de Testes Unitários**: Testes dedicados de backend (`test_webhook_followup_saving.py`) e frontend (`useIntegrations.test.jsx`) cobrindo as validações de delay com 100% de sucesso.
+- **Otimização do Fluxo de Memória IA**:
+  - **Visual Flow Builder**: Remoção definitiva do toggle `"Enviar para Memória?"` do nó de mensagens (`MessageNode.jsx`), simplificando a interface visual.
+  - **Envio Automático**: O backend (`events.py` e `whatsapp.py`) agora envia automaticamente todas as mensagens entregues para o webhook de memória configurado do agente, sem depender de flag individual do nó.
 
 ### v3.7.9
 - **Filtro por Etiquetas (Tags) em Todos os Dropdowns de Templates (Novo!)**:
