@@ -1,8 +1,44 @@
-import React from 'react';
-import { FiCheck, FiClock, FiAlertCircle, FiZap, FiTrash2 } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiCheck, FiClock, FiAlertCircle, FiZap, FiTrash2, FiTag, FiPlus, FiX } from 'react-icons/fi';
 
 const TemplateItem = ({ tpl, logic }) => {
-    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen } = logic;
+    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen, updateTemplateTags, templates } = logic;
+    const [showTagPopover, setShowTagPopover] = useState(false);
+    const [newTagInput, setNewTagInput] = useState('');
+    const [tempTags, setTempTags] = useState(tpl.tags || []);
+
+    const allExistingTags = Array.from(
+        new Set((templates || []).flatMap(t => t.tags || []))
+    );
+
+    const handleToggleTag = (tag) => {
+        if (tempTags.includes(tag)) {
+            setTempTags(tempTags.filter(t => t !== tag));
+        } else {
+            setTempTags([...tempTags, tag]);
+        }
+    };
+
+    const handleAddNewTag = (e) => {
+        e.preventDefault();
+        const cleanTag = newTagInput.trim().toLowerCase();
+        if (cleanTag && !tempTags.includes(cleanTag)) {
+            setTempTags([...tempTags, cleanTag]);
+            setNewTagInput('');
+        }
+    };
+
+    const handleSaveTags = async () => {
+        const success = await updateTemplateTags(tpl.id, tempTags);
+        if (success) {
+            setShowTagPopover(false);
+        }
+    };
+
+    const handleOpenPopover = () => {
+        setTempTags(tpl.tags || []);
+        setShowTagPopover(true);
+    };
 
     return (
         <div className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 hover:border-blue-200 dark:hover:border-blue-800 transition-all group">
@@ -33,6 +69,93 @@ const TemplateItem = ({ tpl, logic }) => {
                         </span>
                     )}
                 </div>
+            </div>
+
+            {/* Linha de Etiquetas (Tags) */}
+            <div className="flex flex-wrap items-center gap-1.5 mb-3 relative">
+                {(tpl.tags || []).map((tag, idx) => (
+                    <span 
+                        key={idx} 
+                        className="text-[9px] font-bold px-2 py-0.5 bg-blue-50/60 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/30 rounded"
+                    >
+                        {tag}
+                    </span>
+                ))}
+                
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (showTagPopover) {
+                            setShowTagPopover(false);
+                        } else {
+                            handleOpenPopover();
+                        }
+                    }}
+                    className="p-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-all flex items-center justify-center"
+                    title="Gerenciar Etiquetas"
+                >
+                    <FiTag size={10} />
+                </button>
+
+                {showTagPopover && (
+                    <div 
+                        className="absolute left-0 top-7 z-50 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl w-60 animate-in fade-in slide-in-from-top-1 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-gray-700">
+                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Etiquetas</span>
+                            <button 
+                                onClick={() => setShowTagPopover(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                            >
+                                <FiX size={12} />
+                            </button>
+                        </div>
+
+                        <div className="max-h-24 overflow-y-auto mb-2 pr-1 custom-scrollbar">
+                            {allExistingTags.length === 0 ? (
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 italic py-1">Nenhuma etiqueta criada ainda.</p>
+                            ) : (
+                                <div className="flex flex-col gap-1.5">
+                                    {allExistingTags.map((tag) => (
+                                        <label key={tag} className="flex items-center gap-2 cursor-pointer select-none text-[10px] text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
+                                            <input 
+                                                type="checkbox"
+                                                checked={tempTags.includes(tag)}
+                                                onChange={() => handleToggleTag(tag)}
+                                                className="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
+                                            />
+                                            <span className="truncate">{tag}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <form onSubmit={handleAddNewTag} className="flex gap-1 mb-3">
+                            <input
+                                type="text"
+                                value={newTagInput}
+                                onChange={(e) => setNewTagInput(e.target.value)}
+                                placeholder="Nova etiqueta..."
+                                className="flex-1 px-2 py-1 text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:border-blue-500"
+                            />
+                            <button
+                                type="submit"
+                                className="p-1 rounded bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center shrink-0"
+                            >
+                                <FiPlus size={12} />
+                            </button>
+                        </form>
+
+                        <button
+                            onClick={handleSaveTags}
+                            className="w-full py-1.5 text-[10px] font-bold text-center text-white bg-green-500 hover:bg-green-600 rounded transition-colors"
+                        >
+                            Salvar Alterações
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="flex items-center justify-between gap-2">

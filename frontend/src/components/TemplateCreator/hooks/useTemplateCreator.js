@@ -300,6 +300,40 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         toast.success('Texto corrigido para o formato da Meta!');
     };
 
+    const updateTemplateTags = async (templateId, tagsList) => {
+        if (!activeClient) return false;
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/whatsapp/templates/${templateId}/tags`,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tags: tagsList })
+                },
+                activeClient.id
+            );
+
+            if (res.ok) {
+                setTemplates(prev => prev.map(t => {
+                    if (String(t.id) === String(templateId)) {
+                        return { ...t, tags: tagsList };
+                    }
+                    return t;
+                }));
+                toast.success("Etiquetas salvas com sucesso!");
+                return true;
+            } else {
+                const err = await res.json();
+                toast.error(err.detail || "Erro ao salvar etiquetas.");
+                return false;
+            }
+        } catch (error) {
+            console.error("Error updating template tags:", error);
+            toast.error("Erro de conexão ao salvar etiquetas.");
+            return false;
+        }
+    };
+
     return {
         activeClient,
         loading,
@@ -341,6 +375,7 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         handleDeleteTemplate,
         handleMediaUpload,
         handleSubmit,
-        fixBodyTextForMeta
+        fixBodyTextForMeta,
+        updateTemplateTags
     };
 };
