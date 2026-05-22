@@ -79,31 +79,52 @@ export function useIntegrations(activeClient) {
   const handleSaveIntegration = async () => {
     if (!formData.name.trim()) return toast.error('Nome é obrigatório');
     setIsSaving(true);
-    try {
-      const url = editingIntegration 
-        ? `${API_URL}/webhook-integrations/${editingIntegration.id}` 
-        : `${API_URL}/webhook-integrations`;
-      const method = editingIntegration ? 'PUT' : 'POST';
 
-      const res = await fetchWithAuth(url, {
-        method,
-        body: JSON.stringify(formData)
-      }, activeClient.id);
+    const savePromise = new Promise(async (resolve, reject) => {
+      try {
+        const url = editingIntegration 
+          ? `${API_URL}/webhook-integrations/${editingIntegration.id}` 
+          : `${API_URL}/webhook-integrations`;
+        const method = editingIntegration ? 'PUT' : 'POST';
 
-      if (res.ok) {
-        toast.success(editingIntegration ? 'Integração atualizada!' : 'Integração criada!');
-        setIsModalOpen(false);
-        fetchIntegrations();
-      } else {
-        const err = await res.json();
-        toast.error(err.detail || 'Erro ao salvar');
+        const res = await fetchWithAuth(url, {
+          method,
+          body: JSON.stringify(formData)
+        }, activeClient.id);
+
+        if (res.ok) {
+          setIsModalOpen(false);
+          fetchIntegrations();
+          resolve(editingIntegration ? 'Integração atualizada!' : 'Integração criada!');
+        } else {
+          const err = await res.json().catch(() => ({}));
+          reject(err.detail || 'Erro ao salvar');
+        }
+      } catch (err) {
+        console.error(err);
+        reject('Erro de conexão');
+      } finally {
+        setIsSaving(false);
       }
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro de conexão');
-    } finally {
-      setIsSaving(false);
-    }
+    });
+
+    toast.promise(savePromise, {
+      loading: 'Salvando alterações...',
+      success: (msg) => msg,
+      error: (err) => err,
+    }, {
+      style: {
+        minWidth: '250px',
+      },
+      success: {
+        duration: 4000,
+        icon: '✅',
+      },
+      error: {
+        duration: 4000,
+        icon: '❌',
+      }
+    });
   };
 
   const handleDeleteIntegration = async () => {
