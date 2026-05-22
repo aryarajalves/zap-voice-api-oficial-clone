@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.6)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.7)
 
-Bem-vindo à versão **3.7.6** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.7** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,15 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.7.7
+- **Controle de Acesso Baseado em Funções (RBAC) (Novo!)**: Implementação de restrições de acesso refinadas de acordo com as permissões do usuário logado:
+  - Administrador (`admin`): Acesso total às configurações do cliente (Chatwoot, WhatsApp e Avançado). Sem acesso a gestão global de usuários.
+  - Premium (`premium`): Acesso total a funis, templates, disparos, contatos e financeiro. Bloqueio completo na visualização de chaves de API/Tokens e abas avançadas no modal de configurações.
+  - Usuário (`user`): Acesso de apenas visualização (read-only) para histórico, agenda de disparos e financeiro. Bloqueio para criação e edição de recursos, e bloqueio de visualização das chaves de API.
+- **Segurança de Endpoints no Backend**: Inclusão dos validadores `require_admin` e `require_premium` em rotas cruciais do FastAPI (Configurações, Funis, Schedules, WhatsApp, Contatos Bloqueados e Leads).
+- **Adequação da Interface (UI)**: Ocultação dinâmica de abas de configuração avançada no modal de configurações e ajuste dos itens visíveis na sidebar dependendo da role do usuário.
+- **Suíte de Testes e Provas Visuais**: Criação de testes automatizados dedicados à segurança do RBAC (`test_17_rbac_permissions.py`) com 100% de sucesso e geração de capturas de tela automatizadas via Playwright para cada um dos papéis de usuário.
 
 ### v3.7.6
 - **Gestão de Links de Convite (Novo!)**: Aba dedicada incorporada ao painel de "Gestão de Usuários" permitindo listar todos os convites criados, ver status (PENDENTE, UTILIZADO ou EXPIRADO), cargos atribuídos e acessos a clientes permitidos.

@@ -69,27 +69,31 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                                 label="Básico" 
                                 icon={FiLayout} 
                             />
-                            <TabButton 
-                                id="chatwoot" 
-                                activeTab={logic.activeTab} 
-                                onClick={logic.setActiveTab} 
-                                label="Chatwoot" 
-                                icon={FiMessageSquare} 
-                            />
-                            <TabButton 
-                                id="whatsapp" 
-                                activeTab={logic.activeTab} 
-                                onClick={logic.setActiveTab} 
-                                label="WhatsApp" 
-                                icon={FiSmartphone} 
-                            />
-                            <TabButton 
-                                id="advanced" 
-                                activeTab={logic.activeTab} 
-                                onClick={logic.setActiveTab} 
-                                label="Avançado" 
-                                icon={FiCpu} 
-                            />
+                            {logic.user?.role !== 'user' && logic.user?.role !== 'premium' && (
+                                <>
+                                    <TabButton 
+                                        id="chatwoot" 
+                                        activeTab={logic.activeTab} 
+                                        onClick={logic.setActiveTab} 
+                                        label="Chatwoot" 
+                                        icon={FiMessageSquare} 
+                                    />
+                                    <TabButton 
+                                        id="whatsapp" 
+                                        activeTab={logic.activeTab} 
+                                        onClick={logic.setActiveTab} 
+                                        label="WhatsApp" 
+                                        icon={FiSmartphone} 
+                                    />
+                                    <TabButton 
+                                        id="advanced" 
+                                        activeTab={logic.activeTab} 
+                                        onClick={logic.setActiveTab} 
+                                        label="Avançado" 
+                                        icon={FiCpu} 
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
 

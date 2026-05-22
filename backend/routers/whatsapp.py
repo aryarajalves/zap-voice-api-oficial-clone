@@ -5,6 +5,7 @@ import models
 import schemas
 from fastapi import Depends
 from core.deps import get_current_user, get_db
+from core.permissions import require_premium, require_user
 from core.logger import setup_logger
 from config_loader import get_setting
 import httpx
@@ -45,7 +46,7 @@ async def debug_env():
 @router.get("/templates")
 async def list_templates(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     try:
         # Prefer X-Client-ID header, fallback to user's client_id
@@ -65,7 +66,7 @@ async def list_templates(
 @router.get("/labels")
 async def list_labels(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     try:
         target_client_id = x_client_id if x_client_id else current_user.client_id
@@ -82,7 +83,7 @@ async def list_labels(
 async def upload_template_media(
     file: UploadFile = File(...),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Faz upload de imagem/vídeo/documento para a Meta Resumable Upload API
@@ -138,7 +139,7 @@ async def upload_template_media(
 async def create_template(
     payload: schemas.WhatsAppTemplateCreate,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     target_client_id = x_client_id if x_client_id else current_user.client_id
     client = ChatwootClient(client_id=target_client_id)
@@ -157,7 +158,7 @@ async def update_template(
     template_id: str,
     payload: schemas.WhatsAppTemplateCreate,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     target_client_id = x_client_id if x_client_id else current_user.client_id
     client = ChatwootClient(client_id=target_client_id)
@@ -173,7 +174,7 @@ async def update_template(
 async def delete_template(
     template_name: str,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     target_client_id = x_client_id if x_client_id else current_user.client_id
     client = ChatwootClient(client_id=target_client_id)
@@ -189,7 +190,7 @@ async def update_template_status(
     template_id: str,
     status: str,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     target_client_id = x_client_id if x_client_id else current_user.client_id
     client = ChatwootClient(client_id=target_client_id)
@@ -202,7 +203,7 @@ async def update_template_status(
 async def send_template(
     payload: schemas.WhatsAppTemplateRequest, 
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     try:
         phone = payload.phone_number
@@ -318,7 +319,7 @@ async def send_template(
 @router.get("/profile", summary="Busca o perfil do WhatsApp Business")
 async def get_whatsapp_profile(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
@@ -430,7 +431,7 @@ async def get_whatsapp_profile(
 async def update_profile_picture(
     file: UploadFile = File(...),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
@@ -499,7 +500,7 @@ async def update_profile_picture(
 async def update_whatsapp_profile(
     payload: dict,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
@@ -534,7 +535,7 @@ async def update_whatsapp_profile(
 async def update_whatsapp_name(
     payload: dict,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
@@ -564,7 +565,7 @@ async def update_whatsapp_name(
 @router.post("/register-number", summary="Registra o número de telefone (Ativa certificado de nome)")
 async def register_whatsapp_number(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
@@ -599,7 +600,7 @@ async def register_whatsapp_number(
 async def debug_meta(
     waba_id: str,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)

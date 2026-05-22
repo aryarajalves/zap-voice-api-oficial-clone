@@ -9,6 +9,7 @@ import json
 import pandas as pd
 import io
 from core.deps import get_current_user, get_db
+from core.permissions import require_premium, require_user
 from services.leads import upsert_webhook_lead
 
 class BulkDeleteRequest(BaseModel):
@@ -30,7 +31,7 @@ def bulk_create_leads(
     request: BulkCreateLeadsRequest,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Cria ou atualiza uma lista de leads.
@@ -67,7 +68,7 @@ def bulk_create_leads(
 @router.post("/leads/import/preview", summary="Pré-visualizar arquivo de importação")
 async def preview_import(
     file: UploadFile = File(...),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Lê o arquivo e retorna os nomes das colunas e as primeiras 3 linhas.
@@ -125,7 +126,7 @@ async def execute_import(
     mapping: str = Form(...), # JSON string do mapeamento
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Processa o arquivo aplicando o mapeamento de colunas e salvando no banco.
@@ -226,7 +227,7 @@ def create_manual_lead(
     lead_in: schemas.WebhookLeadCreate,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Cria um novo lead ou atualiza um existente com base no telefone.
@@ -266,7 +267,7 @@ def create_manual_lead(
 def clean_corrupted_tags(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Remove tags corrompidas (com barras, aspas escapadas, JSON malformado) de todos os leads do cliente.
@@ -314,7 +315,7 @@ def list_leads(
     tag: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     """
     Retorna a lista de leads capturados via webhook, com filtros e busca.
@@ -362,7 +363,7 @@ def list_leads(
 def get_lead_filters(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     """
     Retorna os tipos de eventos e nomes de produtos únicos para preencher os filtros do Frontend.
@@ -403,7 +404,7 @@ def export_leads_csv(
     tag: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     """
     Gera um arquivo CSV com os leads filtrados.
@@ -498,7 +499,7 @@ def delete_lead(
     lead_id: int,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     lead = db.query(models.WebhookLead).filter(
@@ -519,7 +520,7 @@ def update_lead(
     lead_in: schemas.WebhookLeadUpdate,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     lead = db.query(models.WebhookLead).filter(
@@ -554,7 +555,7 @@ def bulk_delete_leads(
     request: BulkDeleteRequest,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
     leads = db.query(models.WebhookLead).filter(

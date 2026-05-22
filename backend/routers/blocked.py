@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from core.deps import get_db, get_current_user
+from core.permissions import require_premium, require_user
 from models import BlockedContact, User
 from pydantic import BaseModel
 from typing import List, Optional
@@ -39,7 +40,7 @@ class BulkBlockRequest(BaseModel):
 
 @router.get("/", response_model=List[BlockedContactResponse])
 def list_blocked_contacts(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_user),
     db: Session = Depends(get_db),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
@@ -56,7 +57,7 @@ def list_blocked_contacts(
 @router.post("/", response_model=BlockedContactResponse, status_code=status.HTTP_201_CREATED)
 def block_contact(
     data: BlockedContactCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
@@ -97,7 +98,7 @@ def block_contact(
 @router.post("/check_bulk", response_model=BulkCheckResponse)
 def check_bulk_blocked(
     data: BulkCheckRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_user),
     db: Session = Depends(get_db),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
@@ -136,7 +137,7 @@ def check_bulk_blocked(
 @router.delete("/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
 def unblock_contact(
     contact_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
@@ -160,7 +161,7 @@ def unblock_contact(
 @router.post("/unblock_bulk")
 def unblock_bulk(
     data: BulkUnblockRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
@@ -180,7 +181,7 @@ def unblock_bulk(
 @router.post("/block_bulk")
 def block_bulk(
     data: BulkBlockRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):

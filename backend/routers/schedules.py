@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from core.deps import get_current_user
+from core.permissions import require_premium, require_user
 from models import User, RecurringTrigger, WebhookLead
 from core.recurrent_logic import calculate_next_run
 import schemas
@@ -37,7 +38,7 @@ def get_schedules(
     end: datetime,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_user)
 ):
     # Local imports to avoid circular deps
     from models import ScheduledTrigger, Funnel
@@ -111,7 +112,7 @@ def update_schedule_time(
     update_data: ScheduleUpdateSchema,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_premium)
 ):
     from models import ScheduledTrigger
 
@@ -140,7 +141,7 @@ def delete_schedule(
     trigger_id: int,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_premium)
 ):
     from models import ScheduledTrigger
 
@@ -168,7 +169,7 @@ def dispatch_now(
     trigger_id: int,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_premium)
 ):
     """Disparar agendamento imediatamente, setando scheduled_time para agora."""
     from models import ScheduledTrigger
@@ -199,7 +200,7 @@ def create_recurring_schedule(
     rt_data: schemas.RecurringTriggerCreate,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_premium)
 ):
     if not x_client_id:
         raise HTTPException(status_code=400, detail="X-Client-ID header missing")
@@ -239,7 +240,7 @@ def create_recurring_schedule(
 def get_recurring_schedules(
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_user)
 ):
     if not x_client_id:
         raise HTTPException(status_code=400, detail="X-Client-ID header missing")
@@ -253,7 +254,7 @@ def delete_recurring_schedule(
     rt_id: int,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_premium)
 ):
     if not x_client_id:
         raise HTTPException(status_code=400, detail="X-Client-ID header missing")
@@ -276,7 +277,7 @@ def update_recurring_schedule(
     rt_data: schemas.RecurringTriggerUpdate,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_premium)
 ):
     if not x_client_id:
         raise HTTPException(status_code=400, detail="X-Client-ID header missing")
@@ -319,7 +320,7 @@ def trigger_recurring_manual(
     rt_id: int,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_premium)
 ):
     from models import ScheduledTrigger, WebhookLead
     
@@ -383,7 +384,7 @@ def get_recurring_contacts(
     rt_id: int,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_user)
 ):
     if not x_client_id:
         raise HTTPException(status_code=400, detail="X-Client-ID header missing")

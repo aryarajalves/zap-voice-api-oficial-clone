@@ -4,6 +4,7 @@ from typing import List, Optional
 import models, schemas
 from database import SessionLocal
 from core.deps import get_current_user, get_validated_client_id
+from core.permissions import require_premium, require_user
 
 router = APIRouter()
 
@@ -20,7 +21,7 @@ def list_funnels(
     limit: int = 100,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     """
     Retorna uma lista paginada de todos os funis de automação cadastrados.
@@ -35,7 +36,7 @@ def read_funnel(
     funnel_id: int,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_user)
 ):
     """
     Busca um funil específico pelo seu ID.
@@ -54,7 +55,7 @@ def create_funnel(
     funnel: schemas.FunnelCreate,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Cria um novo funil de automação.
@@ -104,7 +105,7 @@ def update_funnel(
     funnel_update: schemas.FunnelCreate,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Atualiza as propriedades e passos de um funil existente.
@@ -150,7 +151,7 @@ def delete_funnels_bulk(
     payload: schemas.FunnelBulkDelete,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Remove permanentemente múltiplos funis do sistema de uma vez.
@@ -201,7 +202,7 @@ def delete_funnel(
     funnel_id: int,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(require_premium)
 ):
     """
     Remove permanentemente um funil do sistema.

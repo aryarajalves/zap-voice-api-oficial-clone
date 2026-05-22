@@ -41,7 +41,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'integrations', label: 'Integrações Webhook', icon: FiZap, roles: ['super_admin', 'admin', 'premium'] },
         { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'] },
         { id: 'blocked', label: 'Contatos Bloqueados', icon: FiSlash, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium'] },
+        { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium', 'user'] },
         { id: 'users', label: 'Gestão de Usuários', icon: FiUsers, roles: ['super_admin'] },
         { id: 'monitoring', label: 'Monitoramento', icon: FiActivity, roles: ['super_admin'] },
     ];
