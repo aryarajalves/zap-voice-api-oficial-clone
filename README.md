@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.8)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.9)
 
-Bem-vindo à versão **3.7.8** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.9** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,12 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.7.9
+- **Filtro por Etiquetas (Tags) em Todos os Dropdowns de Templates (Novo!)**:
+  - **Mapeamento de Integrações**: Adicionado suporte à filtragem rápida e inteligente por etiquetas nos seletores de template principal (`MappingItem`) e de follow-up (`FollowUpSection`).
+  - **Visual Flow Builder**: Substituição do seletor nativo `<select>` do nó de template do WhatsApp (`TemplateNode`) pelo componente customizado `SearchableSelect`, trazendo busca textual robusta e filtro horizontal de etiquetas.
+  - **Suíte de Testes Unitários de Frontend**: Implementação do arquivo de testes unitários `SearchableSelect.test.jsx` utilizando Vitest, com cobertura e validação 100% aprovada para os novos fluxos de filtragem por etiquetas.
 
 ### v3.7.8
 - **Classificação de Templates por Etiquetas (Tags) (Novo!)**: Implementação de etiquetas locais para categorização de templates do WhatsApp diretamente nos cards da aba "Meus Templates", por meio de um popover flutuante para gerenciamento ágil.

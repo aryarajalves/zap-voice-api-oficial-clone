@@ -334,6 +334,33 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         }
     };
 
+    const deleteTemplateTagGlobal = async (tag) => {
+        if (!activeClient) return false;
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/whatsapp/templates/tags/${encodeURIComponent(tag)}`,
+                {
+                    method: 'DELETE'
+                },
+                activeClient.id
+            );
+
+            if (res.ok) {
+                toast.success("Etiqueta excluída de todos os templates!");
+                fetchTemplates();
+                return true;
+            } else {
+                const err = await res.json();
+                toast.error(err.detail || "Erro ao excluir etiqueta.");
+                return false;
+            }
+        } catch (error) {
+            console.error("Error deleting template tag globally:", error);
+            toast.error("Erro de conexão ao excluir etiqueta.");
+            return false;
+        }
+    };
+
     return {
         activeClient,
         loading,
@@ -376,6 +403,7 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         handleMediaUpload,
         handleSubmit,
         fixBodyTextForMeta,
-        updateTemplateTags
+        updateTemplateTags,
+        deleteTemplateTagGlobal
     };
 };

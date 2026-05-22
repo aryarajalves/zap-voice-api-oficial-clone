@@ -71,7 +71,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         if (!activeClient) return;
         setIsLoadingTemplates(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates`);
+            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id);
             if (res.ok) {
                 const data = await res.json();
                 setTemplates(data || []);
@@ -90,7 +90,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         if (!activeClient) return;
         setIsLoadingChatwootLabels(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/chatwoot/labels`);
+            const res = await fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, activeClient.id);
             if (res.ok) {
                 const data = await res.json();
                 setChatwootLabels(data || []);
@@ -109,7 +109,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         if (!activeClient) return;
         setIsLoadingExclusionTags(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/leads/filters`);
+            const res = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
             if (res.ok) {
                 const data = await res.json();
                 setExclusionAvailableTags(data.tags || []);
@@ -202,7 +202,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         setIsWorking(true);
         setWorkingMessage(`Buscando contatos com a etiqueta: ${selectedExclusionTag}...`);
         try {
-            const res = await fetchWithAuth(`${API_URL}/leads?tag=${encodeURIComponent(selectedExclusionTag)}&limit=1000`);
+            const res = await fetchWithAuth(`${API_URL}/leads?tag=${encodeURIComponent(selectedExclusionTag)}&limit=1000`, {}, activeClient.id);
             if (res.ok) {
                 const data = await res.json();
                 const nums = (data.items || []).map(l => String(l.phone || '').replace(/\D/g, '')).filter(n => n.length >= 8);

@@ -97,7 +97,7 @@ const MappingItem = ({
                 <FiSettings size={12} /> Template ZapVoice
               </label>
               <SearchableSelect
-                options={templates.map(t => ({ value: t.id, label: t.name }))}
+                options={templates.map(t => ({ value: t.id, label: t.name, tags: t.tags }))}
                 value={mapping.template_id}
                 onChange={(val) => updateMapping(mIndex, 'template_id', val)}
                 placeholder="Selecione um Template..."

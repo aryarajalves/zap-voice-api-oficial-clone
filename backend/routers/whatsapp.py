@@ -152,6 +152,51 @@ async def update_template_tags(
         "tags": clean_tags
     }
 
+@router.delete("/templates/tags/{tag}")
+async def delete_template_tag_global(
+    tag: str,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_premium),
+    db: Session = Depends(get_db)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    clean_tag = tag.strip().lower()
+    if not clean_tag:
+        raise HTTPException(status_code=400, detail="Nome da etiqueta inválido.")
+
+    logger.info(f"🗑️ [TAG_DELETE_GLOBAL] Iniciando deleção da etiqueta '{clean_tag}' para o cliente {target_client_id}")
+
+    try:
+        db_tpls = db.query(models.WhatsAppTemplateCache).filter(
+            models.WhatsAppTemplateCache.client_id == target_client_id,
+            models.WhatsAppTemplateCache.tags.isnot(None)
+        ).all()
+
+        updated_count = 0
+        for tpl in db_tpls:
+            current_tags = [t.strip().lower() for t in tpl.tags.split(",") if t.strip()]
+            if clean_tag in current_tags:
+                new_tags = [t for t in current_tags if t != clean_tag]
+                tpl.tags = ",".join(new_tags) if new_tags else None
+                updated_count += 1
+
+        if updated_count > 0:
+            db.commit()
+            logger.info(f"✅ [TAG_DELETE_GLOBAL] Etiqueta '{clean_tag}' removida com sucesso de {updated_count} templates.")
+        else:
+            logger.info(f"ℹ️ [TAG_DELETE_GLOBAL] Nenhuma ocorrência da etiqueta '{clean_tag}' encontrada para o cliente {target_client_id}")
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ [TAG_DELETE_GLOBAL] Erro ao deletar etiqueta global '{clean_tag}': {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor ao deletar etiqueta global.")
+
+    return {
+        "success": True,
+        "tag": clean_tag,
+        "removed_from_count": updated_count
+    }
+
 @router.get("/labels")
 async def list_labels(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),

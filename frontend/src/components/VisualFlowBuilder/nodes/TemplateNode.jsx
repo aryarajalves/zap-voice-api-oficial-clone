@@ -6,6 +6,7 @@ import { fetchWithAuth } from '../../../AuthContext';
 import { API_URL } from '../../../config';
 import NodeHeader from '../components/NodeHeader';
 import VariableSelector from '../components/VariableSelector';
+import SearchableSelect from '../../../pages/Integrations/components/SearchableSelect';
 
 const TemplateNode = ({ id, data }) => {
     const { activeClient } = useClient();
@@ -42,32 +43,28 @@ const TemplateNode = ({ id, data }) => {
 
                 <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Modelo (Template)</label>
-                    <select
-                        className={`nodrag nopan w-full text-sm p-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded border border-gray-200 outline-none ${loading ? 'opacity-50 cursor-wait' : ''}`}
-                        value={data.templateName || ''}
-                        onChange={(e) => {
-                            const selectedName = e.target.value;
-                            const t = templates.find(temp => temp.name === selectedName);
-                            data.onChange(id, {
-                                templateName: selectedName,
-                                language: t ? t.language : 'pt_BR'
-                            });
-                        }}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <option value="">🔄 Carregando templates...</option>
-                        ) : (
-                            <>
-                                <option value="">Selecione um Template...</option>
-                                {Array.isArray(templates) && templates
-                                    .filter(t => ['APPROVED', 'ACTIVE'].includes(t.status))
-                                    .map(t => (
-                                        <option key={t.id || t.name} value={t.name}>{t.name} ({t.language})</option>
-                                    ))}
-                            </>
-                        )}
-                    </select>
+                    <div className="nodrag nopan">
+                        <SearchableSelect
+                            options={Array.isArray(templates) ? templates
+                                .filter(t => ['APPROVED', 'ACTIVE'].includes(t.status))
+                                .map(t => ({
+                                    value: t.name,
+                                    label: `${t.name} (${t.language})`,
+                                    tags: t.tags
+                                })) : []
+                            }
+                            value={data.templateName || ''}
+                            onChange={(selectedName) => {
+                                const t = templates.find(temp => temp.name === selectedName);
+                                data.onChange(id, {
+                                    templateName: selectedName,
+                                    language: t ? t.language : 'pt_BR'
+                                });
+                            }}
+                            placeholder={loading ? "Carregando templates..." : "Selecione um Template..."}
+                            allowNone
+                        />
+                    </div>
                 </div>
 
                 {/* Preview Section */}

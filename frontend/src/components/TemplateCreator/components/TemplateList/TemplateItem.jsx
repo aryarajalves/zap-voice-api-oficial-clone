@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
 import { FiCheck, FiClock, FiAlertCircle, FiZap, FiTrash2, FiTag, FiPlus, FiX } from 'react-icons/fi';
+import ConfirmModal from '../../../ConfirmModal';
 
 const TemplateItem = ({ tpl, logic }) => {
-    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen, updateTemplateTags, templates } = logic;
+    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen, updateTemplateTags, templates, deleteTemplateTagGlobal } = logic;
     const [showTagPopover, setShowTagPopover] = useState(false);
     const [newTagInput, setNewTagInput] = useState('');
     const [tempTags, setTempTags] = useState(tpl.tags || []);
+    const [tagToDelete, setTagToDelete] = useState(null);
+    const [isDeleteTagModalOpen, setIsDeleteTagModalOpen] = useState(false);
 
     const allExistingTags = Array.from(
-        new Set((templates || []).flatMap(t => t.tags || []))
+        new Set([
+            ...(templates || []).flatMap(t => t.tags || []),
+            ...tempTags
+        ])
     );
 
     const handleToggleTag = (tag) => {
@@ -116,17 +122,31 @@ const TemplateItem = ({ tpl, logic }) => {
                             {allExistingTags.length === 0 ? (
                                 <p className="text-[10px] text-gray-400 dark:text-gray-500 italic py-1">Nenhuma etiqueta criada ainda.</p>
                             ) : (
-                                <div className="flex flex-col gap-1.5">
+                                <div className="flex flex-col gap-1">
                                     {allExistingTags.map((tag) => (
-                                        <label key={tag} className="flex items-center gap-2 cursor-pointer select-none text-[10px] text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
-                                            <input 
-                                                type="checkbox"
-                                                checked={tempTags.includes(tag)}
-                                                onChange={() => handleToggleTag(tag)}
-                                                className="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
-                                            />
-                                            <span className="truncate">{tag}</span>
-                                        </label>
+                                        <div key={tag} className="flex items-center justify-between gap-2 group/tag py-0.5 hover:bg-slate-500/5 rounded px-1 transition-all">
+                                            <label className="flex items-center gap-2 cursor-pointer select-none text-[10px] text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 flex-1 min-w-0">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={tempTags.includes(tag)}
+                                                    onChange={() => handleToggleTag(tag)}
+                                                    className="w-3 h-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700 shrink-0"
+                                                />
+                                                <span className="truncate" title={tag}>{tag}</span>
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setTagToDelete(tag);
+                                                    setIsDeleteTagModalOpen(true);
+                                                }}
+                                                className="opacity-0 group-hover/tag:opacity-100 p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-all shrink-0"
+                                                title="Excluir etiqueta permanentemente"
+                                            >
+                                                <FiTrash2 size={10} />
+                                            </button>
+                                        </div>
                                     ))}
                                 </div>
                             )}
@@ -209,6 +229,24 @@ const TemplateItem = ({ tpl, logic }) => {
                     </p>
                 </div>
             )}
+
+            <ConfirmModal
+                isOpen={isDeleteTagModalOpen}
+                onClose={() => {
+                    setIsDeleteTagModalOpen(false);
+                    setTagToDelete(null);
+                }}
+                onConfirm={async () => {
+                    if (tagToDelete) {
+                        await deleteTemplateTagGlobal(tagToDelete);
+                        setTempTags(prev => prev.filter(t => t !== tagToDelete));
+                    }
+                }}
+                title="Excluir Etiqueta"
+                message={`Tem certeza de que deseja excluir a etiqueta "${tagToDelete}" de todos os templates? Esta ação não pode ser desfeita.`}
+                confirmText="Excluir Globalmente"
+                isDangerous={true}
+            />
         </div>
     );
 };

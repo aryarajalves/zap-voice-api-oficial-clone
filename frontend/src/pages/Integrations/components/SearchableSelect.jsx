@@ -25,14 +25,34 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
     }
   }, [isOpen]);
 
-  const rawOptions = options || [];
-  const filteredOptions = rawOptions.filter(opt =>
-    opt && opt.label && String(opt.label).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const [selectedTag, setSelectedTag] = useState(null);
 
-  // Se permitir "Nenhum" e não estiver filtrando (ou "Nenhum" bate com o filtro)
+  const rawOptions = options || [];
+
+  const allTags = React.useMemo(() => {
+    const tagsSet = new Set();
+    rawOptions.forEach(opt => {
+      if (opt && Array.isArray(opt.tags)) {
+        opt.tags.forEach(t => {
+          if (t && t.trim()) {
+            tagsSet.add(t.trim());
+          }
+        });
+      }
+    });
+    return Array.from(tagsSet);
+  }, [rawOptions]);
+
+  const filteredOptions = rawOptions.filter(opt => {
+    if (!opt || !opt.label) return false;
+    const matchesSearch = String(opt.label).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesTag = !selectedTag || (Array.isArray(opt.tags) && opt.tags.includes(selectedTag));
+    return matchesSearch && matchesTag;
+  });
+
+  // Se permitir "Nenhum" e não estiver filtrando por tag (ou "Nenhum" bate com o filtro)
   const displayOptions = [...filteredOptions];
-  if (allowNone && !isMulti && (!searchTerm || "nenhum".includes(searchTerm.toLowerCase()))) {
+  if (allowNone && !isMulti && !selectedTag && (!searchTerm || "nenhum".includes(searchTerm.toLowerCase()))) {
     displayOptions.unshift({ value: "", label: "Nenhum" });
   }
 
@@ -109,7 +129,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
                 : { top: coords.bottom + 4 })
             }}
           >
-            <div className="p-2 border-b border-gray-50 dark:border-white/5">
+            <div className="p-2 border-b border-gray-50 dark:border-white/5 space-y-1.5">
               <input
                 autoFocus
                 type="text"
@@ -119,6 +139,35 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
               />
+              {allTags.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTag(null)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider transition-all ${
+                      !selectedTag 
+                        ? 'bg-blue-500 text-white shadow-md shadow-blue-500/20' 
+                        : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-750 hover:text-gray-800 dark:hover:text-white'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  {allTags.map(tag => (
+                    <button
+                      type="button"
+                      key={tag}
+                      onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                      className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider transition-all ${
+                        selectedTag === tag 
+                          ? 'bg-blue-500 text-white shadow-md shadow-blue-500/20' 
+                          : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-750 hover:text-gray-800 dark:hover:text-white'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="max-h-60 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-white/10">
               {displayOptions.length === 0 ? (
@@ -136,8 +185,19 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
                         handleToggle(opt.value);
                       }}
                     >
-                      <span>{opt.label}</span>
-                      {active && <FiCheck size={12} />}
+                      <div className="flex items-center justify-between w-full gap-2 min-w-0">
+                        <span className="truncate">{opt.label}</span>
+                        {opt.tags && opt.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 justify-end max-w-[50%] shrink-0">
+                            {opt.tags.map(t => (
+                              <span key={t} className={`px-1.5 py-0.2 rounded text-[8px] font-bold truncate ${active ? 'bg-white/20 text-white border border-white/10' : 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-500/10'}`}>
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {active && <FiCheck size={12} className="ml-2 shrink-0" />}
                     </div>
                   );
                 })

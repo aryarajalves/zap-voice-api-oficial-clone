@@ -80,7 +80,7 @@ const FollowUpSection = ({
                 <FiSettings size={12} /> Template de Follow-up
               </label>
               <SearchableSelect
-                options={templates.map(t => ({ value: t.id, label: t.name }))}
+                options={templates.map(t => ({ value: t.id, label: t.name, tags: t.tags }))}
                 value={mapping.followup_template_id}
                 onChange={(val) => updateMapping(mIndex, 'followup_template_id', val)}
                 placeholder="Selecione o segundo Template..."
