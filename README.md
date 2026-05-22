@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.7)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.8)
 
-Bem-vindo à versão **3.7.7** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.8** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,12 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.7.8
+- **Classificação de Templates por Etiquetas (Tags) (Novo!)**: Implementação de etiquetas locais para categorização de templates do WhatsApp diretamente nos cards da aba "Meus Templates", por meio de um popover flutuante para gerenciamento ágil.
+- **Filtragem Dinâmica nos Dropdowns**: Integração de badges de tags horizontais nos dropdowns de seleção de templates nas telas de Envio em Massa (Bulk Sender) e Agendamentos Recorrentes (Recurring Schedules), permitindo que o usuário visualize as tags dos templates e filtre a exibição instantaneamente.
+- **Resiliência e Sincronização Local**: Sincronia local no banco de dados que preserva as tags de forma robusta e independente da API externa da Meta WhatsApp, assegurando que novas sincronizações não apaguem os metadados locais de tags.
+- **Suíte de Testes Unitários**: Criação do arquivo de testes do backend `test_template_tags.py` que cobre e valida as rotas de tags no SQLite com 100% de sucesso.
 
 ### v3.7.7
 - **Controle de Acesso Baseado em Funções (RBAC) (Novo!)**: Implementação de restrições de acesso refinadas de acordo com as permissões do usuário logado:
