@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.5)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.6)
 
-Bem-vindo à versão **3.7.5** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.6** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,12 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.7.6
+- **Gestão de Links de Convite (Novo!)**: Aba dedicada incorporada ao painel de "Gestão de Usuários" permitindo listar todos os convites criados, ver status (PENDENTE, UTILIZADO ou EXPIRADO), cargos atribuídos e acessos a clientes permitidos.
+- **Ações de Cópia e Revogação**: Copiar link direto de convite com feedback visual instantâneo e revogar convite usando modal de confirmação persistente com fundo escurecido (backdrop blur).
+- **Proteção Autofill de Formulários**: Adicionados inputs vazios camuflados para impedir que navegadores pré-preencham credenciais indevidamente nos campos da tela de registro de convites (`InviteRegister`).
+- **Suíte de Testes Unitários de Convites**: Cobertura de backend com 11 testes integrados aprovados validando o fluxo completo de criação, consulta, ativação e deleção dos links.
 
 ### v3.7.5
 - **Suporte ao Primeiro Nome do Contato**: Implementação da resolução e extração dinâmica da variável `primeiro_nome` / `first_name` a partir do nome completo do contato no backend e adaptação de substituição nos templates de webhooks, funis de mensagens e disparos em massa.
