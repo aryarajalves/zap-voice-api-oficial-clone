@@ -9,6 +9,7 @@ const VariableSelector = ({ onSelect }) => {
 
     const CONTACT_VARS = [
         { id: 'cv-nome', name: 'nome', label: 'Nome do Contato' },
+        { id: 'cv-prim-nome', name: 'primeiro_nome', label: 'Primeiro Nome do Contato' },
         { id: 'cv-tel', name: 'telefone', label: 'Telefone' },
         { id: 'cv-prod', name: 'produto', label: 'Nome do Produto' },
     ];

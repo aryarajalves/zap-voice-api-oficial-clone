@@ -111,10 +111,16 @@ def apply_vars(text: str, trigger, global_map: dict) -> str:
     """Aplica substituição de variáveis no texto, extraindo valores puros de objetos complexos."""
     if not text: return text
     
+    contact_name = trigger.contact_name or "Contato"
+    parts = contact_name.strip().split()
+    first_name = parts[0] if parts else "Contato"
+    
     local_vars = {
-        "nome": trigger.contact_name or "Contato",
+        "nome": contact_name,
         "telefone": trigger.contact_phone or "",
         "produto": trigger.product_name or "",
+        "primeiro_nome": first_name,
+        "first_name": first_name,
     }
     
     t_comp = trigger.template_components

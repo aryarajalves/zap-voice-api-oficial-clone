@@ -24,6 +24,9 @@ def render_template_body(body: str, components: list, contact_name: str = None, 
     # 1. Substituição de variáveis nomeadas (padrão amigável)
     body = body.replace("{{nome}}", real_name or "")
     body = body.replace("{{name}}", real_name or "")
+    first_name = real_name.strip().split()[0] if real_name else ""
+    body = body.replace("{{primeiro_nome}}", first_name)
+    body = body.replace("{{first_name}}", first_name)
     
     body_comp = next(
         (c for c in components if isinstance(c, dict) and str(c.get("type", "")).lower() == "body"),
@@ -83,6 +86,12 @@ def sanitize_template_components(components: list, contact_name: str = None, con
                                 val = val.replace("{{nome}}", contact_name or "")
                             if "{{name}}" in val:
                                 val = val.replace("{{name}}", contact_name or "")
+                            if "{{primeiro_nome}}" in val:
+                                first_name = contact_name.strip().split()[0] if contact_name else ""
+                                val = val.replace("{{primeiro_nome}}", first_name)
+                            if "{{first_name}}" in val:
+                                first_name = contact_name.strip().split()[0] if contact_name else ""
+                                val = val.replace("{{first_name}}", first_name)
                             if "{{telefone}}" in val:
                                 val = val.replace("{{telefone}}", contact_phone or "")
                             if "{{phone}}" in val:

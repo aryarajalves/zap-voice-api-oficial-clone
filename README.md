@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.4)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.5)
 
-Bem-vindo à versão **3.7.4** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.5** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -111,6 +111,11 @@ docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
 ---
 
 ## 📝 Changelog
+
+### v3.7.5
+- **Suporte ao Primeiro Nome do Contato**: Implementação da resolução e extração dinâmica da variável `primeiro_nome` / `first_name` a partir do nome completo do contato no backend e adaptação de substituição nos templates de webhooks, funis de mensagens e disparos em massa.
+- **Mapeamento na Interface (UI)**: Inclusão de opções dedicadas à variável "Primeiro Nome" em seletores visuais em três locais estratégicos: mapeamento de campos dinâmicos em Webhooks, menu de variáveis rápidas no editor do Visual Flow Builder e mapeamento de parâmetros nos Agendamentos Recorrentes.
+- **Suíte de Testes Unitários**: Criação e aprovação do arquivo `test_first_name_rendering.py` para garantir o funcionamento ideal de parsing, fallback e sanidade na renderização do primeiro nome.
 
 ### v3.7.4
 - **Correção no Teste de Webhook (Actions)**: Validação robusta de UUID para `integration_id` e classificação automática de status para `skipped` com erro amigável em português se nenhum mapeamento ativo para o evento detectado for encontrado.

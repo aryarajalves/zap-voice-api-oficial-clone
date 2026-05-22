@@ -20,6 +20,7 @@ export const HEADER_VAR_OPTIONS = [
 
 export const BODY_VAR_OPTIONS = [
   { value: 'name', label: 'Nome do Contato' },
+  { value: 'first_name', label: 'Primeiro Nome do Contato' },
   { value: 'phone', label: 'Telefone' },
   { value: 'email', label: 'E-mail' },
   { value: 'product_name', label: 'Nome do Produto' },

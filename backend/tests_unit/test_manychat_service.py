@@ -46,7 +46,7 @@ def test_sync_to_manychat_creates_tag_and_adds_it():
             assert mock_client.post.call_count == 3
             
             args1, kwargs1 = mock_client.post.call_args_list[0]
-            assert "createContact" in args1[0]
+            assert "createSubscriber" in args1[0]
             assert "first_name" in kwargs1["json"]
             
             args2, kwargs2 = mock_client.post.call_args_list[1]
