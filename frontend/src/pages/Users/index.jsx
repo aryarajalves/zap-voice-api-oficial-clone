@@ -2,19 +2,24 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { API_URL, WS_URL } from '../../config';
 import { fetchWithAuth } from '../../AuthContext';
 import { toast } from 'react-hot-toast';
-import { FiUserPlus } from 'react-icons/fi';
+import { FiUserPlus, FiUsers, FiLink } from 'react-icons/fi';
 import ConfirmModal from '../../components/ConfirmModal';
 import UserFilters from './components/UserFilters';
 import UserTable from './components/UserTable';
 import UserModal from './components/UserModal';
+import InvitationTable from './components/InvitationTable';
 
 const Users = () => {
     const [users, setUsers] = useState([]);
     const [clients, setClients] = useState([]);
+    const [invitations, setInvitations] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('users'); // 'users' ou 'invitations'
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleteInviteModalOpen, setIsDeleteInviteModalOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState(null);
+    const [inviteToDelete, setInviteToDelete] = useState(null);
     const [editingUser, setEditingUser] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
 
@@ -82,8 +87,21 @@ const Users = () => {
 
     const fetchData = async () => {
         setLoading(true);
-        await Promise.all([fetchUsers(), fetchClients()]);
+        await Promise.all([fetchUsers(), fetchClients(), fetchInvitations()]);
         setLoading(false);
+    };
+
+    const fetchInvitations = async () => {
+        try {
+            const res = await fetchWithAuth(`${API_URL}/auth/invitations`);
+            if (res.ok) {
+                const data = await res.json();
+                setInvitations(data);
+            }
+        } catch (err) {
+            console.error("Error fetching invitations:", err);
+            toast.error("Erro ao carregar convites.");
+        }
     };
 
     const fetchUsers = async () => {
@@ -230,6 +248,36 @@ const Users = () => {
         }
     };
 
+    const confirmDeleteInvitation = (invite) => {
+        setInviteToDelete(invite);
+        setIsDeleteInviteModalOpen(true);
+    };
+
+    const handleDeleteInvitation = async () => {
+        if (!inviteToDelete) return;
+
+        const loadingToast = toast.loading("Revogando convite...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/auth/invitations/${inviteToDelete.id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                toast.success("Convite revogado com sucesso.");
+                setIsDeleteInviteModalOpen(false);
+                setInviteToDelete(null);
+                fetchInvitations();
+            } else {
+                const error = await res.json();
+                throw new Error(error.detail || "Erro ao revogar convite");
+            }
+        } catch (err) {
+            toast.error(err.message);
+        } finally {
+            toast.dismiss(loadingToast);
+        }
+    };
+
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -242,23 +290,65 @@ const Users = () => {
                 </button>
             </div>
 
-            <UserFilters 
-                searchTerm={searchTerm} 
-                setSearchTerm={setSearchTerm} 
-                roleFilter={roleFilter} 
-                setRoleFilter={setRoleFilter} 
-            />
+            {/* Abas Premium */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700">
+                <button
+                    onClick={() => setActiveTab('users')}
+                    className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all ${
+                        activeTab === 'users'
+                            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                >
+                    <FiUsers size={16} /> Usuários Ativos
+                </button>
+                <button
+                    onClick={() => setActiveTab('invitations')}
+                    className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all ${
+                        activeTab === 'invitations'
+                            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                >
+                    <FiLink size={16} /> Links de Convite
+                </button>
+            </div>
 
-            {loading ? (
-                <div className="flex justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                </div>
+            {activeTab === 'users' ? (
+                <>
+                    <UserFilters 
+                        searchTerm={searchTerm} 
+                        setSearchTerm={setSearchTerm} 
+                        roleFilter={roleFilter} 
+                        setRoleFilter={setRoleFilter} 
+                    />
+
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        </div>
+                    ) : (
+                        <UserTable 
+                            users={filteredUsers} 
+                            handleOpenEditModal={handleOpenEditModal} 
+                            confirmDeleteUser={confirmDeleteUser} 
+                        />
+                    )}
+                </>
             ) : (
-                <UserTable 
-                    users={filteredUsers} 
-                    handleOpenEditModal={handleOpenEditModal} 
-                    confirmDeleteUser={confirmDeleteUser} 
-                />
+                <>
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        </div>
+                    ) : (
+                        <InvitationTable
+                            invitations={invitations}
+                            clients={clients}
+                            confirmDeleteInvitation={confirmDeleteInvitation}
+                        />
+                    )}
+                </>
             )}
 
             <UserModal 
@@ -272,6 +362,7 @@ const Users = () => {
                 setShowPassword={setShowPassword}
                 clients={clients}
                 toggleClientAccess={toggleClientAccess}
+                onInviteGenerated={fetchInvitations}
             />
 
             <ConfirmModal
@@ -284,6 +375,19 @@ const Users = () => {
                 title="Confirma a exclusão?"
                 message={`Você está prestes a remover "${userToDelete?.full_name || userToDelete?.email}" do sistema. Esta ação é irreversível.`}
                 confirmText="Sim, Excluir"
+                isDangerous={true}
+            />
+
+            <ConfirmModal
+                isOpen={isDeleteInviteModalOpen}
+                onClose={() => {
+                    setIsDeleteInviteModalOpen(false);
+                    setInviteToDelete(null);
+                }}
+                onConfirm={handleDeleteInvitation}
+                title="Revogar Link de Convite?"
+                message="Você está prestes a revogar este link de convite. Ninguém poderá utilizá-lo para se cadastrar. Esta ação é irreversível."
+                confirmText="Sim, Revogar"
                 isDangerous={true}
             />
         </div>

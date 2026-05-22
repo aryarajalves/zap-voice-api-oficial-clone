@@ -2,6 +2,7 @@ from .base import user_clients, Base
 from .auth import User
 from .client import Client, AppConfig, BlockedContact, ContactWindow
 from .funnel import Funnel, WebhookConfig, WebhookEvent
+from .invitation import UserInvitation, invitation_clients
 from .trigger import (
     ScheduledTrigger, 
     MessageStatus, 
@@ -28,6 +29,8 @@ __all__ = [
     "Funnel",
     "WebhookConfig",
     "WebhookEvent",
+    "UserInvitation",
+    "invitation_clients",
     "ScheduledTrigger",
     "MessageStatus",
     "WebhookIntegration",
