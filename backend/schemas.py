@@ -255,6 +255,10 @@ class WhatsAppTemplateCreate(BaseModel):
     body_text: str = Field(..., description="Texto do corpo da mensagem (suporta variáveis {{1}}, {{2}}...)")
     footer_text: Optional[str] = Field(None, description="Texto do rodapé")
     buttons: Optional[List[dict]] = Field(default=[], description="Lista de botões [{type: 'QUICK_REPLY', text: 'Sim'}]")
+
+class TemplateTagsUpdate(BaseModel):
+    tags: List[str] = Field(..., description="Lista de tags/etiquetas para o template")
+
 # --- Global Variable Schemas ---
 
 class GlobalVariableBase(BaseModel):

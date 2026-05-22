@@ -46,22 +46,111 @@ async def debug_env():
 @router.get("/templates")
 async def list_templates(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(require_user)
+    current_user: models.User = Depends(require_user),
+    db: Session = Depends(get_db)
 ):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    templates = []
+    meta_success = False
+
     try:
-        # Prefer X-Client-ID header, fallback to user's client_id
-        target_client_id = x_client_id if x_client_id else current_user.client_id
-        
-        # Verify ownership if needed, or loosely allow for single-user-multi-client
-        # For now, trust the header if authenticated user
-        
         client = ChatwootClient(client_id=target_client_id)
         templates = await client.get_whatsapp_templates()
-        return templates or []
+        meta_success = True
     except Exception as e:
-        logger.error(f"Error listing templates: {e}")
-        # Retornar lista vazia em vez de erro 500 para não quebrar frontend
-        return []
+        logger.error(f"Error listing templates from Meta (falling back to cache): {e}")
+
+    # Se a chamada à Meta falhar ou retornar vazia, buscar do banco local
+    if not meta_success or not templates:
+        logger.info("Using cached templates from database.")
+        try:
+            cached_templates = db.query(models.WhatsAppTemplateCache).filter(
+                models.WhatsAppTemplateCache.client_id == target_client_id
+            ).all()
+            templates = []
+            for ct in cached_templates:
+                templates.append({
+                    "id": str(ct.id),
+                    "name": ct.name,
+                    "language": ct.language,
+                    "category": "MARKETING",
+                    "status": "APPROVED",
+                    "body_text": ct.body,
+                    "components": ct.components or []
+                })
+        except Exception as db_err:
+            logger.error(f"Error querying local template cache: {db_err}")
+
+    # Mesclar as tags locais
+    try:
+        local_caches = db.query(models.WhatsAppTemplateCache).filter(
+            models.WhatsAppTemplateCache.client_id == target_client_id
+        ).all()
+        
+        tags_map = {}
+        for lc in local_caches:
+            if lc.tags:
+                tags_map[str(lc.id)] = [t.strip() for t in lc.tags.split(",") if t.strip()]
+            else:
+                tags_map[str(lc.id)] = []
+
+        for t in templates:
+            t_id = str(t.get("id"))
+            t["tags"] = tags_map.get(t_id, [])
+    except Exception as merge_err:
+        logger.error(f"Error merging template tags: {merge_err}")
+        for t in templates:
+            if "tags" not in t:
+                t["tags"] = []
+
+    return templates
+
+@router.put("/templates/{template_id}/tags")
+async def update_template_tags(
+    template_id: str,
+    payload: schemas.TemplateTagsUpdate,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_premium),
+    db: Session = Depends(get_db)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    
+    try:
+        int_id = int(template_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID de template inválido. Deve ser numérico.")
+
+    # Busca o template no banco
+    db_tpl = db.query(models.WhatsAppTemplateCache).filter(
+        models.WhatsAppTemplateCache.id == int_id,
+        models.WhatsAppTemplateCache.client_id == target_client_id
+    ).first()
+    
+    if not db_tpl:
+        # Se não existe no banco, podemos criá-lo (caso o usuário clique logo após sync)
+        # Mas para garantir, tentamos criar um registro básico ou retornar 404.
+        # Vamos retornar 404, pois em teoria list_templates sincroniza e cria o cache.
+        raise HTTPException(
+            status_code=404, 
+            detail="Template não encontrado no cache local. Atualize a lista de templates primeiro."
+        )
+        
+    clean_tags = [tag.strip() for tag in payload.tags if tag.strip()]
+    db_tpl.tags = ",".join(clean_tags) if clean_tags else None
+    
+    try:
+        db.commit()
+        db.refresh(db_tpl)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Erro ao salvar tags do template {template_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor ao salvar etiquetas.")
+    
+    return {
+        "success": True, 
+        "template_id": template_id, 
+        "tags": clean_tags
+    }
 
 @router.get("/labels")
 async def list_labels(
