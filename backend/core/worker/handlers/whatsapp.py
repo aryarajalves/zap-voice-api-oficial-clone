@@ -169,13 +169,16 @@ async def handle_whatsapp_event(data: dict):
                                         {"cost": cost_to_add, "paid": paid_increment, "tid": trigger.id}
                                     )
 
-                                if trigger_delivered and (trigger.is_bulk or trigger.publish_external_event):
+                                # Disparar webhook de memória para qualquer template entregue.
+                                # A verificação de URL configurada fica no próprio serviço ai_memory,
+                                # eliminando a dependência das flags is_bulk/publish_external_event.
+                                if trigger_delivered:
                                     from services.ai_memory import notify_agent_memory_webhook
                                     asyncio.create_task(notify_agent_memory_webhook(
                                         client_id=trigger.client_id,
                                         phone=message_record.phone_number,
                                         name=trigger.contact_name or message_record.phone_number,
-                                        template_name=message_record.template_name or trigger.template_name or "Mensagem Bulk",
+                                        template_name=message_record.template_name or trigger.template_name or "Mensagem",
                                         content=message_record.content or "",
                                         trigger_id=trigger.id,
                                         internal_contact_id=message_record.id

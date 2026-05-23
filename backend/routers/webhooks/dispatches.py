@@ -228,6 +228,7 @@ async def play_dispatch(
         private_message_delay=trigger.private_message_delay,
         private_message_concurrency=trigger.private_message_concurrency,
         is_bulk=False, # Sempre individual ao disparar pelo histórico de um contato
+        publish_external_event=True, # Garante que o webhook de memória seja disparado no delivery
         event_type=trigger.event_type or 'manual_retry',
         integration_id=trigger.integration_id,
         chatwoot_label=trigger.chatwoot_label,
@@ -368,6 +369,7 @@ async def bulk_play_dispatches(
     for trigger in triggers:
         trigger.status = "processing"
         trigger.scheduled_time = datetime.now(timezone.utc)
+        trigger.publish_external_event = True  # Garante que o webhook de memória seja disparado no delivery
         await rabbitmq.publish("zapvoice_funnel_executions", {
             "trigger_id": trigger.id,
             "funnel_id": trigger.funnel_id,

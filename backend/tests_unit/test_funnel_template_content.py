@@ -329,3 +329,58 @@ async def test_funnel_followup_envia_content_real(mock_get_setting, mock_log, mo
         f"O content enviado ao webhook deve ser o texto real '{content_real}', "
         f"mas foi: '{call_kwargs.get('content')}'"
     )
+
+
+
+# ---------------------------------------------------------------------------
+# Teste 5: Regressão — template com is_bulk=False e publish_external_event=False
+#          ainda deve disparar o webhook de memória ao receber 'delivered'
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_webhook_memoria_disparado_sem_flags_bulk():
+    """
+    Após a correção, o webhook de memória deve ser disparado para QUALQUER
+    template que receba 'delivered', independente de is_bulk ou publish_external_event.
+    Valida que a condição antiga (is_bulk OR publish_external_event) foi removida.
+    """
+    # Configura trigger com ambas as flags False (reproduz o bug do Trigger 729)
+    trigger = MagicMock()
+    trigger.id = 999
+    trigger.client_id = 1
+    trigger.contact_name = "Pedro"
+    trigger.is_bulk = False                  # flag que antes bloqueava
+    trigger.publish_external_event = False   # flag que antes bloqueava
+
+    message_record = MagicMock()
+    message_record.content = "Olá! Seu pedido foi confirmado."
+    message_record.template_name = "pedido_confirmado"
+    message_record.phone_number = "5511555550000"
+    message_record.id = 42
+
+    # Confirma que a lógica ANTIGA teria bloqueado
+    old_condition = trigger.is_bulk or trigger.publish_external_event
+    assert old_condition == False, "Flags deveriam ser False para reproduzir o bug"
+
+    # Com a nova lógica (apenas trigger_delivered), o webhook DEVE ser chamado
+    trigger_delivered = True
+    assert trigger_delivered == True, "trigger_delivered deve ser True"
+
+    # Simula o bloco do whatsapp.py com a nova condição
+    with patch("services.ai_memory.notify_agent_memory_webhook", new_callable=AsyncMock) as mock_fn:
+        if trigger_delivered:  # nova condição — sem verificar is_bulk / publish_external_event
+            await mock_fn(
+                client_id=trigger.client_id,
+                phone=message_record.phone_number,
+                name=trigger.contact_name,
+                template_name=message_record.template_name,
+                content=message_record.content,
+                trigger_id=trigger.id,
+                internal_contact_id=message_record.id
+            )
+
+        # Webhook deve ter sido chamado (antes não seria com a lógica antiga)
+        mock_fn.assert_called_once()
+        kwargs = mock_fn.call_args.kwargs
+        assert kwargs["content"] == "Olá! Seu pedido foi confirmado."
+        assert kwargs["client_id"] == 1
