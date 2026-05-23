@@ -290,7 +290,7 @@ async def play_dispatch(
                 template_language=new_trigger.template_language or "pt_BR",
                 client_id=new_trigger.client_id,
                 product_name=new_trigger.product_name,
-                private_message=None,
+                private_message="true",  # Envia nota privada com o corpo do follow-up
                 publish_external_event=True,
                 chatwoot_label=new_trigger.chatwoot_label,
                 is_free_message=False,
@@ -434,7 +434,7 @@ async def bulk_play_dispatches(
                         template_language=trigger.template_language or "pt_BR",
                         client_id=trigger.client_id,
                         product_name=trigger.product_name,
-                        private_message=None,
+                        private_message="true",  # Envia nota privada com o corpo do follow-up
                         publish_external_event=True,
                         chatwoot_label=trigger.chatwoot_label,
                         is_free_message=False,

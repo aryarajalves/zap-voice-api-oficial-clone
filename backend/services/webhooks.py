@@ -215,7 +215,6 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                         old_time = fu_scheduled_time
                         fu_scheduled_time = get_next_business_hour_start_generic(fu_scheduled_time, fu_days, fu_start)
                         logger.info(f"🕒 [FOLLOW-UP-BUSINESS-HOURS] Ajustando horario de follow-up {fu_idempotency_key} de {old_time} para {fu_scheduled_time} (fora do comercial)")
-                
                 fu_st = models.ScheduledTrigger(
                     scheduled_time=fu_scheduled_time,
                     status="queued",
@@ -226,7 +225,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                     template_language=mapping.template_language or "pt_BR",
                     client_id=client_id,
                     product_name=st.product_name,
-                    private_message=None,
+                    private_message="true",  # Sempre envia nota privada com o corpo do follow-up
                     publish_external_event=True,
                     chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
                     is_free_message=False,

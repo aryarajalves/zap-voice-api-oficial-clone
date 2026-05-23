@@ -240,7 +240,7 @@ async def execute_webhook_resend_logic(
                 template_language=mapping.template_language or "pt_BR",
                 client_id=integration.client_id,
                 product_name=st.product_name,
-                private_message=None,
+                private_message="true",  # Envia nota privada com o corpo do follow-up
                 publish_external_event=True,
                 chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
                 is_free_message=False,
