@@ -76,6 +76,8 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
                 defaultEdgeOptions={{ style: { strokeWidth: 2 } }}
                 minZoom={0.05}
                 maxZoom={1.5}
+                fitView
+                fitViewOptions={{ padding: 0.3 }}
             >
                 <Background color="#94a3b8" opacity={0.15} gap={16} size={1.5} />
                 <Controls showInteractive={false} position="bottom-right" className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-md" />

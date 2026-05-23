@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.8)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.11)
 
-Bem-vindo à versão **3.7.8** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.11** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,11 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.7.11
+- **Aprimoramento do Enquadramento e Foco do React Flow (Fluxo Visual)**:
+  - Adicionadas as propriedades nativas `fitView` e `fitViewOptions={{ padding: 0.3 }}` no componente `<ReactFlow>` em `PipelineFlowViewer.jsx`, garantindo que os nós sejam centralizados e enquadrados automaticamente na tela assim que o canvas é montado, mesmo que eles estejam bastante deslocados (ex: a partir de `x = 668`).
+  - Execução bem-sucedida da suíte de testes unitários do frontend (`PipelineFlowViewer.test.jsx`).
 
 ### v3.7.10
 - **Resolução de Bugs no Modal de Automação (Visualizador de Pipeline)**:

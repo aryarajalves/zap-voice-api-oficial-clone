@@ -118,6 +118,8 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
     - **Resposta**: Sim, deve haver um botão "Retomar" que continue o envio exatamente de onde parou (utilizando a lista de contatos pendentes).
 - [x] [NOVO] No histórico, disparos que ficam "travados" por mais de X horas devem ser marcados como falha automaticamente?
     - **Resposta**: Sim. Disparos travados em `processing` ou `queued` por mais de 2 horas serão marcados como falha pelo Scheduler, com a mensagem: "Disparo travado: O tempo limite de processamento (2h) foi excedido".
+- [ ] [NOVO] O trigger filho gerado para a execução do funil pós-template deve herdar as mesmas etiquetas do Chatwoot (`chatwoot_label`) do disparo pai de template?
+- [ ] [NOVO] Caso o template falhe em ser enviado pela API da Meta, o funil filho associado não deve ser criado nem executado, marcando apenas o template como falha. Concorda com este comportamento?
 
 ## 📋 Histórico de Decisões
 As perguntas iniciais sobre regras de negócio foram todas respondidas e integradas às seções acima. O sistema segue o modelo de isolamento total entre clientes e automação robusta com retentativas configuradas.
@@ -125,4 +127,5 @@ As perguntas iniciais sobre regras de negócio foram todas respondidas e integra
 ---
 > 📋 **Documentação Atualizada:** Todas as pendências do BUSINESS_RULES.md foram sanadas.
 
-> 📋 **Perguntas novas adicionadas ao BUSINESS_RULES.md:** Regras de cancelamento cruzado, prioridade de filas, blacklist global, limite de retentativas e profundidade da integração ManyChat.
+> 📋 **Perguntas novas adicionadas ao BUSINESS_RULES.md:** Herança de etiquetas do Chatwoot no funil filho e comportamento em caso de falha de envio do template pai.
+
