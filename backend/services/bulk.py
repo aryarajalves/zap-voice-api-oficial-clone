@@ -200,8 +200,9 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                         status='sent', message_type=msg_type, content=content, template_name=template_name,
                         **meta["vars"]
                     )
-                    # Sempre envia o conteúdo da mensagem como nota privada para o Chatwoot automaticamente
-                    msg_status.pending_private_note = content
+                    # A nota privada é enviada imediatamente pelo _post_send em bulk_core.py
+                    # NÃO definir pending_private_note aqui para evitar envio duplicado
+                    # (o mecanismo deferred do whatsapp.py dispararia uma 2ª nota ao receber 'delivered')
                     
                     db_msg.add(msg_status)
                     update_trigger_stats(db_msg, trigger_id, sent=1)
