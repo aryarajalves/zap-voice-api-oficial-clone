@@ -82,14 +82,33 @@ async def handle_funnel_execution(data: dict):
                     msg_id_raw = res.get("messages", [{}])[0].get("id") if res.get("messages") else "template_sent"
                     msg_id = str(msg_id_raw).replace("wamid.", "")
 
-                    # Registrar no histórico de mensagens
+                    # Buscar o conteúdo real do template do cache para enviar no webhook de memória
+                    from core.engine.utils import apply_vars
+                    global_vars = db.query(models.GlobalVariable).filter(
+                        models.GlobalVariable.client_id == client_id
+                    ).all()
+                    global_map = {v.name: v.value for v in global_vars}
+
+                    template_cache = db.query(models.WhatsAppTemplateCache).filter(
+                        models.WhatsAppTemplateCache.client_id == client_id,
+                        models.WhatsAppTemplateCache.name == trigger.template_name
+                    ).first()
+
+                    if template_cache and template_cache.body:
+                        real_content = apply_vars(template_cache.body, trigger, global_map)
+                        logger.info(f"📄 [DIRECT] Conteúdo real do template resolvido: {real_content[:80]}...")
+                    else:
+                        real_content = f"[Template: {trigger.template_name}]"
+                        logger.warning(f"⚠️ [DIRECT] Template '{trigger.template_name}' não encontrado no cache. Usando nome como fallback.")
+
+                    # Registrar no histórico de mensagens com o conteúdo real
                     db.add(models.MessageStatus(
                         trigger_id=trigger.id,
                         message_id=msg_id,
                         phone_number=contact_phone,
                         status='sent',
                         message_type='TEMPLATE',
-                        content=f"[Template: {trigger.template_name}]"
+                        content=real_content
                     ))
                     trigger.total_sent = (trigger.total_sent or 0) + 1
                     trigger.status = 'completed'
