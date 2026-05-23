@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.0)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.7)
 
-Bem-vindo à versão **3.8.0** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.7** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -102,44 +102,28 @@ O sistema estará disponível em:
 
 **ZapVoice - Escalando seu negócio com a inteligência da API Oficial.** 🚀
 
-
-
-**Inicializar / Criar as tabelas faltantes manualmente no servidor caso precisse:**
-
-docker exec zapvoice_zapvoice_app python fix_missing_webhook_columns.py
-
 ---
 
 ## 📝 Changelog
 
-### v3.8.0
-- **Validação de Tempo de Espera do Follow-up (Novo!)**:
-  - **Frontend**: Validação no hook `useIntegrations.js` que impede o salvamento de integrações se o follow-up estiver ativo com valor de atraso inválido (vazio, nulo ou menor que 1).
-  - **Backend**: Validação robusta nos roteadores `POST` e `PUT` da API (`integrations.py`) retornando HTTP 400 em caso de valores inválidos.
-  - **Suíte de Testes Unitários**: Testes dedicados de backend (`test_webhook_followup_saving.py`) e frontend (`useIntegrations.test.jsx`) cobrindo as validações de delay com 100% de sucesso.
-- **Otimização do Fluxo de Memória IA**:
-  - **Visual Flow Builder**: Remoção definitiva do toggle `"Enviar para Memória?"` do nó de mensagens (`MessageNode.jsx`), simplificando a interface visual.
-  - **Envio Automático**: O backend (`events.py` e `whatsapp.py`) agora envia automaticamente todas as mensagens entregues para o webhook de memória configurado do agente, sem depender de flag individual do nó.
-
-### v3.7.9
-- **Filtro por Etiquetas (Tags) em Todos os Dropdowns de Templates (Novo!)**:
-  - **Mapeamento de Integrações**: Adicionado suporte à filtragem rápida e inteligente por etiquetas nos seletores de template principal (`MappingItem`) e de follow-up (`FollowUpSection`).
-  - **Visual Flow Builder**: Substituição do seletor nativo `<select>` do nó de template do WhatsApp (`TemplateNode`) pelo componente customizado `SearchableSelect`, trazendo busca textual robusta e filtro horizontal de etiquetas.
-  - **Suíte de Testes Unitários de Frontend**: Implementação do arquivo de testes unitários `SearchableSelect.test.jsx` utilizando Vitest, com cobertura e validação 100% aprovada para os novos fluxos de filtragem por etiquetas.
-
-### v3.7.8
-- **Classificação de Templates por Etiquetas (Tags) (Novo!)**: Implementação de etiquetas locais para categorização de templates do WhatsApp diretamente nos cards da aba "Meus Templates", por meio de um popover flutuante para gerenciamento ágil.
-- **Filtragem Dinâmica nos Dropdowns**: Integração de badges de tags horizontais nos dropdowns de seleção de templates nas telas de Envio em Massa (Bulk Sender) e Agendamentos Recorrentes (Recurring Schedules), permitindo que o usuário visualize as tags dos templates e filtre a exibição instantaneamente.
-- **Resiliência e Sincronização Local**: Sincronia local no banco de dados que preserva as tags de forma robusta e independente da API externa da Meta WhatsApp, assegurando que novas sincronizações não apaguem os metadados locais de tags.
-- **Suíte de Testes Unitários**: Criação do arquivo de testes do backend `test_template_tags.py` que cobre e valida as rotas de tags no SQLite com 100% de sucesso.
-
 ### v3.7.7
-- **Controle de Acesso Baseado em Funções (RBAC) (Novo!)**: Implementação de restrições de acesso refinadas de acordo com as permissões do usuário logado:
-  - Administrador (`admin`): Acesso total às configurações do cliente (Chatwoot, WhatsApp e Avançado). Sem acesso a gestão global de usuários.
-  - Premium (`premium`): Acesso total a funis, templates, disparos, contatos e financeiro. Bloqueio completo na visualização de chaves de API/Tokens e abas avançadas no modal de configurações.
-  - Usuário (`user`): Acesso de apenas visualização (read-only) para histórico, agenda de disparos e financeiro. Bloqueio para criação e edição de recursos, e bloqueio de visualização das chaves de API.
-- **Segurança de Endpoints no Backend**: Inclusão dos validadores `require_admin` e `require_premium` em rotas cruciais do FastAPI (Configurações, Funis, Schedules, WhatsApp, Contatos Bloqueados e Leads).
-- **Adequação da Interface (UI)**: Ocultação dinâmica de abas de configuração avançada no modal de configurações e ajuste dos itens visíveis na sidebar dependendo da role do usuário.
+- **Correções Críticas e Otimizações de Fluxo (Novo!)**:
+  - **Webhook de Memória IA**: O backend agora resolve o conteúdo real dos templates do WhatsApp (substituindo variáveis dinâmicas) antes de enviá-los ao webhook de memória do agente de IA, ao invés de apenas transmitir o nome do template.
+  - **Notificação Automática de Entrega**: Disparo automático do webhook de memória para todos os templates do WhatsApp que forem entregues com sucesso, não se limitando apenas a disparos em massa.
+  - **Correção da Nota Privada de Follow-up**: Correção do fluxo onde notas privadas automáticas dos follow-ups agendados não eram publicadas na conversa correspondente no Chatwoot.
+  - **Prevenção de Notas Duplicadas**: Ajustado o fluxo de envio em massa (Bulk Send) para evitar o registro duplicado de notas privadas para o mesmo contato no histórico do Chatwoot.
+  - **Validação de Tempo de Espera do Follow-up**:
+    - **Frontend**: Validação no hook `useIntegrations.js` que impede o salvamento de integrações se o follow-up estiver ativo com valor de atraso inválido (vazio, nulo ou menor que 1).
+    - **Backend**: Validação robusta nos roteadores `POST` e `PUT` da API (`integrations.py`) retornando HTTP 400 em caso de valores inválidos.
+    - **Suíte de Testes**: Testes automatizados dedicados de backend (`test_webhook_followup_saving.py`) e frontend (`useIntegrations.test.jsx`) validando o tratamento de atraso do follow-up.
+  - **Filtro por Etiquetas (Tags) em Dropdowns**:
+    - **Mapeamento de Integrações & Funil**: Adicionado suporte à filtragem rápida e inteligente por etiquetas nos dropdowns de templates do WhatsApp na interface.
+    - **SearchableSelect**: Substituição de seletores padrão no Flow Builder por um dropdown pesquisável dinâmico com filtragem de tags de templates.
+  - **Classificação de Templates por Etiquetas (Tags)**:
+    - Implementação de etiquetas locais para categorização de templates diretamente nos cards em "Meus Templates".
+    - Persistência e sincronização de banco de dados local mantendo tags intactas mesmo após atualizações vindas da Meta WhatsApp API.
+  - **Controle de Acesso Baseado em Funções (RBAC)**:
+    - Implementação de restrições finas de acesso de acordo com os papéis do usuário (`admin`, `premium` e `user`) tanto no frontend (ocultação de abas e botões confidenciais na Sidebar e Configurações) quanto no backend FastAPI (validadores de rota `require_admin` e `require_premium`).
 - **Suíte de Testes e Provas Visuais**: Criação de testes automatizados dedicados à segurança do RBAC (`test_17_rbac_permissions.py`) com 100% de sucesso e geração de capturas de tela automatizadas via Playwright para cada um dos papéis de usuário.
 
 ### v3.7.6
