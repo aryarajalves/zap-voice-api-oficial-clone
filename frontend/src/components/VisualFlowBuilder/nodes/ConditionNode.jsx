@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import { FiCpu } from 'react-icons/fi';
 import NodeHeader from '../components/NodeHeader';
 
 const ConditionNode = ({ id, data }) => {
+    const [activeTab, setActiveTab] = useState('config');
     const conditionType = data.conditionType || 'text';
     const isRange = conditionType === 'datetime_range';
 
@@ -29,10 +30,30 @@ const ConditionNode = ({ id, data }) => {
                     >
                         <option value="text">Busca por Texto (Simples)</option>
                         <option value="tag">Tag no Chatwoot</option>
+                        <option value="ai_question">Análise de Resposta (IA)</option>
                         <option value="datetime_range">Período de Data/Hora (Antes/Durante/Depois)</option>
                         <option value="weekday">Dias da Semana</option>
                     </select>
                 </div>
+
+                {conditionType === 'ai_question' && (
+                    <div className="flex border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-0.5 rounded-lg">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('config')}
+                            className={`flex-1 py-1 text-[10px] font-bold rounded-md transition ${activeTab === 'config' ? 'bg-white dark:bg-gray-700 shadow-sm text-purple-600 dark:text-purple-400' : 'text-gray-400'}`}
+                        >
+                            Parâmetros
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('instructions')}
+                            className={`flex-1 py-1 text-[10px] font-bold rounded-md transition ${activeTab === 'instructions' ? 'bg-white dark:bg-gray-700 shadow-sm text-purple-600 dark:text-purple-400' : 'text-gray-400'}`}
+                        >
+                            Critérios de Sucesso
+                        </button>
+                    </div>
+                )}
 
                 {/* Campos Específicos */}
                 {conditionType === 'text' && (
@@ -107,6 +128,46 @@ const ConditionNode = ({ id, data }) => {
                                 </label>
                             );
                         })}
+                    </div>
+                )}
+
+                {conditionType === 'ai_question' && activeTab === 'config' && (
+                    <div className="space-y-3 animate-fade-in">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Pergunta Específica</label>
+                            <input
+                                type="text"
+                                placeholder="ex: O cliente aceitou agendar?"
+                                className="nodrag nopan w-full text-sm p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm"
+                                value={data.aiQuestion || ''}
+                                onChange={(e) => data.onChange(id, { aiQuestion: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Últimas Mensagens a Analisar (Limite)</label>
+                            <input
+                                type="number"
+                                placeholder="15"
+                                className="nodrag nopan w-full text-sm p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm font-bold text-center"
+                                value={data.aiLimit || 15}
+                                onChange={(e) => data.onChange(id, { aiLimit: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {conditionType === 'ai_question' && activeTab === 'instructions' && (
+                    <div className="space-y-3 animate-fade-in">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Instruções de Sucesso</label>
+                            <textarea
+                                className="nodrag nopan w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none"
+                                rows={4}
+                                placeholder="Descreva quais respostas são válidas (ex: 'Considere sim caso ele aceite agendar ou sugira um horário')."
+                                value={data.aiInstructions || ''}
+                                onChange={(e) => data.onChange(id, { aiInstructions: e.target.value })}
+                            />
+                        </div>
                     </div>
                 )}
 
@@ -186,6 +247,12 @@ const ConditionNode = ({ id, data }) => {
                                 <span className="text-xs font-black text-red-700 dark:text-red-400 uppercase flex items-center gap-1">❌ Não / Inválido</span>
                                 <Handle id="no" type="source" position={Position.Right} className="w-3 h-3 bg-red-500 !-right-2" />
                             </div>
+                            {conditionType === 'ai_question' && (
+                                <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg relative border border-orange-100 dark:border-orange-900 shadow-sm animate-fade-in">
+                                    <span className="text-xs font-black text-orange-700 dark:text-orange-400 uppercase flex items-center gap-1">⚠️ Erro / Falha</span>
+                                    <Handle id="error" type="source" position={Position.Right} className="w-3 h-3 bg-orange-500 !-right-2" />
+                                </div>
+                            )}
                         </>
                     )}
                 </div>

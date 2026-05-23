@@ -1,3 +1,5 @@
+name: zapvoice
+
 services:
   # === CORE SERVICES ===
   zapvoice_app:
@@ -118,7 +120,11 @@ services:
 
 volumes:
   zapvoice_uploads:
+    name: docker_zapvoice_uploads
+    external: true
   zapvoice_db_data:
+    name: docker_zapvoice_db_data
+    external: true
 
 
 networks:

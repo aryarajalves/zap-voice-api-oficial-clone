@@ -27,6 +27,32 @@ def get_trigger(
     
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo não encontrado ou sem permissão.")
+
+    # Resolver chatwoot_account_id se nulo
+    from config_loader import get_setting
+    account_id = trigger.chatwoot_account_id
+    if not account_id:
+        cw_acc_str = get_setting("CHATWOOT_ACCOUNT_ID", "1", client_id=client_id)
+        if cw_acc_str:
+            try:
+                account_id = int(cw_acc_str)
+            except ValueError:
+                account_id = cw_acc_str
+            # Persistir no banco para consultas futuras
+            trigger.chatwoot_account_id = account_id
+            db.commit()
+            db.refresh(trigger)
+
+    # Resolver chatwoot_url
+    base_url = get_setting("CHATWOOT_URL", "https://app.chatwoot.com", client_id=client_id)
+    if base_url.endswith("/"):
+        base_url = base_url[:-1]
+    
+    convo_id = trigger.conversation_id
+    if convo_id and account_id:
+        trigger.chatwoot_url = f"{base_url}/app/accounts/{account_id}/conversations/{convo_id}"
+    else:
+        trigger.chatwoot_url = None
         
     return trigger
 
@@ -88,9 +114,11 @@ def list_triggers(
     
     if trigger_type:
         if trigger_type == 'bulk':
-            query = query.filter(models.ScheduledTrigger.is_bulk == True)
+            query = query.filter(models.ScheduledTrigger.is_bulk == True, models.ScheduledTrigger.is_recurring == False)
         elif trigger_type == 'single':
-            query = query.filter(models.ScheduledTrigger.is_bulk == False)
+            query = query.filter(models.ScheduledTrigger.is_bulk == False, models.ScheduledTrigger.is_recurring == False)
+        elif trigger_type == 'recurring':
+            query = query.filter(models.ScheduledTrigger.is_recurring == True)
 
     total = query.count()
     triggers = query.order_by(models.ScheduledTrigger.created_at.desc()).offset(skip).limit(limit).all()

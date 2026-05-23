@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.7)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.8)
 
-Bem-vindo à versão **3.7.7** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.8** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,36 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.7.10
+- **Resolução de Bugs no Modal de Automação (Visualizador de Pipeline)**:
+  - **Correção de Concorrência de Memória**: Adicionado `db.expire(trigger)` no executor visual (`graph_executor.py`) e legado (`legacy_executor.py`) antes de commits e alterações de propriedades, impedindo que o motor do funil sobrescreva as gravações assíncronas de status de memória do webhook (`success`/`failed`) feitas pelo worker.
+  - **Resolução do ID da Conta do Chatwoot**: Ajustado o fallback padrão do ID da conta do Chatwoot para `"1"` no executor de funil e no endpoint de triggers caso a chave não esteja configurada no banco de dados, evitando exibir `ID CONTA: N/A`.
+  - **Ajustes de Renderização e Câmera no React Flow**: 
+    - Implementação de múltiplos disparos de `window.dispatchEvent(new Event('resize'))` e `fitView` agendados (100ms, 350ms e 700ms) após o modal ser montado. Isso resolve o problema de tela em branco/azul no carregamento inicial causado pela montagem do React Flow com dimensões zeradas (0x0) em modais animados do Tailwind.
+    - Definição de altura rígida (`h-[450px] relative w-full`) no contêiner da aba do React Flow no frontend, garantindo o correto cálculo de dimensões.
+    - Fallback no frontend para utilizar `trigger.chatwoot_url` resolvida pela API caso a URL global do Chatwoot do cliente ativo não esteja carregada no estado global.
+  - **Suíte de Testes Aprovada**: Adicionado teste unitário de backend validando a resolução de fallback do ID de conta do Chatwoot para `1`.
+
+### v3.7.9
+- **Análise Inteligente de Resposta com IA (Novo!)**:
+  - Integração do modelo de análise por Inteligência Artificial (`gpt-5-mini` com fallback automático de contingência para `gpt-4o-mini`) sob a opção de validação "Análise de Resposta (IA)" do nó de Condição Inteligente.
+  - Implementação de rastreabilidade completa gravando o modelo de IA de fato utilizado para a validação do fluxo do contato nos logs de execução do nó.
+  - Adição de aba dedicada de **"Critérios de Sucesso"** no frontend (`ConditionNode.jsx`), permitindo ao usuário descrever em linguagem natural quais critérios e regras de negócio definem uma resposta positiva/válida (ex. aceitar agendamento, propor horário alternativo).
+  - Implementação de tratamento resiliente de erros na API da OpenAI, direcionando a execução do fluxo para a nova saída dedicada **"Erro / Falha" (laranja)**.
+- **Suíte de Testes e Conectividade**:
+  - Criação de testes unitários robustos de backend (`test_condition_ai.py`) cobrindo fallbacks, sucesso da IA, erro de chamada e validação de prompt.
+  - Criação de testes unitários no frontend (`ConditionNode.test.jsx`) garantindo a estabilidade e funcionamento de alternância de abas, renderização de campos e chamadas ao callback `onChange`.
+
+### v3.7.8
+- **Visualizador de Logs do Funil Visual (Estilo ManyChat) [NOVO]**:
+  - Implementação gráfica interativa do fluxo de execução do funil no modal de pipeline utilizando o React Flow, com enquadramento de câmera inteligente automático centrado no nó ativo (`current_node_id`).
+  - Criação de nós customizados neon e responsivos (`PipelineNode.jsx`) e caminhos animados dinâmicos (`PipelineFlowViewer.jsx`) mapeando status em tempo real.
+  - Adição de aba de alternância fluida entre "Fluxo Visual" e "Linha do Tempo" cronológica e botão "Ver Pipeline" de monitoramento rápido no Histórico de Disparos.
+- **Controle de Tolerância e Filtro de Disparos Recorrentes**:
+  - Implementado limitador de tolerância de 30 minutos no Scheduler para evitar disparos fora do horário programado.
+  - Adicionado filtro de "Disparos Recorrentes" e respectivo status "Abortado" por limite de tolerância excedido.
+- **Suíte de Testes Aprovada**: Criação e validação de 5 testes unitários complexos específicos para o visualizador de fluxos do pipeline.
 
 ### v3.7.7
 - **Correções Críticas e Otimizações de Fluxo (Novo!)**:

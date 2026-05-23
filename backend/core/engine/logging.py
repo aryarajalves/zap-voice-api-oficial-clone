@@ -10,6 +10,12 @@ logger = setup_logger("FunnelEngine.Log")
 def log_node_execution(db, trigger, node_id, status, details=None, extra_data=None, emit_event=True):
     """Adiciona ou atualiza uma entrada no log de execução do trigger."""
     try:
+        # Forçar expiração do trigger na sessão SQLAlchemy para recarregar do banco fresco
+        try:
+            db.expire(trigger)
+        except Exception:
+            pass
+
         # Bloqueia a linha para atualização atômica
         trigger = db.query(models.ScheduledTrigger).filter(
             models.ScheduledTrigger.id == trigger.id

@@ -102,6 +102,8 @@ class ScheduledTrigger(ScheduledTriggerBase):
     followup_status: Optional[str] = Field(None, description="Status do disparo de follow-up associado")
     followup_scheduled_time: Optional[datetime] = Field(None, description="Horário de disparo do follow-up associado")
     sent_as: Optional[str] = None  # Resultado real: 'FREE_MESSAGE' (grátis) ou 'TEMPLATE' (pago)
+    is_recurring: bool = Field(False, description="Indica se faz parte de uma recorrência")
+    recurring_trigger_id: Optional[int] = Field(None, description="ID da recorrência de origem")
     chatwoot_label: Optional[List[str]] = Field(default_factory=list)
 
     @field_validator('chatwoot_label', mode='before')
@@ -119,6 +121,7 @@ class ScheduledTrigger(ScheduledTriggerBase):
     chatwoot_account_id: Optional[int] = None
     chatwoot_contact_id: Optional[int] = None
     chatwoot_inbox_id: Optional[int] = None
+    chatwoot_url: Optional[str] = None
     execution_history: Optional[List[dict]] = []
 
     @field_validator('integration_id', mode='before')

@@ -31,19 +31,33 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         confirmText: 'Sair'
     });
 
+    const categories = [
+        { id: 'campanhas', label: 'Envios & Campanhas' },
+        { id: 'automacao', label: 'Automação' },
+        { id: 'contatos', label: 'Contatos' },
+        { id: 'admin', label: 'Administração' }
+    ];
+
     const menuItems = [
-        { id: 'templates', label: 'Criar Template', icon: FiPlus, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'bulk_sender', label: 'Disparo em Massa', icon: FiHome, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'recurring_schedules', label: 'Disparo Recorrente Criado', icon: FiClock, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'funnels', label: 'Meus Funis', icon: FiLayers, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'schedules', label: 'Agenda de Disparos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium', 'user'] },
-        { id: 'history', label: 'Histórico', icon: FiClock, roles: ['super_admin', 'admin', 'premium', 'user'] },
-        { id: 'integrations', label: 'Integrações Webhook', icon: FiZap, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'blocked', label: 'Contatos Bloqueados', icon: FiSlash, roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium', 'user'] },
-        { id: 'users', label: 'Gestão de Usuários', icon: FiUsers, roles: ['super_admin'] },
-        { id: 'monitoring', label: 'Monitoramento', icon: FiActivity, roles: ['super_admin'] },
+        // Campanhas
+        { id: 'bulk_sender', label: 'Disparo em Massa', icon: FiHome, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
+        { id: 'recurring_schedules', label: 'Disparo Recorrente Criado', icon: FiClock, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
+        { id: 'schedules', label: 'Agenda de Disparos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
+        { id: 'history', label: 'Histórico', icon: FiClock, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
+
+        // Automação
+        { id: 'templates', label: 'Criar Template', icon: FiPlus, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
+        { id: 'funnels', label: 'Meus Funis', icon: FiLayers, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
+        { id: 'integrations', label: 'Integrações Webhook', icon: FiZap, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
+
+        // Contatos
+        { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
+        { id: 'blocked', label: 'Contatos Bloqueados', icon: FiSlash, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
+
+        // Administração
+        { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'admin' },
+        { id: 'users', label: 'Gestão de Usuários', icon: FiUsers, roles: ['super_admin'], category: 'admin' },
+        { id: 'monitoring', label: 'Monitoramento', icon: FiActivity, roles: ['super_admin'], category: 'admin' },
     ];
 
     const handleLogoutClick = () => {
@@ -81,23 +95,42 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
 
             <ClientSelector onCreateClick={onClientCreate} />
 
-            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                {activeClient && menuItems.filter(item => item.roles.includes(user?.role)).map((item) => {
-                    const Icon = item.icon;
-                    const isActive = activeView === item.id;
+            <nav className="flex-1 p-4 space-y-4 overflow-y-auto">
+                {activeClient && categories.map((category) => {
+                    const categoryItems = menuItems.filter(
+                        item => item.category === category.id && item.roles.includes(user?.role)
+                    );
+
+                    if (categoryItems.length === 0) return null;
+
                     return (
-                        <button
-                            key={item.id}
-                            onClick={() => onViewChange(item.id)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 font-medium text-sm ${isActive
-                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm'
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
-                                }`}
-                        >
-                            <Icon size={20} />
-                            {item.label}
-                        </button>
-                    )
+                        <div key={category.id} className="space-y-1.5">
+                            {/* Cabeçalho da Categoria */}
+                            <div className="px-3 pt-2 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest border-b border-gray-100/50 dark:border-white/5 pb-1 mb-2">
+                                {category.label}
+                            </div>
+                            
+                            <div className="space-y-1">
+                                {categoryItems.map((item) => {
+                                    const Icon = item.icon;
+                                    const isActive = activeView === item.id;
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => onViewChange(item.id)}
+                                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 font-medium text-sm ${isActive
+                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shadow-sm'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
+                                                }`}
+                                        >
+                                            <Icon size={18} />
+                                            {item.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
                 })}
             </nav>
 

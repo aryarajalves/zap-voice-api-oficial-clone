@@ -56,10 +56,22 @@ async def execute_funnel(
             return
 
     # Discovery Log
+    resolved_account_id = chatwoot_account_id or trigger.chatwoot_account_id
+    if not resolved_account_id:
+        cw_acc_str = get_setting("CHATWOOT_ACCOUNT_ID", "1", client_id=trigger.client_id)
+        if cw_acc_str:
+            try:
+                resolved_account_id = int(cw_acc_str)
+            except ValueError:
+                resolved_account_id = cw_acc_str
+            # Persistir no banco de dados para consultas futuras
+            trigger.chatwoot_account_id = resolved_account_id
+            db.commit()
+
     client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=trigger.client_id)
     logger.info(f"🔍 [ENGINE] Iniciando orquestração para Trigger {trigger_id} (Funil {funnel_id})")
     log_node_execution(db, trigger, 'DISCOVERY', 'completed', f'{client_name}: Contexto Sincronizado', {
-        "account_id": chatwoot_account_id or trigger.chatwoot_account_id,
+        "account_id": resolved_account_id,
         "conversation_id": conversation_id or trigger.conversation_id,
         "contact_id": chatwoot_contact_id or trigger.chatwoot_contact_id
     })

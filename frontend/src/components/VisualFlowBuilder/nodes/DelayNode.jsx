@@ -8,13 +8,14 @@ const DelayNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-yellow-500 min-w-[240px]">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-yellow-500" />
+            {!data.isStart && <Handle type="target" position={Position.Top} className="w-3 h-3 bg-yellow-500" />}
             <NodeHeader
                 label="Smart Delay"
                 icon={FiClock}
                 colorClass="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400"
                 onDelete={() => data.onDelete(id)}
                 isStart={data.isStart}
+                onSetStart={() => data.onSetStart(id, 'delayNode')}
             />
 
             <div className="space-y-3">

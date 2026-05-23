@@ -16,6 +16,8 @@ vi.mock('react-icons/fi', () => ({
   FiCalendar: () => <span />,
   FiGlobe: () => <span />,
   FiActivity: () => <span />,
+  FiZap: () => <span />,
+  FiDollarSign: () => <span />,
 }));
 
 vi.mock('./ClientSelector', () => ({
@@ -64,7 +66,7 @@ describe('Sidebar', () => {
 
   it('exibe o nome do cliente', () => {
     render(<Sidebar {...baseProps} />);
-    expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    expect(screen.getByText(/Acme Corp/i)).toBeInTheDocument();
   });
 
   it('renderiza ClientSelector', () => {

@@ -31,6 +31,13 @@ const getStatusBadge = (trigger) => {
                     {failure_reason && <span className="text-[10px] text-red-500 font-medium max-w-[150px] truncate" title={failure_reason}>{failure_reason}</span>}
                 </div>
             );
+        case 'aborted':
+            return (
+                <div className="flex flex-col items-center gap-1">
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400">Abortado</span>
+                    {failure_reason && <span className="text-[10px] text-orange-500 font-medium max-w-[150px] truncate" title={failure_reason}>{failure_reason}</span>}
+                </div>
+            );
         case 'cancelled':
             return (
                 <div className="flex flex-col items-center gap-1">
@@ -108,7 +115,11 @@ const TriggerTableRow = ({
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-blue-600 dark:text-blue-400">📤 {trigger.template_name?.split('|').pop() || trigger.funnel?.name || 'Disparo em Massa'}</span>
-                            <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">Bulk</span>
+                            {trigger.is_recurring ? (
+                                <span className="text-xs bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">🔄 Recorrente</span>
+                            ) : (
+                                <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">Bulk</span>
+                            )}
                         </div>
                         {(trigger.template_name) && (
                             <div className="flex flex-wrap gap-4 mt-2">
@@ -266,6 +277,16 @@ const TriggerTableRow = ({
                 )}
             </td>
             <td className="p-4 text-right flex justify-end gap-2">
+                <button 
+                    onClick={() => handleViewPipeline(trigger.id)} 
+                    className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800 rounded transition" 
+                    title="Ver Pipeline"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </button>
+
                 {/* 1. DISPAROS EM ANDAMENTO (Pode Pausar ou Cancelar) */}
                 {trigger.status === 'processing' && (
                     <>

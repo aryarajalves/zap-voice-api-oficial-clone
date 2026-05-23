@@ -10,6 +10,10 @@ logger = logging.getLogger("FunnelEngine.LegacyExecutor")
 async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, contact_phone, db, apply_vars_func):
     total_steps = len(steps)
     if trigger.current_step_index is None:
+        try:
+            db.expire(trigger)
+        except Exception:
+            pass
         trigger.current_step_index = 0
         db.commit()
 
@@ -32,6 +36,10 @@ async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, conta
                 trigger_id=trigger.id, message_id=f"legacy_{int(datetime.now().timestamp())}",
                 phone_number=contact_phone, status='sent', content=content_processed
             ))
+            try:
+                db.expire(trigger)
+            except Exception:
+                pass
             trigger.total_sent = (trigger.total_sent or 0) + 1
             db.commit()
             log_node_execution(db, trigger, f"step_{step_index}", "completed")
@@ -42,6 +50,10 @@ async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, conta
         raw_delay = int(step.get("delay", 0))
         if raw_delay > 0:
             if raw_delay > 60:
+                 try:
+                     db.expire(trigger)
+                 except Exception:
+                     pass
                  trigger.status = 'queued'
                  trigger.scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=raw_delay)
                  trigger.current_step_index = step_index + 1
@@ -50,10 +62,22 @@ async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, conta
             else:
                 await asyncio.sleep(raw_delay)
 
+        try:
+            db.expire(trigger)
+        except Exception:
+            pass
         trigger.current_step_index = step_index + 1
         db.commit()
     
+    try:
+        db.expire(trigger)
+    except Exception:
+        pass
     trigger.status = 'completed'
     client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=trigger.client_id)
     log_node_execution(db, trigger, "FINISH", "completed", f"{client_name}: Funil (Lista) concluído com sucesso.")
+    try:
+        db.expire(trigger)
+    except Exception:
+        pass
     db.commit()

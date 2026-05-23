@@ -52,8 +52,8 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     }, []);
 
     const setStartNode = useCallback((id, type) => {
-        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode') {
-            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio' ou 'Template' podem ser o nó inicial! 🚫");
+        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode' && type !== 'delayNode') {
+            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio', 'Template' ou 'Smart Delay' podem ser o nó inicial! 🚫");
             return;
         }
 
@@ -142,7 +142,7 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
 
         setNodes((nds) => {
             const hasStartNode = nds.some(n => n.data?.isStart);
-            const isStartingType = ['messageNode', 'mediaNode', 'audioNode', 'templateNode'].includes(type);
+            const isStartingType = ['messageNode', 'mediaNode', 'audioNode', 'templateNode', 'delayNode'].includes(type);
 
             if (!hasStartNode && isStartingType) {
                 defaultData.isStart = true;
@@ -185,8 +185,7 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     const onConnect = useCallback((params) => {
         setEdges((eds) => {
             const filteredEdges = eds.filter(e =>
-                !(e.source === params.source && e.sourceHandle === params.sourceHandle) &&
-                !(e.target === params.target && e.targetHandle === params.targetHandle)
+                !(e.source === params.source && e.sourceHandle === params.sourceHandle)
             );
             return addEdge({ ...params, animated: true }, filteredEdges);
         });

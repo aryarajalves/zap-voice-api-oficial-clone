@@ -7,6 +7,12 @@ from core.logger import setup_logger
 logger = setup_logger("ChatwootClient")
 
 class ChatwootMessagesMixin:
+    async def get_messages(self, conversation_id: int):
+        if not self.api_token:
+            logger.debug("Chatwoot Token not set. Mocking get_messages.")
+            return {"payload": []}
+        return await self._request("GET", f"conversations/{conversation_id}/messages")
+
     async def send_message(self, conversation_id: int, content: str, private: bool = False, message_type: str = "outgoing"):
         if not self.api_token:
             logger.debug(f"Chatwoot Token not set. Mocking send_message ({message_type}).")

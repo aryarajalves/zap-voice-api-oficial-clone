@@ -151,6 +151,107 @@ async def run_stale_triggers_cleanup(db_session=None):
             db.close()
         _last_cleanup_stale = today
 
+async def process_recurring_triggers(db, now_utc):
+    active_recurring = db.query(models.RecurringTrigger).filter(
+        models.RecurringTrigger.is_active == True,
+        models.RecurringTrigger.next_run_at <= now_utc
+    ).with_for_update(skip_locked=True).all()
+    
+    for rt in active_recurring:
+        logger.info(f"🔄 Executando Recurring Trigger {rt.id} (Freq: {rt.frequency})...")
+        
+        # Calcular atraso de execução
+        scheduled_time_utc = rt.next_run_at
+        delay_minutes = 0.0
+        if scheduled_time_utc:
+            t1 = now_utc.replace(tzinfo=None) if now_utc.tzinfo else now_utc
+            t2 = scheduled_time_utc.replace(tzinfo=None) if scheduled_time_utc.tzinfo else scheduled_time_utc
+            delay_minutes = (t1 - t2).total_seconds() / 60.0
+        
+        is_aborted = delay_minutes > 30.0
+        
+        # Determine contacts
+        final_contacts = rt.contacts_list or []
+        if rt.tag:
+            logger.info(f"🔍 Re-filtrando contatos pela tag: {rt.tag}")
+            leads = db.query(models.WebhookLead).filter(
+                models.WebhookLead.client_id == rt.client_id,
+                models.WebhookLead.tags.ilike(f"%{rt.tag}%")
+            ).all()
+            
+            tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
+            if rt.contacts_list:
+                phones_in_list = {c.get('phone') for c in final_contacts}
+                for tc in tag_contacts:
+                    if tc['phone'] not in phones_in_list:
+                        final_contacts.append(tc)
+            else:
+                final_contacts = tag_contacts
+
+        if is_aborted:
+            failure_reason = f"Disparo abortado: Limite de atraso (30 minutos) excedido. O disparo deveria ter ocorrido às {scheduled_time_utc.strftime('%H:%M:%S')} UTC, mas o scheduler executou às {now_utc.strftime('%H:%M:%S')} UTC ({int(delay_minutes)} minutos de atraso)."
+            logger.warning(f"❌ Recurring Trigger {rt.id} abortado devido a atraso excessivo ({delay_minutes:.1f} minutos de atraso).")
+            
+            new_st = models.ScheduledTrigger(
+                client_id=rt.client_id,
+                funnel_id=rt.funnel_id,
+                template_name=rt.template_name,
+                template_language=rt.template_language,
+                template_components=rt.template_components,
+                contacts_list=final_contacts,
+                delay_seconds=rt.delay_seconds,
+                concurrency_limit=rt.concurrency_limit,
+                private_message=rt.private_message,
+                private_message_delay=rt.private_message_delay,
+                private_message_concurrency=rt.private_message_concurrency,
+                direct_message=rt.direct_message,
+                direct_message_params=rt.direct_message_params,
+                status='aborted',
+                is_bulk=True,
+                is_recurring=True,
+                recurring_trigger_id=rt.id,
+                scheduled_time=scheduled_time_utc,
+                failure_reason=failure_reason
+            )
+            db.add(new_st)
+        elif not final_contacts:
+            logger.warning(f"⚠️ Recurring Trigger {rt.id} não tem contatos. Pulando criação de ScheduledTrigger.")
+        else:
+            # Create ScheduledTrigger normal (queued)
+            new_st = models.ScheduledTrigger(
+                client_id=rt.client_id,
+                funnel_id=rt.funnel_id,
+                template_name=rt.template_name,
+                template_language=rt.template_language,
+                template_components=rt.template_components,
+                contacts_list=final_contacts,
+                delay_seconds=rt.delay_seconds,
+                concurrency_limit=rt.concurrency_limit,
+                private_message=rt.private_message,
+                private_message_delay=rt.private_message_delay,
+                private_message_concurrency=rt.private_message_concurrency,
+                direct_message=rt.direct_message,
+                direct_message_params=rt.direct_message_params,
+                status='queued',
+                is_bulk=True,
+                is_recurring=True,
+                recurring_trigger_id=rt.id,
+                scheduled_time=now_utc
+            )
+            db.add(new_st)
+            logger.info(f"✅ Recurring Trigger {rt.id} enfileirado com sucesso.")
+        
+        # Update Recurring Trigger next run
+        rt.last_run_at = now_utc
+        rt.next_run_at = calculate_next_run(
+            base_date=now_utc, 
+            frequency=rt.frequency, 
+            days_of_week=rt.days_of_week, 
+            day_of_month=rt.day_of_month, 
+            scheduled_time_str=rt.scheduled_time
+        )
+        db.commit()
+
 async def scheduler_task():
     logger.info("Scheduler task started (RabbitMQ Mode)")
     while True:
@@ -159,70 +260,7 @@ async def scheduler_task():
             now_utc = datetime.now(timezone.utc)
             
             # --- 1. PROCESS RECURRING TRIGGERS ---
-            active_recurring = db.query(models.RecurringTrigger).filter(
-                models.RecurringTrigger.is_active == True,
-                models.RecurringTrigger.next_run_at <= now_utc
-            ).with_for_update(skip_locked=True).all()
-            
-            for rt in active_recurring:
-                logger.info(f"🔄 Executando Recurring Trigger {rt.id} (Freq: {rt.frequency})...")
-                
-                # Determine contacts
-                final_contacts = rt.contacts_list or []
-                if rt.tag:
-                    logger.info(f"🔍 Re-filtrando contatos pela tag: {rt.tag}")
-                    leads = db.query(models.WebhookLead).filter(
-                        models.WebhookLead.client_id == rt.client_id,
-                        models.WebhookLead.tags.ilike(f"%{rt.tag}%")
-                    ).all()
-                    
-                    # Merge or use those leads
-                    # Convert to standard format
-                    tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
-                    if rt.contacts_list:
-                        # Append if user wants to combine? No, usually it's one or the other.
-                        # Rule: Tag overrides/merges with static list if both present
-                        phones_in_list = {c.get('phone') for c in final_contacts}
-                        for tc in tag_contacts:
-                            if tc['phone'] not in phones_in_list:
-                                final_contacts.append(tc)
-                    else:
-                        final_contacts = tag_contacts
-
-                if not final_contacts:
-                    logger.warning(f"⚠️ Recurring Trigger {rt.id} não tem contatos. Pulando criação de ScheduledTrigger.")
-                else:
-                    # Create ScheduledTrigger
-                    new_st = models.ScheduledTrigger(
-                        client_id=rt.client_id,
-                        funnel_id=rt.funnel_id,
-                        template_name=rt.template_name,
-                        template_language=rt.template_language,
-                        template_components=rt.template_components,
-                        contacts_list=final_contacts,
-                        delay_seconds=rt.delay_seconds,
-                        concurrency_limit=rt.concurrency_limit,
-                        private_message=rt.private_message,
-                        private_message_delay=rt.private_message_delay,
-                        private_message_concurrency=rt.private_message_concurrency,
-                        direct_message=rt.direct_message,
-                        direct_message_params=rt.direct_message_params,
-                        status='queued',
-                        is_bulk=True,
-                        scheduled_time=now_utc
-                    )
-                    db.add(new_st)
-                
-                # Update Recurring Trigger next run
-                rt.last_run_at = now_utc
-                rt.next_run_at = calculate_next_run(
-                    base_date=now_utc, 
-                    frequency=rt.frequency, 
-                    days_of_week=rt.days_of_week, 
-                    day_of_month=rt.day_of_month, 
-                    scheduled_time_str=rt.scheduled_time
-                )
-                db.commit()
+            await process_recurring_triggers(db, now_utc)
 
             # --- 2. PROCESS PENDING ONE-OFF TRIGGERS ---
             pending_triggers = db.query(models.ScheduledTrigger).filter(

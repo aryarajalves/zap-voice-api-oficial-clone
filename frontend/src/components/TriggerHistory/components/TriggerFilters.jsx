@@ -47,6 +47,7 @@ const TriggerFilters = ({
                     <option value="processing">Enviando</option>
                     <option value="completed">Enviado</option>
                     <option value="failed">Falha</option>
+                    <option value="aborted">Abortado</option>
                     <option value="cancelled">Cancelado</option>
                 </select>
                 

@@ -40,6 +40,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 20/05/2026 | Horário Comercial no Follow-up | `webhook_event_mappings` | `followup_business_hours_active`, `followup_business_hours_start`, `followup_business_hours_end`, `followup_business_hours_days` | `backend/scripts/add_followup_business_hours.py` |
 | 22/05/2026 | Sistema de Convites de Usuário | `user_invitations`, `invitation_clients` | Tabela inteira de convites, relacionamento de clientes | `backend/scripts/add_user_invitations_table.py` |
 | 22/05/2026 | Etiquetas de Classificação de Templates | `whatsapp_template_cache` | `tags` | `backend/scripts/database/add_template_tags_col.py` |
+| 23/05/2026 | Rastreamento de Recorrências | `scheduled_triggers` | `is_recurring`, `recurring_trigger_id` | `backend/add_recurring_columns.py` |
 
 
 

@@ -77,4 +77,46 @@ describe('TriggerTable Component', () => {
     const funnelAtivadosButton = screen.getByText(/Funis Ativados/i);
     expect(funnelAtivadosButton).toBeInTheDocument();
   });
+
+  it('deve renderizar o badge "Recorrente" quando is_recurring é true', () => {
+    const recurringTrigger = {
+      id: 3,
+      is_bulk: true,
+      is_recurring: true,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      total_sent: 10,
+      total_failed: 0,
+      total_interactions: 0,
+      child_count: 0,
+      funnel: { name: 'Funil Alfa' }
+    };
+    
+    render(<TriggerTable {...defaultProps} triggers={[recurringTrigger]} />);
+    
+    const recurringBadge = screen.getByText(/Recorrente/i);
+    expect(recurringBadge).toBeInTheDocument();
+    expect(recurringBadge).toHaveClass('text-emerald-700');
+  });
+
+  it('deve renderizar o status "Abortado" e o failure_reason quando o status é aborted', () => {
+    const abortedTrigger = {
+      id: 4,
+      is_bulk: true,
+      status: 'aborted',
+      failure_reason: 'Disparo abortado por atraso',
+      created_at: new Date().toISOString(),
+      total_sent: 0,
+      total_failed: 0,
+      total_interactions: 0,
+      child_count: 0,
+      funnel: { name: 'Funil Beta' }
+    };
+    
+    render(<TriggerTable {...defaultProps} triggers={[abortedTrigger]} />);
+    
+    const abortedBadge = screen.getByText("Abortado");
+    expect(abortedBadge).toBeInTheDocument();
+    expect(screen.getByText(/Disparo abortado por atraso/i)).toBeInTheDocument();
+  });
 });

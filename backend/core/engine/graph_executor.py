@@ -30,7 +30,7 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
         if not start_node and nodes:
             logger.warning(f"⚠️ [GRAPH] Nenhum nó de início (start) encontrado para o Funil {funnel.id}. Usando fallback para o primeiro nó disponível.")
             # Priorizar tipos de conteúdo
-            priority_nodes = [n for n in nodes.values() if n.get("type") in ["message", "messageNode", "audioNode", "mediaNode", "templateNode"]]
+            priority_nodes = [n for n in nodes.values() if n.get("type") in ["message", "messageNode", "audioNode", "mediaNode", "templateNode", "delayNode", "delay"]]
             if priority_nodes:
                 start_node = priority_nodes[0]
             else:
@@ -85,7 +85,7 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
                 logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Delay) pausou a execução (Scheduled).")
                 break
         elif node_type in ["condition", "conditionNode"]:
-            res = await handle_condition_node(db, trigger, node, chatwoot, contact_phone, edges)
+            res = await handle_condition_node(db, trigger, node, chatwoot, contact_phone, edges, conversation_id)
             if res == "stop": return
             if res in ["break", "abort"]: break
             source_handle = res
@@ -106,13 +106,25 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
         if next_node_id:
             logger.info(f"➡️ [GRAPH] Avançando do Nó {current_node_id} para {next_node_id}")
             current_node_id = next_node_id
+            try:
+                db.expire(trigger)
+            except Exception:
+                pass
             trigger.current_node_id = current_node_id
             db.commit()
         else: 
             logger.info(f"🔚 [GRAPH] Fim do caminho alcançado no Nó {current_node_id}")
             break
 
+    try:
+        db.expire(trigger)
+    except Exception:
+        pass
     trigger.status = 'completed'
     client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=trigger.client_id)
     log_node_execution(db, trigger, "FINISH", "completed", f"{client_name}: Funil concluído com sucesso.")
+    try:
+        db.expire(trigger)
+    except Exception:
+        pass
     db.commit()

@@ -69,6 +69,8 @@ class ScheduledTrigger(Base):
     
     parent_id = Column(Integer, ForeignKey("scheduled_triggers.id", ondelete="CASCADE"), nullable=True, index=True)
     is_followup = Column(Boolean, default=False)
+    is_recurring = Column(Boolean, default=False)
+    recurring_trigger_id = Column(Integer, ForeignKey("recurring_triggers.id", ondelete="SET NULL"), nullable=True, index=True)
     
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
