@@ -38,15 +38,13 @@ async function run() {
     console.log('Aguardando painel principal...');
     await page.waitForTimeout(6000); // aguardar login e animações
     
-    // Selecionar cliente se não houver cliente ativo
-    const hasNoClient = await page.locator('button:has-text("Sem cliente selecionado")').count();
-    if (hasNoClient > 0) {
-      console.log('Nenhum cliente ativo. Selecionando o primeiro disponível...');
-      await page.locator('button:has-text("Sem cliente selecionado")').click();
-      await page.waitForTimeout(1000);
-      await page.locator('div.max-h-60 button').first().click();
-      await page.waitForTimeout(3000);
-    }
+    // Forçar a seleção de "Fonte Oculta" no seletor de clientes
+    console.log('Forçando seleção do cliente Fonte Oculta...');
+    const selectorButton = page.locator('button:has-text("Sem cliente selecionado"), button:has-text("ID:")').first();
+    await selectorButton.click();
+    await page.waitForTimeout(1000);
+    await page.locator('div.max-h-60 button:has-text("Fonte Oculta")').first().click();
+    await page.waitForTimeout(4000);
     
     // Definir viewport
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -61,11 +59,19 @@ async function run() {
     await page.locator('select').first().selectOption('single');
     await page.waitForTimeout(3000); // aguarda carregar
 
-    // Clicar no botão "Ver Pipeline" do primeiro item do histórico de funis
-    console.log('Abrindo o modal do Pipeline Visual de um Funil...');
-    const pipelineButton = page.locator('button[title="Ver Pipeline"]').first();
-    await pipelineButton.click();
-    await page.waitForTimeout(4000); // aguardar renderização do canvas do React Flow
+    // Localizar a linha que contém o telefone
+    console.log('Localizando a linha do disparo do Aryaraj...');
+    const row = page.locator('tr:has-text("5585996123586")').first();
+    
+    // Clicar no botão "Funis Ativados" para abrir a listagem de funis filhos
+    console.log('Abrindo os funis filhos...');
+    await row.locator('button:has-text("Funis Ativados")').click();
+    await page.waitForTimeout(2000); // aguarda o modal secundário
+    
+    // Clicar no primeiro botão "Ver Pipeline" da listagem de funis filhos
+    console.log('Abrindo o modal do Pipeline Visual do funil filho...');
+    await page.locator('button[title="Ver Pipeline"]').first().click();
+    await page.waitForTimeout(5000); // aguardar renderização completa e timers do React Flow
     
     // Tirar print do fluxo visual
     console.log('Tirando print do modal de Pipeline (Fluxo Visual)...');

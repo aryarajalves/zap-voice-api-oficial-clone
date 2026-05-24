@@ -67,7 +67,7 @@ async def handle_funnel_execution(data: dict):
                     effective_inbox_id = int(inbox_id_str)
 
             # CASO 1: TEMPLATE DIRETO (Sem Funil Grafo)
-            if not trigger.funnel_id and trigger.template_name:
+            if trigger.template_name:
                 logger.info(f"📄 Gatilho de Template Direto: {trigger.template_name} para {contact_phone} | Inbox: {effective_inbox_id}")
 
                 # 1. Enviar Template via Meta
@@ -178,6 +178,43 @@ async def handle_funnel_execution(data: dict):
                                     logger.warning(f"⚠️ [DIRECT] Não foi possível encontrar conversa para aplicar etiquetas para {contact_phone}")
                         except Exception as e_lbl:
                             logger.error(f"❌ [DIRECT] Erro ao aplicar etiquetas: {e_lbl}")
+
+                    # 4. Se houver um funil vinculado, disparar o funil filho logo em seguida
+                    if trigger.funnel_id:
+                        logger.info(f"🚀 [FOLLOW-UP-FUNNEL] Criando trigger filho para Funil {trigger.funnel_id} pós-template para {contact_phone}")
+                        child_trigger = models.ScheduledTrigger(
+                            client_id=client_id,
+                            funnel_id=trigger.funnel_id,
+                            contact_phone=contact_phone,
+                            contact_name=trigger.contact_name,
+                            conversation_id=trigger.conversation_id,
+                            chatwoot_account_id=trigger.chatwoot_account_id,
+                            chatwoot_contact_id=trigger.chatwoot_contact_id,
+                            chatwoot_inbox_id=effective_inbox_id,
+                            status='processing',
+                            scheduled_time=datetime.now(timezone.utc),
+                            is_bulk=False,
+                            parent_id=trigger.id,
+                            product_name="HIDDEN_CHILD",
+                            chatwoot_label=trigger.chatwoot_label,
+                            skip_block_check=True
+                        )
+                        db.add(child_trigger)
+                        db.commit()
+                        db.refresh(child_trigger)
+
+                        logger.info(f"🚀 [FOLLOW-UP-FUNNEL] Iniciando execução do Funil {trigger.funnel_id} pós-template via trigger filho #{child_trigger.id}")
+                        await execute_funnel(
+                            funnel_id=trigger.funnel_id, 
+                            conversation_id=child_trigger.conversation_id, 
+                            trigger_id=child_trigger.id,
+                            contact_phone=contact_phone, 
+                            db=db, 
+                            skip_block_check=getattr(child_trigger, 'skip_block_check', False),
+                            chatwoot_contact_id=child_trigger.chatwoot_contact_id, 
+                            chatwoot_account_id=child_trigger.chatwoot_account_id, 
+                            chatwoot_inbox_id=effective_inbox_id
+                        )
 
                 else:
                     trigger.status = 'failed'

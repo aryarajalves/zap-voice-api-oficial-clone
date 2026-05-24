@@ -529,3 +529,115 @@ def get_record_dispatch_status(
         "created_at": trigger.created_at.isoformat() if trigger.created_at else None,
         "has_trigger": True
     }
+
+@router.get("/dispatches/{trigger_id}/contacts", summary="Listar Contatos/Mensagens de um Disparo de Webhook")
+def get_dispatch_contacts(
+    trigger_id: int,
+    status_filter: Optional[str] = Query(None, alias="filter"),
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    from config_loader import get_setting
+    trigger = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.id == trigger_id,
+        models.ScheduledTrigger.client_id == x_client_id
+    ).first()
+    
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo não encontrado")
+        
+    base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
+    
+    if status_filter:
+        if status_filter == 'delivered':
+            base_query = base_query.filter(or_(models.MessageStatus.status.in_(['delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.is_interaction == True))
+        elif status_filter == 'read':
+            base_query = base_query.filter(or_(models.MessageStatus.status.in_(['read', 'interaction']), models.MessageStatus.is_interaction == True, models.MessageStatus.read_counted == True))
+        elif status_filter == 'failed':
+            base_query = base_query.filter(models.MessageStatus.status == 'failed')
+        elif status_filter == 'sent':
+            base_query = base_query.filter(or_(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.read_counted == True))
+        elif status_filter == 'blocked':
+            base_query = base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
+        elif status_filter in ('interaction', 'interactions'):
+            base_query = base_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True), or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'))
+        elif status_filter == 'private_note':
+            base_query = base_query.filter(models.MessageStatus.private_note_posted == True)
+
+    items = base_query.order_by(models.MessageStatus.updated_at.desc()).all()
+    
+    # Buscar os leads do client_id para obter as tags
+    leads = db.query(models.WebhookLead).filter(
+        models.WebhookLead.client_id == x_client_id
+    ).all()
+    
+    lead_tags_map = {}
+    for lead in leads:
+        if lead.phone:
+            clean_p = "".join(filter(str.isdigit, str(lead.phone)))
+            last8 = clean_p[-8:] if len(clean_p) >= 8 else clean_p
+            if last8:
+                lead_tags_map[last8] = lead.tags
+                
+    base_url = get_setting("CHATWOOT_URL", "https://app.chatwoot.com", client_id=x_client_id)
+    if base_url.endswith("/"): base_url = base_url[:-1]
+
+    contacts_map = {}
+    if trigger.is_bulk and trigger.contacts_list:
+        for c in trigger.contacts_list:
+            if isinstance(c, dict):
+                p = c.get('phone') or c.get('telefone') or c.get('whatsapp') or ''
+                if p:
+                    clean_p = "".join(filter(str.isdigit, str(p)))
+                    name = c.get('{{1}}') or c.get('1') or c.get('nome') or c.get('name') or c.get('full_name') or c.get('contact_name') or ""
+                    if clean_p: contacts_map[clean_p] = name
+
+    serialized_contacts = []
+    for item in items:
+        clean_item_p = "".join(filter(str.isdigit, str(item.phone_number)))
+        item.contact_name = contacts_map.get(clean_item_p) or trigger.contact_name
+        convo_id = item.chatwoot_conversation_id or (trigger.conversation_id if not trigger.is_bulk else None)
+        account_id = item.chatwoot_account_id or trigger.chatwoot_account_id
+        if convo_id and account_id: item.chatwoot_url = f"{base_url}/app/accounts/{account_id}/conversations/{convo_id}"
+        else: item.chatwoot_url = None
+        
+        last8 = clean_item_p[-8:] if len(clean_item_p) >= 8 else clean_item_p
+        lead_tags = lead_tags_map.get(last8) if last8 else None
+
+        contact_dict = {
+            "id": item.id,
+            "trigger_id": item.trigger_id,
+            "message_id": item.message_id,
+            "phone_number": item.phone_number,
+            "status": item.status,
+            "failure_reason": item.failure_reason,
+            "is_interaction": item.is_interaction,
+            "message_type": item.message_type,
+            "meta_price_category": item.meta_price_category,
+            "meta_price_brl": item.meta_price_brl,
+            "content": item.content,
+            "private_note_posted": item.private_note_posted,
+            "memory_webhook_status": item.memory_webhook_status,
+            "memory_webhook_error": item.memory_webhook_error,
+            "chatwoot_conversation_id": item.chatwoot_conversation_id,
+            "chatwoot_account_id": item.chatwoot_account_id,
+            "chatwoot_inbox_id": item.chatwoot_inbox_id,
+            "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+            "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            "contact_name": item.contact_name,
+            "chatwoot_url": item.chatwoot_url,
+            "lead_tags": lead_tags
+        }
+        serialized_contacts.append(contact_dict)
+
+    full_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
+    counts = {
+        "all": full_query.count(),
+        "sent": full_query.filter(or_(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.read_counted == True)).count(),
+        "delivered": full_query.filter(or_(models.MessageStatus.status.in_(['delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.is_interaction == True)).count(),
+        "read": full_query.filter(or_(models.MessageStatus.status.in_(['read', 'interaction']), models.MessageStatus.is_interaction == True, models.MessageStatus.read_counted == True)).count(),
+        "failed": full_query.filter(models.MessageStatus.status == 'failed').count()
+    }
+
+    return {"contacts": serialized_contacts, "counts": counts}

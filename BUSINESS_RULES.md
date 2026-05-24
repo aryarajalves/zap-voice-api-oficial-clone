@@ -118,8 +118,10 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
     - **Resposta**: Sim, deve haver um botão "Retomar" que continue o envio exatamente de onde parou (utilizando a lista de contatos pendentes).
 - [x] [NOVO] No histórico, disparos que ficam "travados" por mais de X horas devem ser marcados como falha automaticamente?
     - **Resposta**: Sim. Disparos travados em `processing` ou `queued` por mais de 2 horas serão marcados como falha pelo Scheduler, com a mensagem: "Disparo travado: O tempo limite de processamento (2h) foi excedido".
-- [ ] [NOVO] O trigger filho gerado para a execução do funil pós-template deve herdar as mesmas etiquetas do Chatwoot (`chatwoot_label`) do disparo pai de template?
-- [ ] [NOVO] Caso o template falhe em ser enviado pela API da Meta, o funil filho associado não deve ser criado nem executado, marcando apenas o template como falha. Concorda com este comportamento?
+- [x] [NOVO] O trigger filho gerado para a execução do funil pós-template deve herdar as mesmas etiquetas do Chatwoot (`chatwoot_label`) do disparo pai de template?
+    - **Resposta**: Sim, o trigger filho herdará as mesmas etiquetas para garantir a consistência das tags.
+- [x] [NOVO] Caso o template falhe em ser enviado pela API da Meta, o funil filho associado não deve ser criado nem executado, marcando apenas o template como falha. Concorda com este comportamento?
+    - **Resposta**: Sim, se o envio do template pai falhar, o funil filho correspondente não será criado nem executado.
 
 ## 📋 Histórico de Decisões
 As perguntas iniciais sobre regras de negócio foram todas respondidas e integradas às seções acima. O sistema segue o modelo de isolamento total entre clientes e automação robusta com retentativas configuradas.

@@ -418,3 +418,94 @@ def test_bulk_play_dispatches_requeues_followup(client, db_session):
         assert fu1.scheduled_time.replace(tzinfo=None) > datetime.now()
     finally:
         app.dependency_overrides.pop(dispatches_get_db, None)
+
+
+def test_get_dispatch_contacts_with_lead_tags(client, db_session):
+    """
+    Testa que a rota /webhook-integrations/dispatches/{trigger_id}/contacts
+    retorna a lista de contatos correta com as lead_tags associadas.
+    """
+    app.dependency_overrides[dispatches_get_db] = lambda: db_session
+    try:
+        db = db_session
+
+        test_client = models.Client(name="Contacts Lead Client")
+        db.add(test_client)
+        db.commit()
+        db.refresh(test_client)
+
+        integration_id = uuid.uuid4()
+        integration = models.WebhookIntegration(
+            id=integration_id,
+            client_id=test_client.id,
+            name="Contacts Integration",
+            platform="hotmart",
+            status="active"
+        )
+        db.add(integration)
+
+        # Criar trigger
+        trigger = models.ScheduledTrigger(
+            client_id=test_client.id,
+            integration_id=integration_id,
+            event_type="compra_aprovada",
+            scheduled_time=datetime.now(timezone.utc),
+            status="completed",
+            is_bulk=False,
+            contact_phone="5511999999999",
+            contact_name="Cliente Teste"
+        )
+        db.add(trigger)
+        db.commit()
+        db.refresh(trigger)
+
+        # Criar mensagem associada no status
+        msg_status = models.MessageStatus(
+            trigger_id=trigger.id,
+            phone_number="5511999999999",
+            status="delivered",
+            message_type="TEMPLATE",
+            message_id="msg_123"
+        )
+        db.add(msg_status)
+
+        # Criar WebhookLead para verificar se as tags vêm associadas
+        lead = models.WebhookLead(
+            client_id=test_client.id,
+            name="Cliente Teste",
+            phone="5511999999999",
+            tags="vip, hotmart_buy",
+            platform="hotmart"
+        )
+        db.add(lead)
+        db.commit()
+
+        from core.security import create_access_token
+        token = create_access_token({"sub": "contactstest@test.com", "role": "super_admin"})
+        user = models.User(email="contactstest@test.com", role="super_admin", client_id=test_client.id)
+        db.add(user)
+        db.commit()
+
+        headers = {
+            "X-Client-ID": str(test_client.id),
+            "Authorization": f"Bearer {token}"
+        }
+
+        response = client.get(f"/api/webhook-integrations/dispatches/{trigger.id}/contacts", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "contacts" in data
+        assert "counts" in data
+        
+        contacts_list = data["contacts"]
+        assert len(contacts_list) == 1
+        assert contacts_list[0]["phone_number"] == "5511999999999"
+        assert contacts_list[0]["lead_tags"] == "vip, hotmart_buy"
+        
+        # Validar as contagens
+        assert data["counts"]["all"] == 1
+        assert data["counts"]["delivered"] == 1
+    finally:
+        app.dependency_overrides.pop(dispatches_get_db, None)
+

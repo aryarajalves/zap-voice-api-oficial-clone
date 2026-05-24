@@ -12,6 +12,7 @@ const IntegrationFormModal = ({
   onSave, 
   editingIntegration, 
   templates, 
+  funnels,
   chatwootLabels,
   setIsMappingGuideOpen
 }) => {
@@ -91,6 +92,7 @@ const IntegrationFormModal = ({
               formData={formData} 
               setFormData={setFormData} 
               templates={templates} 
+              funnels={funnels}
               chatwootLabels={chatwootLabels}
               setIsMappingGuideOpen={setIsMappingGuideOpen}
             />

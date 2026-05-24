@@ -9,6 +9,7 @@ export function useIntegrations(activeClient) {
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState([]);
   const [chatwootLabels, setChatwootLabels] = useState([]);
+  const [funnels, setFunnels] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingIntegration, setEditingIntegration] = useState(null);
@@ -68,13 +69,26 @@ export function useIntegrations(activeClient) {
     }
   }, [activeClient]);
 
+  const fetchFunnels = useCallback(async () => {
+    if (!activeClient) return;
+    try {
+      const res = await fetchWithAuth(`${API_URL}/funnels`, {}, activeClient.id);
+      if (res.ok) {
+        setFunnels(await res.json());
+      }
+    } catch (err) {
+      console.error("Erro ao buscar funis:", err);
+    }
+  }, [activeClient]);
+
   useEffect(() => {
     if (activeClient) {
       fetchIntegrations();
       fetchTemplates();
       fetchChatwootLabels();
+      fetchFunnels();
     }
-  }, [activeClient, fetchIntegrations, fetchTemplates, fetchChatwootLabels]);
+  }, [activeClient, fetchIntegrations, fetchTemplates, fetchChatwootLabels, fetchFunnels]);
 
   const handleSaveIntegration = async () => {
     if (!formData.name.trim()) return toast.error('Nome é obrigatório');
@@ -202,6 +216,7 @@ export function useIntegrations(activeClient) {
     loading,
     templates,
     chatwootLabels,
+    funnels,
     isModalOpen,
     setIsModalOpen,
     isSaving,

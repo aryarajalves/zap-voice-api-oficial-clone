@@ -3,7 +3,7 @@ import { FiPlus, FiZap, FiShare2 } from 'react-icons/fi';
 import MappingItem from './MappingItem';
 import { EVENT_TYPES } from '../../constants';
 
-const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setIsMappingGuideOpen }) => {
+const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLabels, setIsMappingGuideOpen }) => {
   const [expandedMappings, setExpandedMappings] = React.useState({});
 
   const toggleMapping = (index) => {
@@ -23,6 +23,7 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
           id: Date.now(),
           event_type: 'compra_aprovada',
           template_id: '',
+          funnel_id: '',
           delay_minutes: 0,
           is_active: true,
           private_note: "true",
@@ -194,6 +195,7 @@ const MappingsConfig = ({ formData, setFormData, templates, chatwootLabels, setI
               updateMapping={updateMapping}
               removeMapping={removeMapping}
               templates={templates}
+              funnels={funnels}
               chatwootLabels={chatwootLabels}
               updateVariable={updateVariable}
               addVariable={addVariable}

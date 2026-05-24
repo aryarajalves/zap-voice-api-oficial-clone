@@ -109,11 +109,16 @@ export function useAppLogic() {
     const handleCreateFunnel = async () => {
         const loadingToast = toast.loading("Criando novo funil...");
         try {
+            const now = new Date();
+            const localeStr = now.toLocaleString('pt-BR');
+            const colonCount = (localeStr.match(/:/g) || []).length;
+            const formattedDate = colonCount === 2 ? localeStr.replace(/:\d{2}$/, '') : localeStr;
+
             const res = await fetchWithAuth(`${API_URL}/funnels`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: `Novo Funil ${new Date().toLocaleString()}`,
+                    name: `Novo Funil ${formattedDate}`,
                     description: "Criado via Visual Builder",
                     steps: []
                 })

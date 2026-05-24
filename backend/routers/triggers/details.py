@@ -61,6 +61,20 @@ def get_trigger_messages(
                     name = c.get('{{1}}') or c.get('1') or c.get('nome') or c.get('name') or c.get('full_name') or c.get('contact_name') or ""
                     if clean_p: contacts_map[clean_p] = name
 
+    # Buscar os leads do client_id para obter as tags
+    leads = db.query(models.WebhookLead).filter(
+        models.WebhookLead.client_id == client_id
+    ).all()
+    
+    lead_tags_map = {}
+    for lead in leads:
+        if lead.phone:
+            clean_p = "".join(filter(str.isdigit, str(lead.phone)))
+            last8 = clean_p[-8:] if len(clean_p) >= 8 else clean_p
+            if last8:
+                lead_tags_map[last8] = lead.tags
+
+    serialized_items = []
     for item in items:
         clean_item_p = "".join(filter(str.isdigit, str(item.phone_number)))
         item.contact_name = contacts_map.get(clean_item_p) or trigger.contact_name
@@ -68,6 +82,35 @@ def get_trigger_messages(
         account_id = item.chatwoot_account_id or trigger.chatwoot_account_id
         if convo_id and account_id: item.chatwoot_url = f"{base_url}/app/accounts/{account_id}/conversations/{convo_id}"
         else: item.chatwoot_url = None
+        
+        last8 = clean_item_p[-8:] if len(clean_item_p) >= 8 else clean_item_p
+        lead_tags = lead_tags_map.get(last8) if last8 else None
+
+        item_dict = {
+            "id": item.id,
+            "trigger_id": item.trigger_id,
+            "message_id": item.message_id,
+            "phone_number": item.phone_number,
+            "status": item.status,
+            "failure_reason": item.failure_reason,
+            "is_interaction": item.is_interaction,
+            "message_type": item.message_type,
+            "meta_price_category": item.meta_price_category,
+            "meta_price_brl": item.meta_price_brl,
+            "content": item.content,
+            "private_note_posted": item.private_note_posted,
+            "memory_webhook_status": item.memory_webhook_status,
+            "memory_webhook_error": item.memory_webhook_error,
+            "chatwoot_conversation_id": item.chatwoot_conversation_id,
+            "chatwoot_account_id": item.chatwoot_account_id,
+            "chatwoot_inbox_id": item.chatwoot_inbox_id,
+            "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+            "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            "contact_name": item.contact_name,
+            "chatwoot_url": item.chatwoot_url,
+            "lead_tags": lead_tags
+        }
+        serialized_items.append(item_dict)
 
     full_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
     if message_type:
@@ -87,7 +130,7 @@ def get_trigger_messages(
         "private_note": full_query.filter(models.MessageStatus.private_note_posted == True).count()
     }
 
-    return {"items": items, "counts": counts}
+    return {"items": serialized_items, "counts": counts}
 
 @router.get("/{trigger_id}/failures-csv", summary="Exportar Falhas CSV")
 def export_failures_csv(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

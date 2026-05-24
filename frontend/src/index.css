@@ -43,18 +43,20 @@
 }
 
 .react-flow__handle:hover {
-    @apply scale-150 !important;
+    transform: translate(-50%, -50%) scale(1.5) !important;
     box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
 }
 
 /* Feedback de quando está tentando conectar */
 .react-flow__handle-connecting {
-    @apply bg-blue-500 scale-150 ring-4 ring-blue-500/30 animate-pulse !important;
+    transform: translate(-50%, -50%) scale(1.5) !important;
+    @apply bg-blue-500 ring-4 ring-blue-500/30 animate-pulse !important;
 }
 
 /* Feedback de conexão válida */
 .react-flow__handle-valid {
-    @apply bg-green-500 scale-[2] ring-4 ring-green-500/40 !important;
+    transform: translate(-50%, -50%) scale(2) !important;
+    @apply bg-green-500 ring-4 ring-green-500/40 !important;
 }
 
 /* Linha de conexão durante o arraste */

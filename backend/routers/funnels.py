@@ -175,6 +175,17 @@ def delete_funnels_bulk(
         models.ScheduledTrigger.funnel_id.in_(funnel_ids)
     ).update({models.ScheduledTrigger.funnel_id: None}, synchronize_session=False)
 
+    # 1.1 Update Webhook Event Mappings
+    db.query(models.WebhookEventMapping).filter(
+        models.WebhookEventMapping.funnel_id.in_(funnel_ids)
+    ).update({models.WebhookEventMapping.funnel_id: None}, synchronize_session=False)
+
+    # 1.2 Update Recurring Triggers
+    db.query(models.RecurringTrigger).filter(
+        models.RecurringTrigger.funnel_id.in_(funnel_ids)
+    ).update({models.RecurringTrigger.funnel_id: None}, synchronize_session=False)
+
+
     # 2. Delete Webhooks
     # First delete events to avoid Foreign Key violation
     webhook_ids_query = db.query(models.WebhookConfig.id).filter(
@@ -219,6 +230,16 @@ def delete_funnel(
     db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.funnel_id == funnel_id
     ).update({models.ScheduledTrigger.funnel_id: None}, synchronize_session=False)
+
+    # 1.1 Handle WebhookEventMappings
+    db.query(models.WebhookEventMapping).filter(
+        models.WebhookEventMapping.funnel_id == funnel_id
+    ).update({models.WebhookEventMapping.funnel_id: None}, synchronize_session=False)
+
+    # 1.2 Handle RecurringTriggers
+    db.query(models.RecurringTrigger).filter(
+        models.RecurringTrigger.funnel_id == funnel_id
+    ).update({models.RecurringTrigger.funnel_id: None}, synchronize_session=False)
 
     # 2. Handle WebhookConfigs
     # Delete webhooks associated with this funnel as they cannot exist without it

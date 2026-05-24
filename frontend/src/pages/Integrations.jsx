@@ -44,7 +44,7 @@ export default function Integrations() {
   const [confirmDeleteDispatch, setConfirmDeleteDispatch] = useState({ isOpen: false, type: 'single', id: null, ids: [] });
 
   const {
-    integrations, loading, templates, chatwootLabels, isModalOpen, setIsModalOpen,
+    integrations, loading, templates, chatwootLabels, funnels, isModalOpen, setIsModalOpen,
     isSaving, editingIntegration, formData, setFormData, isDeleteModalOpen, setIsDeleteModalOpen,
     integrationToDelete, setIntegrationToDelete, bulkResendProgress, setBulkResendProgress,
     fetchIntegrations, handleSaveIntegration, handleDeleteIntegration, openNewModal, openEditModal
@@ -303,7 +303,7 @@ export default function Integrations() {
       </div>
 
       {/* Modals */}
-      <IntegrationFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} formData={formData} setFormData={setFormData} isSaving={isSaving} onSave={handleSaveIntegration} editingIntegration={editingIntegration} templates={templates} chatwootLabels={chatwootLabels} setIsMappingGuideOpen={setIsMappingGuideOpen} />
+      <IntegrationFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} formData={formData} setFormData={setFormData} isSaving={isSaving} onSave={handleSaveIntegration} editingIntegration={editingIntegration} templates={templates} funnels={funnels} chatwootLabels={chatwootLabels} setIsMappingGuideOpen={setIsMappingGuideOpen} />
       <HistoryModal 
         isOpen={isHistoryModalOpen} 
         onClose={() => {

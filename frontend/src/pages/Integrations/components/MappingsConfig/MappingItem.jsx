@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiPlay, FiTrash2, FiChevronDown, FiZap, FiSettings } from 'react-icons/fi';
+import { FiPlay, FiTrash2, FiChevronDown, FiZap, FiSettings, FiRefreshCw } from 'react-icons/fi';
 import SearchableSelect from '../SearchableSelect';
 import { EVENT_TYPES } from '../../constants';
 import ManyChatSection from './ManyChatSection';
@@ -15,6 +15,7 @@ const MappingItem = ({
   updateMapping, 
   removeMapping,
   templates,
+  funnels,
   chatwootLabels,
   updateVariable,
   addVariable,
@@ -74,7 +75,7 @@ const MappingItem = ({
       {/* Corpo do Gatilho */}
       {isExpanded && (
         <div className="p-5 space-y-6 animate-in slide-in-from-top-4 duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Evento */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
@@ -101,6 +102,20 @@ const MappingItem = ({
                 value={mapping.template_id}
                 onChange={(val) => updateMapping(mIndex, 'template_id', val)}
                 placeholder="Selecione um Template..."
+                allowNone
+              />
+            </div>
+
+            {/* Funil Pós-Template */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
+                <FiRefreshCw size={12} /> Funil ZapVoice
+              </label>
+              <SearchableSelect
+                options={(funnels || []).map(f => ({ value: f.id, label: f.name }))}
+                value={mapping.funnel_id}
+                onChange={(val) => updateMapping(mIndex, 'funnel_id', val)}
+                placeholder="Selecione um Funil..."
                 allowNone
               />
             </div>

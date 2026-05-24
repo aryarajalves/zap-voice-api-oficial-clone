@@ -1,4 +1,4 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.11)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.12)
 
 Bem-vindo à versão **3.7.11** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
@@ -105,6 +105,14 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.7.12
+- **Criação de Etiquetas Customizadas e Exibição de Tags nos Contatos (Novo!)**:
+  - Implementação de um input interativo `<input type="text">` com dropdown e overlay de fechamento nos modais de contatos do histórico de disparos (`ContactsModal.jsx`) e integrações (`ContactsViewerModal.jsx`), permitindo a digitação livre e cadastro de novas tags para o lead.
+  - Exibição dinâmica das etiquetas ativas do lead (badges verdes do lado do número) em ambos os modais nos históricos.
+  - **Rota do Backend Dedicada**: Criação do endpoint `/webhook-integrations/dispatches/{trigger_id}/contacts` no backend FastAPI para suprir o consumo de rede do frontend, associando tags a contatos.
+  - **Correção de Sombreamento no Backend**: Correção de bug no parâmetro `filter` da rota de contatos que causava conflito com a função built-in `filter` do Python, eliminando erro de `TypeError` nos testes.
+  - **Suítes de Testes Aprovadas**: Criação e execução bem-sucedida de testes unitários do backend (`test_webhooks_dispatches.py`) e frontend (`ContactsModal.test.jsx`).
 
 ### v3.7.11
 - **Aprimoramento do Enquadramento e Foco do React Flow (Fluxo Visual)**:
