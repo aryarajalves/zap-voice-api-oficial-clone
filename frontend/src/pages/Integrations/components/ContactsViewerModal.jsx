@@ -354,8 +354,8 @@ const ContactsViewerModal = ({ isOpen, onClose, triggerId, contacts, counts, fil
       {/* Modal de Etiquetas */}
       {isTagModalOpen && (
         <div className="fixed inset-0 z-[20050] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#1e293b] border border-white/5 rounded-[2rem] w-full max-w-md overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" style={{ userSelect: 'none' }}>
-            <div className="p-5 border-b border-white/5 bg-[#0f172a]/50 flex justify-between items-center">
+          <div className="bg-[#1e293b] border border-white/5 rounded-[2rem] w-full max-w-md flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" style={{ userSelect: 'none' }}>
+            <div className="p-5 border-b border-white/5 bg-[#0f172a]/50 flex justify-between items-center rounded-t-[2rem]">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-emerald-400"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                 Adicionar Etiquetas
@@ -466,7 +466,7 @@ const ContactsViewerModal = ({ isOpen, onClose, triggerId, contacts, counts, fil
               </div>
             </div>
             
-            <div className="p-5 border-t border-white/5 bg-[#0f172a]/50 flex justify-end gap-3">
+            <div className="p-5 border-t border-white/5 bg-[#0f172a]/50 flex justify-end gap-3 rounded-b-[2rem]">
               <button 
                 onClick={() => setIsTagModalOpen(false)}
                 disabled={isSavingLeads}
