@@ -4,13 +4,11 @@ import { FiCpu } from 'react-icons/fi';
 import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
 import { useClient } from '../../../contexts/ClientContext';
-
 const ContactsModal = ({ 
     contactsModal, setContactsModal, contactsFilter, setContactsFilter, 
     contactsTypeFilter, setContactsTypeFilter, loadingContacts 
 }) => {
     const { activeClient } = useClient();
-
     const [selectedPhones, setSelectedPhones] = React.useState([]);
     const [isTagModalOpen, setIsTagModalOpen] = React.useState(false);
     const [tagInput, setTagInput] = React.useState('');
@@ -19,20 +17,34 @@ const ContactsModal = ({
     const [isSavingLeads, setIsSavingLeads] = React.useState(false);
     const [isTagsDropdownOpen, setIsTagsDropdownOpen] = React.useState(false);
     const [tagsSearch, setTagsSearch] = React.useState('');
-
     React.useEffect(() => {
         setSelectedPhones([]);
     }, [contactsModal.isOpen, contactsFilter, contactsTypeFilter]);
-
     const fetchTags = async () => {
         if (!activeClient) return;
         setIsLoadingTags(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
-            if (res && res.ok) {
-                const data = await res.json();
-                setAvailableTags(data.tags || []);
+            const [resLeads, resChatwoot] = await Promise.all([
+                fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id),
+                fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, activeClient.id).catch(() => null)
+            ]);
+            let leadsTags = [];
+            if (resLeads && resLeads.ok) {
+                const data = await resLeads.json();
+                leadsTags = data.tags || [];
             }
+            let chatwootTags = [];
+            if (resChatwoot && resChatwoot.ok) {
+                const data = await resChatwoot.json();
+                if (Array.isArray(data)) {
+                    chatwootTags = data.map(item => item.title || item.name || '').filter(Boolean);
+                }
+            }
+            const combined = Array.from(new Set([...leadsTags, ...chatwootTags]))
+                .map(t => t.trim())
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b));
+            setAvailableTags(combined);
         } catch (err) {
             console.error("Erro ao buscar etiquetas:", err);
         } finally {
@@ -41,20 +53,15 @@ const ContactsModal = ({
     };
 
     React.useEffect(() => {
-        if (isTagModalOpen) {
-            fetchTags();
-        }
+        if (isTagModalOpen) fetchTags();
     }, [isTagModalOpen]);
-
     const getContactPhone = (contact) => {
         return contact.phone_number || contact.phone || '';
     };
-
     const isSelected = (contact) => {
         const phone = getContactPhone(contact);
         return phone ? selectedPhones.includes(phone) : false;
     };
-
     const toggleSelectOne = (contact) => {
         const phone = getContactPhone(contact);
         if (!phone) return;
@@ -131,20 +138,6 @@ const ContactsModal = ({
             setIsSavingLeads(false);
         }
     };
-
-    const filterLabels = { 
-        all: 'Todos', 
-        total: 'Total na Lista',
-        sent: 'Enviados', 
-        delivered: 'Interações', 
-        read: 'Viram', 
-        failed: 'Falharam', 
-        interaction: 'Interagiram', 
-        blocked: 'Bloquearam', 
-        free: 'Gratuita', 
-        template: 'Template' 
-    };
-
     if (!contactsModal.isOpen) return null;
 
     return (
@@ -314,7 +307,7 @@ const ContactsModal = ({
                                                 </div>
                                             </div>
                                         </div>
-                                         <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3">
                                             <div className="text-right">
                                                 {contact.status === 'sent' && !contact.failure_reason && (
                                                     <div className="text-[10px] text-blue-400 font-black uppercase tracking-widest animate-pulse">Aguardando...</div>

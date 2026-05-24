@@ -26,11 +26,27 @@ const ContactsViewerModal = ({ isOpen, onClose, triggerId, contacts, counts, fil
     if (!activeClient) return;
     setIsLoadingTags(true);
     try {
-      const res = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
-      if (res && res.ok) {
-        const data = await res.json();
-        setAvailableTags(data.tags || []);
+      const [resLeads, resChatwoot] = await Promise.all([
+        fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id),
+        fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, activeClient.id).catch(() => null)
+      ]);
+      let leadsTags = [];
+      if (resLeads && resLeads.ok) {
+        const data = await resLeads.json();
+        leadsTags = data.tags || [];
       }
+      let chatwootTags = [];
+      if (resChatwoot && resChatwoot.ok) {
+        const data = await resChatwoot.json();
+        if (Array.isArray(data)) {
+          chatwootTags = data.map(item => item.title || item.name || '').filter(Boolean);
+        }
+      }
+      const combined = Array.from(new Set([...leadsTags, ...chatwootTags]))
+        .map(t => t.trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+      setAvailableTags(combined);
     } catch (err) {
       console.error("Erro ao buscar etiquetas:", err);
     } finally {
@@ -39,9 +55,7 @@ const ContactsViewerModal = ({ isOpen, onClose, triggerId, contacts, counts, fil
   };
 
   React.useEffect(() => {
-    if (isTagModalOpen) {
-      fetchTags();
-    }
+    if (isTagModalOpen) fetchTags();
   }, [isTagModalOpen]);
 
   const getContactPhone = (contact) => {

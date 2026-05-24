@@ -47,6 +47,30 @@ const mockContacts = [
 describe('ContactsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(fetchWithAuth).mockImplementation(async (url) => {
+      if (url.includes('/leads/filters')) {
+        return {
+          ok: true,
+          json: async () => ({ tags: ['Cliente Fiel', 'Interessado'] }),
+        };
+      }
+      if (url.includes('/chatwoot/labels')) {
+        return {
+          ok: true,
+          json: async () => ([
+            { id: 1, title: 'Chatwoot Tag 1' },
+            { id: 2, title: 'Chatwoot Tag 2' }
+          ]),
+        };
+      }
+      if (url.includes('/leads/bulk')) {
+        return {
+          ok: true,
+          json: async () => ({ status: 'success', imported: 2 }),
+        };
+      }
+      return { ok: false };
+    });
   });
 
   const defaultProps = {
@@ -108,12 +132,6 @@ describe('ContactsModal', () => {
   });
 
   it('abre o modal de etiquetas ao clicar em etiquetar e envia tags para a API com sucesso', async () => {
-    // Mock do fetch de tags existentes
-    vi.mocked(fetchWithAuth).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ tags: ['Cliente Fiel', 'Interessado'] }),
-    });
-
     render(<ContactsModal {...defaultProps} />);
 
     const checkboxes = screen.getAllByRole('checkbox');
@@ -124,12 +142,6 @@ describe('ContactsModal', () => {
 
     // Deve abrir o modal de etiquetas
     expect(screen.getByText('Adicionar Etiquetas')).toBeInTheDocument();
-
-    // Mock da chamada de bulk save
-    vi.mocked(fetchWithAuth).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ status: 'success', imported: 2 }),
-    });
 
     // Simula foco no input de tags para abrir dropdown
     const dropdownTrigger = screen.getByPlaceholderText('Digite ou selecione uma etiqueta...');
@@ -174,12 +186,6 @@ describe('ContactsModal', () => {
 
     const tagButton = screen.getByRole('button', { name: /etiquetar \(2\)/i });
     fireEvent.click(tagButton);
-
-    // Mock da chamada de bulk save
-    vi.mocked(fetchWithAuth).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ status: 'success', imported: 2 }),
-    });
 
     const inputTrigger = screen.getByPlaceholderText('Digite ou selecione uma etiqueta...');
     
