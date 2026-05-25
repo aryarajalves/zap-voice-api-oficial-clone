@@ -54,6 +54,10 @@ def test_bulk_delete_dispatches_route(client, db_session):
         db.refresh(t1)
         db.refresh(t2)
         
+        # Salvar IDs localmente antes de deletar
+        t1_id = t1.id
+        t2_id = t2.id
+        
         # Configurar autenticação
         token = create_access_token({"sub": "admin@testdelete.com", "role": "super_admin"})
         user = models.User(email="admin@testdelete.com", role="super_admin", client_id=test_client.id)
@@ -66,7 +70,7 @@ def test_bulk_delete_dispatches_route(client, db_session):
         }
         
         # Payload para bulk delete
-        payload = {"ids": [t1.id, t2.id]}
+        payload = {"ids": [t1_id, t2_id]}
         
         # Executar a requisição POST (que substitui a antiga DELETE)
         response = client.post(
@@ -79,9 +83,9 @@ def test_bulk_delete_dispatches_route(client, db_session):
         assert response.json()["status"] == "success"
         assert response.json()["deleted_count"] == 2
         
-        # Validar no banco que foram excluídos
+        # Validar no banco que foram excluídos usando os IDs salvos
         triggers_count = db.query(models.ScheduledTrigger).filter(
-            models.ScheduledTrigger.id.in_([t1.id, t2.id])
+            models.ScheduledTrigger.id.in_([t1_id, t2_id])
         ).count()
         assert triggers_count == 0
         
@@ -132,6 +136,10 @@ def test_bulk_delete_webhook_history_route(client, db_session):
         db.refresh(h1)
         db.refresh(h2)
         
+        # Salvar IDs localmente antes de deletar
+        h1_id = h1.id
+        h2_id = h2.id
+        
         # Configurar autenticação
         token = create_access_token({"sub": "admin_history@testdelete.com", "role": "super_admin"})
         user = models.User(email="admin_history@testdelete.com", role="super_admin", client_id=test_client.id)
@@ -144,7 +152,7 @@ def test_bulk_delete_webhook_history_route(client, db_session):
         }
         
         # Payload para bulk delete
-        payload = {"ids": [h1.id, h2.id]}
+        payload = {"ids": [h1_id, h2_id]}
         
         # Executar a requisição POST (que substitui a antiga DELETE)
         response = client.post(
@@ -156,9 +164,9 @@ def test_bulk_delete_webhook_history_route(client, db_session):
         assert response.status_code == 200
         assert response.json()["status"] == "success"
         
-        # Validar no banco que foram excluídos
+        # Validar no banco que foram excluídos usando os IDs salvos
         history_count = db.query(models.WebhookHistory).filter(
-            models.WebhookHistory.id.in_([h1.id, h2.id])
+            models.WebhookHistory.id.in_([h1_id, h2_id])
         ).count()
         assert history_count == 0
         

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import ReactFlow, { 
     Background, 
-    Controls, 
     useReactFlow, 
     ReactFlowProvider 
 } from 'reactflow';
@@ -32,8 +31,8 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
             const allNodes = getNodes();
             if (!allNodes || allNodes.length === 0) return;
             
-            // Ajusta a câmera para enquadrar todo o fluxo (visão geral e centralizada de todos os nós)
-            fitView({ padding: 0.3, duration: 600 });
+            // Ajusta a câmera para enquadrar todo o fluxo (zoom mais proximo e centralizado)
+            fitView({ padding: 0.15, maxZoom: 0.85, duration: 600 });
             hasInitialFocused.current = true;
         };
 
@@ -71,7 +70,7 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
                     <FiMinus size={16} />
                 </button>
                 <button 
-                    onClick={() => fitView({ padding: 0.3, duration: 400 })}
+                    onClick={() => fitView({ padding: 0.15, maxZoom: 0.85, duration: 400 })}
                     className="w-9 h-9 bg-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95 hover:text-blue-400"
                     title="Centralizar Visualização"
                 >
@@ -95,10 +94,9 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
                 minZoom={0.05}
                 maxZoom={3.0}
                 fitView
-                fitViewOptions={{ padding: 0.3 }}
+                fitViewOptions={{ padding: 0.15, maxZoom: 0.85 }}
             >
                 <Background color="#94a3b8" opacity={0.15} gap={16} size={1.5} />
-                <Controls showInteractive={false} position="bottom-right" className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-md" />
             </ReactFlow>
         </div>
     );

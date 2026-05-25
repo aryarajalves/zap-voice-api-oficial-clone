@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.15)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.17)
 
-Bem-vindo à versão **3.7.15** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.17** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,16 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.7.17
+- **Correção da Deleção em Massa (Bulk Delete) de Disparos e Histórico**: 
+  - Alteração do método HTTP das rotas de exclusão em lote (`bulk-delete`) de **DELETE** para **POST** no backend FastAPI, solucionando o descarte e bloqueio indevido de corpos JSON por proxies de rede e pelo Cloudflare.
+  - Ajuste correspondente nos hooks do frontend React (`useDispatchHistory.js` e `useWebhookHistory.js`) para fazer a chamada em `POST` para exclusões em massa.
+  - Implementação de novos testes unitários automatizados (`test_bulk_delete.py`) cobrindo as rotas POST de exclusão em lote de disparos e histórico de webhooks, garantindo a consistência lógica e a integridade de banco de dados.
+
+### v3.7.16
+- **Melhoria no Zoom Inicial e Enquadramento do Fluxo**: Ajustado o comportamento inicial da câmera no ReactFlow para enquadrar a árvore completa do funil com um padding reduzido (`0.15`) e limitador de `maxZoom` em `0.85`. Isso faz com que os nós apareçam maiores, mais legíveis e melhor centralizados na tela, atendendo com precisão à preferência visual do usuário.
+- **Remoção de Elementos Redundantes de Zoom**: Removido o painel `<Controls />` nativo do ReactFlow do canto inferior direito, eliminando poluição visual e mantendo exclusivamente o painel premium de controle de zoom em Glassmorphism posicionado no canto superior direito.
 
 ### v3.7.15
 - **Ajuste de Sobreposição no Monitor de Pipeline**: Elevação do `z-index` do `PipelineModal` para `z-[16000]` para que ele abra por cima do popup de "Funis Iniciados" (`z-[15000]`), permitindo interagir diretamente com o monitoramento sem a necessidade de fechar o popup anterior.
