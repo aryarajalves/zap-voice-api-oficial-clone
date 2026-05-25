@@ -455,7 +455,7 @@ async def bulk_play_dispatches(
     db.commit()
     return {"status": "success", "triggered_count": count}
 
-@router.delete("/{integration_id}/dispatches/bulk-delete", summary="Excluir múltiplos agendamentos em massa")
+@router.post("/{integration_id}/dispatches/bulk-delete", summary="Excluir múltiplos agendamentos em massa")
 async def bulk_delete_dispatches(
     integration_id: str,
     request: schemas.BulkDeleteRequest,

@@ -90,6 +90,11 @@ export function useAppLogic() {
     useEffect(() => {
         if (appBranding.name) {
             document.title = appBranding.name;
+            try {
+                localStorage.setItem('appBranding', JSON.stringify(appBranding));
+            } catch (e) {
+                console.error("Erro ao salvar branding no localStorage:", e);
+            }
         }
     }, [appBranding]);
 

@@ -32,22 +32,8 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
             const allNodes = getNodes();
             if (!allNodes || allNodes.length === 0) return;
             
-            if (currentNodeId) {
-                const activeNode = allNodes.find(n => n.id === currentNodeId);
-                if (activeNode) {
-                    // Centralizar a câmera no nó ativo
-                    fitView({
-                        nodes: [activeNode],
-                        duration: 600,
-                        padding: 0.4
-                    });
-                    hasInitialFocused.current = true;
-                    return;
-                }
-            }
-            
-            // Caso contrário, ajusta a câmera para enquadrar todo o fluxo
-            fitView({ padding: 0.25, duration: 400 });
+            // Ajusta a câmera para enquadrar todo o fluxo (visão geral e centralizada de todos os nós)
+            fitView({ padding: 0.3, duration: 600 });
             hasInitialFocused.current = true;
         };
 

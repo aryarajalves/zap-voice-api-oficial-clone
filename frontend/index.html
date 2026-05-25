@@ -4,7 +4,22 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>ZapVoice</title>
+    <script>
+      (function() {
+        try {
+          const savedBranding = localStorage.getItem('appBranding');
+          if (savedBranding) {
+            const branding = JSON.parse(savedBranding);
+            if (branding && branding.name) {
+              document.title = branding.name;
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      })();
+    </script>
     <!-- Script de configuração dinâmica (Gerado no runtime pelo Docker) -->
     <script src="/env-config.js"></script>
   </head>

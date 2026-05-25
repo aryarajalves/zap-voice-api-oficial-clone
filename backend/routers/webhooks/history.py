@@ -158,7 +158,7 @@ async def delete_webhook_history(
     db.commit()
     return {"status": "success"}
 
-@router.delete("/{integration_id}/history/bulk-delete", summary="Excluir múltiplos registros")
+@router.post("/{integration_id}/history/bulk-delete", summary="Excluir múltiplos registros")
 async def bulk_delete_webhook_history(
     integration_id: str,
     request: Request,

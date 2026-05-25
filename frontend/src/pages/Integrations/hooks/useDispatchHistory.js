@@ -65,11 +65,16 @@ export function useDispatchHistory(activeClient) {
   const handleDeleteDispatch = async (integrationId, type, id = null, ids = []) => {
     try {
       let url = `${API_URL}/webhook-integrations/${integrationId}/dispatches`;
-      if (type === 'single') url += `/${id}`;
-      else if (type === 'bulk') url += `/bulk-delete`;
+      let method = 'DELETE';
+      if (type === 'single') {
+        url += `/${id}`;
+      } else if (type === 'bulk') {
+        url += `/bulk-delete`;
+        method = 'POST';
+      }
 
       const res = await fetchWithAuth(url, {
-        method: 'DELETE',
+        method,
         body: type === 'bulk' ? JSON.stringify({ ids }) : undefined
       }, activeClient.id);
 
