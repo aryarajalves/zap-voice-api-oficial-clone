@@ -137,11 +137,19 @@ async def test_whatsapp_delivery_emits_websocket_bulk_progress(mock_rabbitmq, mo
         "trigger_id": 30,
         "status": "processing",
         "sent": 10,
+        "total_sent": 10,
         "failed": 0,
+        "total_failed": 0,
         "total_contacts": 10,
+        "total": 10,
         "delivered": 2, 
+        "total_delivered": 2, 
         "read": 1,
+        "total_read": 1,
         "interactions": 0,
+        "total_interactions": 0,
         "blocked": 0,
-        "cost": 0.70
+        "total_blocked": 0,
+        "cost": 0.70,
+        "total_cost": 0.70
     })

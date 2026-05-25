@@ -141,18 +141,19 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                     if (payload.event === "bulk_progress") {
                         setTriggers(prev => prev.map(t => {
                             if (t.id === payload.data.trigger_id) {
+                                const d = payload.data;
                                 return {
                                     ...t,
-                                    status: payload.data.status,
-                                    total_sent: payload.data.sent,
-                                    total_failed: payload.data.failed,
-                                    total_contacts: payload.data.total_contacts || payload.data.total,
-                                    total_delivered: payload.data.delivered,
-                                    total_read: payload.data.read,
-                                    total_interactions: payload.data.interactions,
-                                    total_blocked: payload.data.blocked,
-                                    total_cost: payload.data.cost,
-                                    total_memory_sent: payload.data.memory_sent
+                                    status: d.status !== undefined ? d.status : t.status,
+                                    total_sent: d.sent !== undefined ? d.sent : (d.total_sent !== undefined ? d.total_sent : t.total_sent),
+                                    total_failed: d.failed !== undefined ? d.failed : (d.total_failed !== undefined ? d.total_failed : t.total_failed),
+                                    total_contacts: d.total_contacts !== undefined ? d.total_contacts : (d.total !== undefined ? d.total : t.total_contacts),
+                                    total_delivered: d.delivered !== undefined ? d.delivered : (d.total_delivered !== undefined ? d.total_delivered : t.total_delivered),
+                                    total_read: d.read !== undefined ? d.read : (d.total_read !== undefined ? d.total_read : t.total_read),
+                                    total_interactions: d.interactions !== undefined ? d.interactions : (d.total_interactions !== undefined ? d.total_interactions : t.total_interactions),
+                                    total_blocked: d.blocked !== undefined ? d.blocked : (d.total_blocked !== undefined ? d.total_blocked : t.total_blocked),
+                                    total_cost: d.cost !== undefined ? d.cost : (d.total_cost !== undefined ? d.total_cost : t.total_cost),
+                                    total_memory_sent: d.memory_sent !== undefined ? d.memory_sent : (d.total_memory_sent !== undefined ? d.total_memory_sent : t.total_memory_sent)
                                 };
                             }
                             return t;

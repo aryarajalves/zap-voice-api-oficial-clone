@@ -228,7 +228,33 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             db_msg.close()
 
         # Progress Event
-        await rabbitmq.publish_event("bulk_progress", {"trigger_id": trigger_id, "status": "processing", "sent": sent_count, "failed": failed_count, "total": total})
+        db_progress = SessionLocal()
+        try:
+            t_prog = db_progress.query(models.ScheduledTrigger).get(trigger_id)
+            if t_prog:
+                await rabbitmq.publish_event("bulk_progress", {
+                    "trigger_id": trigger_id,
+                    "status": "processing",
+                    "sent": t_prog.total_sent or 0,
+                    "total_sent": t_prog.total_sent or 0,
+                    "failed": t_prog.total_failed or 0,
+                    "total_failed": t_prog.total_failed or 0,
+                    "delivered": t_prog.total_delivered or 0,
+                    "total_delivered": t_prog.total_delivered or 0,
+                    "read": t_prog.total_read or 0,
+                    "total_read": t_prog.total_read or 0,
+                    "interactions": t_prog.total_interactions or 0,
+                    "total_interactions": t_prog.total_interactions or 0,
+                    "blocked": t_prog.total_blocked or 0,
+                    "total_blocked": t_prog.total_blocked or 0,
+                    "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                    "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                    "total": total,
+                    "total_contacts": total
+                })
+        finally:
+            db_progress.close()
+            
         if i + concurrency < total: await asyncio.sleep(delay)
 
     # Finalize
@@ -241,7 +267,26 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             log_node_execution(db_final, t, node_id='DELIVERY', status='completed', details=f'{client_name}: Envio finalizado para {t.total_sent} contatos.')
             t.status = "completed"
             db_final.commit()
-            await rabbitmq.publish_event("bulk_progress", {"trigger_id": trigger_id, "status": "completed", "sent": t.total_sent, "failed": t.total_failed, "total": total})
+            await rabbitmq.publish_event("bulk_progress", {
+                "trigger_id": trigger_id,
+                "status": "completed",
+                "sent": t.total_sent or 0,
+                "total_sent": t.total_sent or 0,
+                "failed": t.total_failed or 0,
+                "total_failed": t.total_failed or 0,
+                "delivered": t.total_delivered or 0,
+                "total_delivered": t.total_delivered or 0,
+                "read": t.total_read or 0,
+                "total_read": t.total_read or 0,
+                "interactions": t.total_interactions or 0,
+                "total_interactions": t.total_interactions or 0,
+                "blocked": t.total_blocked or 0,
+                "total_blocked": t.total_blocked or 0,
+                "cost": float(t.total_cost) if t.total_cost else 0.0,
+                "total_cost": float(t.total_cost) if t.total_cost else 0.0,
+                "total": total,
+                "total_contacts": total
+            })
     finally:
         db_final.close()
 
@@ -365,7 +410,34 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
         finally:
             db_persist.close()
         
-        await rabbitmq.publish_event("bulk_progress", {"trigger_id": trigger_id, "sent": sent_count, "failed": failed_count, "total": total})
+        # Progress Event
+        db_progress = SessionLocal()
+        try:
+            t_prog = db_progress.query(models.ScheduledTrigger).get(trigger_id)
+            if t_prog:
+                await rabbitmq.publish_event("bulk_progress", {
+                    "trigger_id": trigger_id,
+                    "status": "processing",
+                    "sent": t_prog.total_sent or 0,
+                    "total_sent": t_prog.total_sent or 0,
+                    "failed": t_prog.total_failed or 0,
+                    "total_failed": t_prog.total_failed or 0,
+                    "delivered": t_prog.total_delivered or 0,
+                    "total_delivered": t_prog.total_delivered or 0,
+                    "read": t_prog.total_read or 0,
+                    "total_read": t_prog.total_read or 0,
+                    "interactions": t_prog.total_interactions or 0,
+                    "total_interactions": t_prog.total_interactions or 0,
+                    "blocked": t_prog.total_blocked or 0,
+                    "total_blocked": t_prog.total_blocked or 0,
+                    "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                    "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                    "total": total,
+                    "total_contacts": total
+                })
+        finally:
+            db_progress.close()
+            
         if i + concurrency < total: await asyncio.sleep(delay)
 
     db_final = SessionLocal()
@@ -378,6 +450,25 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
             from services.engine import log_node_execution
             log_node_execution(db_final, t, node_id='DELIVERY', status='completed')
             db_final.commit()
-            await rabbitmq.publish_event("bulk_progress", {"trigger_id": trigger_id, "status": "completed", "sent": sent_count, "failed": failed_count, "total": total})
+            await rabbitmq.publish_event("bulk_progress", {
+                "trigger_id": trigger_id,
+                "status": t.status,
+                "sent": t.total_sent or 0,
+                "total_sent": t.total_sent or 0,
+                "failed": t.total_failed or 0,
+                "total_failed": t.total_failed or 0,
+                "delivered": t.total_delivered or 0,
+                "total_delivered": t.total_delivered or 0,
+                "read": t.total_read or 0,
+                "total_read": t.total_read or 0,
+                "interactions": t.total_interactions or 0,
+                "total_interactions": t.total_interactions or 0,
+                "blocked": t.total_blocked or 0,
+                "total_blocked": t.total_blocked or 0,
+                "cost": float(t.total_cost) if t.total_cost else 0.0,
+                "total_cost": float(t.total_cost) if t.total_cost else 0.0,
+                "total": total,
+                "total_contacts": total
+            })
     finally:
         db_final.close()

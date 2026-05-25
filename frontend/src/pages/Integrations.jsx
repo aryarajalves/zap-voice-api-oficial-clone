@@ -104,7 +104,20 @@ export default function Integrations() {
                 const index = prev.findIndex(item => item.id === triggerId);
                 if (index !== -1) {
                   const newHistory = [...prev];
-                  newHistory[index] = { ...newHistory[index], ...data };
+                  const existingItem = newHistory[index];
+                  const mappedData = {
+                    status: data.status !== undefined ? data.status : existingItem.status,
+                    total_sent: data.sent !== undefined ? data.sent : (data.total_sent !== undefined ? data.total_sent : existingItem.total_sent),
+                    total_failed: data.failed !== undefined ? data.failed : (data.total_failed !== undefined ? data.total_failed : existingItem.total_failed),
+                    total_contacts: data.total_contacts !== undefined ? data.total_contacts : (data.total !== undefined ? data.total : existingItem.total_contacts),
+                    total_delivered: data.delivered !== undefined ? data.delivered : (data.total_delivered !== undefined ? data.total_delivered : existingItem.total_delivered),
+                    total_read: data.read !== undefined ? data.read : (data.total_read !== undefined ? data.total_read : existingItem.total_read),
+                    total_interactions: data.interactions !== undefined ? data.interactions : (data.total_interactions !== undefined ? data.total_interactions : existingItem.total_interactions),
+                    total_blocked: data.blocked !== undefined ? data.blocked : (data.total_blocked !== undefined ? data.total_blocked : existingItem.total_blocked),
+                    total_cost: data.cost !== undefined ? data.cost : (data.total_cost !== undefined ? data.total_cost : existingItem.total_cost),
+                    total_memory_sent: data.memory_sent !== undefined ? data.memory_sent : (data.total_memory_sent !== undefined ? data.total_memory_sent : existingItem.total_memory_sent)
+                  };
+                  newHistory[index] = { ...existingItem, ...data, ...mappedData };
                   return newHistory;
                 }
                 return prev;

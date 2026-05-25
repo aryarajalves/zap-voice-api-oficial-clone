@@ -195,13 +195,21 @@ async def handle_whatsapp_event(data: dict):
                                             "trigger_id": trigger.id,
                                             "status": trigger.status,
                                             "sent": trigger.total_sent or 0,
+                                            "total_sent": trigger.total_sent or 0,
                                             "failed": trigger.total_failed or 0,
+                                            "total_failed": trigger.total_failed or 0,
                                             "total_contacts": trigger.total_contacts or 0,
+                                            "total": trigger.total_contacts or 0,
                                             "delivered": trigger.total_delivered or 0,
+                                            "total_delivered": trigger.total_delivered or 0,
                                             "read": trigger.total_read or 0,
+                                            "total_read": trigger.total_read or 0,
                                             "interactions": trigger.total_interactions or 0,
+                                            "total_interactions": trigger.total_interactions or 0,
                                             "blocked": trigger.total_blocked or 0,
-                                            "cost": trigger.total_cost or 0.0
+                                            "total_blocked": trigger.total_blocked or 0,
+                                            "cost": float(trigger.total_cost) if trigger.total_cost else 0.0,
+                                            "total_cost": float(trigger.total_cost) if trigger.total_cost else 0.0
                                         })
                                     except Exception as ws_err:
                                         logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")

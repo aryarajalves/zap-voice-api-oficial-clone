@@ -28,6 +28,7 @@ class ChatwootClient:
         self.api_token = self._cw.api_token
         self.base_url = self._cw.base_url
         self.headers = self._cw.headers
+        self.settings = self._cw.settings
 
     # --- Chatwoot Methods (Delegated to _cw) ---
     
