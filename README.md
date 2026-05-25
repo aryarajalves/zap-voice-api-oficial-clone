@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.12)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.14)
 
-Bem-vindo à versão **3.7.11** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.14** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,20 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.7.14
+- **Ocultação Condicional de Variáveis Adicionais / Cabeçalho (Novo!)**:
+  - A seção "Variáveis Adicionais / Cabeçalho" agora é exibida condicionalmente com base na estrutura do template selecionado. Ela permanece totalmente oculta se o template não exigir variáveis dinâmicas, mídias de cabeçalho (Imagem/Vídeo/Documento) ou links dinâmicos de botões.
+  - Correção na propriedade `header_type` no follow-up (`FollowUpSection.jsx`) para extrair corretamente mídias e links dinâmicos dos componentes internos da Meta, resolvendo um bug que impedia o mapeamento de mídias no follow-up.
+  - Validação no frontend (`useIntegrations.js`) que impede salvar a integração com o follow-up ativo se nenhum template correspondente estiver selecionado.
+  - **Suíte de Testes Aprovada**: Criação de testes unitários para a visibilidade de variáveis (`VariablesSection.test.jsx`) e cobertura de validação no salvamento do follow-up (`useIntegrations.test.jsx`).
+
+### v3.7.13
+- **Adição de Múltiplas Etiquetas e Atualização Imediata (Novo!)**:
+  - Implementação de seleção e inserção múltipla de etiquetas em lote nos modais de contatos do histórico (`ContactsModal.jsx`) e integrações (`ContactsViewerModal.jsx`).
+  - Envio de múltiplas tags de uma vez como string delimitada por vírgulas para a API do backend `/leads/bulk` (processadas e associadas adequadamente a cada contato no banco de dados).
+  - Atualização local instantânea das etiquetas dos contatos nos modais após a gravação bem-sucedida, sem necessidade de recarregar a página.
+  - Atualização da suíte de testes unitários do frontend (`ContactsModal.test.jsx`) contemplando cobertura para salvamento múltiplo e modificação de placeholder.
 
 ### v3.7.12
 - **Criação de Etiquetas Customizadas e Exibição de Tags nos Contatos (Novo!)**:

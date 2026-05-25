@@ -146,6 +146,7 @@ const MappingItem = ({
             removeVariable={removeVariable}
             templateVars={templateVars}
             customFieldsMapping={customFieldsMapping}
+            templates={templates}
           />
 
           {/* Configurações Avançadas de Gatilho */}

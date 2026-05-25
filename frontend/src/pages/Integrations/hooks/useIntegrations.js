@@ -107,6 +107,19 @@ export function useIntegrations(activeClient) {
       return toast.error('O tempo de espera do Follow-up deve ser no mínimo 1.');
     }
 
+    // Validar se follow-up está ativo mas o template não foi selecionado
+    const hasMissingFollowupTemplate = (formData.mappings || []).some(mapping => {
+      const active = mapping.followup_active === true || 
+                     String(mapping.followup_active).toLowerCase() === 'true' ||
+                     mapping.followup_active === 1 || 
+                     String(mapping.followup_active) === '1';
+      if (!active) return false;
+      return !mapping.followup_template_name || !mapping.followup_template_name.trim();
+    });
+    if (hasMissingFollowupTemplate) {
+      return toast.error('Você deve selecionar um Template para o Follow-up.');
+    }
+
     setIsSaving(true);
 
     const savePromise = new Promise(async (resolve, reject) => {

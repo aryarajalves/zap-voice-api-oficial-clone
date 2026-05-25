@@ -5,6 +5,9 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
     if (!childrenModal.isOpen) return null;
 
     const isFollowup = childrenModal.children.some(child => child.is_followup);
+    const displayChildren = isFollowup 
+        ? childrenModal.children.filter(child => child.is_followup) 
+        : childrenModal.children;
 
     return (
         <div className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -31,14 +34,14 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
                             <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                             <p className="text-gray-500 font-bold animate-pulse uppercase tracking-widest text-xs">Carregando execuções...</p>
                         </div>
-                    ) : childrenModal.children.length === 0 ? (
+                    ) : displayChildren.length === 0 ? (
                         <div className="text-center py-20 flex flex-col items-center gap-4">
                             <span className="text-5xl">🏜️</span>
                             <p className="text-gray-400 font-bold uppercase tracking-widest text-sm">Nenhum funil iniciado ainda.</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {childrenModal.children.map(child => (
+                            {displayChildren.map(child => (
                                 <div key={child.id} className="bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50 rounded-xl p-4 flex items-center justify-between group hover:border-orange-200 dark:hover:border-orange-900/50 transition-all hover:shadow-lg">
                                     <div className="flex items-center gap-4">
                                         <div className="flex flex-col">

@@ -19,8 +19,13 @@ const FollowUpSection = ({
     t => t.id === mapping.followup_template_id || String(t.id) === String(mapping.followup_template_id)
   );
   const hasVars = followupTemplateVars && followupTemplateVars.length > 0;
-  const hasMedia = selectedTemplate && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selectedTemplate.header_type);
-  const needsConfig = hasVars || hasMedia;
+  const headerComp = selectedTemplate?.components?.find(c => c.type === 'HEADER');
+  const hasMedia = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format);
+  const buttonsComp = selectedTemplate?.components?.find(c => c.type === 'BUTTONS');
+  const hasDynamicButtons = buttonsComp && buttonsComp.buttons?.some(b => 
+    b.type === 'URL' && b.url && b.url.includes('{{')
+  );
+  const needsConfig = hasVars || hasMedia || hasDynamicButtons;
 
   // Opções para o dropdown de variáveis customizadas
   const customOptions = Object.keys(customFieldsMapping || {}).map(key => ({

@@ -6,7 +6,16 @@ import PipelineCountdown from './PipelineCountdown';
 const PipelineModal = ({ isOpen, onClose, dispatch }) => {
   if (!isOpen || !dispatch) return null;
 
-  const pipeline = dispatch.pipeline_steps || [];
+  let pipeline = dispatch.pipeline_steps || [];
+  if (pipeline.length === 0 && dispatch.execution_history) {
+    pipeline = dispatch.execution_history.map(item => ({
+      name: item.details || item.node_id,
+      status: item.status,
+      timestamp: item.timestamp,
+      description: item.details || '',
+      metadata: item.extra || {}
+    }));
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[12000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">

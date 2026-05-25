@@ -116,7 +116,72 @@ describe('useIntegrations hook', () => {
           {
             event_type: 'compra_aprovada',
             followup_active: true,
-            followup_delay_value: 5
+            followup_delay_value: 5,
+            followup_template_name: 'test_template'
+          }
+        ],
+        product_filtering: false,
+        product_whitelist: [],
+        discovered_products: [],
+        custom_slug: ''
+      });
+    });
+
+    await act(async () => {
+      await hookResult.handleSaveIntegration();
+    });
+
+    expect(toast.promise).toHaveBeenCalled();
+  });
+
+  it('deve validar template do follow-up obrigatório ao salvar', async () => {
+    render(<TestComponent />);
+
+    // Define dados inválidos: follow-up ativo mas template_name vazio
+    act(() => {
+      hookResult.setFormData({
+        name: 'Hotmart Integration',
+        platform: 'hotmart',
+        mappings: [
+          {
+            event_type: 'compra_aprovada',
+            followup_active: true,
+            followup_delay_value: 5,
+            followup_template_name: ''
+          }
+        ],
+        product_filtering: false,
+        product_whitelist: [],
+        discovered_products: [],
+        custom_slug: ''
+      });
+    });
+
+    await act(async () => {
+      await hookResult.handleSaveIntegration();
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('Você deve selecionar um Template para o Follow-up.');
+  });
+
+  it('deve permitir salvar se o template do follow-up for válido', async () => {
+    fetchWithAuth.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 1, name: 'New Integration' })
+    });
+
+    render(<TestComponent />);
+
+    act(() => {
+      hookResult.setFormData({
+        name: 'Hotmart Integration',
+        platform: 'hotmart',
+        mappings: [
+          {
+            event_type: 'compra_aprovada',
+            followup_active: true,
+            followup_delay_value: 5,
+            followup_template_name: 'template_followup_valido'
           }
         ],
         product_filtering: false,
@@ -133,3 +198,4 @@ describe('useIntegrations hook', () => {
     expect(toast.promise).toHaveBeenCalled();
   });
 });
+
