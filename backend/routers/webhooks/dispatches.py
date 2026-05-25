@@ -55,7 +55,7 @@ def list_dispatches(
 
     query = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == uuid_obj,
+        models.ScheduledTrigger.integration_id == str(uuid_obj),
         models.ScheduledTrigger.parent_id == None
     )
 
@@ -147,7 +147,7 @@ def backfill_dispatch_costs(
 
     triggers = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == uuid_obj,
+        models.ScheduledTrigger.integration_id == str(uuid_obj),
         or_(models.ScheduledTrigger.total_cost == None, models.ScheduledTrigger.total_cost == 0),
         models.ScheduledTrigger.total_sent > 0
     ).options(joinedload(models.ScheduledTrigger.messages)).all()
@@ -203,7 +203,7 @@ async def play_dispatch(
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == dispatch_id,
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == uuid_obj
+        models.ScheduledTrigger.integration_id == str(uuid_obj)
     ).first()
 
     if not trigger:
@@ -335,7 +335,7 @@ def cancel_dispatch(
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == dispatch_id,
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == uuid_obj
+        models.ScheduledTrigger.integration_id == str(uuid_obj)
     ).first()
 
     if not trigger:
@@ -361,7 +361,7 @@ async def bulk_play_dispatches(
     triggers = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id.in_(dispatch_ids),
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == uuid_obj
+        models.ScheduledTrigger.integration_id == str(uuid_obj)
     ).all()
     
     count = 0
@@ -472,7 +472,7 @@ async def bulk_delete_dispatches(
     valid_ids_query = db.query(models.ScheduledTrigger.id).filter(
         models.ScheduledTrigger.id.in_(dispatch_ids),
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == uuid_obj
+        models.ScheduledTrigger.integration_id == str(uuid_obj)
     )
     valid_ids = [row[0] for row in valid_ids_query.all()]
     
@@ -510,7 +510,7 @@ def get_record_dispatch_status(
         raise HTTPException(status_code=404, detail="Record not found")
 
     trigger = db.query(models.ScheduledTrigger).filter(
-        models.ScheduledTrigger.integration_id == uuid_obj
+        models.ScheduledTrigger.integration_id == str(uuid_obj)
     ).order_by(models.ScheduledTrigger.created_at.desc()).first()
 
     if not trigger:

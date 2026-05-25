@@ -47,7 +47,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             last_st = db.query(models.ScheduledTrigger).filter(
                 models.ScheduledTrigger.client_id == client_id,
                 models.ScheduledTrigger.contact_phone == phone,
-                models.ScheduledTrigger.integration_id == mapping.integration_id,
+                models.ScheduledTrigger.integration_id == str(mapping.integration_id),
                 models.ScheduledTrigger.event_type == history.event_type,
                 models.ScheduledTrigger.created_at >= datetime.now(timezone.utc) - timedelta(seconds=10)
             ).first()
@@ -77,7 +77,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 existing_trigger = db.query(models.ScheduledTrigger).filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.ScheduledTrigger.contact_phone == phone,
-                    models.ScheduledTrigger.integration_id == mapping.integration_id,
+                    models.ScheduledTrigger.integration_id == str(mapping.integration_id),
                     models.ScheduledTrigger.template_name == template_name,
                     models.ScheduledTrigger.status.notin_(["failed", "cancelled"])
                 ).first()
@@ -93,7 +93,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 existing_trigger = db.query(models.ScheduledTrigger).filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.ScheduledTrigger.contact_phone == phone,
-                    models.ScheduledTrigger.integration_id == mapping.integration_id,
+                    models.ScheduledTrigger.integration_id == str(mapping.integration_id),
                     models.ScheduledTrigger.funnel_id == funnel_id,
                     models.ScheduledTrigger.status.notin_(["failed", "cancelled"])
                 ).first()
