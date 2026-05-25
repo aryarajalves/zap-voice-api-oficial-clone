@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ZapVoice</title>
     <script>
       (function() {
         try {
@@ -12,12 +11,14 @@
           if (savedBranding) {
             const branding = JSON.parse(savedBranding);
             if (branding && branding.name) {
-              document.title = branding.name;
+              document.write('<title>' + branding.name + '</title>');
+              return;
             }
           }
         } catch (e) {
           console.error(e);
         }
+        document.write('<title>ZapVoice</title>');
       })();
     </script>
     <!-- Script de configuração dinâmica (Gerado no runtime pelo Docker) -->
