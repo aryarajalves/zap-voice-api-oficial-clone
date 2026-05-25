@@ -182,7 +182,17 @@ export default function Integrations() {
         setIsTestModalOpen(false);
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.detail || 'Erro ao enviar teste', { id: loadingToast });
+        let errMsg = 'Erro ao enviar teste';
+        if (err.detail) {
+          if (Array.isArray(err.detail)) {
+            errMsg = err.detail.map(d => `${d.loc ? d.loc.join('.') : 'campo'}: ${d.msg}`).join(', ');
+          } else if (typeof err.detail === 'object') {
+            errMsg = JSON.stringify(err.detail);
+          } else {
+            errMsg = err.detail;
+          }
+        }
+        toast.error(errMsg, { id: loadingToast });
       }
     } catch (err) { 
       console.error(err);

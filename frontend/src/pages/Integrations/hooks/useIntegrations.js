@@ -140,7 +140,17 @@ export function useIntegrations(activeClient) {
           resolve(editingIntegration ? 'Integração atualizada!' : 'Integração criada!');
         } else {
           const err = await res.json().catch(() => ({}));
-          reject(err.detail || 'Erro ao salvar');
+          let errMsg = 'Erro ao salvar';
+          if (err.detail) {
+            if (Array.isArray(err.detail)) {
+              errMsg = err.detail.map(d => `${d.loc ? d.loc.join('.') : 'campo'}: ${d.msg}`).join(', ');
+            } else if (typeof err.detail === 'object') {
+              errMsg = JSON.stringify(err.detail);
+            } else {
+              errMsg = err.detail;
+            }
+          }
+          reject(errMsg);
         }
       } catch (err) {
         console.error(err);
@@ -212,6 +222,7 @@ export function useIntegrations(activeClient) {
         id: m.id || Date.now() + Math.random(),
         chatwoot_label: normalizeChatwootLabel(m.chatwoot_label || m.chatwoot_labels),
         variables_mapping: Array.isArray(m.variables_mapping) ? m.variables_mapping : [],
+        followup_variables_mapping: Array.isArray(m.followup_variables_mapping) ? m.followup_variables_mapping : [],
         private_note: "true",
         publish_external_event: true
       })),

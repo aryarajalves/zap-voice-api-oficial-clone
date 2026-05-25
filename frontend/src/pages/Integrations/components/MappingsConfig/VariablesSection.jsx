@@ -149,10 +149,10 @@ const VariablesSection = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {mapping.variables_mapping.filter(v => {
+              {(mapping.variables_mapping || []).filter(v => {
                 return !templateVars.some(tv => tv.key === v.key && (tv.type === v.type || (tv.type === 'body' && !v.type)));
               }).map((variable) => {
-                const actualVIndex = mapping.variables_mapping.findIndex(v => v === variable);
+                const actualVIndex = (mapping.variables_mapping || []).findIndex(v => v === variable);
                 return (
                   <div key={actualVIndex} className="bg-white dark:bg-[#0b1120]/40 border border-gray-100 dark:border-white/5 rounded-xl p-3 flex flex-wrap lg:flex-nowrap items-center gap-4 transition-all hover:border-blue-500/20 group/var">
                     <div className="flex items-center gap-2 min-w-[120px]">

@@ -327,6 +327,13 @@ class WebhookEventMappingBase(BaseModel):
     
     is_active: Optional[bool] = Field(True, description="Indica se o mapeamento está ativo")
 
+    @field_validator('funnel_id', 'template_id', 'followup_template_id', mode='before')
+    @classmethod
+    def coerce_empty_string_to_none(cls, v):
+        if v == "" or str(v).strip().lower() in ["none", "null", "undefined"]:
+            return None
+        return v
+
     @field_validator('chatwoot_label', mode='before')
     @classmethod
     def validate_list_or_string(cls, v):

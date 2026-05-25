@@ -77,13 +77,11 @@ def auth_headers(super_admin, client_obj):
 @pytest.fixture
 def app_client(db):
     from main import app
-    import routers.triggers as triggers_router
 
     def override_get_db():
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[triggers_router.get_db] = override_get_db
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -303,22 +301,34 @@ def test_delete_trigger_not_found(app_client, auth_headers):
     assert resp.status_code == 404
 
 
-def test_delete_trigger_non_super_admin_forbidden(app_client, db, client_obj):
+def test_delete_trigger_non_super_admin_forbidden(app_client, db, client_obj, funnel):
+    # Criar um trigger real para garantir que o ID existe
+    t = ScheduledTrigger(
+        client_id=client_obj.id,
+        funnel_id=funnel.id,
+        status="completed",
+        is_bulk=False,
+        scheduled_time=datetime.now(timezone.utc),
+    )
+    db.add(t)
+    db.commit()
+
+    # Usuário com role 'user' — não é admin nem super_admin, deve ser bloqueado (403)
     regular = User(
         email="regular_trigger@test.com",
         hashed_password=get_password_hash("pass"),
-        role="admin",
+        role="user",
         is_active=True,
         client_id=client_obj.id,
     )
     db.add(regular)
     db.commit()
-    token = create_access_token({"sub": "regular_trigger@test.com", "role": "admin"})
+    token = create_access_token({"sub": "regular_trigger@test.com", "role": "user"})
     headers = {
         "Authorization": f"Bearer {token}",
         "X-Client-ID": str(client_obj.id),
     }
-    resp = app_client.delete("/api/triggers/1", headers=headers)
+    resp = app_client.delete(f"/api/triggers/{t.id}", headers=headers)
     assert resp.status_code == 403
 
 
