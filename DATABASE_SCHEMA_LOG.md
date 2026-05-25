@@ -42,6 +42,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 22/05/2026 | Etiquetas de Classificação de Templates | `whatsapp_template_cache` | `tags` | `backend/scripts/database/add_template_tags_col.py` |
 | 23/05/2026 | Rastreamento de Recorrências | `scheduled_triggers` | `is_recurring`, `recurring_trigger_id` | `backend/add_recurring_columns.py` |
 | 24/05/2026 | Timestamps de Funis | `funnels` | `created_at`, `updated_at` | `backend/add_funnel_timestamp_columns.py` |
+| 25/05/2026 | Arquivamento de Templates | `whatsapp_template_cache` | `is_archived` | `backend/scripts/add_archived_column_to_templates.py` |
 
 
 

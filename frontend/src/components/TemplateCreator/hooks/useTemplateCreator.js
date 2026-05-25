@@ -45,7 +45,7 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         if (!activeClient) return;
         setFetchingTemplates(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id);
+            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates?include_archived=true`, {}, activeClient.id);
             if (res.ok) {
                 const data = await res.json();
                 setTemplates(Array.isArray(data) ? data : []);
@@ -361,6 +361,54 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         }
     };
 
+    const archiveTemplate = async (templateName) => {
+        const loadingToast = toast.loading("Arquivando template...");
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/whatsapp/templates/${templateName}/archive`,
+                { method: 'POST' },
+                activeClient?.id
+            );
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success("Template arquivado com sucesso!");
+                fetchTemplates();
+            } else {
+                const err = await res.json();
+                toast.dismiss(loadingToast);
+                toast.error(err.detail || "Erro ao arquivar template");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.dismiss(loadingToast);
+            toast.error("Erro de conexão ao arquivar");
+        }
+    };
+
+    const unarchiveTemplate = async (templateName) => {
+        const loadingToast = toast.loading("Desarquivando template...");
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/whatsapp/templates/${templateName}/unarchive`,
+                { method: 'POST' },
+                activeClient?.id
+            );
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success("Template desarquivado com sucesso!");
+                fetchTemplates();
+            } else {
+                const err = await res.json();
+                toast.dismiss(loadingToast);
+                toast.error(err.detail || "Erro ao desarquivar template");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.dismiss(loadingToast);
+            toast.error("Erro de conexão ao desarquivar");
+        }
+    };
+
     return {
         activeClient,
         loading,
@@ -404,6 +452,8 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         handleSubmit,
         fixBodyTextForMeta,
         updateTemplateTags,
-        deleteTemplateTagGlobal
+        deleteTemplateTagGlobal,
+        archiveTemplate,
+        unarchiveTemplate
     };
 };

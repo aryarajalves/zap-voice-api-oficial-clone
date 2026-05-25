@@ -6,9 +6,9 @@ import sys
 os.environ["DATABASE_URL"] = "sqlite://"
 
 # Adiciona o diretório backend ao path
-backend_path = os.path.dirname(os.path.abspath(__file__))
+backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_path not in sys.path:
-    sys.path.append(backend_path)
+    sys.path.insert(0, backend_path)
 
 import pytest
 from sqlalchemy import create_engine, StaticPool

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header, UploadFile, File
+from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Query
 from typing import Optional
 from chatwoot_client import ChatwootClient
 import models
@@ -45,6 +45,7 @@ async def debug_env():
 
 @router.get("/templates")
 async def list_templates(
+    include_archived: bool = Query(False),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
@@ -76,10 +77,31 @@ async def list_templates(
                     "category": "MARKETING",
                     "status": "APPROVED",
                     "body_text": ct.body,
-                    "components": ct.components or []
+                    "components": ct.components or [],
+                    "is_archived": ct.is_archived
                 })
         except Exception as db_err:
             logger.error(f"Error querying local template cache: {db_err}")
+
+    # Mapear status is_archived do banco local para os templates vindos da Meta
+    try:
+        archived_templates = db.query(models.WhatsAppTemplateCache).filter(
+            models.WhatsAppTemplateCache.client_id == target_client_id,
+            models.WhatsAppTemplateCache.is_archived == True
+        ).all()
+        archived_names = {t.name for t in archived_templates}
+        
+        for t in templates:
+            t["is_archived"] = t.get("name") in archived_names
+    except Exception as arch_err:
+        logger.error(f"Error mapping archived templates: {arch_err}")
+        for t in templates:
+            if "is_archived" not in t:
+                t["is_archived"] = False
+
+    # Filtrar arquivados se include_archived for False
+    if not include_archived:
+        templates = [t for t in templates if not t.get("is_archived", False)]
 
     # Mesclar as tags locais
     try:
@@ -104,6 +126,55 @@ async def list_templates(
                 t["tags"] = []
 
     return templates
+
+@router.post("/templates/{template_name}/archive")
+async def archive_template(
+    template_name: str,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_premium),
+    db: Session = Depends(get_db)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    db_tpl = db.query(models.WhatsAppTemplateCache).filter(
+        models.WhatsAppTemplateCache.name == template_name,
+        models.WhatsAppTemplateCache.client_id == target_client_id
+    ).first()
+    if not db_tpl:
+        try:
+            client = ChatwootClient(client_id=target_client_id)
+            meta_tpls = await client.get_whatsapp_templates()
+            db_tpl = db.query(models.WhatsAppTemplateCache).filter(
+                models.WhatsAppTemplateCache.name == template_name,
+                models.WhatsAppTemplateCache.client_id == target_client_id
+            ).first()
+        except Exception as e:
+            logger.error(f"Error fetching templates from Meta to archive: {e}")
+            
+    if not db_tpl:
+        raise HTTPException(status_code=404, detail="Template não encontrado no cache local.")
+    
+    db_tpl.is_archived = True
+    db.commit()
+    return {"status": "success", "message": "Template arquivado com sucesso."}
+
+@router.post("/templates/{template_name}/unarchive")
+async def unarchive_template(
+    template_name: str,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_premium),
+    db: Session = Depends(get_db)
+):
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    db_tpl = db.query(models.WhatsAppTemplateCache).filter(
+        models.WhatsAppTemplateCache.name == template_name,
+        models.WhatsAppTemplateCache.client_id == target_client_id
+    ).first()
+    if not db_tpl:
+        raise HTTPException(status_code=404, detail="Template não encontrado no cache local.")
+    
+    db_tpl.is_archived = False
+    db.commit()
+    return {"status": "success", "message": "Template desarquivado com sucesso."}
 
 @router.put("/templates/{template_id}/tags")
 async def update_template_tags(

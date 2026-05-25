@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.17)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.9)
 
-Bem-vindo à versão **3.7.17** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.9** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -164,13 +164,17 @@ O sistema estará disponível em:
   - **Suíte de Testes Aprovada**: Adicionado teste unitário de backend validando a resolução de fallback do ID de conta do Chatwoot para `1`.
 
 ### v3.7.9
+- **Arquivamento de Templates de Mensagens do WhatsApp (Novo!)**:
+  - Implementação local da opção de arquivar e desarquivar templates de mensagens, ocultando-os de todos os seletores e dropdowns de disparo nas outras telas (Disparo em Massa, Funis, Integrações).
+  - Adição de abas de controle de visualização ("Ativos" e "Arquivados") e botão rápido de ação ao passar o mouse sobre os cards na tela de Meus Templates.
+  - Sincronização resiliente de banco de dados que impede a perda do status local de arquivamento durante a atualização de cache com a API do WhatsApp/Meta.
 - **Análise Inteligente de Resposta com IA (Novo!)**:
   - Integração do modelo de análise por Inteligência Artificial (`gpt-5-mini` com fallback automático de contingência para `gpt-4o-mini`) sob a opção de validação "Análise de Resposta (IA)" do nó de Condição Inteligente.
   - Implementação de rastreabilidade completa gravando o modelo de IA de fato utilizado para a validação do fluxo do contato nos logs de execução do nó.
   - Adição de aba dedicada de **"Critérios de Sucesso"** no frontend (`ConditionNode.jsx`), permitindo ao usuário descrever em linguagem natural quais critérios e regras de negócio definem uma resposta positiva/válida (ex. aceitar agendamento, propor horário alternativo).
   - Implementação de tratamento resiliente de erros na API da OpenAI, direcionando a execução do fluxo para a nova saída dedicada **"Erro / Falha" (laranja)**.
 - **Suíte de Testes e Conectividade**:
-  - Criação de testes unitários robustos de backend (`test_condition_ai.py`) cobrindo fallbacks, sucesso da IA, erro de chamada e validação de prompt.
+  - Criação de testes unitários robustos de backend (`test_condition_ai.py` e `test_template_archive.py`) cobrindo fallbacks, sucesso da IA, erro de chamada e validação de prompt.
   - Criação de testes unitários no frontend (`ConditionNode.test.jsx`) garantindo a estabilidade e funcionamento de alternância de abas, renderização de campos e chamadas ao callback `onChange`.
 
 ### v3.7.8

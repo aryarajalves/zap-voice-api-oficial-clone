@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { FiCheck, FiClock, FiAlertCircle, FiZap, FiTrash2, FiTag, FiPlus, FiX } from 'react-icons/fi';
+import { FiCheck, FiClock, FiAlertCircle, FiZap, FiTrash2, FiTag, FiPlus, FiX, FiArchive } from 'react-icons/fi';
 import ConfirmModal from '../../../ConfirmModal';
 
 const TemplateItem = ({ tpl, logic }) => {
-    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen, updateTemplateTags, templates, deleteTemplateTagGlobal } = logic;
+    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen, updateTemplateTags, templates, deleteTemplateTagGlobal, archiveTemplate, unarchiveTemplate } = logic;
     const [showTagPopover, setShowTagPopover] = useState(false);
     const [newTagInput, setNewTagInput] = useState('');
     const [tempTags, setTempTags] = useState(tpl.tags || []);
@@ -66,6 +66,11 @@ const TemplateItem = ({ tpl, logic }) => {
                         {tpl.status === 'REJECTED' && <FiAlertCircle size={10} />}
                         {tpl.status}
                     </span>
+                    {tpl.is_archived && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-lg border text-amber-500 border-amber-500/20 bg-amber-500/5 flex items-center gap-1">
+                            <FiArchive size={8} /> ARQUIVADO
+                        </span>
+                    )}
                     {tpl.quality_score && (
                         <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg border flex items-center gap-1 ${tpl.quality_score === 'HIGH' ? 'text-green-500 border-green-500/20 bg-green-500/5' :
                             tpl.quality_score === 'MEDIUM' ? 'text-yellow-500 border-yellow-500/20 bg-yellow-500/5' :
@@ -194,6 +199,29 @@ const TemplateItem = ({ tpl, logic }) => {
                             title="Excluir Template"
                         >
                             <FiTrash2 size={12} />
+                        </button>
+                    )}
+                    {tpl.is_archived ? (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                unarchiveTemplate(tpl.name);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 bg-green-50 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-800 transition-all flex items-center justify-center"
+                            title="Desarquivar Template"
+                        >
+                            <FiArchive size={12} />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                archiveTemplate(tpl.name);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-800 transition-all flex items-center justify-center"
+                            title="Arquivar Template"
+                        >
+                            <FiArchive size={12} />
                         </button>
                     )}
                     <button
