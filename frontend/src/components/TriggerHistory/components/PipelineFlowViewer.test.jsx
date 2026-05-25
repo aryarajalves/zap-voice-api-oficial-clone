@@ -5,6 +5,10 @@ import { describe, it, expect, vi } from 'vitest';
 import PipelineFlowViewer from './PipelineFlowViewer';
 import PipelineNode from './PipelineNode';
 
+const mockFitView = vi.fn();
+const mockZoomIn = vi.fn();
+const mockZoomOut = vi.fn();
+
 // Mock do reactflow para evitar erros no JSDOM de dimensões/SVG
 vi.mock('reactflow', async () => {
   const React = await import('react');
@@ -36,7 +40,9 @@ vi.mock('reactflow', async () => {
     Background: () => <div data-testid="mock-background" />,
     Controls: () => <div data-testid="mock-controls" />,
     useReactFlow: () => ({
-      fitView: vi.fn(),
+      fitView: mockFitView,
+      zoomIn: mockZoomIn,
+      zoomOut: mockZoomOut,
       getNodes: () => [],
     }),
     ReactFlowProvider: ({ children }) => <div data-testid="mock-provider">{children}</div>,
@@ -162,5 +168,27 @@ describe('PipelineFlowViewer Component', () => {
     expect(screen.getAllByText('Enviados')[0]).toBeInTheDocument();
     expect(screen.getAllByText('Fila')[0]).toBeInTheDocument();
     expect(screen.getAllByText('Falhas')[0]).toBeInTheDocument();
+  });
+
+  it('deve renderizar os botões de zoom e centralização e chamar as respectivas funções de useReactFlow ao serem clicados', () => {
+    render(<PipelineFlowViewer trigger={mockTriggerWithFunnel} />);
+
+    const zoomInBtn = screen.getByTitle('Aumentar Zoom');
+    const zoomOutBtn = screen.getByTitle('Diminuir Zoom');
+    const fitViewBtn = screen.getByTitle('Centralizar Visualização');
+
+    expect(zoomInBtn).toBeInTheDocument();
+    expect(zoomOutBtn).toBeInTheDocument();
+    expect(fitViewBtn).toBeInTheDocument();
+
+    const { fireEvent } = require('@testing-library/react');
+    fireEvent.click(zoomInBtn);
+    expect(mockZoomIn).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(zoomOutBtn);
+    expect(mockZoomOut).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(fitViewBtn);
+    expect(mockFitView).toHaveBeenCalledTimes(1);
   });
 });

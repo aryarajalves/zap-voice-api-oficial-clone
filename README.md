@@ -108,8 +108,13 @@ O sistema estará disponível em:
 
 ### v3.7.15
 - **Ajuste de Sobreposição no Monitor de Pipeline**: Elevação do `z-index` do `PipelineModal` para `z-[16000]` para que ele abra por cima do popup de "Funis Iniciados" (`z-[15000]`), permitindo interagir diretamente com o monitoramento sem a necessidade de fechar o popup anterior.
+- **Controle de Zoom Premium**: Adicionados botões flutuantes de "Aumentar Zoom (+)", "Diminuir Zoom (-)" e "Centralizar Visualização" com design limpo, além de estender o zoom máximo para `3.0` e habilitar o controle suave e preciso via scroll do mouse (roda do mouse) através do ajuste de `preventScrolling={true}`.
+- **Foco de Câmera Inteligente**: Modificada a centralização da câmera (auto-pan) para ocorrer de forma suave apenas no carregamento inicial do modal, evitando redirecionamentos indesejados nas transições de nós durante a execução em tempo real.
+- **Layout Compacto e Responsivo**: Redução da altura do canvas de fluxo de `450px` para `350px` e otimização de paddings verticais para garantir que o rodapé e o botão "Fechar Pipeline" fiquem 100% visíveis em qualquer tela de notebook ou dispositivo móvel.
+- **Correção de Leitura de Delays no Frontend**: Correção de bug de mapeamento de propriedades no `PipelineNode` do frontend, fazendo com que ele exiba o tempo exato configurado no funil (Fixo ou Aleatório) ao ler chaves como `data.time`, `data.unit`, `data.minTime` e `data.maxTime`, em vez de cair no fallback de 5 segundos.
+- **Remoção do Botão "Ver Pipeline" no Histórico**: Ocultação do ícone azul de barras que abria o pipeline a partir da coluna de Ações na tabela do histórico geral de disparos (`TriggerTable.jsx`).
 - **Remoção de Contact ID no Monitor de Pipeline**: Ocultação da chave de metadados `contact_id` (case-insensitive) na visualização dos passos do pipeline, limpando a interface.
-- **Suíte de Testes Unitários de Interface**: Criação de suíte de testes unitários dedicada (`PipelineModal.test.jsx`) com cobertura para renderização do modal, sobreposição e filtros de chaves de metadados.
+- **Suíte de Testes Unitários de Interface**: Criação de testes unitários dedicados (`PipelineNode.test.jsx` e `PipelineModal.test.jsx`) e atualização do `PipelineFlowViewer.test.jsx` com cobertura total para renderização, sobreposição, novos botões de zoom e filtros de chaves de metadados.
 
 ### v3.7.14
 - **Ocultação Condicional de Variáveis Adicionais / Cabeçalho (Novo!)**:

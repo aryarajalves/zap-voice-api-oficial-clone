@@ -33,11 +33,21 @@ const getNodeConfig = (type, data) => {
             };
         case 'delayNode':
         case 'delay':
+            const isRandom = data.useRandom ?? false;
+            let titleText = '';
+            if (isRandom) {
+                titleText = `Aguardar ${data.minTime || data.time || 10}s a ${data.maxTime || data.minTime || data.time || 10}s`;
+            } else {
+                const timeVal = data.time || data.delay || 10;
+                const unitVal = data.unit || 'seconds';
+                const unitAbbr = unitVal === 'seconds' ? 's' : unitVal === 'minutes' ? 'm' : unitVal === 'hours' ? 'h' : 'd';
+                titleText = `Aguardar ${timeVal}${unitAbbr}`;
+            }
             return {
                 icon: FiClock,
                 color: 'text-orange-500',
                 bgColor: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200/50 dark:border-orange-800/30',
-                title: `Aguardar ${data.delay || data.delay_seconds || 5}s`
+                title: titleText
             };
         case 'conditionNode':
         case 'condition':
@@ -172,7 +182,10 @@ const PipelineNode = ({ id, data }) => {
                 {/* Exibição específica para Delays */}
                 {type === 'delayNode' && (
                     <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
-                        ⏱️ Aguardando {data.delay || 5} {data.timeUnit || 'segundos'}
+                        ⏱️ {data.useRandom 
+                            ? `Aguardando entre ${data.minTime || data.time || 10} e ${data.maxTime || data.minTime || data.time || 10} ${data.unit === 'seconds' ? 'segundos' : data.unit === 'minutes' ? 'minutos' : data.unit === 'hours' ? 'horas' : 'dias'}`
+                            : `Aguardando ${data.time || data.delay || 10} ${data.unit === 'seconds' || !data.unit ? 'segundos' : data.unit === 'minutes' ? 'minutos' : data.unit === 'hours' ? 'horas' : 'dias'}`
+                        }
                     </p>
                 )}
 

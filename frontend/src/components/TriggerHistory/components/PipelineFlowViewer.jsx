@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import ReactFlow, { 
     Background, 
     Controls, 
@@ -6,6 +6,7 @@ import ReactFlow, {
     ReactFlowProvider 
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { FiPlus, FiMinus, FiMaximize } from 'react-icons/fi';
 import PipelineNode from './PipelineNode';
 
 // Registramos nosso nó de exibição personalizado
@@ -15,12 +16,15 @@ const nodeTypes = {
 
 // Sub-componente interno que tem acesso ao contexto useReactFlow para câmera inteligente
 const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
-    const { fitView, getNodes } = useReactFlow();
+    const { fitView, getNodes, zoomIn, zoomOut } = useReactFlow();
     const currentNodeId = trigger.current_node_id;
+    const hasInitialFocused = useRef(false);
 
-    // Foca e centraliza a visualização em tempo real com múltiplos disparos
-    // para garantir o correto posicionamento após animações e renderizações de modal
+    // Foca e centraliza a visualização apenas na montagem inicial/abertura do modal
+    // para permitir que o usuário controle a câmera e o zoom livremente depois
     useEffect(() => {
+        if (hasInitialFocused.current) return;
+
         const focusOnActiveNode = () => {
             // Forçar o React Flow a recalcular suas dimensões internas
             window.dispatchEvent(new Event('resize'));
@@ -37,12 +41,14 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
                         duration: 600,
                         padding: 0.4
                     });
+                    hasInitialFocused.current = true;
                     return;
                 }
             }
             
             // Caso contrário, ajusta a câmera para enquadrar todo o fluxo
             fitView({ padding: 0.25, duration: 400 });
+            hasInitialFocused.current = true;
         };
 
         // Agenda múltiplos disparos em momentos chaves:
@@ -62,6 +68,31 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
 
     return (
         <div className="relative" style={{ width: '100%', height: '100%' }}>
+            {/* Barra de controle de zoom premium (Glassmorphism) */}
+            <div className="absolute top-4 right-4 z-20 flex gap-2 bg-[#0f172a]/80 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-xl">
+                <button 
+                    onClick={() => zoomIn({ duration: 300 })}
+                    className="w-9 h-9 bg-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95 hover:text-blue-400"
+                    title="Aumentar Zoom"
+                >
+                    <FiPlus size={16} />
+                </button>
+                <button 
+                    onClick={() => zoomOut({ duration: 300 })}
+                    className="w-9 h-9 bg-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95 hover:text-blue-400"
+                    title="Diminuir Zoom"
+                >
+                    <FiMinus size={16} />
+                </button>
+                <button 
+                    onClick={() => fitView({ padding: 0.3, duration: 400 })}
+                    className="w-9 h-9 bg-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-95 hover:text-blue-400"
+                    title="Centralizar Visualização"
+                >
+                    <FiMaximize size={16} />
+                </button>
+            </div>
+
             <ReactFlow
                 style={{ width: '100%', height: '100%' }}
                 nodes={nodes}
@@ -72,11 +103,11 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
                 elementsSelectable={false}
                 panOnDrag={true}
                 zoomOnScroll={true}
-                preventScrolling={false}
+                preventScrolling={true}
                 proOptions={{ hideAttribution: true }}
                 defaultEdgeOptions={{ style: { strokeWidth: 2 } }}
                 minZoom={0.05}
-                maxZoom={1.5}
+                maxZoom={3.0}
                 fitView
                 fitViewOptions={{ padding: 0.3 }}
             >
@@ -204,7 +235,7 @@ const PipelineFlowViewer = ({ trigger }) => {
     }
 
     return (
-        <div className="bg-slate-50 dark:bg-[#0b0f19] relative overflow-hidden transition-colors duration-200" style={{ width: '100%', height: '450px', minHeight: '450px' }}>
+        <div className="bg-slate-50 dark:bg-[#0b0f19] relative overflow-hidden transition-colors duration-200" style={{ width: '100%', height: '350px', minHeight: '320px' }}>
             <ReactFlowProvider>
                 <FlowCameraOrchestrator 
                     trigger={trigger} 

@@ -90,7 +90,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
             <div className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-300">
                 <div className="bg-white dark:bg-gray-900 w-full max-w-2xl max-h-[90vh] rounded-[2.5rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
                     
-                    <div className="p-8 pb-6 flex justify-between items-start">
+                    <div className="p-6 pb-4 flex justify-between items-start">
                         <div className="flex items-center gap-4">
                             <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
                                 <FiZap className="text-white text-2xl" />
@@ -141,8 +141,8 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                         </div>
                     </div>
 
-                    <div className="px-8 pb-6">
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-3xl p-5 flex items-center justify-between">
+                    <div className="px-6 pb-4">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-2xl p-4 flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center text-blue-600">
                                     <FiUser size={18} />
@@ -162,7 +162,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                         </div>
                     </div>
 
-                    <div className="px-8 pb-4 flex gap-2 border-b border-gray-100 dark:border-gray-800">
+                    <div className="px-6 pb-3 flex gap-2 border-b border-gray-100 dark:border-gray-800">
                         <button 
                             onClick={() => setActiveTab('flow')}
                             className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
@@ -186,7 +186,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                     </div>
 
                     {activeTab === 'flow' ? (
-                        <div className="flex-1 relative w-full" style={{ height: '450px', minHeight: '450px' }}>
+                        <div className="flex-1 relative w-full" style={{ height: '300px', minHeight: '240px' }}>
                             <PipelineFlowViewer trigger={trigger} />
                         </div>
                     ) : (
@@ -374,7 +374,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                         </div>
                     )}
 
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex flex-col md:flex-row gap-3">
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex gap-3">
                         {isProcessing && (
                             <button 
                                 onClick={() => onStop(trigger.id)}
