@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.9)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.0)
 
-Bem-vindo à versão **3.7.9** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.0** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,16 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.8.0
+- **Notas Privadas no Chatwoot Assíncronas**:
+  - Enfileiramento das notas privadas na fila `chatwoot_private_messages` do RabbitMQ durante o pós-envio de disparos em massa, eliminando falhas por excesso de requisições (Rate Limit 429) no Chatwoot.
+- **Fallback Inteligente de Inbox ID**:
+  - Implementado fallback dinâmico para a caixa de entrada (`CHATWOOT_SELECTED_INBOX_ID`) salva nas configurações da integração caso o `inbox_id` não seja fornecido ativamente pelo Chatwoot.
+- **Progresso do Disparo em Tempo Real (WebSocket)**:
+  - Disparo de atualizações em tempo real (`bulk_progress`) via WebSocket pelo Worker do WhatsApp para sincronizar instantaneamente os contadores de entrega (Delivered) e leitura (Read) na interface do Histórico de Disparos.
+- **Testes Unitários Dedicados**:
+  - Criação de suíte de testes unitários específicos em `tests_unit/test_bulk_notes_and_websocket.py` para blindar o fallback de caixa de entrada, enfileiramento e notificações WebSocket.
 
 ### v3.7.17
 - **Correção da Deleção em Massa (Bulk Delete) de Disparos e Histórico**: 

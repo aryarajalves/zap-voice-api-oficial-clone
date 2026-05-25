@@ -187,6 +187,25 @@ async def handle_whatsapp_event(data: dict):
                                 db.commit()
                                 logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id})")
                                 
+                                # Publicar progresso de bulk via WebSocket em tempo real
+                                if trigger.is_bulk:
+                                    try:
+                                        db.refresh(trigger)
+                                        await rabbitmq.publish_event("bulk_progress", {
+                                            "trigger_id": trigger.id,
+                                            "status": trigger.status,
+                                            "sent": trigger.total_sent or 0,
+                                            "failed": trigger.total_failed or 0,
+                                            "total_contacts": trigger.total_contacts or 0,
+                                            "delivered": trigger.total_delivered or 0,
+                                            "read": trigger.total_read or 0,
+                                            "interactions": trigger.total_interactions or 0,
+                                            "blocked": trigger.total_blocked or 0,
+                                            "cost": trigger.total_cost or 0.0
+                                        })
+                                    except Exception as ws_err:
+                                        logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")
+
                                 if status in ('delivered', 'read'):
                                     asyncio.create_task(handle_deferred_post_delivery(trigger.id, message_record.id, status, msg_id, recipient))
                                     

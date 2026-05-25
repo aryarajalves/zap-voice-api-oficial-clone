@@ -14,7 +14,11 @@ async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, n
         resolved_conv_id = conversation_id
         if not resolved_conv_id:
             try:
-                conv = await chatwoot.ensure_conversation(phone, contact_name or "")
+                inbox_id = None
+                cfg_inbox_id = chatwoot.settings.get("CHATWOOT_SELECTED_INBOX_ID")
+                if cfg_inbox_id and str(cfg_inbox_id).isdigit():
+                    inbox_id = int(cfg_inbox_id)
+                conv = await chatwoot.ensure_conversation(phone, contact_name or "", inbox_id=inbox_id)
                 if conv:
                     resolved_conv_id = conv.get("conversation_id")
             except Exception as e_conv:
@@ -26,8 +30,16 @@ async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, n
 
         # Nota privada com o conteúdo da mensagem enviada
         if note_content:
-            logger.info(f"📝 [BULK] Enviando nota privada na conversa {resolved_conv_id}")
-            await chatwoot.send_private_note(resolved_conv_id, note_content)
+            logger.info(f"📝 [BULK] Enfileirando nota privada na conversa {resolved_conv_id} via RabbitMQ")
+            from rabbitmq_client import rabbitmq
+            await rabbitmq.publish("chatwoot_private_messages", {
+                "client_id": chatwoot.client_id,
+                "phone": phone,
+                "message": note_content,
+                "trigger_id": trigger_id,
+                "conversation_id": resolved_conv_id,
+                "delay": 5
+            })
             
             if trigger_id:
                 from database import SessionLocal

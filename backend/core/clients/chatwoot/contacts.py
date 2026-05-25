@@ -157,6 +157,11 @@ class ChatwootContactsMixin:
             return False
 
     async def ensure_conversation(self, phone_number: str, name: str, inbox_id: int = None):
+        if not inbox_id:
+            cfg_inbox_id = self.settings.get("CHATWOOT_SELECTED_INBOX_ID")
+            if cfg_inbox_id and str(cfg_inbox_id).isdigit():
+                inbox_id = int(cfg_inbox_id)
+
         clean_phone = ''.join(filter(str.isdigit, phone_number))
         contact_id = None
         search_queries = [clean_phone, f"+{clean_phone}"]
