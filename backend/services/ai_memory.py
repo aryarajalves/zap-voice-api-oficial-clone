@@ -1,11 +1,11 @@
 
-import logging
 import httpx
+from core.logger import setup_logger
 from datetime import datetime, timezone
 from rabbitmq_client import rabbitmq
 from config_loader import get_setting
 
-logger = logging.getLogger("AIMemory")
+logger = setup_logger("AIMemory")
 
 async def notify_ai_memory(client_id: int, phone: str, content: str, msg_type: str = "text", direction: str = "incoming", metadata: dict = None):
     """

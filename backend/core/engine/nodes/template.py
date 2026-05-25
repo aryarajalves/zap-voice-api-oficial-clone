@@ -1,5 +1,5 @@
-import logging
 import asyncio
+from core.logger import setup_logger
 from datetime import datetime, timezone, timedelta
 import models
 from ..utils import apply_vars
@@ -8,7 +8,7 @@ from ..sync import wait_for_delivery_sync
 from ..events import publish_node_external_event
 from services.window_manager import get_best_conversation
 
-logger = logging.getLogger("FunnelEngine.Nodes.Template")
+logger = setup_logger("FunnelEngine.Nodes.Template")
 
 async def handle_template_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, chatwoot_contact_id=None):
     data = node.get("data", {})

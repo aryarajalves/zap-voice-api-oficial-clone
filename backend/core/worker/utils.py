@@ -1,9 +1,9 @@
 import json
-import logging
 from sqlalchemy.orm import Session
+from core.logger import setup_logger
 from sqlalchemy import text
 
-logger = logging.getLogger("Worker.Utils")
+logger = setup_logger("Worker.Utils")
 
 async def update_node_history_extra(db: Session, trigger_id: int, node_id: str, field: str, value: str):
     """

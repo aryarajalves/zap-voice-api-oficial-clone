@@ -17,7 +17,7 @@ async def test_handle_whatsapp_event_logs_stabilization_on_delivery(db_session):
     db_session.add(trigger)
     
     msg_status = models.MessageStatus(
-        message_id="wamid.test_delivery_123",
+        message_id="test_delivery_123",
         trigger_id=999,
         status='sent',
         phone_number="5511999999999",

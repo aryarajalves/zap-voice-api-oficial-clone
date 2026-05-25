@@ -1,10 +1,10 @@
 import asyncio
-import logging
 import os
 from database import SessionLocal
+from core.logger import setup_logger
 from services.bulk import process_bulk_send, process_bulk_funnel
 
-logger = logging.getLogger("Worker.Bulk")
+logger = setup_logger("Worker.Bulk")
 MESSAGE_DELAY = float(os.getenv("RABBITMQ_MESSAGE_DELAY", 1.0))
 
 async def handle_bulk_send(data: dict):

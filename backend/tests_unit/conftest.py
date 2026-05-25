@@ -14,10 +14,10 @@ import pytest
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
+import database
 from database import Base
 import models
 from core.deps import get_db
-from main import app
 
 # SQLite in-memory compartilhado entre conexões via StaticPool
 TEST_DATABASE_URL = "sqlite://"
@@ -28,6 +28,36 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+_active_test_session = None
+
+class TestSessionWrapper:
+    def __init__(self, session):
+        self._session = session
+        
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+        
+    def close(self):
+        # Ignora close para não fechar a sessão do teste no finally do handler
+        pass
+        
+    def commit(self):
+        # Executa commit na sessão real
+        self._session.commit()
+
+class SessionProxy:
+    def __call__(self, *args, **kwargs):
+        global _active_test_session
+        if _active_test_session is not None:
+            return TestSessionWrapper(_active_test_session)
+        return TestingSessionLocal(*args, **kwargs)
+
+# Redireciona a SessionLocal e a engine do projeto para a nossa SessionLocal e engine de teste
+database.engine = engine
+database.SessionLocal = SessionProxy()
+
+from main import app
 
 @pytest.fixture(scope="session", autouse=True)
 def mock_rabbitmq_session():
@@ -50,12 +80,16 @@ def setup_test_db():
 
 @pytest.fixture
 def db_session():
+    global _active_test_session
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
 
+    _active_test_session = session
+
     yield session
 
+    _active_test_session = None
     session.close()
     transaction.rollback()
     connection.close()

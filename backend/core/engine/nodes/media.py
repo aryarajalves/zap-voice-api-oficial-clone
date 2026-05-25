@@ -1,7 +1,7 @@
-import logging
 import asyncio
 from datetime import datetime, timezone, timedelta
 import models
+from core.logger import setup_logger
 from ..utils import validate_media_url, apply_vars
 from ..logging import log_node_execution
 from ..sync import wait_for_delivery_sync
@@ -9,7 +9,7 @@ from ..events import publish_node_external_event
 from ..business_hours import is_within_business_hours, get_next_business_hour_start
 from services.window_manager import get_best_conversation, is_window_open_strict
 
-logger = logging.getLogger("FunnelEngine.Nodes.Media")
+logger = setup_logger("FunnelEngine.Nodes.Media")
 
 async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel, chatwoot_contact_id=None):
     data = node.get("data", {})

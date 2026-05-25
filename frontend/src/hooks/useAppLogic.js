@@ -41,7 +41,20 @@ export function useAppLogic() {
 
     // Branding State
     const [clientName, setClientName] = useState('');
-    const [appBranding, setAppBranding] = useState({ name: 'ZapVoice', logo: null, logoSize: 'medium' });
+    const [appBranding, setAppBranding] = useState(() => {
+        try {
+            const saved = localStorage.getItem('appBranding');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && parsed.name) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao carregar branding inicial do localStorage:", e);
+        }
+        return { name: 'ZapVoice', logo: null, logoSize: 'medium' };
+    });
 
     const fetchSettings = useCallback(async () => {
         if (!activeClient) return;

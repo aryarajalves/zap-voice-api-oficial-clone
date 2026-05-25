@@ -1,4 +1,4 @@
-# Reload trigger 4 (Fixing hang)
+# Gatilho de recarga 4 (Corrigindo travamento)
 from fastapi import FastAPI, WebSocket, Request, Depends, Response
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,12 +28,12 @@ from routers.webhooks_inbound.meta import meta_webhook_handler # Import direto p
 from routers.webhooks import router as webhooks_integrations_router
 from routers.triggers import router as triggers_router
 
-# Services / Utils
+# Serviços / Utilitários
 from services.scheduler import scheduler_task
 from rabbitmq_client import rabbitmq
 from websocket_manager import manager
 
-# Security
+# Segurança
 from core.security import limiter
 from core.deps import get_db
 from core.logger import logger
@@ -42,7 +42,7 @@ from slowapi import _rate_limit_exceeded_handler
 
 load_dotenv()
 
-# Create database tables
+# Criação das tabelas do banco de dados
 # Conexão com banco de dados (Postgres ou SQLite)
 # models.Base.metadata.create_all(bind=engine) # Movido para run_migrations() para evitar deadlock
 # auto_migrate(engine) # Movido para run_migrations() para evitar deadlock
@@ -73,16 +73,16 @@ SENTRY_DSN = os.getenv("SENTRY_DSN")
 if SENTRY_DSN:
     sentry_sdk.init(dsn=SENTRY_DSN, traces_sample_rate=1.0)
 
-# Setup Rate Limiter
+# Configuração do limitador de requisições
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Mount static files
+# Servindo arquivos estáticos
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(os.path.join(_BASE_DIR, "static", "uploads"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=os.path.join(_BASE_DIR, "static")), name="static")
 
-# Mount Vite Assets (Production/Docker)
+# Servindo assets do Vite (Produção/Docker)
 assets_path = os.path.join(_BASE_DIR, "static", "dist", "assets")
 if os.path.exists(assets_path):
     logger.info(f"📂 [STATIC] Pasta assets encontrada em: {assets_path}")
@@ -122,7 +122,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
-# Include Routers
+# Registro dos Roteadores
 # --- Webhooks & Integrations Routers (PRIORIDADE MÁXIMA PARA RECEBIMENTO) ---
 # Registro direto no app para evitar erro 405 de roteadores aninhados
 @app.get("/api/meta")
@@ -160,9 +160,9 @@ app.include_router(global_vars.router, prefix="/api")
 app.include_router(leads.router, prefix="/api", tags=["Leads"])
 app.include_router(financial.router, prefix="/api", tags=["Financial"])
 
-# --- End Webhooks ---
+# --- Fim dos Webhooks ---
 
-# Startup Events
+# Eventos de Inicialização
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     # Ignora caminhos de assets estáticos e docs para não poluir
@@ -295,7 +295,7 @@ async def seed_super_admin():
                 
             db.commit()
             logger.info(f"✅ Sincronização de Super Admin ({email}) concluída com sucesso!")
-            break # Sucesso, sai do loop de retry
+            break # Sucesso — sai do loop de tentativas
             
         except OperationalError as e:
             logger.warning(f"⏳ Banco de dados ainda não está pronto (Tentativa {attempt + 1}/{max_retries}). Aguardando {retry_delay}s...")
@@ -319,7 +319,7 @@ def run_migrations():
     from database import SessionLocal
     db = SessionLocal()
     try:
-        # Diagnostic Log
+        # Log de diagnóstico
         from models import WebhookIntegration, WebhookConfig, WebhookEventMapping
         count_new = db.query(WebhookIntegration).count()
         count_old = db.query(WebhookConfig).count()
@@ -378,7 +378,7 @@ async def event_listener():
     except Exception as e:
         logger.error(f"Erro ao iniciar listener de eventos: {e}")
 
-# WebSocket Endpoint
+# Endpoint WebSocket
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = None):
     from jose import jwt, JWTError
@@ -435,8 +435,8 @@ def get_index_with_cache_busting():
         with open(index_path, "r", encoding="utf-8") as f:
             content = f.read()
         
-        # Injeta timestamp no env-config.js
-        # Ex: src="/env-config.js" -> src="/env-config.js?v=17382910..."
+        # Injeta timestamp no env-config.js para forçar recarregamento
+        # Ex: src="/env-config.js" → src="/env-config.js?v=17382910..."
         timestamp = int(time.time())
         content = content.replace(
             'src="/env-config.js"', 
@@ -468,20 +468,20 @@ async def root():
         "mode": "production"
     }
 
-# Serve env-config.js with no-cache headers
+# Servindo env-config.js sem cache
 @app.get("/env-config.js")
 async def serve_env_config():
     config_path = os.path.join(_BASE_DIR, "static", "dist", "env-config.js")
     if os.path.exists(config_path):
         from fastapi.responses import FileResponse
         response = FileResponse(config_path, media_type="application/javascript")
-        # Disable caching for this file to ensure runtime updates take effect
+        # Desabilita cache para garantir que atualizações em tempo de execução sejam aplicadas
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return response
     from fastapi import HTTPException
     raise HTTPException(status_code=404, detail="Config file not found")
 
-# SPA Catch-all (Run AFTER all other routes)
+# Rota coringa do SPA (deve rodar APÓS todas as outras rotas)
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
     # Ignorar caminhos de API, Estáticos e Webhooks para não dar conflito de método (POST vs GET)

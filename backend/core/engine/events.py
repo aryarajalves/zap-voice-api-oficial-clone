@@ -1,9 +1,9 @@
-import logging
+from core.logger import setup_logger
 from config_loader import get_setting
 from services.ai_memory import notify_agent_memory_webhook
 from .logging import log_node_execution
 
-logger = logging.getLogger("FunnelEngine.Events")
+logger = setup_logger("FunnelEngine.Events")
 
 async def publish_node_external_event(db, trigger, data, content, contact_phone, node_id, event_type="funnel_message_sent"):
     """Publica um evento externo (Memória IA) se o webhook de memória estiver configurado.

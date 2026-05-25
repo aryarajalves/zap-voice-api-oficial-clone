@@ -1,6 +1,6 @@
-import logging
 import sys
 import os
+from core.logger import setup_logger
 
 # Garante que o pacote core seja encontrado
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -14,7 +14,7 @@ execute_funnel = _execute_funnel
 log_node_execution = _log_node_execution
 trigger_to_dict = _trigger_to_dict
 
-logger = logging.getLogger("FunnelEngine.Proxy")
+logger = setup_logger("FunnelEngine.Proxy")
 
 async def validate_media_url(url: str) -> tuple[bool, str]:
     from core.engine.utils import validate_media_url as _validate_media_url

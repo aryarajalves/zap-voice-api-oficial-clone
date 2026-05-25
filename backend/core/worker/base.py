@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from rabbitmq_client import rabbitmq
+from core.logger import setup_logger
 
 # Handlers
 from .handlers.bulk import handle_bulk_send
@@ -15,7 +16,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("Worker")
+logger = setup_logger("Worker")
 
 # Worker Configuration
 PREFETCH_COUNT = int(os.getenv("RABBITMQ_PREFETCH_COUNT", 100))

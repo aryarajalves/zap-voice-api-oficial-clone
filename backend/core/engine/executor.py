@@ -1,4 +1,4 @@
-import logging
+from core.logger import setup_logger
 from datetime import datetime, timezone
 from sqlalchemy import or_
 import models
@@ -9,7 +9,7 @@ from .logging import log_node_execution
 from .graph_executor import execute_graph_funnel
 from .legacy_executor import execute_legacy_funnel
 
-logger = logging.getLogger("FunnelEngine.Orchestrator")
+logger = setup_logger("FunnelEngine.Orchestrator")
 
 async def execute_funnel(
     funnel_id: int, 

@@ -1,5 +1,5 @@
-import logging
 import random
+from core.logger import setup_logger
 import asyncio
 from datetime import datetime, timezone, timedelta
 import models
@@ -10,7 +10,7 @@ from ..events import publish_node_external_event
 from ..business_hours import is_within_business_hours, get_next_business_hour_start
 from services.window_manager import get_best_conversation, is_window_open_strict
 
-logger = logging.getLogger("FunnelEngine.Nodes.Message")
+logger = setup_logger("FunnelEngine.Nodes.Message")
 
 async def handle_message_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel):
     data = node.get("data", {})

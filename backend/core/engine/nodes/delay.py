@@ -1,11 +1,11 @@
-import logging
 import random
+from core.logger import setup_logger
 import asyncio
 from datetime import datetime, timezone, timedelta
 from ..utils import get_next_node, BRAZIL_TZ
 from ..logging import log_node_execution
 
-logger = logging.getLogger("FunnelEngine.Nodes.Delay")
+logger = setup_logger("FunnelEngine.Nodes.Delay")
 
 async def handle_delay_node(db, trigger, node, edges, funnel):
     data = node.get("data", {})

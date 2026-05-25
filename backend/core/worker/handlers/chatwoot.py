@@ -1,11 +1,11 @@
 import asyncio
-import logging
 import models
+from core.logger import setup_logger
 from database import SessionLocal
 from chatwoot_client import ChatwootClient
 from ..utils import update_node_history_extra
 
-logger = logging.getLogger("Worker.Chatwoot")
+logger = setup_logger("Worker.Chatwoot")
 
 async def handle_chatwoot_private_message(data: dict):
     """

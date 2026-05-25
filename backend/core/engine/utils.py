@@ -3,10 +3,10 @@ import zoneinfo
 import httpx
 import unicodedata
 import re
-import logging
 from datetime import datetime, timezone
+from core.logger import setup_logger
 
-logger = logging.getLogger("FunnelEngine.Utils")
+logger = setup_logger("FunnelEngine.Utils")
 
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
 UPLOAD_DIR = "static/uploads"

@@ -1,10 +1,10 @@
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 import models
-import logging
 from typing import Optional
+from core.logger import setup_logger
 
-logger = logging.getLogger("WindowManager")
+logger = setup_logger("WindowManager")
 
 WINDOW_HOURS = 23
 WINDOW_MINUTES = 59

@@ -1,14 +1,14 @@
 import os
 import secrets
-import logging
 from slowapi import Limiter
+from core.logger import setup_logger
 from slowapi.util import get_remote_address
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import jwt
 
-logger = logging.getLogger("security")
+logger = setup_logger("security")
 
 # ── Rate Limiter ──────────────────────────────────────────────────────────────
 # [OPCIONAL] Habilitar/Desabilitar o limitador de requisições. Útil desativar em testes.

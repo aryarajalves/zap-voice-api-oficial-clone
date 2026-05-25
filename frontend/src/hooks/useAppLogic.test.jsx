@@ -63,4 +63,17 @@ describe('useAppLogic Hook', () => {
         expect(storedBranding).toBeDefined();
         expect(storedBranding.name).toBe('MyWhitelabelCompany');
     });
+
+    it('should initialize appBranding state from localStorage on startup', () => {
+        const cachedBranding = { name: 'CachedCompany', logo: null, logoSize: 'small' };
+        localStorage.setItem('appBranding', JSON.stringify(cachedBranding));
+
+        // Mock fetchWithAuth to not resolve yet (keeps it in loading state)
+        fetchWithAuth.mockReturnValue(new Promise(() => {}));
+
+        const { result } = renderHook(() => useAppLogic());
+
+        expect(result.current.appBranding.name).toBe('CachedCompany');
+        expect(result.current.appBranding.logoSize).toBe('small');
+    });
 });

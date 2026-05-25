@@ -1,9 +1,9 @@
 import re
-import logging
 import json
 from typing import Any, List
+from core.logger import setup_logger
 
-logger = logging.getLogger("CoreUtils")
+logger = setup_logger("CoreUtils")
 
 def get_nested(data, path):
     """

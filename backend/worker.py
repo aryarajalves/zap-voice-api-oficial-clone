@@ -12,6 +12,12 @@ from core.worker.handlers.whatsapp import handle_whatsapp_event
 from core.worker.handlers.funnel import handle_funnel_execution
 from core.worker.handlers.chatwoot import handle_chatwoot_private_message
 from core.worker.handlers.memory import handle_agent_memory_webhook
+from rabbitmq_client import rabbitmq
+
+# Re-exports para compatibilidade com testes unitários (patch("worker.X"))
+from services.bulk import process_bulk_send, process_bulk_funnel
+from core.engine.executor import execute_funnel
+from database import SessionLocal
 
 if __name__ == "__main__":
     try:

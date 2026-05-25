@@ -1,10 +1,10 @@
-import logging
 import random
+from core.logger import setup_logger
 from datetime import datetime, timezone
 import models
 from ..utils import apply_vars
 
-logger = logging.getLogger("FunnelEngine.Nodes.Actions")
+logger = setup_logger("FunnelEngine.Nodes.Actions")
 
 async def handle_update_contact_node(db, trigger, node, chatwoot, contact_phone, apply_vars_func):
     data = node.get("data", {})

@@ -45,9 +45,9 @@ def auto_migrate(engine):
     """
     from sqlalchemy import text, inspect
     from models import Base
-    import logging
-    
-    logger = logging.getLogger("zapvoice")
+    from core.logger import setup_logger
+
+    logger = setup_logger("zapvoice")
     logger.info("🔍 Iniciando verificação dinâmica de esquema do banco de dados...")
     
     try:

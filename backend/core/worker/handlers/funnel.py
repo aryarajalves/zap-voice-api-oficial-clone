@@ -26,11 +26,12 @@ async def handle_funnel_execution(data: dict):
     lock_id = 2000000 + int(trigger_id)
     
     # Lock não-bloqueante para evitar travar o event loop do worker
-    while True:
-        locked = db.execute(text("SELECT pg_try_advisory_xact_lock(:id)"), {"id": lock_id}).scalar()
-        if locked: break
-        import asyncio
-        await asyncio.sleep(0.1)
+    if db.bind.dialect.name == 'postgresql':
+        while True:
+            locked = db.execute(text("SELECT pg_try_advisory_xact_lock(:id)"), {"id": lock_id}).scalar()
+            if locked: break
+            import asyncio
+            await asyncio.sleep(0.1)
     
     try:
         # Refresh do estado do trigger
@@ -111,7 +112,7 @@ async def handle_funnel_execution(data: dict):
                         content=real_content
                     ))
                     trigger.total_sent = (trigger.total_sent or 0) + 1
-                    trigger.status = 'completed'
+                    trigger.status = 'paused_waiting_delivery' if trigger.funnel_id else 'completed'
                     db.commit() # Commit IMEDIATO para liberar o message_id para o webhook de entrega
                     logger.info(f"✅ Template enviado com sucesso para {contact_phone}")
 
@@ -179,42 +180,9 @@ async def handle_funnel_execution(data: dict):
                         except Exception as e_lbl:
                             logger.error(f"❌ [DIRECT] Erro ao aplicar etiquetas: {e_lbl}")
 
-                    # 4. Se houver um funil vinculado, disparar o funil filho logo em seguida
+                    # 4. Se houver um Funil ZapVoice vinculado, aguardar confirmação de entrega
                     if trigger.funnel_id:
-                        logger.info(f"🚀 [FOLLOW-UP-FUNNEL] Criando trigger filho para Funil {trigger.funnel_id} pós-template para {contact_phone}")
-                        child_trigger = models.ScheduledTrigger(
-                            client_id=client_id,
-                            funnel_id=trigger.funnel_id,
-                            contact_phone=contact_phone,
-                            contact_name=trigger.contact_name,
-                            conversation_id=trigger.conversation_id,
-                            chatwoot_account_id=trigger.chatwoot_account_id,
-                            chatwoot_contact_id=trigger.chatwoot_contact_id,
-                            chatwoot_inbox_id=effective_inbox_id,
-                            status='processing',
-                            scheduled_time=datetime.now(timezone.utc),
-                            is_bulk=False,
-                            parent_id=trigger.id,
-                            product_name="HIDDEN_CHILD",
-                            chatwoot_label=trigger.chatwoot_label,
-                            skip_block_check=True
-                        )
-                        db.add(child_trigger)
-                        db.commit()
-                        db.refresh(child_trigger)
-
-                        logger.info(f"🚀 [FOLLOW-UP-FUNNEL] Iniciando execução do Funil {trigger.funnel_id} pós-template via trigger filho #{child_trigger.id}")
-                        await execute_funnel(
-                            funnel_id=trigger.funnel_id, 
-                            conversation_id=child_trigger.conversation_id, 
-                            trigger_id=child_trigger.id,
-                            contact_phone=contact_phone, 
-                            db=db, 
-                            skip_block_check=getattr(child_trigger, 'skip_block_check', False),
-                            chatwoot_contact_id=child_trigger.chatwoot_contact_id, 
-                            chatwoot_account_id=child_trigger.chatwoot_account_id, 
-                            chatwoot_inbox_id=effective_inbox_id
-                        )
+                        logger.info(f"⏳ [FUNIL-ZAPVOICE] Template enviado. Aguardando confirmação de entrega para iniciar o Funil {trigger.funnel_id}...")
 
                 else:
                     trigger.status = 'failed'

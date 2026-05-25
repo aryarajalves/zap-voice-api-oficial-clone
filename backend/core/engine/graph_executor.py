@@ -1,5 +1,5 @@
-import logging
 import asyncio
+from core.logger import setup_logger
 from datetime import datetime, timezone
 import models
 from config_loader import get_setting
@@ -13,7 +13,7 @@ from .nodes.condition import handle_condition_node
 from .nodes.template import handle_template_node
 from .nodes.actions import handle_update_contact_node, handle_label_node, handle_randomizer_node, handle_link_funnel_node
 
-logger = logging.getLogger("FunnelEngine.GraphExecutor")
+logger = setup_logger("FunnelEngine.GraphExecutor")
 
 async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, contact_phone, db, apply_vars_func, chatwoot_contact_id=None):
     current_node_id = trigger.current_node_id

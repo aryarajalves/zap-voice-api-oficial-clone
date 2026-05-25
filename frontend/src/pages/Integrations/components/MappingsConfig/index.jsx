@@ -76,7 +76,7 @@ const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLab
   const removeVariable = (mIndex, vIndex) => {
     const newMappings = [...formData.mappings];
     const mapping = { ...newMappings[mIndex] };
-    const newVars = [...mapping.variables_mapping];
+    const newVars = [...(mapping.variables_mapping || [])];
     newVars.splice(vIndex, 1);
     mapping.variables_mapping = newVars;
     newMappings[mIndex] = mapping;
@@ -86,7 +86,7 @@ const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLab
   const updateVariable = (mIndex, vIndex, field, value) => {
     const newMappings = [...formData.mappings];
     const mapping = { ...newMappings[mIndex] };
-    const newVars = [...mapping.variables_mapping];
+    const newVars = [...(mapping.variables_mapping || [])];
     newVars[vIndex] = { ...newVars[vIndex], [field]: value };
     mapping.variables_mapping = newVars;
     newMappings[mIndex] = mapping;

@@ -1,11 +1,11 @@
-import logging
 import httpx
 import models
+from core.logger import setup_logger
 from database import SessionLocal
 from config_loader import get_setting
 from ..utils import update_node_memory_status
 
-logger = logging.getLogger("Worker.Memory")
+logger = setup_logger("Worker.Memory")
 
 async def handle_agent_memory_webhook(data: dict):
     """

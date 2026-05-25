@@ -1,11 +1,11 @@
 import asyncio
 import time
-import logging
 import models
+from core.logger import setup_logger
 from datetime import datetime, timezone
 from .logging import log_node_execution
 
-logger = logging.getLogger("FunnelEngine.Sync")
+logger = setup_logger("FunnelEngine.Sync")
 
 async def wait_for_delivery_sync(db, message_id, trigger, current_node_id, timeout=60):
     """Aguarda confirmação de recebimento via webhook do WhatsApp."""

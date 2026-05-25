@@ -1,10 +1,10 @@
 import os
-import logging
 from sqlalchemy.orm import Session
+from core.logger import setup_logger
 from database import SessionLocal
 from models import AppConfig
 
-logger = logging.getLogger("config_loader")
+logger = setup_logger("config_loader")
 
 def get_settings(client_id: int = None):
     """

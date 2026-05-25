@@ -1,11 +1,11 @@
-import logging
 import asyncio
+from core.logger import setup_logger
 from datetime import datetime, timezone, timedelta
 import models
 from config_loader import get_setting
 from .logging import log_node_execution
 
-logger = logging.getLogger("FunnelEngine.LegacyExecutor")
+logger = setup_logger("FunnelEngine.LegacyExecutor")
 
 async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, contact_phone, db, apply_vars_func):
     total_steps = len(steps)

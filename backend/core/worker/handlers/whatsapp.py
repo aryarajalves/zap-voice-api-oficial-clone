@@ -1,8 +1,8 @@
-import logging
 import asyncio
 import os
 import json
 import models
+from core.logger import setup_logger
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import text, func, or_
 from database import SessionLocal
@@ -12,7 +12,7 @@ from rabbitmq_client import rabbitmq
 from config_loader import get_setting
 from core.engine.business_hours import is_within_business_hours, get_next_business_hour_start
 
-logger = logging.getLogger("Worker.WhatsApp")
+logger = setup_logger("Worker.WhatsApp")
 
 # Cache em memória para evitar reprocessamento ultra-rápido do mesmo payload
 GLOBAL_PROCESSING_LOCKS = {}
@@ -103,10 +103,10 @@ async def handle_whatsapp_event(data: dict):
                     msg_id = status_data.get("id")
                     status = status_data.get("status")
                     recipient = status_data.get("recipient_id")
-                    
                     if msg_id:
                         clean_id = msg_id.replace("wamid.", "")
-                        db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"status_{clean_id}"})
+                        if db.bind.dialect.name == 'postgresql':
+                            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"status_{clean_id}"})
                         
                         message_record = db.query(models.MessageStatus).filter(
                             models.MessageStatus.message_id == clean_id
@@ -189,6 +189,123 @@ async def handle_whatsapp_event(data: dict):
                                 
                                 if status in ('delivered', 'read'):
                                     asyncio.create_task(handle_deferred_post_delivery(trigger.id, message_record.id, status, msg_id, recipient))
+                                    
+                                    if trigger.status == 'paused_waiting_delivery':
+                                        # Cenário A: Gatilho de Template com Funil ZapVoice Pendente
+                                        if trigger.template_name is not None and trigger.funnel_id is not None:
+                                            child_exists = db.query(models.ScheduledTrigger).filter(
+                                                models.ScheduledTrigger.parent_id == trigger.id
+                                            ).first()
+                                            
+                                            if not child_exists:
+                                                logger.info(f"🚀 [FUNIL-ZAPVOICE] Confirmação de entrega recebida para o trigger pai #{trigger.id}. Criando trigger do Funil ZapVoice...")
+                                                child_trigger = models.ScheduledTrigger(
+                                                    client_id=trigger.client_id,
+                                                    funnel_id=trigger.funnel_id,
+                                                    contact_phone=trigger.contact_phone,
+                                                    contact_name=trigger.contact_name,
+                                                    conversation_id=trigger.conversation_id,
+                                                    chatwoot_account_id=trigger.chatwoot_account_id,
+                                                    chatwoot_contact_id=trigger.chatwoot_contact_id,
+                                                    chatwoot_inbox_id=trigger.chatwoot_inbox_id,
+                                                    status='processing',
+                                                    scheduled_time=datetime.now(timezone.utc),
+                                                    is_bulk=False,
+                                                    parent_id=trigger.id,
+                                                    product_name="HIDDEN_CHILD",
+                                                    chatwoot_label=trigger.chatwoot_label,
+                                                    skip_block_check=True
+                                                )
+                                                db.add(child_trigger)
+                                                db.commit()
+                                                db.refresh(child_trigger)
+                                                
+                                                await rabbitmq.publish("zapvoice_funnel_executions", {
+                                                    "trigger_id": child_trigger.id,
+                                                    "funnel_id": trigger.funnel_id,
+                                                    "conversation_id": child_trigger.conversation_id,
+                                                    "contact_phone": child_trigger.contact_phone,
+                                                    "chatwoot_contact_id": child_trigger.chatwoot_contact_id,
+                                                    "chatwoot_account_id": child_trigger.chatwoot_account_id,
+                                                    "chatwoot_inbox_id": child_trigger.chatwoot_inbox_id
+                                                })
+                                                logger.info(f"📤 [FUNIL-ZAPVOICE] Funil ZapVoice #{trigger.funnel_id} iniciado para {recipient} via trigger filho #{child_trigger.id}")
+                                            
+                                            trigger.status = 'completed'
+                                            db.commit()
+                                            
+                                        # Cenário B: Nó de Funil que estava pausado aguardando entrega
+                                        elif trigger.funnel_id is not None and trigger.current_node_id is not None:
+                                            logger.info(f"🔄 [RESUME] Mensagem entregue. Retomando Funil ZapVoice #{trigger.funnel_id} para {recipient}...")
+                                            
+                                            # Log de conclusão do nó atual
+                                            current_node = trigger.current_node_id
+                                            from core.engine.logging import log_node_execution
+                                            log_node_execution(db, trigger, current_node, 'completed', "Mensagem entregue.")
+                                            
+                                            # Registrar estabilização
+                                            target_time = (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat()
+                                            log_node_execution(db, trigger, "STABILIZATION", "processing", "Estabilizando...", {"target_time": target_time})
+                                            
+                                            # Buscar o próximo nó do grafo
+                                            funnel_obj = trigger.funnel
+                                            if funnel_obj and funnel_obj.steps:
+                                                from core.engine.utils import get_next_node
+                                                graph_data = funnel_obj.steps
+                                                edges = graph_data.get("edges", [])
+                                                next_node_id = get_next_node(current_node, edges)
+                                                
+                                                if next_node_id:
+                                                    trigger.current_node_id = next_node_id
+                                                    trigger.status = 'processing'
+                                                    db.commit()
+                                                    
+                                                    # Função auxiliar para retomar após 10s
+                                                    async def resume_funnel_after_delay(trigger_id, funnel_id, conversation_id, phone, delay=10):
+                                                        await asyncio.sleep(delay)
+                                                        db_res = SessionLocal()
+                                                        try:
+                                                            t_res = db_res.query(models.ScheduledTrigger).get(trigger_id)
+                                                            if t_res and t_res.status == 'processing':
+                                                                from core.engine.logging import log_node_execution
+                                                                log_node_execution(db_res, t_res, "STABILIZATION", "completed", "Estabilização concluída.")
+                                                                
+                                                                await rabbitmq.publish("zapvoice_funnel_executions", {
+                                                                    "trigger_id": trigger_id,
+                                                                    "funnel_id": funnel_id,
+                                                                    "conversation_id": conversation_id,
+                                                                    "contact_phone": phone
+                                                                })
+                                                                logger.info(f"📤 [RESUME] Funil ZapVoice {funnel_id} retomado no nó {next_node_id} para {phone}")
+                                                        except Exception as e_res:
+                                                            logger.error(f"❌ [RESUME] Erro ao retomar funil: {e_res}")
+                                                        finally:
+                                                            db_res.close()
+                                                    
+                                                    asyncio.create_task(resume_funnel_after_delay(
+                                                        trigger.id, funnel_obj.id, trigger.conversation_id, message_record.phone_number
+                                                    ))
+                                                else:
+                                                    # Fim do funil
+                                                    trigger.status = 'completed'
+                                                    db.commit()
+                                                    logger.info(f"🏁 [RESUME] Fim do Funil ZapVoice alcançado para {recipient}")
+                                            else:
+                                                trigger.status = 'completed'
+                                                db.commit()
+                                                
+                                        # Cenário C: Envio de template direto sem Funil associado (Logs de compatibilidade com testes)
+                                        else:
+                                            current_node = trigger.current_node_id or 'DELIVERY'
+                                            from core.engine.logging import log_node_execution
+                                            log_node_execution(db, trigger, current_node, 'completed', "Mensagem entregue.")
+                                            
+                                            target_time = (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat()
+                                            log_node_execution(db, trigger, "STABILIZATION", "processing", "Estabilizando...", {"target_time": target_time})
+                                            
+                                            trigger.status = 'completed'
+                                            db.commit()
+                                            logger.info(f"✅ [RESUME] Envio de template direto concluído para {recipient}")
 
                 # 2. PROCESS INBOUND MESSAGES (INTERACTION)
                 contacts_map = {c.get("wa_id"): c.get("profile", {}).get("name") for c in value.get("contacts", [])}
@@ -200,10 +317,11 @@ async def handle_whatsapp_event(data: dict):
                     
                     db_lock_key = f"inbound_{from_phone}"
                     # Lock não-bloqueante para evitar travar o event loop do worker
-                    while True:
-                        locked = db.execute(text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"), {"key": db_lock_key}).scalar()
-                        if locked: break
-                        await asyncio.sleep(0.05)
+                    if db.bind.dialect.name == 'postgresql':
+                        while True:
+                            locked = db.execute(text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"), {"key": db_lock_key}).scalar()
+                            if locked: break
+                            await asyncio.sleep(0.05)
                     
                     try:
                         db.expire_all()

@@ -1,5 +1,5 @@
-import logging
 import zoneinfo
+from core.logger import setup_logger
 import json
 import httpx
 from datetime import datetime, timezone
@@ -7,7 +7,7 @@ from ..utils import normalize_text, get_next_node
 from ..logging import log_node_execution
 from config_loader import get_setting
 
-logger = logging.getLogger("FunnelEngine.Nodes.Condition")
+logger = setup_logger("FunnelEngine.Nodes.Condition")
 
 async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edges, conversation_id=None):
     data = node.get("data", {})
