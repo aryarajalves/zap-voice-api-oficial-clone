@@ -263,6 +263,18 @@ const FunnelList = ({ logic }) => {
                   <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                     <span>{Array.isArray(funnel.steps) ? funnel.steps.length : (funnel.steps?.nodes?.length || 0)} etapas</span>
                     {funnel.trigger_phrase && <span className="text-yellow-600">⚡ Gatilho</span>}
+                    {funnel.created_at && (
+                      <span className="text-gray-400 dark:text-gray-500">
+                        • Criado em: {new Date(funnel.created_at).toLocaleString('pt-BR', {
+                          timeZone: 'America/Sao_Paulo',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -8,7 +8,7 @@ logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
 
 
-async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, note_content: str, chatwoot_label):
+async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, note_content: str, chatwoot_label, trigger_id: int = None):
     """Após envio bem-sucedido: garante conversa, envia nota privada e aplica etiquetas."""
     try:
         resolved_conv_id = conversation_id
@@ -28,6 +28,28 @@ async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, n
         if note_content:
             logger.info(f"📝 [BULK] Enviando nota privada na conversa {resolved_conv_id}")
             await chatwoot.send_private_note(resolved_conv_id, note_content)
+            
+            if trigger_id:
+                from database import SessionLocal
+                import models
+                db = SessionLocal()
+                try:
+                    clean_phone = "".join(filter(str.isdigit, str(phone)))
+                    msg_rec = db.query(models.MessageStatus).filter(
+                        models.MessageStatus.trigger_id == trigger_id,
+                        models.MessageStatus.phone_number.like(f"%{clean_phone[-10:]}")
+                    ).first()
+                    if msg_rec:
+                        msg_rec.private_note_posted = True
+                        msg_rec.chatwoot_conversation_id = resolved_conv_id
+                        db.commit()
+                        logger.info(f"✅ [BULK-POST-SEND] Marcou private_note_posted como True para {phone} no Trigger {trigger_id}")
+                    else:
+                        logger.warning(f"⚠️ [BULK-POST-SEND] Registro MessageStatus não encontrado para {phone} no Trigger {trigger_id}")
+                except Exception as e_db:
+                    logger.error(f"❌ [BULK-POST-SEND] Erro ao atualizar private_note_posted no banco: {e_db}")
+                finally:
+                    db.close()
 
         # Etiquetas (se configuradas)
         if chatwoot_label:
@@ -39,6 +61,7 @@ async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, n
 
     except Exception as e:
         logger.error(f"❌ [BULK] Erro no pós-envio para {phone}: {e}")
+
 
 
 async def send_smart_message(
@@ -108,7 +131,7 @@ async def send_smart_message(
                     if is_success:
                         now_br = datetime.now(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M:%S")
                         logger.info(f"🚀 [DISPARO] [Trigger {trigger_id}] [{now_br}] [{phone}] Tipo: LIVRE (Sessão) | Sucesso")
-                        asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, free_text, chatwoot_label))
+                        asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, free_text, chatwoot_label, trigger_id))
                         return {"result": res, "type": "FREE_MESSAGE", "success": True}
 
                     err_msg = str(res.get("detail", "")).lower() if isinstance(res, dict) else str(res).lower()
@@ -126,8 +149,9 @@ async def send_smart_message(
             res = await chatwoot.send_template(phone, template_name, language, components=clean_components)
             if res and not res.get("error"):
                 note_content = render_template_body(template_body_cache, effective_components or [], contact_name=contact_name) if template_body_cache else f"[Template: {template_name}]"
-                asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, note_content, chatwoot_label))
+                asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, note_content, chatwoot_label, trigger_id))
                 return {"result": res, "type": "TEMPLATE"}
+
 
             return res
 

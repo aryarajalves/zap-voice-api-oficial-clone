@@ -144,7 +144,7 @@ describe('ContactsModal', () => {
     expect(screen.getByText('Adicionar Etiquetas')).toBeInTheDocument();
 
     // Simula foco no input de tags para abrir dropdown
-    const dropdownTrigger = screen.getByPlaceholderText('Digite ou selecione uma etiqueta...');
+    const dropdownTrigger = screen.getByPlaceholderText('Digite e pressione Enter ou selecione abaixo...');
     fireEvent.focus(dropdownTrigger);
 
     // Aguardar que as tags carreguem e selecionar a tag 'Cliente Fiel'
@@ -187,7 +187,7 @@ describe('ContactsModal', () => {
     const tagButton = screen.getByRole('button', { name: /etiquetar \(2\)/i });
     fireEvent.click(tagButton);
 
-    const inputTrigger = screen.getByPlaceholderText('Digite ou selecione uma etiqueta...');
+    const inputTrigger = screen.getByPlaceholderText('Digite e pressione Enter ou selecione abaixo...');
     
     // Digitar etiqueta customizada
     fireEvent.change(inputTrigger, { target: { value: 'MinhaTagCustom' } });
@@ -209,6 +209,54 @@ describe('ContactsModal', () => {
               { phone: '5511888888888', name: 'Cliente Teste 2', email: null }
             ],
             tags: 'MinhaTagCustom'
+          })
+        }),
+        1
+      );
+    });
+  });
+
+  it('permite selecionar múltiplas etiquetas ao mesmo tempo e salvar', async () => {
+    render(<ContactsModal {...defaultProps} />);
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]); // Seleciona todos
+
+    const tagButton = screen.getByRole('button', { name: /etiquetar \(2\)/i });
+    fireEvent.click(tagButton);
+
+    // Simula foco no input de tags para abrir dropdown
+    const dropdownTrigger = screen.getByPlaceholderText('Digite e pressione Enter ou selecione abaixo...');
+    fireEvent.focus(dropdownTrigger);
+
+    // Aguardar que as tags carreguem
+    await waitFor(() => {
+      expect(screen.getByText('Cliente Fiel')).toBeInTheDocument();
+      expect(screen.getByText('Interessado')).toBeInTheDocument();
+    });
+
+    // Selecionar 'Cliente Fiel'
+    fireEvent.click(screen.getByText('Cliente Fiel'));
+    // Selecionar 'Interessado'
+    fireEvent.click(screen.getByText('Interessado'));
+
+    // Clicar em Salvar
+    const saveButton = screen.getByRole('button', { name: 'Salvar' });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      // Verifica se a chamada correta para a API foi feita com ambas as tags separadas por vírgula
+      expect(fetchWithAuth).toHaveBeenLastCalledWith(
+        'http://localhost:8000/leads/bulk',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leads: [
+              { phone: '5511999999999', name: 'Cliente Teste 1', email: null },
+              { phone: '5511888888888', name: 'Cliente Teste 2', email: null }
+            ],
+            tags: 'Cliente Fiel,Interessado'
           })
         }),
         1

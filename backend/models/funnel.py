@@ -22,6 +22,9 @@ class Funnel(Base):
     business_hours_end = Column(String, nullable=True, default="18:00")
     business_hours_days = Column(JSON, nullable=True, default=lambda: [0,1,2,3,4])
 
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
     client = relationship("Client", back_populates="funnels")
     triggers = relationship("ScheduledTrigger", back_populates="funnel")
 

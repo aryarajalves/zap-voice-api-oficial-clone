@@ -355,7 +355,7 @@ export default function Integrations() {
           setIsPipelineModalOpen(true);
         }} 
       />
-      <ContactsViewerModal isOpen={contactsModal.isOpen} onClose={() => setContactsModal(prev => ({ ...prev, isOpen: false }))} triggerId={contactsModal.triggerId} contacts={contactsModal.contacts} counts={contactsModal.counts} filter={contactsFilter} setFilter={setContactsFilter} loading={loadingContacts} title={contactsModal.title} />
+      <ContactsViewerModal isOpen={contactsModal.isOpen} onClose={() => setContactsModal(prev => ({ ...prev, isOpen: false }))} triggerId={contactsModal.triggerId} contacts={contactsModal.contacts} counts={contactsModal.counts} filter={contactsFilter} setFilter={setContactsFilter} loading={loadingContacts} title={contactsModal.title} setContactsModal={setContactsModal} />
       <MaximizedJsonModal isOpen={!!maximizedJson} data={maximizedJson} onClose={() => setMaximizedJson(null)} toast={toast} />
       <EditJsonModal isOpen={editJsonModal.isOpen} data={editJsonModal.data} onClose={() => setEditJsonModal({ isOpen: false, data: '', id: null })} onSave={(data) => handleSaveJson(editJsonModal.id, data, historyIntegration.id).then(success => success && setEditJsonModal({ isOpen: false, data: '', id: null }))} isSaving={isSavingJson} />
       <GuideModal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} />

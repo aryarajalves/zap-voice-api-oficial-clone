@@ -142,3 +142,59 @@ async def test_deferred_post_delivery_sends_note(mock_cw_class, mock_discover, m
             assert message.chatwoot_conversation_id == 456
     finally:
         db_session.close = orig_close
+
+@pytest.mark.asyncio
+async def test_bulk_post_send_updates_private_note_posted(db_session):
+    from services.bulk_core import _post_send
+    
+    mock_cw_instance = MagicMock()
+    mock_cw_instance.send_private_note = AsyncMock()
+    mock_cw_instance.ensure_conversation = AsyncMock(return_value={"conversation_id": 111})
+    mock_cw_instance.add_label_to_conversation = AsyncMock()
+    
+    # 1. Criar trigger e message
+    trigger = models.ScheduledTrigger(
+        client_id=1,
+        template_name="Template_Bulk",
+        status="active",
+        is_bulk=True
+    )
+    db_session.add(trigger)
+    db_session.commit()
+    db_session.refresh(trigger)
+    
+    message = models.MessageStatus(
+        trigger_id=trigger.id,
+        message_id="msg_bulk_123",
+        phone_number="5511988887777",
+        status="sent",
+        private_note_posted=False
+    )
+    db_session.add(message)
+    db_session.commit()
+    db_session.refresh(message)
+    
+    # Evita que o db.close() do handler encerre nossa sessão do teste
+    orig_close = db_session.close
+    db_session.close = MagicMock()
+    
+    try:
+        # Mock SessionLocal de database para usar db_session
+        with patch("database.SessionLocal", return_value=db_session):
+            await _post_send(
+                chatwoot=mock_cw_instance,
+                phone="5511988887777",
+                contact_name="Fulano",
+                conversation_id=111,
+                note_content="Nota de Teste do Bulk",
+                chatwoot_label="Lead",
+                trigger_id=trigger.id
+            )
+            
+        db_session.refresh(message)
+        assert message.private_note_posted is True
+        assert message.chatwoot_conversation_id == 111
+    finally:
+        db_session.close = orig_close
+
+

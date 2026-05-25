@@ -18,7 +18,7 @@ const PipelineModal = ({ isOpen, onClose, dispatch }) => {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[12000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[16000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
       <div className="bg-[#1e293b] border border-white/5 rounded-[2.5rem] w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
         <div className="p-8 border-b border-white/5 flex justify-between items-center bg-[#0f172a]/80 backdrop-blur">
           <div className="flex items-center gap-5">
@@ -86,13 +86,15 @@ const PipelineModal = ({ isOpen, onClose, dispatch }) => {
                       </div>
                       <p className="text-xs text-gray-400 font-medium leading-relaxed">{step.description}</p>
                       
-                      {step.metadata && Object.keys(step.metadata).length > 0 && (
+                      {step.metadata && Object.keys(step.metadata).filter(k => k.toLowerCase() !== 'contact_id').length > 0 && (
                         <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-2 gap-4">
-                           {Object.entries(step.metadata).map(([k, v]) => (
-                             <div key={k} className="flex flex-col">
-                               <span className="text-[9px] font-black text-gray-600 uppercase tracking-tighter mb-0.5">{k.replace('_', ' ')}</span>
-                               <span className="text-[10px] font-mono text-indigo-300 font-bold truncate" title={String(v)}>{String(v)}</span>
-                             </div>
+                           {Object.entries(step.metadata)
+                             .filter(([k]) => k.toLowerCase() !== 'contact_id')
+                             .map(([k, v]) => (
+                               <div key={k} className="flex flex-col">
+                                 <span className="text-[9px] font-black text-gray-600 uppercase tracking-tighter mb-0.5">{k.replace('_', ' ')}</span>
+                                 <span className="text-[10px] font-mono text-indigo-300 font-bold truncate" title={String(v)}>{String(v)}</span>
+                               </div>
                            ))}
                         </div>
                       )}

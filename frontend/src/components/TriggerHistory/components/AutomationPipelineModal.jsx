@@ -186,7 +186,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                     </div>
 
                     {activeTab === 'flow' ? (
-                        <div className="flex-1 min-h-[450px] h-[450px] relative w-full">
+                        <div className="flex-1 relative w-full" style={{ height: '450px', minHeight: '450px' }}>
                             <PipelineFlowViewer trigger={trigger} />
                         </div>
                     ) : (

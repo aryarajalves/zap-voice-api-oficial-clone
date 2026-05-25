@@ -11,6 +11,9 @@ async function run() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   
+  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+  page.on('pageerror', err => console.error('PAGE ERROR:', err.message));
+  
   try {
     console.log('Navegando para o ZapVoice...');
     await page.goto('http://localhost:5176', { waitUntil: 'networkidle', timeout: 30000 });
@@ -75,19 +78,36 @@ async function run() {
     
     // Digitar tag
     console.log('Digitando/Selecionando tag...');
-    await page.locator('div:has-text("Digite ou selecione uma etiqueta...")').last().click();
+    await page.locator('input[placeholder="Digite e pressione Enter ou selecione abaixo..."]').click();
     await page.waitForTimeout(1000);
     
     await page.locator('input[placeholder="Filtrar etiquetas..."]').fill('Tag-Automacao');
     await page.waitForTimeout(1000);
     
-    await page.locator('button', { hasText: 'Usar "Tag-Automacao"' }).click();
+    // Se a tag já existir na lista, clica nela. Caso contrário, clica no botão de criar/usar.
+    const listItem = page.locator('div.group\\/item').filter({ hasText: 'Tag-Automacao' });
+    const usarButton = page.locator('button').filter({ hasText: 'Usar "Tag-Automacao"' });
+    if (await listItem.count() > 0) {
+      console.log('Tag encontrada na lista. Selecionando...');
+      await listItem.first().click();
+    } else {
+      console.log('Tag não encontrada na lista. Criando...');
+      await usarButton.click();
+    }
     await page.waitForTimeout(1000);
     
     // Tirar print da tag preenchida
     console.log('Tirando print com a tag preenchida...');
     await page.screenshot({ path: 'scripts/screenshots/tag_filled.png' });
     console.log('Print salvo: scripts/screenshots/tag_filled.png');
+    
+    // Fechar o dropdown de tags antes de salvar para evitar interceptação de clique
+    const overlay = page.locator('div.fixed.inset-0.z-40.bg-transparent');
+    if (await overlay.count() > 0) {
+      console.log('Fechando o dropdown de tags...');
+      await overlay.click();
+      await page.waitForTimeout(1000);
+    }
     
     // Clicar em Salvar no modal de etiquetas
     console.log('Salvando etiquetas...');
@@ -101,7 +121,7 @@ async function run() {
     
     // Navegar para Contatos via Sidebar
     console.log('Navegando para a aba Contatos...');
-    await page.locator('aside button:has-text("Contatos")').click();
+    await page.locator('aside button:has-text("Contatos")').first().click();
     await page.waitForTimeout(4000);
     
     // Tirar print da lista de contatos atualizada

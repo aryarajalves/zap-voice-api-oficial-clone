@@ -61,8 +61,9 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
     }, [currentNodeId, nodes.length, fitView, getNodes]);
 
     return (
-        <div className="w-full h-full relative">
+        <div className="relative" style={{ width: '100%', height: '100%' }}>
             <ReactFlow
+                style={{ width: '100%', height: '100%' }}
                 nodes={nodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
@@ -203,7 +204,7 @@ const PipelineFlowViewer = ({ trigger }) => {
     }
 
     return (
-        <div className="w-full h-full bg-slate-50 dark:bg-[#0b0f19] relative overflow-hidden transition-colors duration-200">
+        <div className="bg-slate-50 dark:bg-[#0b0f19] relative overflow-hidden transition-colors duration-200" style={{ width: '100%', height: '450px', minHeight: '450px' }}>
             <ReactFlowProvider>
                 <FlowCameraOrchestrator 
                     trigger={trigger} 

@@ -187,7 +187,7 @@ async def handle_whatsapp_event(data: dict):
                                 db.commit()
                                 logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id})")
                                 
-                                if status == 'delivered':
+                                if status in ('delivered', 'read'):
                                     asyncio.create_task(handle_deferred_post_delivery(trigger.id, message_record.id, status, msg_id, recipient))
 
                 # 2. PROCESS INBOUND MESSAGES (INTERACTION)

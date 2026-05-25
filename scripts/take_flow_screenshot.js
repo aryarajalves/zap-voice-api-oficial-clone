@@ -54,23 +54,24 @@ async function run() {
     await page.locator('aside button:has-text("Histórico")').click();
     await page.waitForTimeout(4000); // aguarda a página e as requisições carregarem
     
-    // Filtra por Histórico de Funis (para garantir que clicamos em um trigger com funil estruturado)
-    console.log('Filtrando por Histórico de Funis para achar um com React Flow...');
-    await page.locator('select').first().selectOption('single');
+    // Filtra por "Tudo" para ver os disparos em massa
+    console.log('Filtrando por tudo...');
+    await page.locator('select').first().selectOption('all');
     await page.waitForTimeout(3000); // aguarda carregar
 
-    // Localizar a linha que contém o telefone
-    console.log('Localizando a linha do disparo do Aryaraj...');
-    const row = page.locator('tr:has-text("5585996123586")').first();
+    // Localizar a linha que contém o disparo em massa
+    console.log('Localizando a linha do disparo em massa...');
+    const row = page.locator('tr:has-text("boas_vindas_desbloqueioneural")').first();
     
     // Clicar no botão "Funis Ativados" para abrir a listagem de funis filhos
     console.log('Abrindo os funis filhos...');
     await row.locator('button:has-text("Funis Ativados")').click();
-    await page.waitForTimeout(2000); // aguarda o modal secundário
+    await page.waitForTimeout(3000); // aguarda o modal secundário
     
     // Clicar no primeiro botão "Ver Pipeline" da listagem de funis filhos
     console.log('Abrindo o modal do Pipeline Visual do funil filho...');
-    await page.locator('button[title="Ver Pipeline"]').first().click();
+    const childRow = page.locator('div.group:has-text("Aryaraj")').first();
+    await childRow.locator('button:has-text("MONITORAR AO VIVO")').click();
     await page.waitForTimeout(5000); // aguardar renderização completa e timers do React Flow
     
     // Tirar print do fluxo visual

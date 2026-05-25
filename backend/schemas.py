@@ -44,6 +44,8 @@ class FunnelCreate(FunnelBase):
 
 class Funnel(FunnelBase):
     id: int = Field(..., description="ID único do funil no banco de dados")
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

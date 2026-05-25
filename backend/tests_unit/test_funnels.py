@@ -125,7 +125,11 @@ def test_list_funnels_unauthenticated(app_client, client_obj):
 def test_get_funnel_success(app_client, auth_headers, sample_funnel):
     resp = app_client.get(f"/api/funnels/{sample_funnel.id}", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["id"] == sample_funnel.id
+    data = resp.json()
+    assert data["id"] == sample_funnel.id
+    assert "created_at" in data
+    assert "updated_at" in data
+    assert data["created_at"] is not None
 
 
 def test_get_funnel_not_found(app_client, auth_headers):
@@ -158,7 +162,11 @@ def test_create_funnel_success(app_client, auth_headers):
     }
     resp = app_client.post("/api/funnels", json=payload, headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["name"] == "New Funnel"
+    data = resp.json()
+    assert data["name"] == "New Funnel"
+    assert "created_at" in data
+    assert "updated_at" in data
+    assert data["created_at"] is not None
 
 
 def test_create_funnel_duplicate_name(app_client, auth_headers, sample_funnel):

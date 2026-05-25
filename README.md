@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.14)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.7.15)
 
-Bem-vindo à versão **3.7.14** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.7.15** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,11 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.7.15
+- **Ajuste de Sobreposição no Monitor de Pipeline**: Elevação do `z-index` do `PipelineModal` para `z-[16000]` para que ele abra por cima do popup de "Funis Iniciados" (`z-[15000]`), permitindo interagir diretamente com o monitoramento sem a necessidade de fechar o popup anterior.
+- **Remoção de Contact ID no Monitor de Pipeline**: Ocultação da chave de metadados `contact_id` (case-insensitive) na visualização dos passos do pipeline, limpando a interface.
+- **Suíte de Testes Unitários de Interface**: Criação de suíte de testes unitários dedicada (`PipelineModal.test.jsx`) com cobertura para renderização do modal, sobreposição e filtros de chaves de metadados.
 
 ### v3.7.14
 - **Ocultação Condicional de Variáveis Adicionais / Cabeçalho (Novo!)**:
