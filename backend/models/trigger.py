@@ -61,7 +61,7 @@ class ScheduledTrigger(Base):
     idempotency_key = Column(String, nullable=True, index=True, unique=True)
 
     event_type = Column(String, nullable=True)
-    integration_id = Column(PG_UUID(as_uuid=True), nullable=True, index=True)
+    integration_id = Column(String, nullable=True, index=True)
     is_free_message = Column(Boolean, default=False)
     is_interaction = Column(Boolean, default=False)
     skip_block_check = Column(Boolean, default=False)
