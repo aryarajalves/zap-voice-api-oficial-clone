@@ -46,9 +46,9 @@ echo "✅ Arquivo $CONFIG_FILE gerado com sucesso!"
 # Criar banco de dados se não existir (somente se DATABASE_URL estiver definido e for o App principal)
 if [ -n "$DATABASE_URL" ] && [ "$1" = "uvicorn" ]; then
     echo "🗄️  Verificando/criando banco de dados PostgreSQL..."
-    python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
+    timeout 30 python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
     echo "🏗️  Aplicando migrações de esquema..."
-    python scripts/database/update_schema.py || echo "⚠️  Aviso: Falha ao aplicar migrações de esquema."
+    timeout 60 python scripts/database/update_schema.py || echo "⚠️  Aviso: Falha ao aplicar migrações de esquema (timeout ou erro)."
 fi
 
 # Inicia a aplicação original (uvicorn)

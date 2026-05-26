@@ -1,7 +1,8 @@
 import os
 import sys
+import signal
 
-# Adicionar o diretório raiz ao sys.path para permitir imports de database, models, etc.
+# Adicionar o diretório raiz ao sys.path para permitir imports de database, modelos, etc.
 current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.abspath(os.path.join(current_dir, '..', '..'))
 if root_dir not in sys.path:
@@ -15,6 +16,9 @@ from core.logger import logger
 import models
 from models import Base
 
+def handler(signum, frame):
+    raise TimeoutError("Tempo limite excedido para sincronização do esquema.")
+
 def update_schema():
     """
     Sincronização Dinâmica: Compara os Modelos (Python) com o Banco de Dados (PostgreSQL)
@@ -22,9 +26,13 @@ def update_schema():
     """
     logger.info("🏗️  Iniciando sincronização dinâmica de esquema...")
     
-    inspector = inspect(engine)
+    # Configurar timeout de 30 segundos para o processo
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(30)
     
     try:
+        inspector = inspect(engine)
+        
         # 1. Garantir que as tabelas existam
         Base.metadata.create_all(bind=engine)
         
@@ -49,13 +57,13 @@ def update_schema():
                             # Tradução de tipos para SQL
                             col_type = str(column.type).upper()
                             if "VARCHAR" in col_type: col_type = "VARCHAR"
-                            if "INTEGER" in col_type: col_type = "INTEGER"
-                            if "BOOLEAN" in col_type: col_type = "BOOLEAN DEFAULT FALSE"
-                            if "JSON" in col_type: col_type = "JSONB DEFAULT '[]'"
-                            if "DATETIME" in col_type: col_type = "TIMESTAMP WITH TIME ZONE"
-                            if "FLOAT" in col_type: col_type = "FLOAT DEFAULT 0.0"
-                            if "TEXT" in col_type: col_type = "TEXT"
-                            if "UUID" in col_type: col_type = "UUID"
+                            elif "INTEGER" in col_type: col_type = "INTEGER"
+                            elif "BOOLEAN" in col_type: col_type = "BOOLEAN DEFAULT FALSE"
+                            elif "JSON" in col_type: col_type = "JSONB DEFAULT '[]'"
+                            elif "DATETIME" in col_type: col_type = "TIMESTAMP WITH TIME ZONE"
+                            elif "FLOAT" in col_type: col_type = "FLOAT DEFAULT 0.0"
+                            elif "TEXT" in col_type: col_type = "TEXT"
+                            elif "UUID" in col_type: col_type = "UUID"
 
                             conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN "{column.name}" {col_type}'))
                             conn.commit()
@@ -69,10 +77,12 @@ def update_schema():
             else:
                 logger.info("✨ Esquema do banco de dados já está atualizado.")
                 
+    except TimeoutError as te:
+        logger.error(f"⏳ {te}")
     except Exception as e:
         logger.error(f"💥 Erro fatal na sincronização: {e}")
-        # Não damos sys.exit(1) para não impedir o boot da API se for um erro menor
-        pass
+    finally:
+        signal.alarm(0)
 
 if __name__ == "__main__":
     update_schema()
