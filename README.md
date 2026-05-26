@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.1)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.2)
 
-Bem-vindo à versão **3.8.1** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.2** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,13 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.8.2
+- **Correção da Contabilização e Detalhe de Falhas**:
+  - Implementado a extração de mensagens detalhadas de erro (`failure_reason`) a partir de callbacks com status `failed` enviados pela Meta.
+  - Incremento atômico e idempotente de `total_failed` nos triggers tanto durante o webhook de atualização quanto no loop do bulk de funis.
+  - Sincronização em tempo real das contagens de falha via WebSocket (`bulk_progress`).
+  - Criação de suíte de testes unitários dedicados em `tests_unit/test_webhook_failure_counting.py` para validar o comportamento de incremento de falhas.
 
 ### v3.8.1
 - **Preservação de Estatísticas em Tempo Real**:

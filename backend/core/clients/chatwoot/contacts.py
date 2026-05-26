@@ -156,6 +156,77 @@ class ChatwootContactsMixin:
             logger.error(f"Error in is_within_24h_window: {e}")
             return False
 
+    async def find_existing_conversation(self, phone_number: str, inbox_id: int = None) -> dict | None:
+        """
+        Busca uma conversa existente para o contato SEM criar uma nova.
+        Prioriza conversas abertas com interação recente.
+        Retorna dict com conversation_id e contact_id, ou None se não encontrar.
+        """
+        if not self.api_token:
+            return None
+
+        clean_phone = ''.join(filter(str.isdigit, phone_number))
+        contact_id = None
+
+        # Variações de número para buscar
+        search_queries = [clean_phone, f"+{clean_phone}"]
+        if clean_phone.startswith("55"):
+            if len(clean_phone) == 13:
+                search_queries.append(clean_phone[:4] + clean_phone[5:])
+            elif len(clean_phone) == 12:
+                search_queries.append(clean_phone[:4] + "9" + clean_phone[4:])
+        if len(clean_phone) >= 8:
+            search_queries.append(clean_phone[-8:])
+
+        # Buscar contato existente
+        for q in search_queries:
+            try:
+                search_res = await self.search_contact(q)
+                if search_res and search_res.get("payload"):
+                    contact_id = search_res["payload"][0].get("id")
+                    break
+            except Exception:
+                continue
+
+        if not contact_id:
+            logger.info(f"🔍 [FIND_CONV] Contato não encontrado para {clean_phone} — sem conversa existente.")
+            return None
+
+        # Buscar conversas do contato
+        try:
+            conversations = await self.get_contact_conversations(contact_id=contact_id)
+        except Exception as e:
+            logger.error(f"❌ [FIND_CONV] Erro ao buscar conversas do contato {contact_id}: {e}")
+            return None
+
+        if not conversations:
+            logger.info(f"🔍 [FIND_CONV] Nenhuma conversa encontrada para contato {contact_id}.")
+            return None
+
+        # Filtrar por inbox_id se fornecido
+        eligible = [c for c in conversations if not inbox_id or c.get("inbox_id") == inbox_id]
+        if not eligible:
+            eligible = conversations  # Relaxar filtro se não houver match de inbox
+
+        # Prioridade: open > pending > resolved (por mais recente)
+        conversation_id = None
+        for status_pref in ['open', 'pending', 'resolved']:
+            for conv in eligible:
+                if conv.get("status") == status_pref:
+                    conversation_id = conv["id"]
+                    break
+            if conversation_id:
+                break
+
+        if not conversation_id and eligible:
+            conversation_id = eligible[0]["id"]
+
+        if conversation_id:
+            logger.info(f"✅ [FIND_CONV] Conversa existente {conversation_id} encontrada para {clean_phone}.")
+            return {"conversation_id": conversation_id, "contact_id": contact_id}
+
+        return None
+
     async def ensure_conversation(self, phone_number: str, name: str, inbox_id: int = None):
         if not inbox_id:
             cfg_inbox_id = self.settings.get("CHATWOOT_SELECTED_INBOX_ID")

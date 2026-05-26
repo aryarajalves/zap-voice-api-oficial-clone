@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 import zoneinfo
 from core.logger import setup_logger
-from services.utils.bulk_helpers import render_template_body, sanitize_template_components
+from services.utils.bulk_helpers import render_template_body, sanitize_template_components, extract_body_from_components
 
 logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
@@ -160,7 +160,18 @@ async def send_smart_message(
             clean_components = sanitize_template_components(effective_components or [], contact_name=contact_name, contact_phone=phone)
             res = await chatwoot.send_template(phone, template_name, language, components=clean_components)
             if res and not res.get("error"):
-                note_content = render_template_body(template_body_cache, effective_components or [], contact_name=contact_name) if template_body_cache else f"[Template: {template_name}]"
+                # Prioridade 1: Renderizar o body do cache com as variáveis do contato
+                if template_body_cache:
+                    note_content = render_template_body(template_body_cache, effective_components or [], contact_name=contact_name)
+                else:
+                    # Prioridade 2: Extrair diretamente dos components preenchidos (já têm valores reais)
+                    note_content = extract_body_from_components(clean_components)
+                    if note_content:
+                        logger.info(f"📝 [Smart Send] Conteúdo extraído dos components para nota: {note_content[:80]}")
+                    else:
+                        # Fallback final: apenas se não houver body nem components utilizáveis
+                        note_content = f"[Template: {template_name}]"
+                        logger.warning(f"⚠️ [Smart Send] Não foi possível extrair conteúdo do template '{template_name}'. Usando nome como fallback.")
                 asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, note_content, chatwoot_label, trigger_id))
                 return {"result": res, "type": "TEMPLATE"}
 

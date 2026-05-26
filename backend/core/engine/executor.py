@@ -1,6 +1,7 @@
 from core.logger import setup_logger
 from datetime import datetime, timezone
 from sqlalchemy import or_
+import asyncio
 import models
 from chatwoot_client import ChatwootClient
 from config_loader import get_setting
@@ -10,6 +11,10 @@ from .graph_executor import execute_graph_funnel
 from .legacy_executor import execute_legacy_funnel
 
 logger = setup_logger("FunnelEngine.Orchestrator")
+
+# Delay (segundos) antes de buscar conversa existente quando conversation_id não está disponível.
+# Garante que a conversa criada pela mensagem do próprio usuário já esteja no Chatwoot.
+CONVERSATION_LOOKUP_DELAY_SECONDS = 5
 
 async def execute_funnel(
     funnel_id: int, 
@@ -80,6 +85,12 @@ async def execute_funnel(
     target_convo_id = conversation_id or trigger.conversation_id
     
     if not target_convo_id:
+        # ETAPA 1: Aguardar para permitir que a conversa criada pela mensagem do usuário
+        # esteja disponível no Chatwoot antes de buscar/criar uma nova.
+        logger.info(f"⏳ [ENGINE] conversation_id ausente para {contact_phone}. Aguardando {CONVERSATION_LOOKUP_DELAY_SECONDS}s antes de buscar conversa existente...")
+        await asyncio.sleep(CONVERSATION_LOOKUP_DELAY_SECONDS)
+
+        # ETAPA 2: Tentar recuperar via ContactWindow (cache local)
         try:
             window = db.query(models.ContactWindow).filter(
                 models.ContactWindow.phone == clean_phone,
@@ -93,6 +104,26 @@ async def execute_funnel(
                 logger.info(f"🎯 [ENGINE] Conversa {target_convo_id} recuperada via ContactWindow para {clean_phone}")
         except Exception as e_win:
             logger.error(f"❌ [ENGINE] Erro ao recuperar conversa via ContactWindow: {e_win}")
+
+        # ETAPA 3: Se ainda não encontrou, buscar via API do Chatwoot (SEM criar nova conversa)
+        if not target_convo_id:
+            try:
+                logger.info(f"🔍 [ENGINE] Buscando conversa existente via API para {contact_phone}...")
+                inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
+                inbox_id = int(inbox_id_str) if inbox_id_str and str(inbox_id_str).isdigit() else (chatwoot_inbox_id or None)
+                
+                # Busca apenas conversas existentes — sem criar nova conversa
+                conv = await chatwoot.find_existing_conversation(contact_phone, inbox_id=inbox_id)
+                if conv:
+                    target_convo_id = conv.get("conversation_id")
+                    trigger.conversation_id = target_convo_id
+                    conversation_id = target_convo_id
+                    db.commit()
+                    logger.info(f"✅ [ENGINE] Conversa existente {target_convo_id} encontrada via API para {clean_phone}")
+                else:
+                    logger.warning(f"⚠️ [ENGINE] Nenhuma conversa existente encontrada para {clean_phone}. ensure_conversation criará uma nova se necessário.")
+            except Exception as e_api:
+                logger.error(f"❌ [ENGINE] Erro ao buscar conversa existente via API: {e_api}")
     
     if trigger.chatwoot_label:
         try:
@@ -119,7 +150,6 @@ async def execute_funnel(
     # Apply Private Note (Sync with delay if needed)
     if trigger.private_message:
         try:
-            import asyncio
             delay = trigger.private_message_delay or 0
             if delay > 0:
                 logger.info(f"⏳ [ENGINE] Aguardando {delay}s para enviar nota privada...")
@@ -174,7 +204,6 @@ async def execute_funnel(
         
         try:
             from rabbitmq_client import rabbitmq
-            import asyncio
             loop = asyncio.get_running_loop()
             loop.create_task(rabbitmq.publish_event("trigger_updated", {
                 "trigger_id": trigger.id,

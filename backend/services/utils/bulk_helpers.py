@@ -60,6 +60,38 @@ def render_template_body(body: str, components: list, contact_name: str = None, 
     return body
 
 
+def extract_body_from_components(components: list) -> str | None:
+    """
+    Extrai o texto do corpo (BODY) diretamente dos components enviados para a Meta API.
+    Os parâmetros já estão com os valores reais preenchidos (após sanitize_template_components),
+    portanto não precisamos do template_body_cache para reconstruir o texto.
+    
+    Retorna o texto concatenado dos parâmetros do body, ou None se não for possível extrair.
+    """
+    if not components:
+        return None
+
+    for comp in components:
+        if not isinstance(comp, dict):
+            continue
+        if str(comp.get("type", "")).upper() != "BODY":
+            continue
+        params = comp.get("parameters", [])
+        if not params:
+            return None
+        # Extrai e une todos os textos dos parâmetros do body
+        texts = []
+        for param in params:
+            if isinstance(param, dict):
+                text = param.get("text", "")
+                if text:
+                    texts.append(str(text))
+            elif isinstance(param, str) and param:
+                texts.append(param)
+        return " ".join(texts) if texts else None
+
+    return None
+
 def sanitize_template_components(components: list, contact_name: str = None, contact_phone: str = None) -> list:
     """
     Remove ou substitui valores inválidos (como '1') nos componentes do template

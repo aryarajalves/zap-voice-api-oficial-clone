@@ -124,6 +124,20 @@ async def handle_whatsapp_event(data: dict):
                                 trigger_delivered = False
                                 is_first_charge = False
                                 
+                                if status == 'failed':
+                                    meta_errors = status_data.get("errors", [])
+                                    reason = "Erro desconhecido da Meta"
+                                    if meta_errors:
+                                        err = meta_errors[0]
+                                        reason = f"Erro Meta {err.get('code')}: {err.get('message') or err.get('title')}"
+                                    message_record.failure_reason = reason
+                                    
+                                    if old_status != 'failed':
+                                        db.execute(
+                                            text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"),
+                                            {"tid": trigger.id}
+                                        )
+                                
                                 if status == 'delivered' and not message_record.delivered_counted:
                                     message_record.delivered_counted = True
                                     db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})

@@ -7,7 +7,7 @@ from rabbitmq_client import rabbitmq
 from config_loader import get_setting
 from services.engine import execute_funnel
 from core.logger import setup_logger
-from services.utils.bulk_helpers import render_template_body, extract_template_buttons
+from services.utils.bulk_helpers import render_template_body, extract_template_buttons, extract_body_from_components
 from services.utils.phone_utils import normalize_phone, get_phone_suffix
 from services.bulk_persistence import get_sent_phones_set, update_trigger_stats, record_blocked_status
 from services.bulk_core import send_smart_message
@@ -194,7 +194,17 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     if message_id: is_success = True
 
                 if is_success:
-                    content = direct_message or (render_template_body(template_body_cache, meta["components"] or [], contact_name=meta["name"]) if template_body_cache else f"[Template: {template_name}]")
+                    # Prioridade 1: Renderizar o body do cache com as variáveis do contato
+                    if direct_message:
+                        content = direct_message
+                    elif template_body_cache:
+                        content = render_template_body(template_body_cache, meta["components"] or [], contact_name=meta["name"])
+                    else:
+                        # Prioridade 2: Extrair diretamente dos components preenchidos (já têm valores reais)
+                        content = extract_body_from_components(meta["components"] or [])
+                        if not content:
+                            # Fallback final
+                            content = f"[Template: {template_name}]"
                     msg_status = models.MessageStatus(
                         trigger_id=trigger_id, message_id=message_id, phone_number=meta["phone"],
                         status='sent', message_type=msg_type, content=content, template_name=template_name,
@@ -394,6 +404,7 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
                     db_persist.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
                 elif r["status"] == "failed":
                     failed_count += 1
+                    db_persist.execute(text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
                     # CRIAR REGISTRO DE FALHA PARA O RELATÓRIO
                     fail_msg = models.MessageStatus(
                         trigger_id=trigger_id,
