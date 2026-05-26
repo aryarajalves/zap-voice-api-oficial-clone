@@ -346,11 +346,19 @@ def list_leads(
     items = query.order_by(desc(models.WebhookLead.last_event_at)).offset(skip).limit(limit).all()
 
     # Dynamic Redirection Logic — usando a sessão já existente para não abrir nova conexão com o banco
-    chatwoot_url_config = db.query(models.AppConfig).filter(
-        models.AppConfig.client_id == client_id,
-        models.AppConfig.key == "CHATWOOT_API_URL"
-    ).first()
-    raw_url = (chatwoot_url_config.value if chatwoot_url_config and chatwoot_url_config.value else None) or os.getenv("CHATWOOT_API_URL", "https://app.chatwoot.com")
+    try:
+        chatwoot_url_config = db.query(models.AppConfig).filter(
+            models.AppConfig.client_id == client_id,
+            models.AppConfig.key == "CHATWOOT_API_URL"
+        ).first()
+        raw_url = chatwoot_url_config.value if chatwoot_url_config and chatwoot_url_config.value else None
+    except Exception as e:
+        logger.error(f"Erro ao buscar CHATWOOT_API_URL do AppConfig: {e}")
+        raw_url = None
+
+    if not raw_url:
+        raw_url = os.getenv("CHATWOOT_API_URL", "https://app.chatwoot.com")
+
     # Extrair apenas o host base (remover /api/v1 ou /api se houver)
     import re as _re
     base_url = _re.sub(r"/api(/v\d+)?/?$", "", raw_url.strip().rstrip("/"))
