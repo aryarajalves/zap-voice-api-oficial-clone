@@ -49,3 +49,7 @@ Thumbs.db
 docker/backups
 docker/Dockerfile
 docker/docker-compose*
+
+# === Uploads & Cache ===
+backend/static/uploads/
+static/uploads/
