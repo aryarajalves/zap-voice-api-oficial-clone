@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 from chatwoot_client import ChatwootClient
@@ -344,10 +345,15 @@ def list_leads(
     total = query.count()
     items = query.order_by(desc(models.WebhookLead.last_event_at)).offset(skip).limit(limit).all()
 
-    # Dynamic Redirection Logic
-    from config_loader import get_setting
-    base_url = get_setting("CHATWOOT_URL", "https://app.chatwoot.com", client_id=client_id)
-    if base_url.endswith("/"): base_url = base_url[:-1]
+    # Dynamic Redirection Logic — usando a sessão já existente para não abrir nova conexão com o banco
+    chatwoot_url_config = db.query(models.AppConfig).filter(
+        models.AppConfig.client_id == client_id,
+        models.AppConfig.key == "CHATWOOT_API_URL"
+    ).first()
+    raw_url = (chatwoot_url_config.value if chatwoot_url_config and chatwoot_url_config.value else None) or os.getenv("CHATWOOT_API_URL", "https://app.chatwoot.com")
+    # Extrair apenas o host base (remover /api/v1 ou /api se houver)
+    import re as _re
+    base_url = _re.sub(r"/api(/v\d+)?/?$", "", raw_url.strip().rstrip("/"))
 
     for item in items:
         if item.chatwoot_conversation_id and item.chatwoot_account_id:
