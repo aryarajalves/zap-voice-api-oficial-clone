@@ -116,6 +116,10 @@ O sistema estará disponível em:
   - Ajustada a lógica de retry contra status 429 para esperar exatamente 60 segundos no `ChatwootClient` antes de realizar a última tentativa de reenvio, prevenindo a perda definitiva de mensagens e execuções de funis.
 - **Sincronização Automática de Templates Meta nas Notas Privadas**:
   - Integrada a função `resolve_template_body_with_sync` no envio em lote (Bulk) e execução de webhooks, forçando a sincronização imediata de templates Meta caso estejam ausentes do banco de dados local. Isso corrige o bug da nota privada vazia ou com variáveis expostas.
+- **Busca Inteligente Multi-Contatos contra Duplicidade (9º Dígito)**:
+  - Modificado o método `ensure_conversation` em `contacts.py` para pesquisar todas as variações de número de telefone (com e sem o nono dígito brasileiro) e obter todos os perfis de contato correspondentes no Chatwoot.
+  - Implementada lógica de priorização que varre o histórico das conversas desses contatos para reaproveitar aquele perfil que já possui conversas existentes, evitando a criação de conversas duplicadas.
+  - Adicionado teste unitário correspondente em `tests_unit/test_conversation_selection.py`.
 
 ### v3.8.1
 - **Preservação de Estatísticas em Tempo Real**:

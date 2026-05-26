@@ -234,40 +234,67 @@ class ChatwootContactsMixin:
                 inbox_id = int(cfg_inbox_id)
 
         clean_phone = ''.join(filter(str.isdigit, phone_number))
-        contact_id = None
         search_queries = [clean_phone, f"+{clean_phone}"]
         if clean_phone.startswith("55"):
             if len(clean_phone) == 13: search_queries.append(clean_phone[:4] + clean_phone[5:])
             elif len(clean_phone) == 12: search_queries.append(clean_phone[:4] + "9" + clean_phone[4:])
         if len(clean_phone) >= 8: search_queries.append(clean_phone[-8:])
 
+        # Busca todas as variações de contato possíveis para cobrir duplicados de 9º dígito
+        found_contacts = []
         for q in search_queries:
-            search_res = await self.search_contact(q)
-            if search_res and search_res.get("payload"):
-                contact_id = search_res["payload"][0].get("id")
+            try:
+                search_res = await self.search_contact(q)
+                if search_res and search_res.get("payload"):
+                    for c in search_res["payload"]:
+                        c_id = c.get("id")
+                        if c_id and c_id not in found_contacts:
+                            found_contacts.append(c_id)
+            except Exception as e_search:
+                logger.warning(f"⚠️ [CHATWOOT] Erro ao buscar contato com query '{q}': {e_search}")
+
+        contact_id = None
+        conversation_id = None
+
+        # 1. Tentar encontrar uma conversa com janela de 24h ativa entre TODOS os contatos encontrados
+        for c_id in found_contacts:
+            conversations = await self.get_contact_conversations(contact_id=c_id)
+            if conversations:
+                eligible_convs = [c for c in conversations if not inbox_id or c.get("inbox_id") == inbox_id]
+                for conv in eligible_convs[:5]:
+                    if await self.is_within_24h_window(conv["id"]):
+                        conversation_id = conv["id"]
+                        contact_id = c_id
+                        break
+            if conversation_id:
                 break
-        
+
+        # 2. Se nenhuma janela estiver ativa, tentar reaproveitar a conversa mais recente de qualquer contato (open > pending > resolved)
+        if not conversation_id and found_contacts:
+            for status_pref in ['open', 'pending', 'resolved']:
+                for c_id in found_contacts:
+                    conversations = await self.get_contact_conversations(contact_id=c_id)
+                    if conversations:
+                        eligible_convs = [c for c in conversations if not inbox_id or c.get("inbox_id") == inbox_id]
+                        for conv in eligible_convs:
+                            if conv.get("status") == status_pref:
+                                conversation_id = conv["id"]
+                                contact_id = c_id
+                                break
+                    if conversation_id:
+                        break
+                if conversation_id:
+                    break
+
+        # 3. Se achamos contatos mas nenhuma conversa existente, usamos o primeiro contato encontrado
+        if not contact_id and found_contacts:
+            contact_id = found_contacts[0]
+
+        # 4. Se não achamos nenhum contato pré-existente nas buscas, criamos um novo
         if not contact_id and inbox_id:
             res = await self.create_contact(name or phone_number, phone_number, inbox_id)
-            if res and res.get("payload"): contact_id = res["payload"]["contact"]["id"]
-        
-        if not contact_id: return None
-
-        conversations = await self.get_contact_conversations(contact_id=contact_id)
-        conversation_id = None
-        if conversations:
-            eligible_convs = [c for c in conversations if not inbox_id or c.get("inbox_id") == inbox_id]
-            for conv in eligible_convs[:5]:
-                if await self.is_within_24h_window(conv["id"]):
-                    conversation_id = conv["id"]
-                    break
-            if not conversation_id:
-                for status_pref in ['open', 'pending', 'resolved']:
-                    for conv in eligible_convs:
-                        if conv.get("status") == status_pref:
-                            conversation_id = conv["id"]
-                            break
-                    if conversation_id: break
+            if res and res.get("payload"):
+                contact_id = res["payload"]["contact"]["id"]
         
         if not conversation_id and inbox_id:
             res_inboxes = []
