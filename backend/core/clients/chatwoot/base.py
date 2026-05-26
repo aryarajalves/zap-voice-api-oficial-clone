@@ -36,21 +36,24 @@ class ChatwootBase:
         Método centralizado para requisições ao Chatwoot com lógica de Retry (Backoff).
         """
         url = f"{self.base_url}/{path.lstrip('/')}"
-        max_retries = 3
+        max_retries = 5
+        last_status_code = None
         
         for attempt in range(max_retries):
-            # Se for POST, PUT ou DELETE, não tentamos novamente para evitar duplicidade (não é idempotente)
-            if attempt > 0 and method.upper() in ["POST", "PUT", "DELETE"]:
+            # Se for POST, PUT ou DELETE, não tentamos novamente para evitar duplicidade (não é idempotente),
+            # EXCETO se o último erro foi de fato um Rate Limit (429), pois a requisição não chegou a ser processada.
+            if attempt > 0 and method.upper() in ["POST", "PUT", "DELETE"] and last_status_code != 429:
                 break
 
             async with httpx.AsyncClient(timeout=kwargs.pop("timeout", 15.0)) as client:
                 try:
                     response = await client.request(method, url, headers=self.headers, **kwargs)
+                    last_status_code = response.status_code
                     
                     if response.status_code == 429: # Too Many Requests
                         if attempt < max_retries - 1:
-                            wait = (2 ** attempt) + 1
-                            logger.warning(f"⚠️ [CHATWOOT] Rate Limit (429). Tentativa {attempt+1}/{max_retries}. Aguardando {wait}s...")
+                            wait = 60.0
+                            logger.warning(f"⚠️ [CHATWOOT] Rate Limit (429). Tentativa {attempt+1}/{max_retries}. Aguardando {wait:.2f}s...")
                             await asyncio.sleep(wait)
                             continue
                         
@@ -73,9 +76,10 @@ class ChatwootBase:
                 except httpx.HTTPError as e:
                     if hasattr(e, 'response') and e.response is not None:
                          status = e.response.status_code
+                         last_status_code = status
                          logger.error(f"❌ [CHATWOOT ERROR] {status} - {e.response.text}")
                          if 400 <= status < 500 and status != 429:
-                             raise e
+                              raise e
                     
                     if attempt == max_retries - 1:
                         logger.error(f"❌ [CHATWOOT] Falha definitiva após {max_retries} tentativas: {e}")

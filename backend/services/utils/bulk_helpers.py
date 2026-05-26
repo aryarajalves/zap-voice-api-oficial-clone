@@ -165,3 +165,37 @@ def extract_template_buttons(components: list) -> dict:
         "quick_replies": quick_replies,
         "has_special_buttons": has_special_buttons
     }
+
+
+async def resolve_template_body_with_sync(db, client_id: int, template_name: str) -> tuple:
+    """
+    Busca o corpo do template e botões no cache local.
+    Se não encontrar, sincroniza da Meta API e tenta novamente.
+    """
+    import models
+    from core.logger import setup_logger
+    logger = setup_logger("TemplateSyncHelper")
+    
+    t_name = template_name.split('|')[0] if '|' in template_name else template_name
+    tpl = db.query(models.WhatsAppTemplateCache).filter_by(client_id=client_id, name=t_name).first()
+    
+    if not tpl:
+        logger.info(f"🔍 [TEMPLATE-SYNC] Template '{t_name}' não encontrado no cache. Sincronizando com a Meta...")
+        try:
+            from chatwoot_client import ChatwootClient
+            chatwoot_cl = ChatwootClient(client_id=client_id)
+            await chatwoot_cl.get_whatsapp_templates()
+            # Recarrega do banco
+            tpl = db.query(models.WhatsAppTemplateCache).filter_by(client_id=client_id, name=t_name).first()
+        except Exception as e_sync:
+            logger.error(f"❌ [TEMPLATE-SYNC] Falha ao sincronizar templates com a Meta: {e_sync}")
+            
+    body = None
+    btn_info = {"quick_replies": [], "has_special_buttons": False}
+    if tpl:
+        body = tpl.body
+        if tpl.components:
+            btn_info = extract_template_buttons(tpl.components)
+            
+    return body, btn_info
+

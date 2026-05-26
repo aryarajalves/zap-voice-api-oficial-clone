@@ -5,13 +5,27 @@ from chatwoot_client import ChatwootClient
 
 @pytest.fixture
 def mock_settings():
-    with patch("config_loader.get_settings") as mock:
-        mock.return_value = {
-            "CHATWOOT_API_URL": "https://test.chatwoot.com",
-            "CHATWOOT_API_TOKEN": "test_token",
-            "CHATWOOT_ACCOUNT_ID": "1"
-        }
-        yield mock
+    settings_dict = {
+        "CHATWOOT_API_URL": "https://test.chatwoot.com",
+        "CHATWOOT_API_TOKEN": "test_token",
+        "CHATWOOT_ACCOUNT_ID": "1",
+        "WA_PHONE_NUMBER_ID": "",
+        "WA_ACCESS_TOKEN": ""
+    }
+    
+    def get_setting_mock(key, default=None, client_id=None):
+        return settings_dict.get(key, default)
+        
+    def get_settings_mock(client_id=None):
+        return settings_dict
+
+    with patch("config_loader.get_setting", side_effect=get_setting_mock), \
+         patch("config_loader.get_settings", side_effect=get_settings_mock), \
+         patch("core.clients.chatwoot.base.get_settings", side_effect=get_settings_mock):
+        
+        mock_obj = MagicMock()
+        mock_obj.return_value = settings_dict
+        yield mock_obj
 
 @pytest.mark.asyncio
 async def test_chatwoot_client_init(mock_settings):
@@ -39,7 +53,7 @@ async def test_request_retry_on_429(mock_settings):
             
             assert result == {"success": True}
             assert mock_request.call_count == 2
-            mock_sleep.assert_called_once()
+            mock_sleep.assert_called_once_with(60.0)
 
 @pytest.mark.asyncio
 async def test_send_message_success(mock_settings):
@@ -74,7 +88,7 @@ async def test_send_private_note(mock_settings):
         assert result["private"] is True
         args, kwargs = mock_request.call_args
         assert kwargs["json"]["private"] is True
-        assert "message_type" not in kwargs["json"]
+        assert kwargs["json"]["message_type"] == "outgoing"
 
 @pytest.mark.asyncio
 async def test_get_inboxes_filtering(mock_settings):
@@ -90,7 +104,7 @@ async def test_get_inboxes_filtering(mock_settings):
         ]
     }
     
-    with patch("httpx.AsyncClient.get", return_value=mock_resp):
+    with patch("httpx.AsyncClient.request", return_value=mock_resp):
         inboxes = await client.get_inboxes()
         assert len(inboxes) == 1
         assert inboxes[0]["id"] == 10
@@ -111,7 +125,7 @@ async def test_get_inboxes_selected_ids(mock_settings):
         ]
     }
     
-    with patch("httpx.AsyncClient.get", return_value=mock_resp):
+    with patch("httpx.AsyncClient.request", return_value=mock_resp):
         inboxes = await client.get_inboxes()
         assert len(inboxes) == 2
         ids = [i["id"] for i in inboxes]
@@ -137,7 +151,7 @@ async def test_get_all_conversations_pagination(mock_settings):
     mock_resp2.status_code = 200
     mock_resp2.json.return_value = {"payload": page2}
     
-    with patch("httpx.AsyncClient.get", side_effect=[mock_resp1, mock_resp2]) as mock_get:
+    with patch("httpx.AsyncClient.request", side_effect=[mock_resp1, mock_resp2]) as mock_get:
         conversations = await client.get_all_conversations()
         
         assert len(conversations) == 27
@@ -160,7 +174,7 @@ async def test_get_contact_conversations_success(mock_settings):
         "payload": [{"id": 1000, "last_activity_at": "2023-01-01T00:00:00Z"}]
     }
     
-    with patch.object(ChatwootClient, "_request", side_effect=[search_result, conv_result]) as mock_req:
+    with patch.object(client._cw, "_request", side_effect=[search_result, conv_result]) as mock_req:
         results = await client.get_contact_conversations("85999999999")
         
         assert isinstance(results, list)

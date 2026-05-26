@@ -13,6 +13,7 @@ from services.webhooks import (
     compute_dynamic_manychat_tag
 )
 from core.utils import robust_extract_labels
+from services.utils.bulk_helpers import resolve_template_body_with_sync
 
 async def execute_webhook_resend_logic(
     history_id: int,
@@ -108,12 +109,9 @@ async def execute_webhook_resend_logic(
         if mapping_note_val.lower() == "true":
             # Nota automática baseada no corpo do template
             if template_name:
-                template = db.query(models.WhatsAppTemplateCache).filter(
-                    models.WhatsAppTemplateCache.name == template_name,
-                    models.WhatsAppTemplateCache.client_id == integration.client_id
-                ).first()
-                if template:
-                    private_msg_text = template.body
+                body_text, _ = await resolve_template_body_with_sync(db, integration.client_id, template_name)
+                if body_text:
+                    private_msg_text = body_text
                     
                     body_params = []
                     for comp in components:

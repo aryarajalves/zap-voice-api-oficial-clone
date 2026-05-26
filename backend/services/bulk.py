@@ -7,7 +7,7 @@ from rabbitmq_client import rabbitmq
 from config_loader import get_setting
 from services.engine import execute_funnel
 from core.logger import setup_logger
-from services.utils.bulk_helpers import render_template_body, extract_template_buttons, extract_body_from_components
+from services.utils.bulk_helpers import render_template_body, extract_template_buttons, extract_body_from_components, resolve_template_body_with_sync
 from services.utils.phone_utils import normalize_phone, get_phone_suffix
 from services.bulk_persistence import get_sent_phones_set, update_trigger_stats, record_blocked_status
 from services.bulk_core import send_smart_message
@@ -70,12 +70,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
     if template_name and c_id:
         db_tmpl = SessionLocal()
         try:
-            t_name = template_name.split('|')[0] if '|' in template_name else template_name
-            cached_tmpl = db_tmpl.query(models.WhatsAppTemplateCache).filter_by(client_id=c_id, name=t_name).first()
-            if cached_tmpl:
-                template_body_cache = cached_tmpl.body
-                if cached_tmpl.components:
-                    template_btn_info = extract_template_buttons(cached_tmpl.components)
+            template_body_cache, template_btn_info = await resolve_template_body_with_sync(db_tmpl, c_id, template_name)
         finally:
             db_tmpl.close()
 

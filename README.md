@@ -112,6 +112,10 @@ O sistema estará disponível em:
   - Incremento atômico e idempotente de `total_failed` nos triggers tanto durante o webhook de atualização quanto no loop do bulk de funis.
   - Sincronização em tempo real das contagens de falha via WebSocket (`bulk_progress`).
   - Criação de suíte de testes unitários dedicados em `tests_unit/test_webhook_failure_counting.py` para validar o comportamento de incremento de falhas.
+- **Pausa de 1 Minuto no Rate Limit (429) do Chatwoot**:
+  - Ajustada a lógica de retry contra status 429 para esperar exatamente 60 segundos no `ChatwootClient` antes de realizar a última tentativa de reenvio, prevenindo a perda definitiva de mensagens e execuções de funis.
+- **Sincronização Automática de Templates Meta nas Notas Privadas**:
+  - Integrada a função `resolve_template_body_with_sync` no envio em lote (Bulk) e execução de webhooks, forçando a sincronização imediata de templates Meta caso estejam ausentes do banco de dados local. Isso corrige o bug da nota privada vazia ou com variáveis expostas.
 
 ### v3.8.1
 - **Preservação de Estatísticas em Tempo Real**:
