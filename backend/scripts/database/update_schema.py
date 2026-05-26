@@ -31,21 +31,31 @@ def update_schema():
     signal.alarm(30)
     
     try:
-        inspector = inspect(engine)
-        
         # 1. Garantir que as tabelas existam
         Base.metadata.create_all(bind=engine)
         
         with engine.connect() as conn:
+            # Buscar todas as colunas existentes de uma vez
+            query = text("""
+                SELECT table_name, column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public'
+            """)
+            result = conn.execute(query)
+            existing_cols_map = {}
+            for row in result:
+                tbl = row[0].lower()
+                col = row[1].lower()
+                if tbl not in existing_cols_map:
+                    existing_cols_map[tbl] = set()
+                existing_cols_map[tbl].add(col)
+            
             tables = Base.metadata.tables
             changes_made = 0
             
             for table_name, table_obj in tables.items():
-                if not inspector.has_table(table_name):
-                    continue
-                
-                # Pegar colunas existentes no banco
-                existing_columns = [c['name'].lower() for c in inspector.get_columns(table_name)]
+                table_name_lower = table_name.lower()
+                existing_columns = existing_cols_map.get(table_name_lower, set())
                 
                 for column in table_obj.columns:
                     col_name = column.name.lower()
