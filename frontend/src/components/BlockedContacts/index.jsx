@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FiSlash } from 'react-icons/fi';
 import ConfirmModal from '../ConfirmModal';
 import { useBlockedContacts } from './hooks/useBlockedContacts';
+import { useAutoBlockSettings } from './hooks/useAutoBlockSettings';
 import KeywordSection from './components/KeywordSection';
 import BlockedTabs from './components/BlockedTabs';
 import ManualInput from './components/ManualInput';
@@ -13,6 +14,7 @@ import { ProgressOverlay, LoadingOverlay } from './components/Overlays';
 
 export default function BlockedContactsModular() {
     const hook = useBlockedContacts();
+    const autoBlock = useAutoBlockSettings();
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false, title: '', message: '', onConfirm: () => { }, isDangerous: false, confirmText: 'Confirmar'
     });
@@ -52,11 +54,15 @@ export default function BlockedContactsModular() {
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Seção de Gatilhos */}
             <KeywordSection 
-                keywords={hook.keywords}
-                newKeyword={hook.newKeyword}
-                setNewKeyword={hook.setNewKeyword}
-                addKeyword={hook.addKeyword}
-                removeKeyword={hook.removeKeyword}
+                keywords={autoBlock.keywords}
+                newKeyword={autoBlock.newKeyword}
+                setNewKeyword={autoBlock.setNewKeyword}
+                addKeyword={autoBlock.addKeyword}
+                removeKeyword={autoBlock.removeKeyword}
+                funnels={autoBlock.funnels}
+                autoBlockFunnelId={autoBlock.autoBlockFunnelId}
+                setAutoBlockFunnelId={autoBlock.setAutoBlockFunnelId}
+                saveAutoBlockConfigs={autoBlock.saveAutoBlockConfigs}
             />
 
             {/* Seção de Adição */}

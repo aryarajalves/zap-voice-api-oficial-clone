@@ -106,6 +106,11 @@ O sistema estará disponível em:
 
 ## 📝 Changelog
 
+### v3.8.3
+- **Melhoria no Seletor de Destinatários do Disparo em Massa**: Implementação de detecção imediata e reativa de contatos bloqueados ao fazer upload de arquivos ou inserção manual no Bulk Sender, exibindo-os com o badge vermelho de "Bloqueado" e ativando o aviso de compliance antes da validação de canais. Os contatos bloqueados são omitidos da lista de envios.
+- **Simplificação do Auto-Bloqueio**: Remoção do campo "Etiqueta no Chatwoot (Opcional)" do painel de configuração de auto-bloqueio, salvando apenas o "Funil de Despedida" associado (com envio de string vazia para limpar etiqueta).
+- **Suíte de Testes e Validação**: Adicionados testes de integração no Vitest para o `RecipientSelector` validando a detecção imediata de bloqueados no frontend, com sucesso de 100% de cobertura.
+
 ### v3.8.2
 - **Correção da Contabilização e Detalhe de Falhas**:
   - Implementado a extração de mensagens detalhadas de erro (`failure_reason`) a partir de callbacks com status `failed` enviados pela Meta.

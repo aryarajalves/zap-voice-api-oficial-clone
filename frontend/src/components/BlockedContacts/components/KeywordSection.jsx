@@ -1,7 +1,11 @@
 import React from 'react';
 import { FiSlash } from 'react-icons/fi';
 
-export default function KeywordSection({ keywords, newKeyword, setNewKeyword, addKeyword, removeKeyword }) {
+export default function KeywordSection({
+    keywords, newKeyword, setNewKeyword, addKeyword, removeKeyword,
+    funnels, autoBlockFunnelId, setAutoBlockFunnelId,
+    saveAutoBlockConfigs
+}) {
     return (
         <div className="bg-white/10 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/5 transition-all duration-200">
             <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2 mb-4">
@@ -43,8 +47,46 @@ export default function KeywordSection({ keywords, newKeyword, setNewKeyword, ad
                 {keywords.length === 0 && <span className="text-gray-400 text-sm italic">Nenhum gatilho configurado.</span>}
             </div>
 
-            <div className="flex justify-between items-center text-xs text-gray-400">
+            <div className="flex justify-between items-center text-xs text-gray-400 mb-6">
                 <span>* Gatilhos são salvos automaticamente ao adicionar/remover.</span>
+            </div>
+
+            {/* Divisor */}
+            <div className="border-t border-white/10 my-6"></div>
+
+            {/* Ações automáticas do Auto-bloqueio */}
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2 mb-3">
+                Ações Automáticas de Auto-Bloqueio
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Configure um funil para disparar uma mensagem de despedida ao contato bloqueado.
+            </p>
+
+            <div className="mb-6">
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                    Funil de Despedida (Opcional)
+                </label>
+                <select
+                    value={autoBlockFunnelId}
+                    onChange={(e) => setAutoBlockFunnelId(e.target.value)}
+                    className="w-full px-4 py-2 border border-white/10 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-white/5 dark:bg-gray-700/50 text-gray-900 dark:text-white"
+                >
+                    <option value="" className="text-gray-950 dark:bg-gray-800 dark:text-white">Nenhum funil (Apenas bloquear)</option>
+                    {funnels.map(f => (
+                        <option key={f.id} value={f.id} className="text-gray-950 dark:bg-gray-800 dark:text-white">
+                            {f.name}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            <div className="flex justify-end">
+                <button
+                    onClick={() => saveAutoBlockConfigs(autoBlockFunnelId, '')}
+                    className="px-6 py-2.5 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition shadow-lg shadow-orange-500/20 active:scale-95"
+                >
+                    Salvar Ações
+                </button>
             </div>
         </div>
     );

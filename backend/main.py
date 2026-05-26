@@ -1,43 +1,102 @@
 # Gatilho de recarga 4 (Corrigindo travamento)
+
+# Framework principal da API — cria rotas, middlewares, WebSocket, etc.
 from fastapi import FastAPI, WebSocket, Request, Depends, Response
+
+# Sessão do banco de dados (SQLAlchemy) — usada nas rotas que precisam acessar o banco
 from sqlalchemy.orm import Session
+
+# Middleware que libera acesso ao frontend (evita erro de CORS no navegador)
 from fastapi.middleware.cors import CORSMiddleware
+
+# Permite servir arquivos estáticos (imagens, uploads, build do React)
 from fastapi.staticfiles import StaticFiles
+
+# Carrega as variáveis do arquivo .env para o ambiente
 from dotenv import load_dotenv
-load_dotenv()
+
+# Biblioteca nativa do Python para rodar tarefas assíncronas em paralelo
 import asyncio
+
+# Biblioteca nativa — acessa variáveis de ambiente e o sistema de arquivos
 import os
+
+# Biblioteca nativa — acessa informações do sistema (versão do Python, etc.)
 import sys
+
+# Biblioteca nativa — usada para medir tempo (ex: cache busting do index.html)
 import time
 
 # Log de depuração precoce para confirmar leitura do arquivo no servidor
 print("DEBUG: Lendo main.py - Iniciando carregamento de dependências...", flush=True)
+
+# Biblioteca nativa — converte dados para/de JSON
 import json
+
+# Monitoramento de erros em produção — captura exceções e envia pro painel do Sentry
 import sentry_sdk
+
+# Biblioteca nativa — manipulação de datas e fusos horários
 from datetime import datetime, timezone
 
+# Conexão com o banco de dados e função de migração automática de tabelas
 from database import engine, auto_migrate
+
+# Modelos do banco de dados (tabelas/entidades do SQLAlchemy)
 import models
 
+# Roteadores internos — cada um representa um módulo da API
 from routers import (
-    auth, funnels, schedules, settings, chatwoot, whatsapp, blocked, clients, uploads,
-    global_vars, health, webhooks_public, leads, financial
+    auth,           # Autenticação e geração de tokens JWT
+    funnels,        # Funis de vendas e automações de mensagens
+    schedules,      # Agendamentos de disparos
+    settings,       # Configurações gerais do sistema
+    chatwoot,       # Integração com o Chatwoot
+    whatsapp,       # Conexão e envio via WhatsApp
+    blocked,        # Lista de contatos bloqueados
+    clients,        # Gerenciamento de clientes/tenants
+    uploads,        # Upload de arquivos (áudios, imagens, docs)
+    global_vars,    # Variáveis globais das automações
+    health,         # Healthcheck da API
+    webhooks_public, # Webhooks públicos (WordPress, Hotmart, etc.)
+    leads,          # Gestão de leads captados externamente
+    financial       # Controle financeiro e planos
 )
+
+# Webhook de entrada do Chatwoot (recebe eventos em tempo real)
 from routers.webhooks_inbound import router as webhooks_inbound_router
-from routers.webhooks_inbound.meta import meta_webhook_handler # Import direto para registro prioritário
+
+# Handler direto do Meta (Facebook/Instagram) — registrado com prioridade máxima
+from routers.webhooks_inbound.meta import meta_webhook_handler
+
+# Gerenciamento de integrações externas (configuração pelo dashboard)
 from routers.webhooks import router as webhooks_integrations_router
+
+# Gatilhos automáticos baseados em eventos
 from routers.triggers import router as triggers_router
 
-# Serviços / Utilitários
+# Tarefa de agendamento que roda em background (dispara mensagens nos horários certos)
 from services.scheduler import scheduler_task
+
+# Cliente RabbitMQ — fila de mensagens para processar eventos de forma assíncrona
 from rabbitmq_client import rabbitmq
+
+# Gerenciador de conexões WebSocket — controla quem está conectado em tempo real
 from websocket_manager import manager
 
-# Segurança
+# Limitador de requisições (rate limit) — protege a API contra abuso
 from core.security import limiter
+
+# Função que retorna uma sessão do banco de dados para as rotas
 from core.deps import get_db
+
+# Logger centralizado do projeto — usado para registrar eventos e erros
 from core.logger import logger
+
+# Exceção lançada quando o rate limit é excedido
 from slowapi.errors import RateLimitExceeded
+
+# Handler que retorna resposta HTTP 429 quando o rate limit é atingido
 from slowapi import _rate_limit_exceeded_handler
 
 load_dotenv()

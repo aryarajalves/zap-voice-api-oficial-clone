@@ -5,6 +5,8 @@ import { applyFilters, getDispatchList } from '../../../../utils/phoneFilters';
 import { useFileImport } from './useFileImport';
 import { useValidation } from './useValidation';
 import { useTagManagement } from './useTagManagement';
+import { API_URL } from '../../../../config';
+import { fetchWithAuth } from '../../../../AuthContext';
 
 export const useRecipientSelector = ({
     onSelect,
@@ -36,6 +38,49 @@ export const useRecipientSelector = ({
             setFilterOpenOnly(true);
         }
     }, [requireOpenWindow]);
+
+    useEffect(() => {
+        if (!activeClient || contacts.length === 0) return;
+
+        const toCheck = contacts.filter(c => c.is_blocked === undefined);
+        if (toCheck.length === 0) return;
+
+        const phonesToCheck = toCheck.map(c => c.phone);
+        let active = true;
+
+        const checkBlockedBulk = async () => {
+            try {
+                const res = await fetchWithAuth(`${API_URL}/blocked/check_bulk`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phones: phonesToCheck })
+                }, activeClient.id);
+
+                if (res && res.ok && active) {
+                    const data = await res.json();
+                    const blockedSet = new Set(data.blocked_phones || []);
+                    
+                    setContacts(prev => prev.map(c => {
+                        if (phonesToCheck.includes(c.phone)) {
+                            return {
+                                ...c,
+                                is_blocked: blockedSet.has(c.phone)
+                            };
+                        }
+                        return c;
+                    }));
+                }
+            } catch (err) {
+                console.error("Erro ao verificar bloqueados em lote:", err);
+            }
+        };
+
+        checkBlockedBulk();
+
+        return () => {
+            active = false;
+        };
+    }, [contacts, activeClient]);
 
     const blockedCount = useMemo(() => contacts.filter(c => c.is_blocked).length, [contacts]);
 

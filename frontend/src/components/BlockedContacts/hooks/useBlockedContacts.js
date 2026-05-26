@@ -20,10 +20,6 @@ export function useBlockedContacts() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(50);
 
-    // Auto-block keywords
-    const [keywords, setKeywords] = useState([]);
-    const [newKeyword, setNewKeyword] = useState('');
-    const [savingKeywords, setSavingKeywords] = useState(false);
 
     // File Import
     const [importData, setImportData] = useState({ headers: [], rows: [], nonEmptyIndices: [] });
@@ -58,89 +54,9 @@ export function useBlockedContacts() {
         }
     }, [activeClient]);
 
-    const fetchKeywords = useCallback(async () => {
-        if (!activeClient) return;
-        try {
-            const res = await fetchWithAuth(`${API_URL}/settings/`, {}, activeClient?.id);
-            if (res && res.ok) {
-                const data = await res.json();
-                const kwStr = data.AUTO_BLOCK_KEYWORDS || "bloquear,parar,sair,cancelar,não quero,nao quero,stop,unsubscribe,opt-out,descadastrar";
-                setKeywords(kwStr.split(',').map(k => k.trim()).filter(Boolean));
-            }
-        } catch (err) {
-            console.error("Erro ao buscar gatilhos:", err);
-        }
-    }, [activeClient]);
-
     useEffect(() => {
         fetchBlockedContacts();
-        fetchKeywords();
-    }, [fetchBlockedContacts, fetchKeywords]);
-
-    const persistKeywords = async (updatedKeywords) => {
-        if (!activeClient) return false;
-        try {
-            const res = await fetchWithAuth(`${API_URL}/settings/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    settings: {
-                        AUTO_BLOCK_KEYWORDS: updatedKeywords.join(',')
-                    }
-                })
-            }, activeClient?.id);
-            return res && res.ok;
-        } catch (err) {
-            console.error(err);
-            return false;
-        }
-    };
-
-    const handleSaveKeywords = async () => {
-        setSavingKeywords(true);
-        const success = await persistKeywords(keywords);
-        if (success) {
-            toast.success("Gatilhos salvos com sucesso!");
-        } else {
-            toast.error("Erro ao salvar gatilhos.");
-        }
-        setSavingKeywords(false);
-    };
-
-    const addKeyword = async (e) => {
-        if (e) e.preventDefault();
-        const val = newKeyword.trim().toLowerCase();
-        if (!val) return;
-
-        if (keywords.includes(val)) {
-            toast.error("Este gatilho já está na lista.");
-            setNewKeyword('');
-            return;
-        }
-
-        const newList = [...keywords, val];
-        setKeywords(newList);
-        setNewKeyword('');
-
-        const success = await persistKeywords(newList);
-        if (success) {
-            toast.success(`"${val}" adicionado e salvo com sucesso!`);
-        } else {
-            toast.error(`"${val}" adicionado, mas houve erro ao salvar no banco.`);
-        }
-    };
-
-    const removeKeyword = async (kw) => {
-        const newList = keywords.filter(k => k !== kw);
-        setKeywords(newList);
-
-        const success = await persistKeywords(newList);
-        if (success) {
-            toast.success("Gatilho removido.");
-        } else {
-            toast.error("Erro ao remover no banco.");
-        }
-    };
+    }, [fetchBlockedContacts]);
 
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
@@ -469,12 +385,11 @@ export function useBlockedContacts() {
     return {
         contacts, loading, manualInput, setManualInput, adding, searchTerm, setSearchTerm,
         selectedIds, mode, setMode, currentPage, setCurrentPage, itemsPerPage, setItemsPerPage,
-        keywords, newKeyword, setNewKeyword, savingKeywords, addKeyword, removeKeyword,
         importData, setImportData, selectedPhoneCols, setSelectedPhoneCols, selectedNameCol, setSelectedNameCol,
         isWorking, workingMessage, importing, showColumnSelector, setShowColumnSelector,
         importProgress, importLabel, showFullPreview, setShowFullPreview, isReadingFile,
         phoneColSearch, setPhoneColSearch, nameColSearch, setNameColSearch,
-        handleSaveKeywords, handleFileUpload, processMappedImport, handleBlockManual,
+        handleFileUpload, processMappedImport, handleBlockManual,
         add55ToManualInput, performUnblock, handleBulkDelete, filteredContacts,
         paginatedContacts, totalPages, toggleSelectAll, toggleSelectRow
     };

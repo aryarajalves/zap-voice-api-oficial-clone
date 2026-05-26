@@ -423,7 +423,21 @@ async def handle_whatsapp_event(data: dict):
                             logger.info(f"🆕 [WINDOW-META] Nova janela criada para {from_phone} (Client: {target_cid}, Convo: {resolved_convo_id})")
                         db.commit()
                         
-                        # --- NOVO: Rastreamento de Interação em Mensagens Enviadas ---
+                        # Extrair o input do usuário (seja texto ou clique de botão)
+                        user_input = None
+                        msg_type = msg.get("type")
+                        if msg_type == "text":
+                            user_input = msg.get("text", {}).get("body")
+                        elif msg_type == "button":
+                            user_input = msg.get("button", {}).get("text")
+                        elif msg_type == "interactive":
+                            inter = msg.get("interactive", {})
+                            if inter.get("type") == "button_reply":
+                                user_input = inter.get("button_reply", {}).get("title")
+                            elif inter.get("type") == "list_reply":
+                                user_input = inter.get("list_reply", {}).get("title")
+
+                        # --- Rastreamento de Interação em Mensagens Enviadas ---
                         context = msg.get("context", {})
                         replied_msg_id = context.get("id")
                         message_record = None
@@ -448,6 +462,149 @@ async def handle_whatsapp_event(data: dict):
                                     candidate_cids.insert(0, target_cid)
                                 logger.info(f"🎯 [TARGET_CID] Identificado Client {target_cid} via histórico/contexto para {from_phone}")
 
+                        # --- Lógica de Auto-Bloqueio por Termo/Botão ---
+                        is_auto_blocked = False
+                        if user_input:
+                            input_clean = user_input.strip().lower()
+                            
+                            # Buscar configurações de auto-bloqueio do banco
+                            configs_db = db.query(models.AppConfig).filter(
+                                models.AppConfig.client_id == target_cid,
+                                models.AppConfig.key.in_(["AUTO_BLOCK_KEYWORDS", "AUTO_BLOCK_FUNNEL_ID", "AUTO_BLOCK_LABEL"])
+                            ).all()
+                            
+                            auto_block_keywords = []
+                            auto_block_funnel_id = None
+                            auto_block_label = None
+                            
+                            for cfg in configs_db:
+                                if cfg.key == "AUTO_BLOCK_KEYWORDS" and cfg.value:
+                                    auto_block_keywords = [k.strip().lower() for k in cfg.value.split(",") if k.strip()]
+                                elif cfg.key == "AUTO_BLOCK_FUNNEL_ID" and cfg.value:
+                                    try:
+                                        auto_block_funnel_id = int(cfg.value)
+                                    except ValueError:
+                                        pass
+                                elif cfg.key == "AUTO_BLOCK_LABEL" and cfg.value:
+                                    auto_block_label = cfg.value.strip()
+                                    
+                            if input_clean in auto_block_keywords:
+                                is_auto_blocked = True
+                                logger.info(f"🚫 [AUTO_BLOCK] Mensagem '{user_input}' coincide com palavra-chave de bloqueio {auto_block_keywords} para o cliente {target_cid}")
+                                
+                                # Adicionar à tabela de bloqueados
+                                suffix = from_phone[-8:]
+                                exists = db.query(models.BlockedContact).filter(
+                                    models.BlockedContact.client_id == target_cid,
+                                    or_(
+                                        models.BlockedContact.phone == from_phone,
+                                        models.BlockedContact.phone.like(f"%{suffix}")
+                                    )
+                                ).first()
+                                if not exists:
+                                    new_block = models.BlockedContact(
+                                        client_id=target_cid,
+                                        phone=from_phone,
+                                        name=contacts_map.get(raw_from, "Contato"),
+                                        reason="Auto-Bloqueio (Gatilho)"
+                                    )
+                                    db.add(new_block)
+                                    db.commit()
+                                    logger.info(f"🚫 [AUTO_BLOCK] Contato {from_phone} bloqueado com sucesso.")
+                                    
+                                # Incrementar total_blocked em vez de total_interactions
+                                if message_record and not getattr(message_record, 'interaction_counted', False):
+                                    message_record.interaction_counted = True
+                                    message_record.is_interaction = False
+                                    db.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
+                                    db.commit()
+                                    logger.info(f"🚫 [AUTO_BLOCK_COUNT] Bloqueio contabilizado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
+                                    
+                                    # Publicar no WS
+                                    try:
+                                        trigger_ref = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
+                                        if trigger_ref and trigger_ref.is_bulk:
+                                            db.refresh(trigger_ref)
+                                            await rabbitmq.publish_event("bulk_progress", {
+                                                "trigger_id": trigger_ref.id,
+                                                "status": trigger_ref.status,
+                                                "sent": trigger_ref.total_sent or 0,
+                                                "total_sent": trigger_ref.total_sent or 0,
+                                                "failed": trigger_ref.total_failed or 0,
+                                                "total_failed": trigger_ref.total_failed or 0,
+                                                "total_contacts": trigger_ref.total_contacts or 0,
+                                                "total": trigger_ref.total_contacts or 0,
+                                                "delivered": trigger_ref.total_delivered or 0,
+                                                "total_delivered": trigger_ref.total_delivered or 0,
+                                                "read": trigger_ref.total_read or 0,
+                                                "total_read": trigger_ref.total_read or 0,
+                                                "interactions": trigger_ref.total_interactions or 0,
+                                                "total_interactions": trigger_ref.total_interactions or 0,
+                                                "blocked": trigger_ref.total_blocked or 0,
+                                                "total_blocked": trigger_ref.total_blocked or 0,
+                                                "cost": float(trigger_ref.total_cost) if trigger_ref.total_cost else 0.0,
+                                                "total_cost": float(trigger_ref.total_cost) if trigger_ref.total_cost else 0.0
+                                            })
+                                    except Exception as ws_err:
+                                        logger.error(f"⚠️ Erro ao publicar bulk_progress (bloqueado) via WS: {ws_err}")
+                                
+                                # Obter conversa no Chatwoot para aplicar etiquetas e disparar funil
+                                cw = ChatwootClient(client_id=target_cid)
+                                resolved_convo_id = None
+                                try:
+                                    conv_res = await cw.ensure_conversation(from_phone, contacts_map.get(raw_from, "Contato"))
+                                    if isinstance(conv_res, dict):
+                                        resolved_convo_id = conv_res.get("conversation_id")
+                                    elif isinstance(conv_res, int) or (isinstance(conv_res, str) and conv_res.isdigit()):
+                                        resolved_convo_id = int(conv_res)
+                                except Exception as e_conv:
+                                    logger.error(f"⚠️ [WINDOW-META] Erro ao sincronizar conversa com Chatwoot: {e_conv}")
+                                    
+                                # Aplicar etiqueta se configurada
+                                if auto_block_label and resolved_convo_id:
+                                    try:
+                                        await cw.add_label_to_conversation(resolved_convo_id, [auto_block_label])
+                                        logger.info(f"🏷️ [AUTO_BLOCK] Etiqueta '{auto_block_label}' adicionada à conversa {resolved_convo_id}.")
+                                    except Exception as e_label:
+                                        logger.error(f"⚠️ [AUTO_BLOCK] Erro ao adicionar etiqueta à conversa: {e_label}")
+                                        
+                                    if isinstance(conv_res, dict) and conv_res.get("contact_id"):
+                                        try:
+                                            await cw.add_label_to_contact(conv_res["contact_id"], [auto_block_label])
+                                            logger.info(f"🏷️ [AUTO_BLOCK] Etiqueta '{auto_block_label}' adicionada ao contato {conv_res['contact_id']}.")
+                                        except Exception as e_contact_label:
+                                            logger.error(f"⚠️ [AUTO_BLOCK] Erro ao adicionar etiqueta ao contato: {e_contact_label}")
+                                
+                                # Disparar funil se configurado
+                                if auto_block_funnel_id:
+                                    new_trigger = models.ScheduledTrigger(
+                                        client_id=target_cid,
+                                        funnel_id=auto_block_funnel_id,
+                                        conversation_id=resolved_convo_id,
+                                        contact_phone=from_phone,
+                                        contact_name=contacts_map.get(raw_from, "Contato"),
+                                        status='processing',
+                                        scheduled_time=datetime.now(timezone.utc),
+                                        is_bulk=False,
+                                        is_interaction=True,
+                                        skip_block_check=True
+                                    )
+                                    db.add(new_trigger)
+                                    db.commit()
+                                    db.refresh(new_trigger)
+                                    
+                                    await rabbitmq.publish("zapvoice_funnel_executions", {
+                                        "trigger_id": new_trigger.id,
+                                        "funnel_id": auto_block_funnel_id,
+                                        "conversation_id": resolved_convo_id,
+                                        "contact_phone": from_phone
+                                    })
+                                    logger.info(f"🚀 [AUTO_BLOCK_FUNNEL] Funil {auto_block_funnel_id} iniciado para {from_phone}")
+                                
+                                # Aborta o processamento da mensagem corrente
+                                continue
+
+                        if not is_auto_blocked:
                             # Apenas incrementa se for de fato um clique em botão ou resposta interativa
                             is_button_click = msg.get("type") in ["button", "interactive"]
                             if is_button_click and not getattr(message_record, 'interaction_counted', False):
@@ -462,19 +619,6 @@ async def handle_whatsapp_event(data: dict):
                         # Voltamos a processar aqui porque o webhook do Chatwoot pode falhar ou atrasar.
                         # O engine de execução (executor.py) já cuida de sincronizar com o Chatwoot via ensure_conversation.
                         
-                        user_input = None
-                        msg_type = msg.get("type")
-                        if msg_type == "text":
-                            user_input = msg.get("text", {}).get("body")
-                        elif msg_type == "button":
-                            user_input = msg.get("button", {}).get("text")
-                        elif msg_type == "interactive":
-                            inter = msg.get("interactive", {})
-                            if inter.get("type") == "button_reply":
-                                user_input = inter.get("button_reply", {}).get("title")
-                            elif inter.get("type") == "list_reply":
-                                user_input = inter.get("list_reply", {}).get("title")
-
                         if user_input:
                             # --- NOVO: Verificar se o contato possui um funil pausado em botões ---
                             suspended_trigger = db.query(models.ScheduledTrigger).filter(

@@ -1,0 +1,296 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-8.3.2, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend
+configfile: pytest.ini
+plugins: anyio-4.12.1, asyncio-1.3.0, cov-7.0.0, mock-3.15.1, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests_unit/test_webhook_failure_counting.py::test_whatsapp_status_update_failed_increments_total_failed_and_extracts_reason PASSED [ 50%]
+tests_unit/test_webhook_failure_counting.py::test_process_bulk_funnel_increments_total_failed_in_loop FAILED [100%]
+
+================================== FAILURES ===================================
+__________ test_process_bulk_funnel_increments_total_failed_in_loop ___________
+
+db_session = <sqlalchemy.orm.session.Session object at 0x0000022C67E28E10>
+
+    @pytest.mark.asyncio
+    async def test_process_bulk_funnel_increments_total_failed_in_loop(db_session):
+        client = db_session.query(models.Client).first()
+        if not client:
+            client = models.Client(name="Test Client Failure Counting")
+            db_session.add(client)
+            db_session.commit()
+            db_session.refresh(client)
+    
+        funnel = models.Funnel(
+            client_id=client.id,
+            name="Temp Funnel for Test",
+            steps={"nodes": [], "edges": []}
+        )
+        db_session.add(funnel)
+        db_session.commit()
+        db_session.refresh(funnel)
+    
+        # Criar trigger de bulk
+        trigger = models.ScheduledTrigger(
+            client_id=client.id,
+            is_bulk=True,
+            funnel_id=funnel.id,
+            status="pending",
+            total_failed=0
+        )
+        db_session.add(trigger)
+        db_session.commit()
+        db_session.refresh(trigger)
+    
+        contacts = [{"phone": "5511999999999", "name": "Contato Falho"}]
+    
+        # Mock execute_funnel para levantar exceþÒo (causar falha no loop)
+        with patch("services.bulk.execute_funnel", side_effect=Exception("Simulated Loop Crash")):
+            with patch("services.bulk.SessionLocal", return_value=db_session):
+                await process_bulk_funnel(trigger.id, funnel.id, contacts, 0, 1)
+    
+        db_session.commit()
+    
+        # O total_failed deve ter sido incrementado em tempo real no loop para 1
+        trigger_db = db_session.query(models.ScheduledTrigger).filter_by(id=trigger.id).first()
+        assert trigger_db.total_failed == 1
+    
+        # Cleanup
+        fail_record = db_session.query(models.MessageStatus).filter_by(trigger_id=trigger.id, status='failed').first()
+        if fail_record:
+            db_session.delete(fail_record)
+    
+        trigger_db = db_session.query(models.ScheduledTrigger).filter_by(id=trigger.id).first()
+        if trigger_db:
+            db_session.delete(trigger_db)
+    
+>       funnel_db = db_session.query(models.Funnel).filter_by(id=funnel.id).first()
+
+tests_unit\test_webhook_failure_counting.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\aryar\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\attributes.py:569: in __get__
+    return self.impl.get(state, dict_)  # type: ignore[no-any-return]
+C:\Users\aryar\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\attributes.py:1096: in get
+    value = self._fire_loader_callables(state, key, passive)
+C:\Users\aryar\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\attributes.py:1126: in _fire_loader_callables
+    return state._load_expired(state, passive)
+C:\Users\aryar\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\state.py:828: in _load_expired
+    self.manager.expired_attribute_loader(self, toload, passive)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+mapper = <Mapper at 0x22c41f9fb60; Funnel>
+state = <sqlalchemy.orm.state.InstanceState object at 0x0000022C67E291D0>
+attribute_names = {'allowed_phone', 'allowed_phones', 'blocked_phones', 'business_hours_days', 'business_hours_end', 'business_hours_start', ...}
+passive = symbol('PASSIVE_OFF')
+
+    def load_scalar_attributes(mapper, state, attribute_names, passive):
+        """initiate a column-based attribute refresh operation."""
+    
+        # assert mapper is _state_mapper(state)
+        session = state.session
+        if not session:
+>           raise orm_exc.DetachedInstanceError(
+                "Instance %s is not bound to a Session; "
+                "attribute refresh operation cannot proceed" % (state_str(state))
+            )
+E           sqlalchemy.orm.exc.DetachedInstanceError: Instance <Funnel at 0x22c67b86f90> is not bound to a Session; attribute refresh operation cannot proceed (Background on this error at: https://sqlalche.me/e/20/bhk3)
+
+C:\Users\aryar\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\loading.py:1607: DetachedInstanceError
+---------------------------- Captured stdout call -----------------------------
+[38;5;39m25/05/26 21:58:01 - services.bulk - INFO - Starting BULK FUNNEL 1 | Funnel: 1[0m
+[38;5;196m25/05/26 21:58:01 - services.bulk - ERROR - Error executing funnel for 5511999999999: Simulated Loop Crash[0m
+============================== warnings summary ===============================
+database.py:107
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\database.py:107: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+..\..\..\..\..\..\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717
+..\..\..\..\..\..\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717
+..\..\..\..\..\..\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717
+..\..\..\..\..\..\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717
+..\..\..\..\..\..\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717
+  C:\Users\aryar\AppData\Roaming\Python\Python314\site-packages\slowapi\extension.py:717: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    if asyncio.iscoroutinefunction(func):
+
+routers\auth.py:404
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\routers\auth.py:404: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class InvitationOut(BaseModel):
+
+schemas.py:10
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:10: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    type: str = Field(..., description="Tipo do passo (message, audio, video, image, delay)", example="message")
+
+schemas.py:11
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:11: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    content: Optional[str] = Field(None, description="Conte·do da mensagem ou URL da mÝdia", example="Olß! Como posso ajudar?")
+
+schemas.py:13
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:13: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    delay: Optional[int] = Field(0, description="Tempo de espera (se type=delay)", example=5)
+
+schemas.py:14
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:14: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    timeUnit: Optional[str] = Field("seconds", description="Unidade de tempo (seconds, minutes, hours, days)", example="seconds")
+
+schemas.py:20
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:20: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    buttons: Optional[List[str]] = Field(None, description="Lista de textos para bot§es", example=["Sim", "NÒo"])
+
+schemas.py:25
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:25: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    fileName: Optional[str] = Field(None, description="Nome personalizado para o arquivo enviado", example="comprovante.pdf")
+
+schemas.py:30
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:30: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    name: str = Field(..., description="Nome de identificaþÒo do funil", example="Funil de Boas Vindas")
+
+schemas.py:32
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:32: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    trigger_phrase: Optional[str] = Field(None, description="Frase exata que dispara este funil (Match exato)", example="#start")
+
+schemas.py:35
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:35: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    allowed_phone: Optional[str] = Field(None, description="Legado: apenas este n·mero pode disparar", example="5511999999999")
+
+schemas.py:38
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:38: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    business_hours_start: Optional[str] = Field("08:00", description="Horßrio de inÝcio do perÝodo comercial (HH:MM, America/Sao_Paulo)", example="08:00")
+
+schemas.py:39
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:39: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    business_hours_end: Optional[str] = Field("18:00", description="Horßrio de fim do perÝodo comercial (HH:MM, America/Sao_Paulo)", example="18:00")
+
+schemas.py:45
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:45: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Funnel(FunnelBase):
+
+schemas.py:66
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:66: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ScheduledTrigger(ScheduledTriggerBase):
+
+schemas.py:140
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:140: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class MessageStatus(BaseModel):
+
+schemas.py:175
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:175: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    frequency: str = Field(..., description="'weekly' or 'monthly'", example="weekly")
+
+schemas.py:178
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:178: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    scheduled_time: Optional[str] = Field(None, description="HH:mm em UTC (fallback)", example="09:00")
+
+schemas.py:219
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:219: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class RecurringTrigger(RecurringTriggerBase):
+
+schemas.py:237
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:237: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    phone_number: str = Field(..., description="N·mero de destino (formato internacional sem +)", example="5511999999999")
+
+schemas.py:238
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:238: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    template_name: str = Field(..., description="Nome do template aprovado na Meta", example="hello_world")
+
+schemas.py:239
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:239: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    language: Optional[str] = Field("pt_BR", description="C¾digo do idioma", example="pt_BR")
+
+schemas.py:240
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:240: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    components: Optional[List[dict]] = Field(
+
+schemas.py:254
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:254: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    name: str = Field(..., description="Nome do template (apenas letras min·sculas e underscores)", example="boas_vindas_campanha")
+
+schemas.py:255
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:255: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    category: str = Field("MARKETING", description="Categoria (MARKETING ou UTILITY)", example="MARKETING")
+
+schemas.py:256
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:256: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    language: str = Field("pt_BR", description="Idioma do template", example="pt_BR")
+
+schemas.py:270
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:270: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    name: str = Field(..., description="Nome da varißvel", example="preco_produto")
+
+schemas.py:271
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:271: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    value: str = Field(..., description="Valor da varißvel", example="R$ 97,00")
+
+schemas.py:276
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:276: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class GlobalVariable(GlobalVariableBase):
+
+schemas.py:384
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:384: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class WebhookEventMapping(WebhookEventMappingBase):
+
+schemas.py:404
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:404: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class WebhookIntegration(WebhookIntegrationBase):
+
+schemas.py:421
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:421: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class WebhookHistory(WebhookHistoryBase):
+
+schemas.py:452
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\schemas.py:452: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class WebhookLead(WebhookLeadBase):
+
+routers\blocked.py:19
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\routers\blocked.py:19: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class BlockedContactResponse(BaseModel):
+
+routers\clients.py:19
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\routers\clients.py:19: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ClientResponse(BaseModel):
+
+main.py:177
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\main.py:177: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+..\..\..\..\..\..\AppData\Roaming\Python\Python314\site-packages\fastapi\applications.py:4576
+  C:\Users\aryar\AppData\Roaming\Python\Python314\site-packages\fastapi\applications.py:4576: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests_unit/test_webhook_failure_counting.py::test_whatsapp_status_update_failed_increments_total_failed_and_extracts_reason
+tests_unit/test_webhook_failure_counting.py::test_whatsapp_status_update_failed_increments_total_failed_and_extracts_reason
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\core\worker\handlers\whatsapp.py:116: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    trigger = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
+
+tests_unit/test_webhook_failure_counting.py::test_process_bulk_funnel_increments_total_failed_in_loop
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\services\bulk.py:323: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    t = db_init.query(models.ScheduledTrigger).get(trigger_id)
+
+tests_unit/test_webhook_failure_counting.py::test_process_bulk_funnel_increments_total_failed_in_loop
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\services\bulk.py:373: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    t = db_check.query(models.ScheduledTrigger).get(trigger_id)
+
+tests_unit/test_webhook_failure_counting.py::test_process_bulk_funnel_increments_total_failed_in_loop
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\services\bulk.py:427: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    t_prog = db_progress.query(models.ScheduledTrigger).get(trigger_id)
+
+tests_unit/test_webhook_failure_counting.py::test_process_bulk_funnel_increments_total_failed_in_loop
+  C:\Users\aryar\.gemini\antigravity\scratch\Projetos Serios\Projeto - ZapVoice no Chatwoot\backend\services\bulk.py:456: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    t = db_final.query(models.ScheduledTrigger).get(trigger_id)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests_unit/test_webhook_failure_counting.py::test_process_bulk_funnel_increments_total_failed_in_loop - sqlalchemy.orm.exc.DetachedInstanceError: Instance <Funnel at 0x22c67b86f90> is not bound to a Session; attribute refresh operation cannot proceed (Background on this error at: https://sqlalche.me/e/20/bhk3)
+================== 1 failed, 1 passed, 48 warnings in 1.26s ===================

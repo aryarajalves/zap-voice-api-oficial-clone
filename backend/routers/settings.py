@@ -139,6 +139,8 @@ async def update_settings(
         "APP_LOGO_SIZE",
         "META_RETURN_CONFIG",
         "AUTO_BLOCK_KEYWORDS",
+        "AUTO_BLOCK_FUNNEL_ID",
+        "AUTO_BLOCK_LABEL",
         "AI_MEMORY_ENABLED",
         "AGENT_MEMORY_WEBHOOK_URL",
         "MANYCHAT_API_KEY"

@@ -169,4 +169,51 @@ describe('RecipientSelector', () => {
       ]), expect.any(Object));
     });
   });
+
+  it('verifica contatos bloqueados em lote imediatamente após inserção', async () => {
+    // Mock do check_bulk
+    vi.mocked(fetchWithAuth).mockImplementation((url) => {
+      if (url.includes('/blocked/check_bulk')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ blocked_phones: ['5511999998888'] })
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ event_types: [], product_names: [], tags: [], items: [] })
+      });
+    });
+
+    render(<RecipientSelector {...defaultProps} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '5511999998888' } });
+    
+    const addBtn = screen.getByText(/Processar Lista/i);
+    fireEvent.click(addBtn);
+
+    // Aguardar 1200ms reais para o processamento de parseContacts terminar
+    await new Promise(resolve => setTimeout(resolve, 1200));
+
+    // Deve chamar check_bulk
+    await waitFor(() => {
+      expect(fetchWithAuth).toHaveBeenCalledWith(
+        expect.stringContaining('/blocked/check_bulk'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ phones: ['5511999998888'] })
+        }),
+        1
+      );
+    });
+
+    // Como está bloqueado, não deve estar na lista final para disparos (selectedList)
+    await waitFor(() => {
+      expect(defaultProps.onSelect).toHaveBeenLastCalledWith([], expect.objectContaining({ mode: 'manual' }));
+    });
+
+    // Deve mostrar o aviso de contato bloqueado na tela
+    expect(screen.getByText(/Contatos Bloqueados Detectados/i)).toBeInTheDocument();
+  }, 10000);
 });
