@@ -51,6 +51,8 @@ export default function WebhookLeads() {
         setPage={logic.setPage}
         total={logic.total}
         limit={logic.limit}
+        setLimit={logic.setLimit}
+        fetchLeads={logic.fetchLeads}
       />
 
       <Modals 

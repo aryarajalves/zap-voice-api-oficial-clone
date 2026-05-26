@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.2)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.4)
 
-Bem-vindo à versão **3.8.2** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.4** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,16 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.8.4
+- **Importação de Contatos pelo Chatwoot**: Nova funcionalidade de importação de leads diretamente do Chatwoot no modal `ContactImportModal`, com suporte a busca por nome/telefone, seleção múltipla e integração direta com a listagem de destinatários do Bulk Sender.
+- **Modal de Tags de Contatos Modularizado**: Extração do componente `TagContactsModal.jsx` dos modais de histórico de disparos (`TriggerHistory`) e integrações (`Integrations`), eliminando duplicação de código e centralizando a lógica de aplicação de etiquetas.
+- **Página de Leads do Webhook Aprimorada**: Refatoração completa da tabela de leads (`WebhookLeads/Table.jsx`) com colunas adicionais, melhor formatação e ações rápidas de visualização de contatos e edição de tags.
+- **Segurança e Permissões no Backend**: Melhorias no módulo `core/security.py` com validações refinadas de roles e permissões, aumentando a robustez do sistema de controle de acesso (RBAC).
+- **Busca Avançada de Contatos no Chatwoot**: Implementação de busca multi-critério (nome, telefone, variações com/sem nono dígito) no cliente Chatwoot (`contacts.py`), melhorando a resolução e deduplicação de contatos.
+- **Limpeza de Código de Debug**: Remoção de scripts de diagnóstico e debug temporários do repositório (`check_*.py`, `debug_*.py`, `inspect_*.py`, `verify_*.py` e arquivos `.json`/`.txt` de saída), mantendo o repositório limpo e organizado.
+- **Migração de Banco de Dados**: Adicionado script SQL de migração para a coluna `is_locked` na tabela `webhook_leads` (`add_is_locked_to_webhook_leads.sql`).
+- **Testes Unitários**: Adicionados testes para o fluxo de importação de contatos do Chatwoot (`test_chatwoot_import.py`).
 
 ### v3.8.3
 - **Melhoria no Seletor de Destinatários do Disparo em Massa**: Implementação de detecção imediata e reativa de contatos bloqueados ao fazer upload de arquivos ou inserção manual no Bulk Sender, exibindo-os com o badge vermelho de "Bloqueado" e ativando o aviso de compliance antes da validação de canais. Os contatos bloqueados são omitidos da lista de envios.

@@ -49,6 +49,7 @@ class ChatwootClient:
     async def get_conversations(self, *args, **kwargs): return await self._cw.get_conversations(*args, **kwargs)
     async def get_all_conversations(self, *args, **kwargs): return await self._cw.get_all_conversations(*args, **kwargs)
     async def get_all_contacts(self, *args, **kwargs): return await self._cw.get_all_contacts(*args, **kwargs)
+    async def get_contacts_by_label(self, *args, **kwargs): return await self._cw.get_contacts_by_label(*args, **kwargs)
     async def delete_conversation(self, *args, **kwargs): return await self._cw.delete_conversation(*args, **kwargs)
     async def delete_contact(self, *args, **kwargs): return await self._cw.delete_contact(*args, **kwargs)
     async def create_contact(self, *args, **kwargs): return await self._cw.create_contact(*args, **kwargs)

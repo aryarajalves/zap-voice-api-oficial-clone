@@ -86,6 +86,7 @@ class MessageStatus(Base):
     trigger_id = Column(Integer, ForeignKey("scheduled_triggers.id", ondelete="CASCADE"), index=True)
     message_id = Column(String, unique=True, index=True)
     phone_number = Column(String)
+    contact_name = Column(String, nullable=True)
     status = Column(String, default="sent")
     failure_reason = Column(String, nullable=True)
     is_interaction = Column(Boolean, default=False)
@@ -262,6 +263,8 @@ class WebhookLead(Base):
     chatwoot_account_id = Column(Integer, nullable=True)
     chatwoot_inbox_id = Column(Integer, nullable=True)
     
+    is_locked = Column(Boolean, default=False, nullable=False, server_default="false")
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 

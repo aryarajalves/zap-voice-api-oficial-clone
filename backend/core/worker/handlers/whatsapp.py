@@ -240,11 +240,15 @@ async def handle_whatsapp_event(data: dict):
                                             
                                             if not child_exists:
                                                 logger.info(f"🚀 [FUNIL-ZAPVOICE] Confirmação de entrega recebida para o trigger pai #{trigger.id}. Criando trigger do Funil ZapVoice...")
+                                                # Prioridade: usar dados do MessageStatus individual (contato real do bulk)
+                                                # O trigger pai num bulk tem contact_phone/contact_name do trigger pai, não do contato individual
+                                                individual_phone = message_record.phone_number if message_record else trigger.contact_phone
+                                                individual_name = (getattr(message_record, 'contact_name', None) if message_record else None) or trigger.contact_name or individual_phone
                                                 child_trigger = models.ScheduledTrigger(
                                                     client_id=trigger.client_id,
                                                     funnel_id=trigger.funnel_id,
-                                                    contact_phone=trigger.contact_phone,
-                                                    contact_name=trigger.contact_name,
+                                                    contact_phone=individual_phone,
+                                                    contact_name=individual_name,
                                                     conversation_id=trigger.conversation_id,
                                                     chatwoot_account_id=trigger.chatwoot_account_id,
                                                     chatwoot_contact_id=trigger.chatwoot_contact_id,
@@ -270,7 +274,7 @@ async def handle_whatsapp_event(data: dict):
                                                     "chatwoot_account_id": child_trigger.chatwoot_account_id,
                                                     "chatwoot_inbox_id": child_trigger.chatwoot_inbox_id
                                                 })
-                                                logger.info(f"📤 [FUNIL-ZAPVOICE] Funil ZapVoice #{trigger.funnel_id} iniciado para {recipient} via trigger filho #{child_trigger.id}")
+                                                logger.info(f"📤 [FUNIL-ZAPVOICE] Funil ZapVoice #{trigger.funnel_id} iniciado para {individual_phone} ({individual_name}) via trigger filho #{child_trigger.id}")
                                             
                                             trigger.status = 'completed'
                                             db.commit()
@@ -607,7 +611,7 @@ async def handle_whatsapp_event(data: dict):
                         if not is_auto_blocked:
                             # Apenas incrementa se for de fato um clique em botão ou resposta interativa
                             is_button_click = msg.get("type") in ["button", "interactive"]
-                            if is_button_click and not getattr(message_record, 'interaction_counted', False):
+                            if is_button_click and message_record and not getattr(message_record, 'interaction_counted', False):
                                 message_record.interaction_counted = True
                                 message_record.is_interaction = True
                                 db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
@@ -618,25 +622,40 @@ async def handle_whatsapp_event(data: dict):
                         # --- [REATIVADO] GATILHO DE FUNIL VIA META ---
                         # Voltamos a processar aqui porque o webhook do Chatwoot pode falhar ou atrasar.
                         # O engine de execução (executor.py) já cuida de sincronizar com o Chatwoot via ensure_conversation.
-                        
+
                         if user_input:
-                            # --- NOVO: Verificar se o contato possui um funil pausado em botões ---
+                            # --- Verificar se o contato possui um funil pausado em botões ---
+                            # Usa sufixo de 8 dígitos para tolerância de variações do 9° dígito brasileiro
+                            phone_suffix_sus = from_phone[-8:] if len(from_phone) >= 8 else from_phone
                             suspended_trigger = db.query(models.ScheduledTrigger).filter(
-                                models.ScheduledTrigger.contact_phone == from_phone,
+                                models.ScheduledTrigger.client_id == target_cid,
+                                or_(
+                                    models.ScheduledTrigger.contact_phone == from_phone,
+                                    models.ScheduledTrigger.contact_phone.like(f"%{phone_suffix_sus}")
+                                ),
                                 models.ScheduledTrigger.status == "suspended",
                                 models.ScheduledTrigger.current_node_id != None
                             ).order_by(models.ScheduledTrigger.updated_at.desc()).first()
 
+                            if not suspended_trigger:
+                                logger.info(f"🔍 [WA-RESUME] Nenhum funil suspenso encontrado para {from_phone} (client {target_cid}, sufixo {phone_suffix_sus})")
+
                             if suspended_trigger:
+                                logger.info(f"⏸️ [WA-RESUME] Funil suspenso encontrado: Trigger #{suspended_trigger.id} | Funil #{suspended_trigger.funnel_id} | Nó atual: {suspended_trigger.current_node_id}")
                                 funnel_obj = suspended_trigger.funnel
                                 if funnel_obj and funnel_obj.steps:
                                     graph_data = funnel_obj.steps
                                     nodes = {str(n["id"]): n for n in graph_data.get("nodes", [])}
                                     edges = graph_data.get("edges", [])
-                                    
+
                                     current_node = nodes.get(suspended_trigger.current_node_id)
+                                    if not current_node:
+                                        logger.warning(f"⚠️ [WA-RESUME] Nó {suspended_trigger.current_node_id} não encontrado no grafo. Nós disponíveis: {list(nodes.keys())}")
+                                    if current_node and current_node.get("type") not in ["message", "messageNode"]:
+                                        logger.warning(f"⚠️ [WA-RESUME] Nó {suspended_trigger.current_node_id} tem tipo '{current_node.get('type')}' — não é message/messageNode.")
                                     if current_node and current_node.get("type") in ["message", "messageNode"]:
                                         buttons = [b.strip() for b in current_node.get("data", {}).get("buttons", []) if b.strip()]
+                                        logger.info(f"🔘 [WA-RESUME] Botões do nó: {buttons} | Input do usuário: '{user_input}'")
                                         
                                         target_node_id = None
                                         source_handle = None

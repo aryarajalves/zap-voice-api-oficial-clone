@@ -1,21 +1,49 @@
-import React from 'react';
-import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar, FiLock, FiUnlock } from 'react-icons/fi';
+import { SiChatwoot } from 'react-icons/si';
+import { API_URL } from '../../../config';
+import { fetchWithAuth } from '../../../AuthContext';
+import { useClient } from '../../../contexts/ClientContext';
+import { toast } from 'react-hot-toast';
 
-export default function Table({ 
-  loading, 
-  leads, 
-  selectedLeads, 
-  handleSelectAll, 
-  handleSelectLead, 
-  setLeadToEdit, 
-  setIsEditModalOpen, 
-  setLeadToDelete, 
-  setIsDeleteModalOpen, 
-  page, 
-  setPage, 
-  total, 
-  limit 
+export default function Table({
+  loading,
+  leads,
+  selectedLeads,
+  handleSelectAll,
+  handleSelectLead,
+  setLeadToEdit,
+  setIsEditModalOpen,
+  setLeadToDelete,
+  setIsDeleteModalOpen,
+  page,
+  setPage,
+  total,
+  limit,
+  setLimit,
+  fetchLeads,
 }) {
+  const { activeClient } = useClient();
+  const [togglingLock, setTogglingLock] = useState(null); // id do lead sendo processado
+
+  const handleToggleLock = async (lead) => {
+    setTogglingLock(lead.id);
+    try {
+      const res = await fetchWithAuth(`${API_URL}/leads/${lead.id}/lock`, { method: 'PATCH' }, activeClient?.id);
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message);
+        fetchLeads();
+      } else {
+        toast.error('Erro ao alterar bloqueio do contato.');
+      }
+    } catch {
+      toast.error('Erro ao alterar bloqueio do contato.');
+    } finally {
+      setTogglingLock(null);
+    }
+  };
+
   const formatDateBrasilia = (isoStr) => {
     if (!isoStr) return '---';
     try {
@@ -87,9 +115,20 @@ export default function Table({
                         {lead.name ? lead.name[0].toUpperCase() : '?'}
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-900 dark:text-white leading-tight">
-                          {lead.name || 'Sem Nome'}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-gray-900 dark:text-white leading-tight">
+                            {lead.name || 'Sem Nome'}
+                          </p>
+                          {lead.platform === 'chatwoot_import' && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50"
+                              title="Importado do Chatwoot"
+                            >
+                              <SiChatwoot size={9} />
+                              Chatwoot
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-gray-500 font-mono">{lead.phone}</span>
                           <a 
@@ -146,9 +185,9 @@ export default function Table({
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2">
                       {lead.chatwoot_url && (
-                        <a 
-                          href={lead.chatwoot_url} 
-                          target="_blank" 
+                        <a
+                          href={lead.chatwoot_url}
+                          target="_blank"
                           rel="noreferrer"
                           className="p-2 text-purple-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
                           title="Ver Conversa no Chatwoot"
@@ -163,10 +202,23 @@ export default function Table({
                       >
                         <FiEdit2 size={18} />
                       </button>
-                      <button 
+                      <button
+                        onClick={() => handleToggleLock(lead)}
+                        disabled={togglingLock === lead.id}
+                        className={`p-2 rounded-lg transition-colors ${
+                          lead.is_locked
+                            ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                            : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                        } disabled:opacity-50`}
+                        title={lead.is_locked ? 'Desbloquear contato' : 'Bloquear contato (impede exclusão)'}
+                      >
+                        {lead.is_locked ? <FiLock size={18} /> : <FiUnlock size={18} />}
+                      </button>
+                      <button
                         onClick={() => { setLeadToDelete(lead); setIsDeleteModalOpen(true); }}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title="Excluir Contato e Histórico"
+                        disabled={lead.is_locked}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title={lead.is_locked ? 'Contato bloqueado — desbloqueie para excluir' : 'Excluir Contato e Histórico'}
                       >
                         <FiTrash2 size={18} />
                       </button>
@@ -180,18 +232,41 @@ export default function Table({
       </div>
 
       {/* PAGINATION */}
-      <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-        <button 
+      <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-4 flex-wrap">
+        <button
           disabled={page === 0}
           onClick={() => setPage(p => p - 1)}
           className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 disabled:opacity-50 transition-colors"
         >
           Anterior
         </button>
-        <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">
-          Página {page + 1} de {Math.ceil(total / limit) || 1}
-        </span>
-        <button 
+
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+            Página {page + 1} de {Math.ceil(total / limit) || 1}
+          </span>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400">Exibir</span>
+            <select
+              value={limit}
+              onChange={(e) => {
+                setLimit(Number(e.target.value));
+                setPage(0);
+              }}
+              className="text-xs font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              {[20, 50, 100, 500, 1000].map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span className="text-xs text-gray-400">por página</span>
+          </div>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
+          <span className="text-xs text-gray-400">{total} total</span>
+        </div>
+
+        <button
           disabled={(page + 1) * limit >= total}
           onClick={() => setPage(p => p + 1)}
           className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 disabled:opacity-50 transition-colors"

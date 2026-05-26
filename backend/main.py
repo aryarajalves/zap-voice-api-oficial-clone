@@ -106,9 +106,16 @@ load_dotenv()
 # models.Base.metadata.create_all(bind=engine) # Movido para run_migrations() para evitar deadlock
 # auto_migrate(engine) # Movido para run_migrations() para evitar deadlock
 
+# Habilita o /docs apenas em ambiente local (DEBUG=true no .env)
+# Em produção o /docs fica desabilitado para não expor as rotas publicamente
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
 app = FastAPI(
     title="ZapVoice API Oficial",
     version="3.8.2",
+    docs_url="/docs" if DEBUG else None,
+    redoc_url="/redoc" if DEBUG else None,
+    openapi_url="/openapi.json" if DEBUG else None,
     description="""
 ## 🚀 ZapVoice API v3.8.2
 

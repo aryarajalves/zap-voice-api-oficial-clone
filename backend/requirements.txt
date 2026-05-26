@@ -1,58 +1,86 @@
-aio-pika==9.5.6
-aiormq==6.8.1
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.12.1
-bcrypt==4.0.1
-boto3==1.42.28
-botocore==1.42.28
-certifi==2026.1.4
-cffi==2.0.0
-click==8.1.8
-cryptography==46.0.3
-Deprecated==1.3.1
-ecdsa==0.19.1
-exceptiongroup==1.3.1
-fastapi==0.128.0
-greenlet==3.2.4
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
-idna==3.11
-jmespath==1.0.1
-limits==4.2
-multidict==6.7.0
-packaging==24.2
-pamqp==3.3.0
-passlib==1.7.4
-propcache==0.4.1
-psycopg2-binary==2.9.11
-pyasn1==0.6.1
-pycparser==2.23
-pydantic==2.12.5
-pydantic_core==2.41.5
-python-dateutil==2.9.0.post0
-python-dotenv==1.2.1
-python-jose==3.5.0
-python-magic==0.4.27
-python-multipart==0.0.20
-rsa==4.9.1
-s3transfer==0.16.0
-sentry-sdk==2.49.0
-six==1.17.0
-slowapi==0.1.9
-SQLAlchemy==2.0.45
-starlette==0.49.3
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-urllib3==1.26.20
-uvicorn[standard]==0.39.0
-wrapt==2.0.1
-yarl==1.22.0
-pytz
-psutil==5.9.8
-pandas
-openpyxl
-# Ferramentas de Teste
-pytest==8.3.3
-pytest-asyncio==0.24.0
+# === FILA DE MENSAGENS (RabbitMQ) ===
+aio-pika==9.5.6          # Cliente assíncrono do RabbitMQ — usado para enviar/receber mensagens da fila
+aiormq==6.8.1            # Protocolo AMQP por baixo do aio-pika (dependência interna)
+pamqp==3.3.0             # Protocolo de comunicação AMQP do RabbitMQ (dependência interna)
+
+# === FRAMEWORK PRINCIPAL (FastAPI) ===
+fastapi==0.128.0         # Framework da API — cria rotas, middlewares, WebSocket, etc.
+starlette==0.49.3        # Base do FastAPI — gerencia requests, responses e middlewares
+uvicorn[standard]==0.39.0 # Servidor ASGI que roda o FastAPI
+pydantic==2.12.5         # Validação de dados — garante que os dados recebidos estão no formato certo
+pydantic_core==2.41.5    # Motor de validação do Pydantic (dependência interna)
+python-multipart==0.0.20 # Permite receber arquivos e formulários via upload
+
+# === BANCO DE DADOS ===
+SQLAlchemy==2.0.45       # ORM do banco de dados — permite trabalhar com tabelas como classes Python
+psycopg2-binary==2.9.11  # Driver de conexão com o PostgreSQL
+greenlet==3.2.4          # Necessário para o SQLAlchemy assíncrono funcionar
+
+# === AUTENTICAÇÃO E SEGURANÇA ===
+python-jose==3.5.0       # Geração e validação de tokens JWT
+bcrypt==4.0.1            # Criptografia de senhas (hash seguro)
+passlib==1.7.4           # Utilitário de hashing de senhas — usa o bcrypt por baixo
+cryptography==46.0.3     # Biblioteca de criptografia geral (dependência do jose e outros)
+ecdsa==0.19.1            # Algoritmo de assinatura digital (dependência do jose)
+rsa==4.9.1               # Algoritmo RSA de criptografia (dependência do jose)
+pyasn1==0.6.1            # Formato de dados criptográficos (dependência interna)
+cffi==2.0.0              # Interface com bibliotecas C (dependência da cryptography)
+pycparser==2.23          # Parser C usado pelo cffi (dependência interna)
+
+# === ARMAZENAMENTO S3 (Uploads na Nuvem) ===
+boto3==1.42.28           # SDK oficial da AWS — usado para enviar arquivos pro S3
+botocore==1.42.28        # Motor do boto3 (dependência interna)
+s3transfer==0.16.0       # Gerencia transferências de arquivos pro S3 (dependência do boto3)
+jmespath==1.0.1          # Query em JSON (dependência do boto3)
+
+# === REQUISIÇÕES HTTP ===
+httpx==0.28.1            # Cliente HTTP assíncrono — usado para chamar APIs externas (Chatwoot, WhatsApp)
+httpcore==1.0.9          # Motor HTTP por baixo do httpx (dependência interna)
+h11==0.16.0              # Protocolo HTTP/1.1 (dependência interna)
+
+# === VARIÁVEIS DE AMBIENTE ===
+python-dotenv==1.2.1     # Carrega variáveis do arquivo .env para o ambiente
+
+# === RATE LIMITING ===
+slowapi==0.1.9           # Limita número de requisições por IP (proteção contra abuso)
+limits==4.2              # Motor de contagem de rate limit (dependência do slowapi)
+
+# === MONITORAMENTO DE ERROS ===
+sentry-sdk==2.49.0       # Captura e envia erros em produção para o painel do Sentry
+
+# === DETECÇÃO DE TIPO DE ARQUIVO ===
+python-magic==0.4.27     # Detecta o tipo real de um arquivo (ex: se é realmente um PDF ou imagem)
+
+# === DATAS E FUSOS HORÁRIOS ===
+python-dateutil==2.9.0.post0  # Manipulação avançada de datas
+pytz                          # Suporte a fusos horários
+
+# === DADOS E RELATÓRIOS ===
+pandas                   # Manipulação de dados em tabelas (usado para gerar relatórios/exportações)
+openpyxl                 # Leitura e escrita de arquivos Excel (.xlsx)
+
+# === MONITORAMENTO DO SISTEMA ===
+psutil==5.9.8            # Coleta métricas do sistema (CPU, memória, disco) — usado no monitor do WebSocket
+
+# === DEPENDÊNCIAS AUXILIARES ===
+annotated-doc==0.0.4     # Suporte a tipos anotados
+annotated-types==0.7.0   # Tipos extras para anotações Python
+anyio==4.12.1            # Compatibilidade entre asyncio e trio (base do FastAPI assíncrono)
+certifi==2026.1.4        # Certificados SSL atualizados para conexões HTTPS
+click==8.1.8             # Criação de comandos CLI (dependência do uvicorn)
+Deprecated==1.3.1        # Marca funções como depreciadas (dependência interna)
+exceptiongroup==1.3.1    # Agrupa múltiplas exceções (dependência do anyio)
+idna==3.11               # Suporte a domínios internacionais em URLs
+multidict==6.7.0         # Dicionários com múltiplos valores (dependência do yarl/aiohttp)
+packaging==24.2          # Utilitário de versões de pacotes (dependência interna)
+propcache==0.4.1         # Cache de propriedades (dependência interna)
+six==1.17.0              # Compatibilidade Python 2/3 (dependência de libs antigas)
+typing-inspection==0.4.2 # Inspeção de tipos em tempo de execução
+typing_extensions==4.15.0 # Tipos extras do Python para versões antigas
+urllib3==1.26.20         # Cliente HTTP de baixo nível (dependência do boto3)
+wrapt==2.0.1             # Decoradores avançados (dependência interna)
+yarl==1.22.0             # Manipulação de URLs (dependência do aio-pika)
+
+# === FERRAMENTAS DE TESTE ===
+pytest==8.3.3            # Framework de testes automatizados
+pytest-asyncio==0.24.0   # Suporte a testes assíncronos com pytest

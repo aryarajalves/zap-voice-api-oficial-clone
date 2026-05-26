@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
+from chatwoot_client import ChatwootClient
 from sqlalchemy import or_, desc, cast, String
 from typing import Optional, List, Dict
 from datetime import datetime
@@ -402,12 +403,14 @@ def export_leads_csv(
     event_type: Optional[str] = None,
     product_name: Optional[str] = None,
     tag: Optional[str] = None,
+    ids: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
 ):
     """
     Gera um arquivo CSV com os leads filtrados.
+    Se 'ids' for informado (ex: ids=1,2,3), exporta apenas esses leads.
     """
     import csv, io
     from fastapi.responses import StreamingResponse
@@ -415,22 +418,28 @@ def export_leads_csv(
     client_id = x_client_id if x_client_id else current_user.client_id
     query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
 
-    if search:
-        search_filter = or_(
-            models.WebhookLead.name.ilike(f"%{search}%"),
-            models.WebhookLead.phone.ilike(f"%{search}%"),
-            models.WebhookLead.email.ilike(f"%{search}%")
-        )
-        query = query.filter(search_filter)
+    # Se IDs específicos forem passados, ignora os demais filtros
+    if ids:
+        id_list = [int(i) for i in ids.split(",") if i.strip().isdigit()]
+        if id_list:
+            query = query.filter(models.WebhookLead.id.in_(id_list))
+    else:
+        if search:
+            search_filter = or_(
+                models.WebhookLead.name.ilike(f"%{search}%"),
+                models.WebhookLead.phone.ilike(f"%{search}%"),
+                models.WebhookLead.email.ilike(f"%{search}%")
+            )
+            query = query.filter(search_filter)
 
-    if event_type:
-        query = query.filter(models.WebhookLead.last_event_type == event_type)
+        if event_type:
+            query = query.filter(models.WebhookLead.last_event_type == event_type)
 
-    if (product_name):
-        query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
+        if product_name:
+            query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
 
-    if (tag):
-        query = query.filter(models.WebhookLead.tags.ilike(f"%{tag}%"))
+        if tag:
+            query = query.filter(models.WebhookLead.tags.ilike(f"%{tag}%"))
 
     leads = query.order_by(desc(models.WebhookLead.last_event_at)).all()
 
@@ -510,6 +519,9 @@ def delete_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
 
+    if getattr(lead, 'is_locked', False):
+        raise HTTPException(status_code=403, detail="Este contato está bloqueado e não pode ser excluído.")
+
     _delete_lead_and_relations(db, lead, client_id)
     db.commit()
     return {"status": "success", "message": "Lead e vínculos removidos."}
@@ -564,9 +576,148 @@ def bulk_delete_leads(
     ).all()
 
     deleted_count = 0
+    skipped_locked = 0
     for lead in leads:
+        if getattr(lead, 'is_locked', False):
+            skipped_locked += 1
+            continue
         _delete_lead_and_relations(db, lead, client_id)
         deleted_count += 1
 
     db.commit()
-    return {"status": "success", "deleted_count": deleted_count}
+    msg = f"{deleted_count} lead(s) excluído(s)."
+    if skipped_locked:
+        msg += f" {skipped_locked} ignorado(s) por estarem bloqueados."
+    return {"status": "success", "deleted_count": deleted_count, "skipped_locked": skipped_locked, "message": msg}
+
+@router.patch("/leads/{lead_id}/lock", summary="Bloquear ou desbloquear um lead")
+def toggle_lead_lock(
+    lead_id: int,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    lead = db.query(models.WebhookLead).filter(
+        models.WebhookLead.id == lead_id,
+        models.WebhookLead.client_id == client_id
+    ).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    lead.is_locked = not getattr(lead, 'is_locked', False)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+    status = "bloqueado" if lead.is_locked else "desbloqueado"
+    return {"status": "success", "is_locked": lead.is_locked, "message": f"Contato {status} com sucesso."}
+
+from core.logger import setup_logger
+logger = setup_logger("LeadsRouter")
+
+class ChatwootImportRequest(BaseModel):
+    label: str
+    import_all_tags: bool = False
+    custom_tag: Optional[str] = None
+
+async def run_chatwoot_import(
+    client_id: int,
+    label: str,
+    import_all_tags: bool,
+    custom_tag: Optional[str]
+):
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        logger.info(f"🚀 Iniciando importação assíncrona do Chatwoot. Client ID: {client_id}, Label: {label}")
+        chatwoot = ChatwootClient(client_id=client_id)
+        
+        # 1. Fetch contacts from Chatwoot by label
+        contacts = await chatwoot.get_contacts_by_label(label)
+        if not contacts:
+            logger.info(f"ℹ️ Nenhum contato encontrado no Chatwoot com a etiqueta '{label}'")
+            return
+            
+        logger.info(f"📦 Encontrados {len(contacts)} contatos no Chatwoot com a etiqueta '{label}'")
+        
+        imported_count = 0
+        for c in contacts:
+            try:
+                phone_raw = c.get("phone_number") or c.get("custom_attributes", {}).get("phone_number")
+                if not phone_raw:
+                    continue
+                    
+                import re
+                clean_phone = re.sub(r"\D", "", str(phone_raw))
+                if len(clean_phone) < 8:
+                    continue
+                    
+                name = c.get("name")
+                email = c.get("email")
+                
+                # Determine tags to apply
+                tags_list = []
+                
+                # Option 1: Import all existing tags from the Chatwoot contact
+                if import_all_tags:
+                    # Get contact labels from Chatwoot client
+                    c_labels = await chatwoot.get_contact_labels(c.get("id"))
+                    if c_labels:
+                        tags_list.extend(c_labels)
+                        
+                # Option 2: Always add the filter label
+                tags_list.append(label)
+                
+                # Option 3: Add custom tag if provided
+                if custom_tag:
+                    tags_list.append(custom_tag)
+                
+                # Remove duplicates and format
+                unique_tags = list(set([t.strip() for t in tags_list if t and t.strip()]))
+                final_tags = ", ".join(unique_tags) if unique_tags else None
+                
+                lead_data = {
+                    "phone": clean_phone,
+                    "name": name,
+                    "email": email,
+                    "event_type": "importado_chatwoot"
+                }
+                
+                upsert_webhook_lead(
+                    db=db,
+                    client_id=client_id,
+                    platform="chatwoot_import",
+                    parsed_data=lead_data,
+                    tag=final_tags
+                )
+                imported_count += 1
+            except Exception as row_error:
+                logger.error(f"❌ Erro ao importar contato individual do Chatwoot: {row_error}")
+                continue
+                
+        db.commit()
+        logger.info(f"✅ Importação do Chatwoot concluída com sucesso! {imported_count} contatos importados/atualizados.")
+    except Exception as e:
+        logger.error(f"❌ Erro crítico no processo de importação do Chatwoot: {e}")
+    finally:
+        db.close()
+
+@router.post("/leads/import/chatwoot", summary="Importar contatos de uma etiqueta do Chatwoot")
+async def import_leads_from_chatwoot(
+    request: ChatwootImportRequest,
+    background_tasks: BackgroundTasks,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_premium)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    background_tasks.add_task(
+        run_chatwoot_import,
+        client_id=client_id,
+        label=request.label,
+        import_all_tags=request.import_all_tags,
+        custom_tag=request.custom_tag
+    )
+    return {
+        "status": "success",
+        "message": f"A importação dos contatos com a etiqueta '{request.label}' foi iniciada em segundo plano."
+    }

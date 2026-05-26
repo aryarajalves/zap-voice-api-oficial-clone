@@ -47,7 +47,7 @@ const TriggerFunnelModal = ({ isOpen, onClose, funnel, onTriggerSuccess }) => {
         try {
             if (useBulkEndpoint) {
                 const contactName = total === 1
-                    ? (selectedConversations[0].contact_name || selectedConversations[0].phone || 'Contato')
+                    ? (selectedConversations[0].name || selectedConversations[0].contact_name || selectedConversations[0].phone || 'Contato')
                     : `Disparo em Massa (${total} contatos)`;
 
                 const res = await fetchWithAuth(`${API_URL}/funnels/${funnel.id}/trigger-bulk`, {
@@ -84,7 +84,7 @@ const TriggerFunnelModal = ({ isOpen, onClose, funnel, onTriggerSuccess }) => {
                 const conv = selectedConversations[0];
                 const convId = conv.conversation_id || '0';
                 let url = `${API_URL}/funnels/${funnel.id}/trigger?conversation_id=${convId}`;
-                const name = conv.contact_name || conv.phone;
+                const name = conv.name || conv.contact_name || conv.phone;
                 const phone = conv.phone;
                 if (selectedInbox) url += `&inbox_id=${selectedInbox}`;
                 url += `&contact_name=${encodeURIComponent(name)}&contact_phone=${encodeURIComponent(phone)}`;

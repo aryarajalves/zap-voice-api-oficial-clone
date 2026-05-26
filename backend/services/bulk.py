@@ -202,6 +202,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                             content = f"[Template: {template_name}]"
                     msg_status = models.MessageStatus(
                         trigger_id=trigger_id, message_id=message_id, phone_number=meta["phone"],
+                        contact_name=meta.get("name") or "",
                         status='sent', message_type=msg_type, content=content, template_name=template_name,
                         **meta["vars"]
                     )

@@ -112,6 +112,70 @@ class ChatwootContactsMixin:
                 break
         return all_contacts
 
+    async def get_contacts_by_label(self, label: str):
+        """
+        Busca contatos através das CONVERSAS que possuem a etiqueta informada.
+        No Chatwoot, etiquetas podem ser aplicadas a conversas (não ao contato diretamente).
+        Esta função percorre todas as conversas com aquela etiqueta, extrai o contato
+        de cada uma e retorna uma lista de contatos únicos (deduplicados por phone).
+        """
+        if not self.api_token:
+            return []
+
+        contacts_by_phone = {}  # phone_digits -> contact dict
+        page = 1
+
+        while True:
+            try:
+                params = {
+                    "page": page,
+                    "status": "all",
+                    "labels[]": label,
+                }
+                data = await self._request("GET", "conversations", params=params)
+
+                # Normaliza a resposta (Chatwoot pode retornar de formas diferentes)
+                payload = []
+                if isinstance(data, list):
+                    payload = data
+                elif isinstance(data, dict):
+                    if "data" in data and isinstance(data["data"], dict):
+                        payload = data["data"].get("payload", [])
+                    elif "data" in data and isinstance(data["data"], list):
+                        payload = data["data"]
+                    elif "payload" in data:
+                        payload = data["payload"]
+
+                if not payload or not isinstance(payload, list):
+                    break
+
+                for conv in payload:
+                    sender = conv.get("meta", {}).get("sender", {})
+                    phone_raw = sender.get("phone_number") or ""
+                    phone_digits = "".join(filter(str.isdigit, phone_raw))
+                    if len(phone_digits) < 8:
+                        continue
+                    # Deduplicar por telefone
+                    if phone_digits not in contacts_by_phone:
+                        contacts_by_phone[phone_digits] = {
+                            "id": sender.get("id"),
+                            "name": sender.get("name"),
+                            "phone_number": phone_raw,
+                            "email": sender.get("email"),
+                        }
+
+                if len(payload) < 25:
+                    break
+                page += 1
+                if page > 1000:
+                    break
+
+            except Exception as e:
+                logger.error(f"Error fetching conversations by label '{label}' page {page}: {e}")
+                break
+
+        return list(contacts_by_phone.values())
+
     async def delete_contact(self, contact_id: int):
         return await self._request("DELETE", f"contacts/{contact_id}")
 

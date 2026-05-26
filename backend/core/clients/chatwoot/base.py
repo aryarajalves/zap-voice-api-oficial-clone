@@ -12,7 +12,8 @@ class ChatwootBase:
         self.settings = get_settings(client_id=self.client_id)
         
         self.account_id = account_id or self.settings.get("CHATWOOT_ACCOUNT_ID", "1")
-        self.api_url = self.settings.get("CHATWOOT_API_URL", "https://app.chatwoot.com/api/v1")
+        api_url_raw = self.settings.get("CHATWOOT_API_URL", "").strip()
+        self.api_url = api_url_raw if api_url_raw else "https://app.chatwoot.com/api/v1"
         
         if self.api_url and "/api/v1" not in self.api_url:
             self.api_url = f"{self.api_url.rstrip('/')}/api/v1"

@@ -21,13 +21,77 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
   const [importResult, setImportResult] = useState(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      reset();
-    }
-  }, [isOpen]);
+  const [importSource, setImportSource] = useState(null);
+  const [chatwootLabels, setChatwootLabels] = useState([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState('');
+  const [importAllTags, setImportAllTags] = useState(false);
+  const [customTag, setCustomTag] = useState('');
 
-  if (!isOpen) return null;
+  const fetchChatwootLabels = async () => {
+    setLoadingLabels(true);
+    try {
+      const response = await fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, activeClient?.id);
+      if (response && response.ok) {
+        const data = await response.json();
+        setChatwootLabels(Array.isArray(data) ? data : []);
+      } else {
+        toast.error("Erro ao carregar etiquetas do Chatwoot.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao carregar etiquetas.");
+    } finally {
+      setLoadingLabels(false);
+    }
+  };
+
+  useEffect(() => {
+    if (importSource === 'chatwoot') {
+      fetchChatwootLabels();
+    }
+  }, [importSource]);
+
+  const handleChatwootImport = async () => {
+    if (!selectedLabel) {
+      toast.error('Selecione uma etiqueta do Chatwoot.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetchWithAuth(`${API_URL}/leads/import/chatwoot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          label: selectedLabel,
+          import_all_tags: importAllTags,
+          custom_tag: customTag || null
+        })
+      }, activeClient?.id);
+
+      if (response && response.ok) {
+        const data = await response.json();
+        if (data && data.status === 'success') {
+          toast.success(data.message);
+          onClose();
+          onImportComplete();
+        } else {
+          toast.error(data?.detail || 'Erro ao iniciar importação.');
+        }
+      } else {
+        let errorMsg = 'Erro ao iniciar importação.';
+        try { const err = await response.json(); errorMsg = err?.detail || errorMsg; } catch (_) {}
+        toast.error(errorMsg);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao iniciar importação.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
@@ -135,7 +199,13 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
     setPreviewData(null);
     setImportResult(null);
     setMapping({ name: '', phone: '', email: '', tags: '', remove_tags: '' });
+    setImportSource(null);
+    setSelectedLabel('');
+    setImportAllTags(false);
+    setCustomTag('');
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -159,14 +229,49 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-400">
+          <button onClick={() => { reset(); onClose(); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-400">
             <FiX size={20} />
           </button>
         </div>
 
         {/* Content */}
         <div className="p-6">
-          {step === 1 && (
+          {step === 1 && !importSource && (
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
+                Escolha o método de importação de contatos desejado:
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div 
+                  onClick={() => setImportSource('file')}
+                  className="border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/10 dark:hover:bg-blue-900/10 cursor-pointer transition-all group text-center"
+                >
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">
+                    <FiUpload size={28} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-800 dark:text-gray-200">Importar via Arquivo</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Carregar planilha Excel (.xlsx) ou arquivo CSV</p>
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => setImportSource('chatwoot')}
+                  className="border-2 border-gray-100 dark:border-gray-700 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/10 dark:hover:bg-blue-900/10 cursor-pointer transition-all group text-center"
+                >
+                  <div className="p-4 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full">
+                    <FiSettings size={28} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-800 dark:text-gray-200">Importar do Chatwoot</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Importar contatos associados a uma etiqueta no Chatwoot</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && importSource === 'file' && (
             <div className="space-y-6">
               <div 
                 onClick={() => fileInputRef.current.click()}
@@ -195,6 +300,66 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
                 <div className="text-xs space-y-1">
                   <p className="font-bold">Importante:</p>
                   <p>O sistema usa o número de telefone como chave. Se o contato já existir, ele será atualizado.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && importSource === 'chatwoot' && (
+            <div className="space-y-6">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  Etiqueta do Chatwoot <span className="text-red-500">*</span>
+                </label>
+                {loadingLabels ? (
+                  <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
+                    <FiLoader className="animate-spin" /> Carregando etiquetas do Chatwoot...
+                  </div>
+                ) : (
+                  <select 
+                    value={selectedLabel}
+                    onChange={(e) => setSelectedLabel(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-gray-800 dark:text-white"
+                  >
+                    <option value="">-- Selecione uma etiqueta --</option>
+                    {chatwootLabels.map(lbl => (
+                      <option key={lbl.id || lbl.title} value={lbl.title}>{lbl.title}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/30 p-3.5 rounded-xl border border-gray-100 dark:border-gray-700/50">
+                <input 
+                  type="checkbox"
+                  id="importAllTags"
+                  checked={importAllTags}
+                  onChange={(e) => setImportAllTags(e.target.checked)}
+                  className="rounded border-gray-300 dark:border-gray-700 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <label htmlFor="importAllTags" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  Importar todas as etiquetas originais do contato no Chatwoot
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  Adicionar etiqueta personalizada para todos os importados (Opcional)
+                </label>
+                <input 
+                  type="text"
+                  value={customTag}
+                  onChange={(e) => setCustomTag(e.target.value)}
+                  placeholder="ex: importado-chatwoot, leads-maio"
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium text-gray-800 dark:text-white"
+                />
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 rounded-xl p-4 flex gap-3 text-blue-700 dark:text-blue-400">
+                <FiAlertCircle className="shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <p className="font-bold">Aviso de Segundo Plano:</p>
+                  <p>A importação iniciará em segundo plano. Os contatos serão criados ou atualizados e as etiquetas selecionadas serão aplicadas gradualmente.</p>
                 </div>
               </div>
             </div>
@@ -286,13 +451,27 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <button 
-            onClick={step === 1 ? onClose : step === 3 ? onClose : () => setStep(step - 1)}
+            onClick={step === 1 ? (importSource ? () => { reset(); } : onClose) : step === 3 ? onClose : () => setStep(step - 1)}
             className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-2 transition-colors"
           >
-            {step === 1 ? 'Cancelar' : step === 3 ? 'Fechar' : (
+            {step === 1 ? (importSource ? <><FiArrowLeft /> Voltar</> : 'Cancelar') : step === 3 ? 'Fechar' : (
               <><FiArrowLeft /> Voltar</>
             )}
           </button>
+
+          {step === 1 && importSource === 'chatwoot' && (
+            <button 
+              onClick={handleChatwootImport}
+              disabled={loading || !selectedLabel}
+              className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+            >
+              {loading ? (
+                <><FiLoader className="animate-spin" /> Importando...</>
+              ) : (
+                <><FiCheckCircle /> Iniciar Importação</>
+              )}
+            </button>
+          )}
 
           {step === 2 && (
             <button 

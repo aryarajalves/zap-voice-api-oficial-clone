@@ -439,7 +439,8 @@ class WebhookLeadBase(BaseModel):
     price: Optional[str] = None
     tags: Optional[str] = None
     total_events: int = 1
-    
+    is_locked: bool = False
+
     # Redirecionamento Chatwoot
     chatwoot_conversation_id: Optional[int] = None
     chatwoot_account_id: Optional[int] = None
@@ -467,6 +468,7 @@ class WebhookLeadUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     tags: Optional[str] = None
+    is_locked: Optional[bool] = None
 
 class WebhookLeadListResponse(BaseModel):
     items: List[WebhookLead]

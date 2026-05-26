@@ -8,7 +8,7 @@ export function useWebhookLeads(activeClient) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [limit] = useState(20);
+  const [limit, setLimit] = useState(20);
   
   // Filters
   const [search, setSearch] = useState('');
@@ -75,14 +75,14 @@ export function useWebhookLeads(activeClient) {
     }
   }, [activeClient?.id]);
 
-  // Efeito para filtros instantâneos (ID, Página, Tipo, Tag)
+  // Efeito para filtros instantâneos (ID, Página, Tipo, Tag, Limit)
   useEffect(() => {
     if (activeClient?.id) {
       fetchLeads();
       fetchFilters();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClient?.id, page, eventType, selectedTag]);
+  }, [activeClient?.id, page, eventType, selectedTag, limit]);
 
   const lastSearch = useRef('');
 
@@ -129,9 +129,16 @@ export function useWebhookLeads(activeClient) {
     }
     try {
       let url = `${API_URL}/leads/export?`;
-      if (search) url += `search=${encodeURIComponent(search)}&`;
-      if (eventType) url += `event_type=${encodeURIComponent(eventType)}&`;
-      if (selectedTag) url += `tag=${encodeURIComponent(selectedTag)}&`;
+
+      if (selectedLeads.length > 0) {
+        // Exportar apenas os selecionados
+        url += `ids=${selectedLeads.join(',')}&`;
+      } else {
+        // Exportar com os filtros ativos
+        if (search) url += `search=${encodeURIComponent(search)}&`;
+        if (eventType) url += `event_type=${encodeURIComponent(eventType)}&`;
+        if (selectedTag) url += `tag=${encodeURIComponent(selectedTag)}&`;
+      }
 
       const response = await fetchWithAuth(url, {}, activeClient.id);
       if (response.ok) {
@@ -139,7 +146,9 @@ export function useWebhookLeads(activeClient) {
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
-        const filename = `leads_${new Date().toISOString().split('T')[0]}.csv`;
+        const filename = selectedLeads.length > 0
+          ? `leads_selecionados_${new Date().toISOString().split('T')[0]}.csv`
+          : `leads_${new Date().toISOString().split('T')[0]}.csv`;
         link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
@@ -209,7 +218,7 @@ export function useWebhookLeads(activeClient) {
   };
 
   return {
-    leads, total, loading, page, setPage, limit,
+    leads, total, loading, page, setPage, limit, setLimit,
     search, setSearch, eventType, setEventType, selectedTag, setSelectedTag, availableFilters,
     selectedLeads, setSelectedLeads, isDeleteModalOpen, setIsDeleteModalOpen, leadToDelete, setLeadToDelete, isDeleting,
     isImportModalOpen, setIsImportModalOpen, isCreateModalOpen, setIsCreateModalOpen,

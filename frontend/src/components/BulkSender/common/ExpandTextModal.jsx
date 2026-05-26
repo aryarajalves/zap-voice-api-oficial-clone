@@ -61,7 +61,7 @@ const ExpandTextModal = ({ isOpen, onClose, title, value, onSave, fieldKey }) =>
                         onClick={onClose}
                         className="px-8 py-3 text-slate-400 font-black hover:text-white transition-all uppercase tracking-widest text-xs"
                     >
-                        Descartar
+                        Cancelar
                     </button>
                     <button
                         onClick={() => { onSave(fieldKey, localValue); onClose(); }}
