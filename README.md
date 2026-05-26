@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.0)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.1)
 
-Bem-vindo à versão **3.8.0** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.1** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,14 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.8.1
+- **Preservação de Estatísticas em Tempo Real**:
+  - Ajuste na lógica do WebSocket no frontend para aceitar chaves em formato curto (`sent`, `failed`, etc.) e longo (`total_sent`, `total_failed`, etc.), com fallback que preserva os valores válidos preexistentes da tela de histórico quando não recebidos no payload, evitando que sumam durante os disparos em massa.
+- **Correção de AttributeError do ChatwootClient**:
+  - Exposição do atributo `settings` na classe fachada `ChatwootClient` em `backend/chatwoot_client.py` para permitir que rotas e serviços consigam recuperar as configurações (como o `CHATWOOT_SELECTED_INBOX_ID` padrão) sem disparar erros, reestabelecendo o fluxo de gravação de notas privadas e etiquetas no Chatwoot.
+- **Payload Unificado de WebSocket no Backend**:
+  - Consolidação e unificação dos envios de progresso de disparos em lote (`bulk_progress`) em `bulk.py` e `whatsapp.py`, garantindo que ambos os conjuntos de chaves curtas e longas sejam sempre propagados e que os testes unitários do WebSocket estejam sincronizados.
 
 ### v3.8.0
 - **Notas Privadas no Chatwoot Assíncronas**:
