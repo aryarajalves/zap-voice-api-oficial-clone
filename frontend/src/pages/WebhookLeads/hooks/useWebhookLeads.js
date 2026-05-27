@@ -241,7 +241,8 @@ export function useWebhookLeads(activeClient) {
         }, activeClient.id);
         
         if (res.ok) {
-          toast.success(`${selectedLeads.length} leads excluídos com sucesso.`);
+          const data = await res.json();
+          toast.success(data.message || `${selectedLeads.length} leads excluídos com sucesso.`);
           setSelectedLeads([]);
           fetchLeads();
         } else {
@@ -272,13 +273,15 @@ export function useWebhookLeads(activeClient) {
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedLeads(leads.map(lead => lead.id));
+      setSelectedLeads(leads.filter(lead => !lead.is_locked).map(lead => lead.id));
     } else {
       setSelectedLeads([]);
     }
   };
 
   const handleSelectLead = (leadId) => {
+    const lead = leads.find(l => l.id === leadId);
+    if (lead?.is_locked) return;
     setSelectedLeads(prev => 
       prev.includes(leadId) ? prev.filter(id => id !== leadId) : [...prev, leadId]
     );

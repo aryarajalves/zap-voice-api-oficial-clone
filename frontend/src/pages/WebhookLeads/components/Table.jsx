@@ -70,7 +70,11 @@ export default function Table({
                 <input 
                   type="checkbox" 
                   className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800"
-                  checked={leads.length > 0 && selectedLeads.length === leads.length}
+                  checked={
+                    leads.length > 0 && 
+                    leads.filter(l => !l.is_locked).length > 0 && 
+                    selectedLeads.length === leads.filter(l => !l.is_locked).length
+                  }
                   onChange={handleSelectAll}
                 />
               </th>
@@ -104,9 +108,11 @@ export default function Table({
                   <td className="px-6 py-4">
                     <input 
                       type="checkbox" 
-                      className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800"
+                      className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
                       checked={selectedLeads.includes(lead.id)}
                       onChange={() => handleSelectLead(lead.id)}
+                      disabled={lead.is_locked}
+                      title={lead.is_locked ? "Contatos bloqueados não podem ser selecionados para exclusão em massa." : ""}
                     />
                   </td>
                   <td className="px-6 py-4">
@@ -215,9 +221,19 @@ export default function Table({
                         {lead.is_locked ? <FiLock size={18} /> : <FiUnlock size={18} />}
                       </button>
                       <button
-                        onClick={() => { setLeadToDelete(lead); setIsDeleteModalOpen(true); }}
-                        disabled={lead.is_locked}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        onClick={() => {
+                          if (lead.is_locked) {
+                            toast.error("Não é possível deletar um contato bloqueado.");
+                          } else {
+                            setLeadToDelete(lead);
+                            setIsDeleteModalOpen(true);
+                          }
+                        }}
+                        className={`p-2 rounded-lg transition-colors ${
+                          lead.is_locked
+                            ? 'text-gray-400/30 cursor-not-allowed'
+                            : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                        }`}
                         title={lead.is_locked ? 'Contato bloqueado — desbloqueie para excluir' : 'Excluir Contato e Histórico'}
                       >
                         <FiTrash2 size={18} />

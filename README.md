@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.5)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.6)
 
-Bem-vindo à versão **3.8.5** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.6** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,12 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.8.6
+- **Notificação de Contato Bloqueado**: Interceptação no frontend para disparar um Toast de erro ao tentar deletar contatos com o cadeado ativado, impedindo a abertura indesejada do modal de exclusão.
+- **Segurança Reforçada de Exclusão**: Redundância de validação na API backend com retorno HTTP 403 Forbidden para tentativas de remoção de contatos trancados.
+- **Bloqueio de Seleção em Lote**: Inputs checkbox de contatos trancados agora são exibidos desabilitados na interface, e a seleção múltipla ("Selecionar Todos") pula contatos bloqueados automaticamente.
+- **Toast Bulk Delete Dinâmico**: Corrigida exibição do toast de sucesso/falha de exclusão em lote para exibir os dados de exclusão e ignorados reais retornados pelo backend.
 
 ### v3.8.5
 - **Filtro de Plataformas no Financeiro**: Adicionado seletor visual premium de plataformas (Hotmart, Kiwify, Eduzz, Todas) no painel de Vendas de Webhooks.

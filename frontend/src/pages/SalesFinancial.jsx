@@ -128,7 +128,11 @@ export default function SalesFinancial({ activeClient }) {
             {PERIOD_OPTIONS.map(opt => (
               <button
                 key={opt.value}
-                onClick={() => setPeriod(opt.value)}
+                onClick={() => {
+                  setPeriod(opt.value);
+                  setStartDate('');
+                  setEndDate('');
+                }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   period === opt.value
                     ? 'bg-blue-600 text-white shadow-sm'

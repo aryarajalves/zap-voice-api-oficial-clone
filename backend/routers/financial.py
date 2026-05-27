@@ -221,10 +221,30 @@ def get_financial_sales(
     # Brasilia Timezone
     tz_br = pytz.timezone('America/Sao_Paulo')
 
+    # Calculate default start/end dates based on period if not explicitly provided
+    if not (start_date and start_date.strip()) and not (end_date and end_date.strip()):
+        now_br = datetime.now(tz_br)
+        if period == "daily":
+            # Last 30 days
+            start_dt = now_br - timedelta(days=30)
+            start_date = start_dt.strftime("%Y-%m-%d")
+        elif period == "weekly":
+            # Last 12 weeks (84 days)
+            start_dt = now_br - timedelta(days=84)
+            start_date = start_dt.strftime("%Y-%m-%d")
+        elif period == "monthly":
+            # Last 12 months (365 days)
+            start_dt = now_br - timedelta(days=365)
+            start_date = start_dt.strftime("%Y-%m-%d")
+        elif period == "yearly":
+            # Last 5 years
+            start_dt = now_br - timedelta(days=5*365)
+            start_date = start_dt.strftime("%Y-%m-%d")
+
     # Apply date filters if provided
     # The database holds UTC timestamps, so we should convert start_date/end_date (which are local to BR)
     # into UTC bounds.
-    if start_date:
+    if start_date and start_date.strip():
         try:
             # start of day in BR
             dt_start_br = datetime.strptime(start_date, "%Y-%m-%d")
@@ -234,7 +254,7 @@ def get_financial_sales(
         except ValueError:
             pass
 
-    if end_date:
+    if end_date and end_date.strip():
         try:
             # end of day in BR
             dt_end_br = datetime.strptime(end_date, "%Y-%m-%d")
