@@ -47,7 +47,7 @@ export function useIntegrations(activeClient) {
   const fetchTemplates = useCallback(async () => {
     if (!activeClient) return;
     try {
-      const res = await fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id);
+      const res = await fetchWithAuth(`${API_URL}/whatsapp/templates?include_paused=false`, {}, activeClient.id);
       if (res.ok) {
         setTemplates(await res.json());
       }

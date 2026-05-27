@@ -219,7 +219,11 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     # CRIAR REGISTRO DE FALHA PARA O RELATÓRIO
                     reason = "Erro na API da Meta ou dados inválidos"
                     if isinstance(res, dict) and res.get("error"):
-                        reason = res.get("error")
+                        err_val = res.get("error")
+                        if isinstance(err_val, bool):
+                            reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
+                        else:
+                            reason = str(err_val)
                     
                     fail_msg = models.MessageStatus(
                         trigger_id=trigger_id,

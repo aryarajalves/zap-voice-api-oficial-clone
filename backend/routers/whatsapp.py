@@ -46,6 +46,7 @@ async def debug_env():
 @router.get("/templates")
 async def list_templates(
     include_archived: bool = Query(False),
+    include_paused: bool = Query(True),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
@@ -102,6 +103,10 @@ async def list_templates(
     # Filtrar arquivados se include_archived for False
     if not include_archived:
         templates = [t for t in templates if not t.get("is_archived", False)]
+
+    # Filtrar pausados se include_paused for False
+    if not include_paused:
+        templates = [t for t in templates if (t.get("status") or "").upper() != "PAUSED"]
 
     # Mesclar as tags locais
     try:

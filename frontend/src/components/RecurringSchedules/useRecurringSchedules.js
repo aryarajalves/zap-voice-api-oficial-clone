@@ -48,7 +48,7 @@ export function useRecurringSchedules(activeClient) {
         if (!activeClient?.id) return;
         setIsLoadingTemplates(true);
         try {
-            const response = await fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id);
+            const response = await fetchWithAuth(`${API_URL}/whatsapp/templates?include_paused=false`, {}, activeClient.id);
             if (response.ok) {
                 const data = await response.json();
                 setTemplates(data || []);

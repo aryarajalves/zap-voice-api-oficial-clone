@@ -71,7 +71,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         if (!activeClient) return;
         setIsLoadingTemplates(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id);
+            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates?include_paused=false`, {}, activeClient.id);
             if (res.ok) {
                 const data = await res.json();
                 setTemplates(data || []);

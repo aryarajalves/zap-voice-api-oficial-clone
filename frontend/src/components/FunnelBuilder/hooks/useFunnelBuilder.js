@@ -34,7 +34,7 @@ export const useFunnelBuilder = ({ onSave, initialData }) => {
     // Fetch Templates
     useEffect(() => {
         if (!activeClient) return;
-        fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id)
+        fetchWithAuth(`${API_URL}/whatsapp/templates?include_paused=false`, {}, activeClient.id)
             .then(res => {
                 if (res.ok) return res.json();
                 throw new Error('Falha ao carregar templates');

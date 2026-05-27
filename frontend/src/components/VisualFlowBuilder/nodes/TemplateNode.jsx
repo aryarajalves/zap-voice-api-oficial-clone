@@ -16,7 +16,7 @@ const TemplateNode = ({ id, data }) => {
     useEffect(() => {
         if (!activeClient) return;
         setLoading(true);
-        fetchWithAuth(`${API_URL}/whatsapp/templates`, {}, activeClient.id)
+        fetchWithAuth(`${API_URL}/whatsapp/templates?include_paused=false`, {}, activeClient.id)
             .then(res => res.json())
             .then(setTemplates)
             .catch(console.error)
