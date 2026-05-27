@@ -163,33 +163,53 @@ const TriggerTableRow = ({
                                 </button>
                             </div>
                         )}
-                        {trigger.child_count > 0 && (
-                            <div className="flex items-center gap-3 mt-2 border-t border-gray-100 dark:border-gray-800/50 pt-2">
-                                {(() => {
-                                    if (trigger.followup_status) {
+
+                        {(trigger.interaction_child_count > 0 || trigger.block_child_count > 0 || trigger.child_count > 0) && (
+                            <div className="flex flex-wrap items-center gap-3 mt-2 border-t border-gray-100 dark:border-gray-800/50 pt-2">
+                                {trigger.followup_status && (
+                                    (() => {
                                         const config = getFollowupConfig(trigger.followup_status, trigger.followup_scheduled_time);
                                         return (
                                             <button 
-                                                onClick={() => fetchChildren(trigger)} 
+                                                onClick={() => fetchChildren(trigger, 'followup')} 
                                                 className={`flex items-center gap-1 px-2 py-0.5 rounded transition cursor-pointer ${config.className}`}
                                             >
                                                 <span className="text-sm">{config.icon}</span>
                                                 <span className="text-[10px] font-black uppercase tracking-tighter">{config.text}</span>
                                             </button>
                                         );
-                                    }
-                                    return (
-                                        <button 
-                                            onClick={() => fetchChildren(trigger)} 
-                                            className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400"
-                                        >
-                                            <span className="text-sm">🔄</span>
-                                            <span className="text-[10px] font-black uppercase tracking-tighter">Funis Ativados</span>
-                                        </button>
-                                    );
-                                })()}
+                                    })()
+                                )}
+                                {trigger.interaction_child_count > 0 && (
+                                    <button 
+                                        onClick={() => fetchChildren(trigger, 'interaction')} 
+                                        className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-2 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30"
+                                    >
+                                        <span className="text-sm">🔄</span>
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">Funis de Interação</span>
+                                    </button>
+                                )}
+                                {trigger.block_child_count > 0 && (
+                                    <button 
+                                        onClick={() => fetchChildren(trigger, 'block')} 
+                                        className="flex items-center gap-1 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-0.5 rounded transition cursor-pointer group/rocket text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/30"
+                                    >
+                                        <span className="text-sm">🚫</span>
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">Funis de Bloqueio</span>
+                                    </button>
+                                )}
+                                {((trigger.interaction_child_count || 0) === 0 && (trigger.block_child_count || 0) === 0 && trigger.child_count > 0 && !trigger.followup_status) && (
+                                    <button 
+                                        onClick={() => fetchChildren(trigger, 'all')} 
+                                        className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400"
+                                    >
+                                        <span className="text-sm">🔄</span>
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">Funis Ativados</span>
+                                    </button>
+                                )}
                             </div>
                         )}
+
                         {trigger.total_failed > 0 && (
                             <button onClick={() => fetchErrors(trigger.id)} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 mt-1 font-semibold">
                                 📋 Ver Relatório de Falhas ({trigger.total_failed})
@@ -198,16 +218,34 @@ const TriggerTableRow = ({
                         {trigger.total_delivered > 0 && (
                             <div className={`text-xs font-semibold mt-2 flex flex-wrap gap-2 items-center ${trigger.total_cost > 0 ? 'text-green-600 dark:text-green-400' : 'text-blue-500'}`}>
                                 {(() => {
+                                    const totalDelivered = trigger.total_delivered || 0;
                                     const totalPaid = trigger.total_paid_templates || 0;
-                                    const totalFree = Math.max(0, trigger.total_delivered - totalPaid);
+                                    const totalFree = Math.max(0, totalDelivered - totalPaid);
                                     const hasCost = trigger.total_cost > 0;
+                                    
+                                    const paidPct = totalDelivered > 0 ? Math.round((totalPaid / totalDelivered) * 100) : 0;
+                                    const freePct = totalDelivered > 0 ? 100 - paidPct : 0;
+                                    
+                                    let unitCost = trigger.cost_per_unit;
+                                    if (!unitCost || unitCost <= 0) {
+                                        unitCost = totalPaid > 0 ? (trigger.total_cost / totalPaid) : 0.35;
+                                    }
                                     
                                     return (
                                         <>
-                                            {totalFree > 0 && <span>🆓 {totalFree} {totalFree === 1 ? 'de graça' : 'disparos grátis'}</span>}
+                                            {totalFree > 0 && (
+                                                <span>
+                                                    🆓 {totalFree} {totalFree === 1 ? 'de graça' : 'disparos grátis'} ({freePct}%)
+                                                    {unitCost > 0 && (
+                                                        <span className="text-blue-500 font-bold ml-1">
+                                                            (economia de R$ {(totalFree * unitCost).toFixed(2)})
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            )}
                                             {hasCost && (
-                                                <span className={totalFree > 0 ? 'ml-1' : ''}>
-                                                    💰 R$ {trigger.total_cost.toFixed(2)} ({totalPaid} {totalPaid === 1 ? 'pago' : 'pagos'})
+                                                <span className={totalFree > 0 ? 'ml-2 border-l border-gray-300 dark:border-white/10 pl-2' : ''}>
+                                                    💰 R$ {trigger.total_cost.toFixed(2)} ({totalPaid} {totalPaid === 1 ? 'pago' : 'pagos'} - {paidPct}%)
                                                 </span>
                                             )}
                                         </>
@@ -232,35 +270,49 @@ const TriggerTableRow = ({
                                 {trigger.total_cost > 0 ? `💰 R$ ${trigger.total_cost.toFixed(2)}` : '🆓 de graça'}
                             </div>
                         )}
-                        <div className="flex items-center gap-3 mt-2 border-t border-gray-100 dark:border-gray-800/50 pt-2">
-                            {trigger.child_count > 0 && (
-                                <>
-                                    {(() => {
-                                        if (trigger.followup_status) {
-                                            const config = getFollowupConfig(trigger.followup_status, trigger.followup_scheduled_time);
-                                            return (
-                                                <button 
-                                                    onClick={() => fetchChildren(trigger)} 
-                                                    className={`flex items-center gap-1 px-2 py-0.5 rounded transition cursor-pointer ${config.className}`}
-                                                >
-                                                    <span className="text-sm">{config.icon}</span>
-                                                    <span className="text-[10px] font-black uppercase tracking-tighter">{config.text}</span>
-                                                </button>
-                                            );
-                                        }
-                                        return (
-                                            <button 
-                                                onClick={() => fetchChildren(trigger)} 
-                                                className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400"
-                                            >
-                                                <span className="text-sm">🔄</span>
-                                                <span className="text-[10px] font-black uppercase tracking-tighter">Funis Ativados</span>
-                                            </button>
-                                        );
-                                    })()}
-                                </>
+                        <div className="flex flex-wrap items-center gap-3 mt-2 border-t border-gray-100 dark:border-gray-800/50 pt-2">
+                            {trigger.followup_status && (
+                                (() => {
+                                    const config = getFollowupConfig(trigger.followup_status, trigger.followup_scheduled_time);
+                                    return (
+                                        <button 
+                                            onClick={() => fetchChildren(trigger, 'followup')} 
+                                            className={`flex items-center gap-1 px-2 py-0.5 rounded transition cursor-pointer ${config.className}`}
+                                        >
+                                            <span className="text-sm">{config.icon}</span>
+                                            <span className="text-[10px] font-black uppercase tracking-tighter">{config.text}</span>
+                                        </button>
+                                    );
+                                })()
                             )}
-                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400">
+                            {trigger.interaction_child_count > 0 && (
+                                <button 
+                                    onClick={() => fetchChildren(trigger, 'interaction')} 
+                                    className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-2 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/30"
+                                >
+                                    <span className="text-sm">🔄</span>
+                                    <span className="text-[10px] font-black uppercase tracking-tighter">Funis de Interação</span>
+                                </button>
+                            )}
+                            {trigger.block_child_count > 0 && (
+                                <button 
+                                    onClick={() => fetchChildren(trigger, 'block')} 
+                                    className="flex items-center gap-1 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-0.5 rounded transition cursor-pointer group/rocket text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/30"
+                                >
+                                    <span className="text-sm">🚫</span>
+                                    <span className="text-[10px] font-black uppercase tracking-tighter">Funis de Bloqueio</span>
+                                </button>
+                            )}
+                            {((trigger.interaction_child_count || 0) === 0 && (trigger.block_child_count || 0) === 0 && trigger.child_count > 0 && !trigger.followup_status) && (
+                                <button 
+                                    onClick={() => fetchChildren(trigger, 'all')} 
+                                    className="flex items-center gap-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 px-1.5 py-0.5 rounded transition cursor-pointer group/rocket text-orange-600 dark:text-orange-400"
+                                >
+                                    <span className="text-sm">🔄</span>
+                                    <span className="text-[10px] font-black uppercase tracking-tighter">Funis Ativados</span>
+                                </button>
+                            )}
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400 ml-auto">
                                 <FiMousePointer size={10} />
                                 <span className="text-[10px] font-bold">{trigger.total_interactions || 0}</span>
                             </span>

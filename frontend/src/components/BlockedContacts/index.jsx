@@ -53,16 +53,12 @@ export default function BlockedContactsModular() {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Seção de Gatilhos */}
-            <KeywordSection 
+            <KeywordSection
                 keywords={autoBlock.keywords}
                 newKeyword={autoBlock.newKeyword}
                 setNewKeyword={autoBlock.setNewKeyword}
                 addKeyword={autoBlock.addKeyword}
                 removeKeyword={autoBlock.removeKeyword}
-                funnels={autoBlock.funnels}
-                autoBlockFunnelId={autoBlock.autoBlockFunnelId}
-                setAutoBlockFunnelId={autoBlock.setAutoBlockFunnelId}
-                saveAutoBlockConfigs={autoBlock.saveAutoBlockConfigs}
             />
 
             {/* Seção de Adição */}

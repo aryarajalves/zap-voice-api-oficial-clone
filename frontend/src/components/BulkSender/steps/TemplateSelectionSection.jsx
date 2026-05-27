@@ -24,6 +24,7 @@ const TemplateSelectionSection = ({
         const tagsSet = new Set();
         templates.forEach(t => {
             if (t && Array.isArray(t.tags)) {
+                if (t.status && t.status.toUpperCase() !== 'APPROVED' && t.status.toUpperCase() !== 'ACTIVE') return;
                 t.tags.forEach(tag => {
                     if (tag && tag.trim()) {
                         tagsSet.add(tag.trim());
@@ -97,7 +98,7 @@ const TemplateSelectionSection = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="max-h-60 overflow-y-auto premium-scrollbar">
+                            <div className="max-h-40 overflow-y-auto premium-scrollbar">
                                 <div 
                                     onClick={(e) => {
                                         e.preventDefault();
@@ -114,6 +115,7 @@ const TemplateSelectionSection = ({
                                 {(templates || [])
                                     .filter(t => {
                                         if (!t || !t.name) return false;
+                                        if (t.status && t.status.toUpperCase() !== 'APPROVED' && t.status.toUpperCase() !== 'ACTIVE') return false;
                                         const matchesSearch = t.name.toLowerCase().includes((templateSearch || '').toLowerCase());
                                         const matchesTag = !selectedTag || (Array.isArray(t.tags) && t.tags.includes(selectedTag));
                                         return matchesSearch && matchesTag;
@@ -149,6 +151,7 @@ const TemplateSelectionSection = ({
                                 }
                                 {(templates || []).filter(t => {
                                     if (!t || !t.name) return false;
+                                    if (t.status && t.status.toUpperCase() !== 'APPROVED' && t.status.toUpperCase() !== 'ACTIVE') return false;
                                     const matchesSearch = t.name.toLowerCase().includes((templateSearch || '').toLowerCase());
                                     const matchesTag = !selectedTag || (Array.isArray(t.tags) && t.tags.includes(selectedTag));
                                     return matchesSearch && matchesTag;

@@ -4,7 +4,6 @@ import { FiFlag, FiUser, FiChevronUp, FiChevronDown, FiCalendar } from 'react-ic
 
 const MetadataPanel = ({
     funnelName, setFunnelName,
-    triggerPhrase, setTriggerPhrase,
     showRestrictions, setShowRestrictions,
     allowedPhones, setAllowedPhones,
     blockedPhones, setBlockedPhones,
@@ -25,19 +24,7 @@ const MetadataPanel = ({
                     placeholder="Ex: Funil de Boas Vindas"
                 />
             </div>
-            <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block flex items-center gap-1">
-                    Palavra-Chave (Gatilho) <FiFlag size={10} />
-                </label>
-                <input
-                    type="text"
-                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm font-mono text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={triggerPhrase}
-                    onChange={(e) => setTriggerPhrase(e.target.value)}
-                    placeholder="Ex: #promo2024"
-                />
-                <span className="text-[9px] text-gray-400 mt-0.5 block">Digite a palavra exata para iniciar este fluxo.</span>
-            </div>
+
 
             <div className="pt-2 border-t border-gray-100 dark:border-gray-700 mt-1">
                 {/* Restrições de Contato */}

@@ -15,6 +15,8 @@ def get_trigger_messages(
     trigger_id: int,
     status_filter: Optional[str] = None,
     message_type: Optional[str] = None,
+    limit: int = 20,
+    skip: int = 0,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -43,10 +45,17 @@ def get_trigger_messages(
             base_query = base_query.filter(models.MessageStatus.private_note_posted == True)
 
     if message_type:
-        if message_type == 'template': base_query = base_query.filter(models.MessageStatus.message_type == 'TEMPLATE')
-        elif message_type == 'free': base_query = base_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE']))
+        if message_type == 'template': 
+            base_query = base_query.filter(models.MessageStatus.message_type == 'TEMPLATE', models.MessageStatus.meta_price_brl > 0)
+        elif message_type == 'free': 
+            base_query = base_query.filter(or_(
+                models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE']),
+                models.MessageStatus.meta_price_brl == 0,
+                models.MessageStatus.meta_price_brl == None
+            ))
 
-    items = base_query.order_by(models.MessageStatus.updated_at.desc()).all()
+    total = base_query.count()
+    items = base_query.order_by(models.MessageStatus.updated_at.desc()).offset(skip).limit(limit).all()
     
     base_url = get_setting("CHATWOOT_URL", "https://app.chatwoot.com", client_id=trigger.client_id)
     if base_url.endswith("/"): base_url = base_url[:-1]
@@ -130,7 +139,7 @@ def get_trigger_messages(
         "private_note": full_query.filter(models.MessageStatus.private_note_posted == True).count()
     }
 
-    return {"items": serialized_items, "counts": counts}
+    return {"items": serialized_items, "counts": counts, "total": total}
 
 @router.get("/{trigger_id}/failures-csv", summary="Exportar Falhas CSV")
 def export_failures_csv(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -149,7 +158,17 @@ def export_failures_csv(trigger_id: int, db: Session = Depends(get_db), current_
 @router.get("/{trigger_id}/failures", summary="Listar Falhas JSON")
 def list_failures_json(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     failures = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id, models.MessageStatus.status == 'failed').all()
-    return [{"phone": f.phone_number, "reason": f.failure_reason or "Erro desconhecido", "time": f.updated_at} for f in failures]
+    result = []
+    for f in failures:
+        # Normalizar failure_reason: pode ser booleano True, None ou string
+        reason = f.failure_reason
+        if reason is None or reason == '' or reason is True or str(reason).lower() in ('true', 'false', 'none'):
+            reason = "Erro desconhecido (sem detalhe registrado)"
+        # Usar updated_at individual de cada registro, fallback para timestamp
+        dt = f.updated_at or f.timestamp
+        time_str = dt.isoformat() if dt else None
+        result.append({"phone": f.phone_number, "reason": str(reason), "time": time_str})
+    return result
 
 @router.get("/{aggregator_id}/details", summary="Detalhes do Agregador")
 def get_aggregator_details(aggregator_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

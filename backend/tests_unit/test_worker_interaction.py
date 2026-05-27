@@ -106,14 +106,10 @@ async def test_handle_whatsapp_event_button_triggers_funnel(mock_db, mock_rabbit
             await handle_whatsapp_event(data)
             
             # ASSERT
-            # Check if ScheduledTrigger was added
+            # Check that no ScheduledTrigger was added since trigger_phrase matching is disabled
             triggers = [o for o in mock_db.added if isinstance(o, models.ScheduledTrigger)]
 
-            assert len(triggers) == 1, f"Expected 1 trigger, got {len(triggers)}"
-            trigger = triggers[0]
-            assert trigger.funnel_id == 10
-            # skip_block_check é None ou False por padrão — ambos são falsy
-            assert not trigger.skip_block_check
+            assert len(triggers) == 0, f"Expected 0 triggers since trigger_phrase is disabled, got {len(triggers)}"
 
 @pytest.mark.asyncio
 async def test_handle_whatsapp_event_block_request(mock_rabbitmq):

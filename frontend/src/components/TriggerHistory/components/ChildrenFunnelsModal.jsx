@@ -4,10 +4,24 @@ import { FiActivity, FiNavigation } from 'react-icons/fi';
 const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTrigger }) => {
     if (!childrenModal.isOpen) return null;
 
-    const isFollowup = childrenModal.children.some(child => child.is_followup);
-    const displayChildren = isFollowup 
-        ? childrenModal.children.filter(child => child.is_followup) 
-        : childrenModal.children;
+    const filterType = childrenModal.filterType || 'all';
+    let displayChildren = childrenModal.children;
+    let modalTitle = 'Funis Iniciados';
+    let modalIcon = '🚀';
+
+    if (filterType === 'followup') {
+        displayChildren = childrenModal.children.filter(child => child.is_followup);
+        modalTitle = 'Follow-up Ativado';
+        modalIcon = '⏳';
+    } else if (filterType === 'interaction') {
+        displayChildren = childrenModal.children.filter(child => child.is_interaction && !child.skip_block_check);
+        modalTitle = 'Funis de Interação Iniciados';
+        modalIcon = '🔄';
+    } else if (filterType === 'block') {
+        displayChildren = childrenModal.children.filter(child => child.skip_block_check);
+        modalTitle = 'Funis de Bloqueio Iniciados';
+        modalIcon = '🚫';
+    }
 
     return (
         <div className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -15,11 +29,11 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/30">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center text-2xl">
-                            {isFollowup ? '⏳' : '🚀'}
+                            {modalIcon}
                         </div>
                         <div>
                             <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight">
-                                {isFollowup ? 'Follow-up Ativado' : 'Funis Iniciados'}
+                                {modalTitle}
                             </h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                                 A partir de: <span className="text-orange-600 dark:text-orange-400 font-bold">{childrenModal.triggerName}</span>

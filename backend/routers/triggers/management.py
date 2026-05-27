@@ -114,11 +114,17 @@ def list_triggers(
     
     if trigger_type:
         if trigger_type == 'bulk':
-            query = query.filter(models.ScheduledTrigger.is_bulk == True, models.ScheduledTrigger.is_recurring == False)
+            query = query.filter(
+                models.ScheduledTrigger.is_bulk == True,
+                models.ScheduledTrigger.is_recurring == False,
+                or_(models.ScheduledTrigger.product_name != 'SCALE_TEST', models.ScheduledTrigger.product_name == None)
+            )
         elif trigger_type == 'single':
             query = query.filter(models.ScheduledTrigger.is_bulk == False, models.ScheduledTrigger.is_recurring == False)
         elif trigger_type == 'recurring':
             query = query.filter(models.ScheduledTrigger.is_recurring == True)
+        elif trigger_type == 'scale_test':
+            query = query.filter(models.ScheduledTrigger.product_name == 'SCALE_TEST')
 
     total = query.count()
     triggers = query.order_by(models.ScheduledTrigger.created_at.desc()).offset(skip).limit(limit).all()
@@ -130,6 +136,14 @@ def list_triggers(
                 trigger.sent_as = first_msg.message_type
         
         trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
+        trigger.interaction_child_count = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.parent_id == trigger.id,
+            models.ScheduledTrigger.is_interaction == True
+        ).count()
+        trigger.block_child_count = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.parent_id == trigger.id,
+            models.ScheduledTrigger.skip_block_check == True
+        ).count()
         
         # Buscar follow-up filho associado
         followup = db.query(models.ScheduledTrigger).filter(

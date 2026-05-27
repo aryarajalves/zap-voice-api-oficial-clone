@@ -191,7 +191,7 @@ async def retry_trigger_logic(trigger_id: int, db: Session):
     db.commit()
     
     if trigger.funnel_id:
-        await rabbitmq.publish("zapvoice_funnel_executions", {
+        await rabbitmq.publish("zapvoice_bulk_sends", {
             "trigger_id": trigger.id,
             "funnel_id": trigger.funnel_id,
             "contacts": [{"phone": p} for p in failed_phones],
@@ -242,7 +242,7 @@ async def start_now_trigger_logic(trigger_id: int, db: Session):
     # Enviar para a fila correta
     if trigger.is_bulk:
         if trigger.funnel_id:
-            await rabbitmq.publish("zapvoice_funnel_executions", {
+            await rabbitmq.publish("zapvoice_bulk_sends", {
                 "trigger_id": trigger.id,
                 "funnel_id": trigger.funnel_id,
                 "contacts": trigger.contacts_list,

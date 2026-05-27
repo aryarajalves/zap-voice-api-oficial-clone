@@ -48,7 +48,7 @@ if [ -n "$DATABASE_URL" ] && [ "$1" = "uvicorn" ]; then
     echo "🗄️  Verificando/criando banco de dados PostgreSQL..."
     timeout 30 python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
     echo "🏗️  Aplicando migrações de esquema..."
-    timeout 60 python scripts/database/update_schema.py || echo "⚠️  Aviso: Falha ao aplicar migrações de esquema (timeout ou erro)."
+    timeout 60 python scripts/database/update_schema.py || echo "⚠️ Aviso: Falha ao aplicar migrações de esquema (timeout ou erro)."
 fi
 
 # Inicia a aplicação original (uvicorn)

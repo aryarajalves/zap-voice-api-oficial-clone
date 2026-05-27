@@ -192,3 +192,203 @@ def get_financial_summary(
         "rows": rows,
         "totals": totals,
     }
+
+
+@router.get("/financial/sales", summary="Métricas de Vendas dos Webhooks")
+def get_financial_sales(
+    period: str = "monthly",  # daily, weekly, monthly, yearly
+    status: str = "all",      # all, approved, pending, refunded, canceled
+    platform: str = "all",    # all, hotmart, kiwify, eduzz, etc.
+    start_date: Optional[str] = None, # YYYY-MM-DD
+    end_date: Optional[str] = None,   # YYYY-MM-DD
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Retorna estatísticas de faturamento de vendas recebidas via webhooks.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+
+    # Busca históricos de webhook relacionados à integrações desse cliente
+    query = db.query(models.WebhookHistory).join(
+        models.WebhookIntegration,
+        models.WebhookHistory.integration_id == models.WebhookIntegration.id
+    ).filter(
+        models.WebhookIntegration.client_id == client_id
+    )
+
+    # Brasilia Timezone
+    tz_br = pytz.timezone('America/Sao_Paulo')
+
+    # Apply date filters if provided
+    # The database holds UTC timestamps, so we should convert start_date/end_date (which are local to BR)
+    # into UTC bounds.
+    if start_date:
+        try:
+            # start of day in BR
+            dt_start_br = datetime.strptime(start_date, "%Y-%m-%d")
+            dt_start_br = tz_br.localize(dt_start_br.replace(hour=0, minute=0, second=0, microsecond=0))
+            dt_start_utc = dt_start_br.astimezone(pytz.utc)
+            query = query.filter(models.WebhookHistory.created_at >= dt_start_utc)
+        except ValueError:
+            pass
+
+    if end_date:
+        try:
+            # end of day in BR
+            dt_end_br = datetime.strptime(end_date, "%Y-%m-%d")
+            dt_end_br = tz_br.localize(dt_end_br.replace(hour=23, minute=59, second=59, microsecond=999999))
+            dt_end_utc = dt_end_br.astimezone(pytz.utc)
+            query = query.filter(models.WebhookHistory.created_at <= dt_end_utc)
+        except ValueError:
+            pass
+
+    histories = query.all()
+
+    totals = {
+        "total_revenue": 0.0,
+        "total_sales": 0,
+        "total_refunds": 0,
+        "total_pending": 0,
+    }
+
+    # Grouped by period buckets
+    from collections import defaultdict
+    buckets = defaultdict(lambda: {
+        "revenue": 0.0,
+        "sales_count": 0,
+    })
+
+    # Ranking of products
+    product_stats = defaultdict(lambda: {
+        "sales_count": 0,
+        "total_revenue": 0.0
+    })
+
+    # Detailed transactions list
+    transactions = []
+
+    for h in histories:
+        if not h.created_at:
+            continue
+            
+        data = h.processed_data or {}
+        price_str = data.get("price") or "0"
+        try:
+            price_val = float(price_str)
+        except ValueError:
+            price_val = 0.0
+
+        p_name = data.get("product_name") or "Produto Desconhecido"
+        tx_platform = (data.get("platform") or "outros").lower().strip()
+        payment_method = data.get("payment_method") or "—"
+        raw_status = data.get("raw_status") or h.status
+        buyer_name = data.get("name") or "—"
+        
+        evt = h.event_type or ""
+
+        # Determine transaction category for status filter
+        tx_status_category = "other"
+        if evt == "compra_aprovada":
+            tx_status_category = "approved"
+        elif evt in ["pix_gerado", "boleto_impresso"]:
+            tx_status_category = "pending"
+        elif evt == "reembolso":
+            tx_status_category = "refunded"
+        elif evt in ["cartao_recusado", "pix_expirado"]:
+            tx_status_category = "canceled"
+
+        # Apply platform filter
+        if platform != "all" and tx_platform != platform.lower().strip():
+            continue
+
+        # Apply status filter
+        if status != "all" and tx_status_category != status:
+            continue
+
+        # Classify totals
+        if evt == "compra_aprovada":
+            totals["total_revenue"] += price_val
+            totals["total_sales"] += 1
+            product_stats[p_name]["sales_count"] += 1
+            product_stats[p_name]["total_revenue"] += price_val
+        elif evt == "reembolso":
+            totals["total_refunds"] += 1
+        elif evt in ["pix_gerado", "boleto_impresso"]:
+            totals["total_pending"] += 1
+
+        # Adjust UTC to Brasilia Timezone for period grouping
+        dt_utc = h.created_at
+        if dt_utc.tzinfo is None:
+            dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+        dt_br = dt_utc.astimezone(tz_br)
+
+        transactions.append({
+            "id": h.id,
+            "created_at": dt_br.isoformat(),
+            "buyer_name": buyer_name,
+            "product_name": p_name,
+            "price": price_val,
+            "platform": tx_platform.upper(),
+            "payment_method": payment_method,
+            "status": raw_status,
+            "event_type": evt,
+            "category": tx_status_category
+        })
+
+        if evt == "compra_aprovada":
+            day_key = dt_br.strftime("%Y-%m-%d")
+            buckets[day_key]["revenue"] += price_val
+            buckets[day_key]["sales_count"] += 1
+
+    def group_key(day_str: str, period: str) -> str:
+        d = datetime.strptime(day_str, "%Y-%m-%d")
+        if period == "daily":
+            return day_str
+        elif period == "weekly":
+            return d.strftime("%Y-W%W")
+        elif period == "monthly":
+            return d.strftime("%Y-%m")
+        elif period == "yearly":
+            return d.strftime("%Y")
+        return day_str
+
+    grouped = defaultdict(lambda: {
+        "revenue": 0.0,
+        "sales_count": 0,
+    })
+
+    for day_str, data in buckets.items():
+        key = group_key(day_str, period)
+        grouped[key]["revenue"] += data["revenue"]
+        grouped[key]["sales_count"] += data["sales_count"]
+
+    sorted_rows = []
+    for key in sorted(grouped.keys(), reverse=True):
+        sorted_rows.append({
+            "period": key,
+            "revenue": round(grouped[key]["revenue"], 2),
+            "sales_count": grouped[key]["sales_count"]
+        })
+
+    sorted_products = []
+    for p_name, stats in sorted(product_stats.items(), key=lambda x: x[1]["total_revenue"], reverse=True):
+        sorted_products.append({
+            "product_name": p_name,
+            "sales_count": stats["sales_count"],
+            "total_revenue": round(stats["total_revenue"], 2)
+        })
+
+    transactions.sort(key=lambda x: x["created_at"], reverse=True)
+
+    totals["total_revenue"] = round(totals["total_revenue"], 2)
+
+    return {
+        "period_type": period,
+        "totals": totals,
+        "rows": sorted_rows,
+        "top_products": sorted_products,
+        "transactions": transactions
+    }
+

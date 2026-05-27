@@ -20,6 +20,8 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
     const [chatwootLabels, setChatwootLabels] = useState([]);
     const [isLoadingChatwootLabels, setIsLoadingChatwootLabels] = useState(false);
+    const [funnels, setFunnels] = useState([]);
+    const [isLoadingFunnels, setIsLoadingFunnels] = useState(false);
 
     // Step 1: Configuration
     const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -34,6 +36,9 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [privateMessageDelayUnit, setPrivateMessageDelayUnit] = useState("seconds");
     const [privateMessageConcurrency, setPrivateMessageConcurrency] = useState(1); // Padrão solicitado: 1 job
     const [selectedChatwootLabels, setSelectedChatwootLabels] = useState([]);
+
+    // Button Actions (card 04)
+    const [buttonActions, setButtonActions] = useState({});
 
     // Step 2: Execution & Contacts
     const [finalContacts, setFinalContacts] = useState([]);
@@ -105,6 +110,25 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         }
     };
 
+    const loadFunnels = async () => {
+        if (!activeClient) return;
+        setIsLoadingFunnels(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/funnels`, {}, activeClient.id);
+            if (res.ok) {
+                const data = await res.json();
+                setFunnels(data || []);
+            } else {
+                setFunnels([]);
+            }
+        } catch (error) {
+            console.error("Erro ao carregar funis:", error);
+            setFunnels([]);
+        } finally {
+            setIsLoadingFunnels(false);
+        }
+    };
+
     const loadExclusionTags = async () => {
         if (!activeClient) return;
         setIsLoadingExclusionTags(true);
@@ -129,6 +153,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
             loadTemplates();
             loadChatwootLabels();
             loadExclusionTags();
+            loadFunnels();
         }
     }, [activeClient]);
 
@@ -160,6 +185,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         setExclusionList([]);
         setScheduledTime("");
         setIsRecurring(false);
+        setButtonActions({});
         toast.success("Configurações resetadas!");
     };
 
@@ -241,13 +267,28 @@ export const useBulkSender = (onViewChange, onSuccess) => {
 
         setIsSending(true);
         try {
+            const vFilters = selectionMetadata?.variableFilters || {};
+            
             const payload = {
-                contacts_list: finalContacts.map(c => ({
-                    phone: c.phone,
-                    name: c.name,
-                    components: buildComponentsPayload(selectedTemplateObj, { ...templateParams, ...(c.vars || {}) }),
-                    vars: c.vars || {}
-                })),
+                contacts_list: finalContacts.map(c => {
+                    const processedVars = {};
+                    if (c.vars) {
+                        Object.entries(c.vars).forEach(([key, val]) => {
+                            if (vFilters[key] === 'first_name' && val) {
+                                processedVars[key] = String(val).trim().split(' ')[0];
+                            } else {
+                                processedVars[key] = val;
+                            }
+                        });
+                    }
+                    
+                    return {
+                        phone: c.phone,
+                        name: c.name,
+                        components: buildComponentsPayload(selectedTemplateObj, { ...templateParams, ...processedVars }),
+                        vars: processedVars
+                    };
+                }),
                 exclusion_list: exclusionList,
                 delay_seconds: delayUnit === 'minutes' ? delaySeconds * 60 : delaySeconds,
                 concurrency_limit: concurrency,
@@ -258,7 +299,8 @@ export const useBulkSender = (onViewChange, onSuccess) => {
                 components: buildComponentsPayload(selectedTemplateObj, templateParams),
                 private_message: sendPrivateMessage ? privateMessageText : null,
                 private_message_delay: privateMessageDelayUnit === 'minutes' ? privateMessageDelay * 60 : privateMessageDelay,
-                private_message_concurrency: privateMessageConcurrency
+                private_message_concurrency: privateMessageConcurrency,
+                button_actions: Object.keys(buttonActions).length > 0 ? buttonActions : null
             };
 
             let res;
@@ -285,6 +327,13 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         }
     };
 
+    const extractTemplateButtons = (templateObj) => {
+        if (!templateObj?.components) return [];
+        const buttonsComp = templateObj.components.find(c => c.type === 'BUTTONS');
+        if (!buttonsComp?.buttons) return [];
+        return buttonsComp.buttons.map(b => b.text).filter(Boolean);
+    };
+
     const extractTemplateVariables = (templateObj) => {
         if (!templateObj) return [];
         const bodyComp = templateObj.components?.find(c => c.type === 'BODY');
@@ -300,8 +349,10 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     return {
         step, setStep, isGuideOpen, setIsGuideOpen, isWorking, setIsWorking, workingMessage,
         templates, isLoadingTemplates, chatwootLabels, isLoadingChatwootLabels,
+        funnels, isLoadingFunnels,
         selectedTemplate, setSelectedTemplate, templateSearch, setTemplateSearch,
         isTemplateDropdownOpen, setIsTemplateDropdownOpen, templateParams, setTemplateParams,
+        buttonActions, setButtonActions,
         sendPrivateMessage, setSendPrivateMessage, privateMessageText, setPrivateMessageText,
         privateMessageDelay, setPrivateMessageDelay, privateMessageDelayUnit, setPrivateMessageDelayUnit,
         privateMessageConcurrency, setPrivateMessageConcurrency, selectedChatwootLabels, setSelectedChatwootLabels,
@@ -314,7 +365,8 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         recurrenceDaysOfWeek, setRecurrenceDaysOfWeek, recurrenceDayOfMonth, setRecurrenceDayOfMonth,
         recurrenceTime, setRecurrenceTime, expansionModal, setExpansionModal,
         handleTemplateChange, handleRecipientSelect, handleReset, handleSaveExclusion,
-        handleExclusionFileUpload, confirmExclusionColumn, loadExclusionContactsByTag, handleSend, extractTemplateVariables,
+        handleExclusionFileUpload, confirmExclusionColumn, loadExclusionContactsByTag, handleSend,
+        extractTemplateVariables, extractTemplateButtons,
         activeClient
     };
 };

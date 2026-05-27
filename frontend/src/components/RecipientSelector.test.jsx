@@ -216,4 +216,46 @@ describe('RecipientSelector', () => {
     // Deve mostrar o aviso de contato bloqueado na tela
     expect(screen.getByText(/Contatos Bloqueados Detectados/i)).toBeInTheDocument();
   }, 10000);
+
+  it('permite alternar filtros de variaveis na tabela', async () => {
+    const vars = [{ key: '1', label: 'Var 1' }];
+    
+    // Mock do check_bulk retornando lista vazia de bloqueados
+    vi.mocked(fetchWithAuth).mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ blocked_phones: [] })
+    }));
+
+    render(<RecipientSelector {...defaultProps} templateVariables={vars} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '5511999998888|João Silva Santos' } });
+    
+    const addBtn = screen.getByText(/Processar Lista/i);
+    fireEvent.click(addBtn);
+
+    await new Promise(resolve => setTimeout(resolve, 1200));
+
+    // A tabela deve exibir o valor inteiro
+    expect(screen.getByText('João Silva Santos')).toBeInTheDocument();
+
+    // Encontrar o botão de Inteiro / 1º Nome no th
+    const filterBtn = screen.getByText('Inteiro');
+    fireEvent.click(filterBtn);
+
+    // Agora o botão deve dizer ✦ 1º Nome e a célula deve exibir apenas "João"
+    await waitFor(() => {
+      expect(screen.getByText('✦ 1º Nome')).toBeInTheDocument();
+      expect(screen.getByText('João')).toBeInTheDocument();
+      expect(screen.queryByText('João Silva Santos')).not.toBeInTheDocument();
+    });
+
+    // onSelect deve ter sido chamado com a informação de variableFilters em seu metadado
+    expect(defaultProps.onSelect).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        variableFilters: expect.objectContaining({ '1': 'first_name' })
+      })
+    );
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
+import { toast } from 'react-hot-toast';
 import ContactsModal from './ContactsModal';
 import { fetchWithAuth } from '../../../AuthContext';
 
@@ -88,6 +89,11 @@ describe('ContactsModal', () => {
     contactsTypeFilter: 'all',
     setContactsTypeFilter: vi.fn(),
     loadingContacts: false,
+    contactsPage: 1,
+    setContactsPage: vi.fn(),
+    contactsPerPage: 20,
+    setContactsPerPage: vi.fn(),
+    contactsTotal: 2,
   };
 
   it('renderiza o modal e lista de contatos com checkboxes', () => {
@@ -263,4 +269,102 @@ describe('ContactsModal', () => {
       );
     });
   });
+
+  it('exibe barra de paginação com dropdown e botões de navegação', () => {
+    const propsComPaginacao = {
+      ...defaultProps,
+      contactsTotal: 100,
+      contactsPage: 1,
+      contactsPerPage: 20,
+    };
+    render(<ContactsModal {...propsComPaginacao} />);
+
+    // Dropdown de itens por página deve estar presente
+    const select = document.getElementById('contacts-per-page');
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe('20');
+
+    // Deve ter as opções 20, 50, 100, 500
+    expect(screen.getByRole('option', { name: '20' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '50' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '100' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '500' })).toBeInTheDocument();
+
+    // Indicador de página
+    expect(screen.getByText(/Pág\. 1/i)).toBeInTheDocument();
+
+    // Botões de navegação devem existir
+    expect(document.getElementById('contacts-prev-page')).toBeInTheDocument();
+    expect(document.getElementById('contacts-next-page')).toBeInTheDocument();
+  });
+
+  it('exibe "–" para datas nulas ou de epoch (31/12/1969)', () => {
+    const propsComDataNula = {
+      ...defaultProps,
+      contactsModal: {
+        ...defaultProps.contactsModal,
+        contacts: [
+          {
+            phone_number: '5511111111111',
+            status: 'failed',
+            message_type: 'TEMPLATE',
+            updated_at: null,
+            timestamp: null,
+          },
+          {
+            phone_number: '5533333333333',
+            status: 'delivered',
+            message_type: 'TEMPLATE',
+            updated_at: '2026-05-27T15:00:00Z',
+            timestamp: null,
+          },
+        ],
+        counts: { total: 2 },
+      },
+      contactsTotal: 2,
+    };
+    render(<ContactsModal {...propsComDataNula} />);
+
+    // Deve exibir "–" para datas nulas
+    const dashes = screen.getAllByText('–');
+    expect(dashes.length).toBeGreaterThanOrEqual(1);
+
+    // A data válida (2026) deve estar presente formatada com dia/mês/ano
+    expect(screen.getByText(/27\/05\/2026/)).toBeInTheDocument();
+  });
+
+  it('exibe erro ao tentar copiar lista vazia', () => {
+    const propsVazia = {
+      ...defaultProps,
+      contactsModal: {
+        ...defaultProps.contactsModal,
+        contacts: [],
+        counts: { total: 0 },
+      },
+      contactsTotal: 0,
+    };
+    render(<ContactsModal {...propsVazia} />);
+
+    const copyButton = screen.getByRole('button', { name: /copiar lista/i });
+    fireEvent.click(copyButton);
+
+    expect(toast.error).toHaveBeenCalledWith('A lista está vazia. Nenhum contato para copiar.');
+  });
+
+  it('copia contatos para o clipboard e exibe mensagem de sucesso se a lista contiver elementos', () => {
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockImplementation(() => Promise.resolve()),
+      },
+    });
+
+    render(<ContactsModal {...defaultProps} />);
+
+    const copyButton = screen.getByRole('button', { name: /copiar lista/i });
+    fireEvent.click(copyButton);
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('5511999999999\n5511888888888');
+    expect(toast.success).toHaveBeenCalledWith('Lista copiada!');
+  });
 });
+

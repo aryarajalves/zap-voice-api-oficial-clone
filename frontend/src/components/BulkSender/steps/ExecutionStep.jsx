@@ -2,6 +2,8 @@ import React from 'react';
 import RecipientSelector from '../../RecipientSelector';
 import ExclusionListManager from './ExclusionListManager';
 import SchedulingSection from './SchedulingSection';
+import ButtonActionsSection from './ButtonActionsSection';
+import { getTemplateCategoryInfo } from '../utils/templateUtils';
 
 const ExecutionStep = ({
     activeClient,
@@ -52,8 +54,17 @@ const ExecutionStep = ({
     recurrenceDayOfMonth,
     setRecurrenceDayOfMonth,
     scheduledTime,
-    setStep
+    setStep,
+    templateButtons,
+    buttonActions,
+    setButtonActions,
+    funnels,
+    selectedTemplate,
+    templates
 }) => {
+    const categoryInfo = getTemplateCategoryInfo(selectedTemplate, templates || []);
+    const estimatedCost = finalContacts.length * categoryInfo.price;
+    const formatBRL = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     return (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-10">
             {/* Contacts Column */}
@@ -65,11 +76,18 @@ const ExecutionStep = ({
                         <span className="p-3 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20 shadow-xl shadow-blue-500/10">02</span>
                         Base de Contatos
                     </h2>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-6">
                         <div className="flex flex-col items-end">
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Selecionado</span>
                             <span className="text-2xl font-black text-white tabular-nums">{finalContacts.length} <span className="text-blue-400 text-xs">Leads</span></span>
                         </div>
+                        {finalContacts.length > 0 && categoryInfo.price > 0 && (
+                            <div className="flex flex-col items-end pl-6 border-l border-white/5">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Custo Estimado</span>
+                                <span className="text-2xl font-black text-amber-400 tabular-nums">{formatBRL(estimatedCost)}</span>
+                                <span className="text-[9px] font-bold text-slate-600 mt-0.5">{categoryInfo.type} · {formatBRL(categoryInfo.price)}/msg</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -110,11 +128,18 @@ const ExecutionStep = ({
 
             {/* Config & Send Column */}
             <div className="xl:col-span-2 space-y-8">
+                <ButtonActionsSection
+                    templateButtons={templateButtons}
+                    buttonActions={buttonActions}
+                    setButtonActions={setButtonActions}
+                    funnels={funnels}
+                />
+
                 <section className="bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-10 shadow-2xl border border-white/5 h-fit relative overflow-hidden group/exec">
                     <div className="absolute -top-12 -right-12 w-32 h-32 bg-emerald-500/5 blur-3xl rounded-full"></div>
-                    
+
                     <h2 className="text-2xl font-black text-white flex items-center gap-4 mb-10 relative z-10">
-                        <span className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 shadow-xl shadow-emerald-500/10">03</span>
+                        <span className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 shadow-xl shadow-emerald-500/10">04</span>
                         Configuração de Envio
                     </h2>
 

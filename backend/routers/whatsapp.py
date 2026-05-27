@@ -828,3 +828,135 @@ async def debug_meta(
             "data": res.json()
         }
 
+
+@router.post("/assistant/chat")
+async def assistant_chat(
+    payload: dict,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_user),
+    db: Session = Depends(get_db)
+):
+    import os
+    import json
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    messages = payload.get("messages", [])
+    
+    # 1. Buscar templates ativos para o contexto
+    active_templates = []
+    try:
+        active_templates = await list_templates(
+            include_archived=False,
+            include_paused=False,
+            x_client_id=target_client_id,
+            current_user=current_user,
+            db=db
+        )
+    except Exception as e:
+        logger.error(f"Erro ao obter templates ativos para o contexto do assistente: {e}")
+
+    # 2. Construir o system prompt
+    system_prompt = (
+        "Você é o assistente inteligente de criação de templates do ZapVoice (ZapVoice IA).\n"
+        "Seu objetivo é ajudar o usuário a criar templates de mensagens para o WhatsApp Business da Meta de alta conversão.\n\n"
+        "Aqui estão os templates ativos atuais do projeto para você estudar e manter a mesma identidade visual, tom e estilo:\n"
+    )
+    
+    # Serializar templates para estudo
+    templates_str = ""
+    for tpl in active_templates:
+        tpl_min = {
+            "name": tpl.get("name"),
+            "category": tpl.get("category"),
+            "language": tpl.get("language"),
+            "body_text": tpl.get("body_text") or "",
+            "components": tpl.get("components") or []
+        }
+        templates_str += f"- Template: {json.dumps(tpl_min, ensure_ascii=False)}\n"
+        
+    if not templates_str:
+        templates_str = "(Nenhum template ativo encontrado ainda no projeto. Crie o primeiro com o usuário!)\n"
+        
+    system_prompt += templates_str + "\n"
+    system_prompt += (
+        "INSTRUÇÕES CRÍTICAS:\n"
+        "1. Dê feedbacks e conselhos sobre como escrever ótimas mensagens (tome como base as regras do WhatsApp, sem links enganosos, textos claros, etc.).\n"
+        "2. Quando propor ou fechar a estrutura de um template com o usuário, você DEVE retornar a sugestão estruturada do template em formato JSON no final da sua mensagem, dentro de um bloco de código de marcação Markdown no formato exato:\n"
+        "```json\n"
+        "{\n"
+        "  \"name\": \"nome_do_template_em_minusculo_com_sublinhados\",\n"
+        "  \"category\": \"MARKETING\",\n"
+        "  \"language\": \"pt_BR\",\n"
+        "  \"header_type\": \"NONE\",\n"
+        "  \"header_text\": \"Texto do cabeçalho se aplicável\",\n"
+        "  \"body_text\": \"Corpo da mensagem com {{1}} para variáveis se necessário\",\n"
+        "  \"footer_text\": \"Rodapé opcional\",\n"
+        "  \"buttons\": [\n"
+        "     { \"type\": \"QUICK_REPLY\", \"text\": \"Texto do Botão 1\" }\n"
+        "  ]\n"
+        "}\n"
+        "```\n"
+        "Observação de botões: suportamos QUICK_REPLY, PHONE_NUMBER (com chave phone_number) e URL (com chave url). Máximo 10 botões.\n"
+        "Você deve incluir esse bloco json se e somente se o usuário pedir para criar ou fechar o template de mensagem, ou quando você finalizar a sugestão perfeita de template. O botão 'Aplicar ao Formulário' aparecerá para o usuário baseado nesse bloco."
+    )
+
+    # 3. Chamar OpenAI usando httpx
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        logger.error("OPENAI_API_KEY não configurada no backend.")
+        raise HTTPException(
+            status_code=400,
+            detail="OPENAI_API_KEY não configurada no backend. Por favor, adicione-a ao arquivo .env."
+        )
+
+    openai_model = os.getenv("OPENAI_API_MODEL", "gpt-5-mini")
+    
+    # Construir histórico de mensagens
+    api_messages = [{"role": "system", "content": system_prompt}]
+    for msg in messages:
+        role = msg.get("role", "user")
+        if role in ["user", "assistant"]:
+            api_messages.append({"role": role, "content": msg.get("content", "")})
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as http_client:
+            openai_res = await http_client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": openai_model,
+                    "messages": api_messages
+                }
+            )
+            
+            if openai_res.status_code != 200:
+                err_body = openai_res.text
+                logger.error(f"Erro na API da OpenAI ({openai_res.status_code}): {err_body}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Erro ao chamar OpenAI ({openai_res.status_code}): {err_body}"
+                )
+                
+            res_json = openai_res.json()
+            assistant_message = res_json["choices"][0]["message"]["content"]
+            
+            return {
+                "role": "assistant",
+                "content": assistant_message
+            }
+    except httpx.HTTPError as he:
+        logger.error(f"Erro de conexão HTTP ao chamar OpenAI: {he}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro de conexão com o servidor da OpenAI: {str(he)}"
+        )
+    except Exception as exc:
+        logger.error(f"Erro inesperado no chat do assistente: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro inesperado no assistente: {str(exc)}"
+        )
+
+

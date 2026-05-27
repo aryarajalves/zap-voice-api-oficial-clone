@@ -67,6 +67,10 @@ class ScheduledTrigger(Base):
     skip_block_check = Column(Boolean, default=False)
     sent_as = Column(String, nullable=True)
     
+    interaction_funnel_id = Column(Integer, ForeignKey("funnels.id"), nullable=True)
+    block_funnel_id = Column(Integer, ForeignKey("funnels.id"), nullable=True)
+    button_actions = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    
     parent_id = Column(Integer, ForeignKey("scheduled_triggers.id", ondelete="CASCADE"), nullable=True, index=True)
     is_followup = Column(Boolean, default=False)
     is_recurring = Column(Boolean, default=False)
@@ -75,7 +79,7 @@ class ScheduledTrigger(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     client = relationship("Client", back_populates="triggers")
-    funnel = relationship("Funnel", back_populates="triggers")
+    funnel = relationship("Funnel", back_populates="triggers", foreign_keys=[funnel_id])
     messages = relationship("MessageStatus", back_populates="trigger", cascade="all, delete-orphan")
     children = relationship("ScheduledTrigger", backref=backref("parent", remote_side=[id]), cascade="all, delete-orphan")
 

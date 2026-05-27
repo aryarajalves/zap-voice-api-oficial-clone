@@ -26,7 +26,7 @@ class Funnel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     client = relationship("Client", back_populates="funnels")
-    triggers = relationship("ScheduledTrigger", back_populates="funnel")
+    triggers = relationship("ScheduledTrigger", back_populates="funnel", foreign_keys="[ScheduledTrigger.funnel_id]")
 
 class WebhookConfig(Base):
     __tablename__ = "webhook_configs"

@@ -297,7 +297,8 @@ async def scheduler_task():
                         "direct_message_params": trigger.direct_message_params,
                         "private_message": trigger.private_message,
                         "private_message_delay": trigger.private_message_delay,
-                        "private_message_concurrency": trigger.private_message_concurrency
+                        "private_message_concurrency": trigger.private_message_concurrency,
+                        "type": "funnel_bulk" if trigger.funnel_id else "template_bulk"
                     }
                     await rabbitmq.publish("zapvoice_bulk_sends", payload)
                 

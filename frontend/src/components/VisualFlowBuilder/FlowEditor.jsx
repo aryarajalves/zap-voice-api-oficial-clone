@@ -14,7 +14,7 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
     const portalContainer = React.useContext(PortalContext);
     const {
         nodes, edges, saving, funnelName, setFunnelName,
-        triggerPhrase, setTriggerPhrase, allowedPhones, setAllowedPhones,
+        allowedPhones, setAllowedPhones,
         blockedPhones, setBlockedPhones, showRestrictions, setShowRestrictions,
         businessHoursStart, setBusinessHoursStart, businessHoursEnd, setBusinessHoursEnd,
         businessHoursDays, setBusinessHoursDays, showBusinessHours, setShowBusinessHours,
@@ -49,7 +49,6 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
 
                     <MetadataPanel
                         funnelName={funnelName} setFunnelName={setFunnelName}
-                        triggerPhrase={triggerPhrase} setTriggerPhrase={setTriggerPhrase}
                         showRestrictions={showRestrictions} setShowRestrictions={setShowRestrictions}
                         allowedPhones={allowedPhones} setAllowedPhones={setAllowedPhones}
                         blockedPhones={blockedPhones} setBlockedPhones={setBlockedPhones}

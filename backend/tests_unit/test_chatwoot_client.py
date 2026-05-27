@@ -252,7 +252,7 @@ async def test_send_template_meta_api(mock_settings):
 
     with patch("httpx.AsyncClient.post", return_value=mock_resp) as mock_post:
         result = await client.send_template(
-            phone_number="5585999999999",
+            contact_phone="5585999999999",
             template_name="hello_world",
             components=[{"type": "body", "parameters": [{"type": "text", "text": "Arya"}]}]
         )
@@ -264,3 +264,27 @@ async def test_send_template_meta_api(mock_settings):
         assert "phone_id_123/messages" in args[0]
         assert kwargs["json"]["template"]["name"] == "hello_world"
         assert kwargs["headers"]["Authorization"] == "Bearer meta_token_abc"
+
+@pytest.mark.asyncio
+async def test_send_template_components_keyword_resolution(mock_settings):
+    # Test that passing 'components' keyword argument is properly resolved and avoids duplicate param error
+    client = ChatwootClient(client_id=1)
+    
+    # Mock self._wa.send_template
+    client._wa.send_template = AsyncMock(return_value={"success": True})
+    
+    result = await client.send_template(
+        contact_phone="5585999999999",
+        template_name="hello_world",
+        template_language="pt_BR",
+        components=[{"type": "body", "parameters": [{"type": "text", "text": "Arya"}]}]
+    )
+    
+    assert result == {"success": True}
+    client._wa.send_template.assert_called_once_with(
+        "5585999999999",
+        "hello_world",
+        "pt_BR",
+        [{"type": "body", "parameters": [{"type": "text", "text": "Arya"}]}]
+    )
+

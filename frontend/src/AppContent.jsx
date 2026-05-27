@@ -20,6 +20,7 @@ import WebhookLeads from './pages/WebhookLeads';
 import Financial from './pages/Financial';
 import RecurringSchedules from './components/RecurringSchedules';
 import VisualFlowBuilder from './components/VisualFlowBuilder';
+import StressTest from './pages/StressTest';
 
 export default function AppContent() {
   const logic = useAppLogic();
@@ -74,6 +75,7 @@ export default function AppContent() {
                     {logic.currentView === 'integrations' && 'Integrações Webhook'}
                     {logic.currentView === 'financial' && 'Financeiro'}
                     {logic.currentView === 'leads' && 'Webhook Leads'}
+                    {logic.currentView === 'stress_test' && 'Teste de Escala'}
                   </h1>
                   
                   {/* Guide Buttons */}
@@ -106,6 +108,7 @@ export default function AppContent() {
             {logic.currentView === 'leads' && <WebhookLeads />}
             {logic.currentView === 'financial' && <Financial />}
             {logic.currentView === 'recurring_schedules' && <RecurringSchedules />}
+            {logic.currentView === 'stress_test' && <StressTest />}
             
             {logic.currentView === 'bulk_sender' && (
               <div className="space-y-8">

@@ -1,9 +1,18 @@
 import os
 import sys
+import sqlite3
+import uuid
+
+# Registra adaptador do UUID para o SQLite de forma global nos testes
+sqlite3.register_adapter(uuid.UUID, lambda u: str(u))
 
 # Define DATABASE_URL ANTES de qualquer import do projeto para evitar o ValueError no database.py
 # Usa in-memory para evitar disk I/O errors em ambientes com disco cheio
 os.environ["DATABASE_URL"] = "sqlite://"
+# Força a desativação da simulação de mensagens durante os testes unitários
+# para que a lógica real de envio, pós-envio e controle de fluxo seja testada.
+os.environ["SIMULATE_MESSAGING"] = "false"
+os.environ["SIMULATE_CHATWOOT_RATELIMIT"] = "false"
 
 # Adiciona o diretório backend ao path
 backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

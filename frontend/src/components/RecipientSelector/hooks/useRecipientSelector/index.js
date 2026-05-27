@@ -33,6 +33,8 @@ export const useRecipientSelector = ({
     const [fileVariables, setFileVariables] = useState({});
     const [activeDropdown, setActiveDropdown] = useState(null);
 
+    const [variableFilters, setVariableFilters] = useState({});
+
     useEffect(() => {
         if (requireOpenWindow) {
             setFilterOpenOnly(true);
@@ -104,13 +106,13 @@ export const useRecipientSelector = ({
 
     const lastOnSelectRef = useRef(null);
     useEffect(() => {
-        const payload = { list: selectedList, mode, tag: '', isValidated }; // Tag is handled by the subhook but here it is empty for the payload stringification
+        const payload = { list: selectedList, mode, tag: '', isValidated, variableFilters }; // Tag is handled by the subhook but here it is empty for the payload stringification
         const payloadStr = JSON.stringify(payload);
         if (lastOnSelectRef.current !== payloadStr) {
-            onSelect(selectedList, { mode, tag: '', isValidated });
+            onSelect(selectedList, { mode, tag: '', isValidated, variableFilters });
             lastOnSelectRef.current = payloadStr;
         }
-    }, [selectedList, mode, isValidated, onSelect]);
+    }, [selectedList, mode, isValidated, onSelect, variableFilters]);
 
     // Sub-hooks
     const fileImport = useFileImport({ 
@@ -271,6 +273,7 @@ export const useRecipientSelector = ({
         add55ToInput,
         activeClient,
         isValidated,
+        variableFilters, setVariableFilters,
         // From Sub-hooks
         ...fileImport,
         ...validation,

@@ -21,7 +21,8 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType:
         itemsPerPage, setItemsPerPage, page, setPage, totalPages, totalItems, fetchHistory,
         handleDelete, handleCancel, handleAction, handleBulkDeleteAction, handleStartNow,
         handleRetry, fetchErrors, fetchChildren, handleViewPipeline, handleSelectAll, handleSelectOne,
-        handleViewContacts, handleEditParams
+        handleViewContacts, handleEditParams,
+        contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal
     } = useTriggerHistory(refreshKey, initialTriggerTypeProp);
 
     const handleActionWrapper = () => {
@@ -98,6 +99,11 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType:
                 contactsTypeFilter={contactsTypeFilter}
                 setContactsTypeFilter={setContactsTypeFilter}
                 loadingContacts={loadingContacts}
+                contactsPage={contactsPage}
+                setContactsPage={setContactsPage}
+                contactsPerPage={contactsPerPage}
+                setContactsPerPage={setContactsPerPage}
+                contactsTotal={contactsTotal}
             />
 
             <ErrorReportModal 

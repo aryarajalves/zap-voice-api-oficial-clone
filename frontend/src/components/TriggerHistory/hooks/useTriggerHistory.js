@@ -33,6 +33,9 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     const [contactsFilter, setContactsFilter] = useState('all');
     const [contactsTypeFilter, setContactsTypeFilter] = useState('all');
     const [loadingContacts, setLoadingContacts] = useState(false);
+    const [contactsPage, setContactsPage] = useState(1);
+    const [contactsPerPage, setContactsPerPage] = useState(20);
+    const [contactsTotal, setContactsTotal] = useState(0);
     const [selectedIds, setSelectedIds] = useState([]);
     const [filterName, setFilterName] = useState('');
     const [dateRange, setDateRange] = useState('all');
@@ -153,7 +156,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                                     total_interactions: d.interactions !== undefined ? d.interactions : (d.total_interactions !== undefined ? d.total_interactions : t.total_interactions),
                                     total_blocked: d.blocked !== undefined ? d.blocked : (d.total_blocked !== undefined ? d.total_blocked : t.total_blocked),
                                     total_cost: d.cost !== undefined ? d.cost : (d.total_cost !== undefined ? d.total_cost : t.total_cost),
-                                    total_memory_sent: d.memory_sent !== undefined ? d.memory_sent : (d.total_memory_sent !== undefined ? d.total_memory_sent : t.total_memory_sent)
+                                    total_memory_sent: d.memory_sent !== undefined ? d.memory_sent : (d.total_memory_sent !== undefined ? d.total_memory_sent : t.total_memory_sent),
+                                    total_paid_templates: d.total_paid_templates !== undefined ? d.total_paid_templates : t.total_paid_templates
                                 };
                             }
                             return t;
@@ -212,8 +216,15 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         }
     };
 
-    const fetchChildren = async (trigger) => {
-        setChildrenModal({ isOpen: true, triggerId: trigger.id, triggerName: trigger.template_name || trigger.funnel?.name || 'Disparo', children: [], isLoading: true });
+    const fetchChildren = async (trigger, filterType = 'all') => {
+        setChildrenModal({ 
+            isOpen: true, 
+            triggerId: trigger.id, 
+            triggerName: trigger.template_name || trigger.funnel?.name || 'Disparo', 
+            children: [], 
+            isLoading: true,
+            filterType
+        });
         try {
             const res = await fetchWithAuth(`${API_URL}/triggers/${trigger.id}/children`, {}, activeClient?.id);
             if (res.ok) {
@@ -257,7 +268,9 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                 if (resT.ok) {
                     const trig = await resT.json();
                     const raw = trig.contacts_list || [];
-                    const formatted = raw.map(c => {
+                    const start = (contactsPage - 1) * contactsPerPage;
+                    const paginated = raw.slice(start, start + contactsPerPage);
+                    const formatted = paginated.map(c => {
                         const phone = typeof c === 'string' ? c : (c.phone || c.whatsapp || c.telefone || c.contact_phone || c.number || '');
                         const name = typeof c === 'object' ? (c.nome || c.name || c.full_name || c.contact_name || c['{{1}}'] || c['1'] || '') : '';
                         return {
@@ -268,10 +281,11 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                             is_bulk_raw: true
                         };
                     });
+                    setContactsTotal(raw.length);
                     setContactsModal(prev => ({
                         ...prev,
                         contacts: formatted,
-                        counts: { total: formatted.length }
+                        counts: { total: raw.length }
                     }));
                     setLoadingContacts(false);
                     return;
@@ -280,12 +294,15 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
 
             if (contactsFilter !== 'all') params.append('status_filter', contactsFilter);
             if (contactsTypeFilter !== 'all') params.append('message_type', contactsTypeFilter);
+            params.append('limit', contactsPerPage);
+            params.append('skip', (contactsPage - 1) * contactsPerPage);
             const queryString = params.toString();
             if (queryString) url += `?${queryString}`;
 
             const res = await fetchWithAuth(url, {}, activeClient?.id);
             if (res.ok) {
                 const data = await res.json();
+                setContactsTotal(typeof data.total === 'number' ? data.total : (data.counts?.all || 0));
                 setContactsModal(prev => ({
                     ...prev,
                     contacts: data.items || [],
@@ -293,7 +310,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                 }));
             }
         } catch (e) {
-            toast.error("Erro ao carregar lista de contatos");
+            console.error("Erro ao carregar lista de contatos:", e);
+            toast.error("Erro ao carregar lista de contatos: " + e.message);
         } finally {
             setLoadingContacts(false);
         }
@@ -303,7 +321,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         if (contactsModal.isOpen && contactsModal.triggerId) {
             fetchTriggerContacts();
         }
-    }, [contactsFilter, contactsTypeFilter, contactsModal.isOpen, contactsModal.triggerId]);
+    }, [contactsFilter, contactsTypeFilter, contactsModal.isOpen, contactsModal.triggerId, contactsPage, contactsPerPage]);
 
     const handleSelectAll = (e) => {
         if (e.target.checked) {
@@ -324,6 +342,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     const handleViewContacts = (trigger, initialFilter = 'all') => {
         const filterLabels = { total: 'Total na Lista', sent: 'Enviados', delivered: 'Recebidas', read: 'Lidos', failed: 'Falhas', interaction: 'Interações', blocked: 'Bloqueados', free: 'Gratuitas', template: 'Templates', private_note: 'Notas Privadas' };
         setContactsFilter(initialFilter);
+        setContactsPage(1); // Resetar para página 1 ao abrir
         const label = filterLabels[initialFilter];
         setContactsModal({
             isOpen: true,
@@ -369,6 +388,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         totalPages, totalItems, fetchHistory, handleDelete, handleCancel, handleAction,
         handleBulkDeleteAction, handleStartNow, handleRetry, fetchErrors, fetchChildren,
         handleViewPipeline, fetchTriggerContacts, handleSelectAll, handleSelectOne,
-        handleViewContacts, handleEditParams
+        handleViewContacts, handleEditParams,
+        contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal
     };
 };

@@ -21,13 +21,13 @@ class TestBulkDuplication(unittest.IsolatedAsyncioTestCase):
         
         def base_query(model):
             q = MagicMock()
-            if model == models.ScheduledTrigger:
+            if model is models.ScheduledTrigger:
                 q.get.return_value = self.mock_trigger
-            elif model == models.BlockedContact.phone:
+            elif model is models.BlockedContact.phone:
                 q.filter().all.return_value = []
-            elif model == models.MessageStatus.phone_number:
+            elif model is models.MessageStatus.phone_number:
                 q.filter().all.return_value = []
-            elif model == models.ContactWindow:
+            elif model is models.ContactWindow:
                 q.filter().all.return_value = []
             return q
             
@@ -44,7 +44,7 @@ class TestBulkDuplication(unittest.IsolatedAsyncioTestCase):
         mock_window.last_interaction_at = datetime.now(timezone.utc) - timedelta(minutes=10)
 
         def custom_query(model):
-            if model == models.ContactWindow:
+            if model is models.ContactWindow:
                 q = MagicMock()
                 q.filter().all.return_value = [mock_window]
                 return q
@@ -67,9 +67,9 @@ class TestBulkDuplication(unittest.IsolatedAsyncioTestCase):
         mock_chatwoot.send_template.return_value = {"messages": [{"id": "ok"}]}
         
         def custom_query(model):
-            if model == models.MessageStatus.phone_number:
+            if model is models.MessageStatus.phone_number:
                 q = MagicMock()
-                q.filter().all.return_value = [("sent_already",)]
+                q.filter().all.return_value = [("5511999990001",)]
                 return q
             return self.base_query_func(model)
         self.mock_session.query.side_effect = custom_query
@@ -78,10 +78,10 @@ class TestBulkDuplication(unittest.IsolatedAsyncioTestCase):
              patch("services.bulk.ChatwootClient", return_value=mock_chatwoot), \
              patch("services.bulk.rabbitmq.publish_event", new_callable=AsyncMock):
             
-            await process_bulk_send(123, "tmpl", [{"phone": "sent_already"}, {"phone": "new"}], 0, 2)
+            await process_bulk_send(123, "tmpl", [{"phone": "5511999990001"}, {"phone": "5511999990002"}], 0, 2)
 
             self.assertEqual(mock_chatwoot.send_template.call_count, 1)
-            self.assertEqual(mock_chatwoot.send_template.call_args[0][0], "new")
+            self.assertEqual(mock_chatwoot.send_template.call_args[0][0], "5511999990002")
 
 if __name__ == '__main__':
     unittest.main()

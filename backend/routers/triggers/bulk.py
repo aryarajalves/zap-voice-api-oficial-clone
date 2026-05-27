@@ -287,7 +287,8 @@ async def schedule_bulk_send(
         private_message=payload.get("private_message"),
         private_message_delay=payload.get("private_message_delay", 5),
         private_message_concurrency=payload.get("private_message_concurrency", 1),
-        chatwoot_label=payload.get("chatwoot_label")
+        chatwoot_label=payload.get("chatwoot_label"),
+        button_actions=payload.get("button_actions")
     )
     db.add(trigger)
     db.commit()

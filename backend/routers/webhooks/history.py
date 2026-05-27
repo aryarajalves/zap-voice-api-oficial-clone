@@ -260,6 +260,9 @@ async def sync_webhook_history(
                     tag_list.extend([str(t).strip() for t in current_raw if t])
             if getattr(mapping_exists, "internal_tags", None):
                 tag_list.extend([t.strip() for t in mapping_exists.internal_tags.split(',') if t.strip()])
+            # Fallback para o Status Principal (event_type) se não houver tags configuradas
+            if not tag_list and history.event_type:
+                tag_list.append(history.event_type.replace("_", " ").title())
         
         tag = ", ".join(list(dict.fromkeys(tag_list))) if tag_list else None
         upsert_webhook_lead(db, integration.client_id, integration.platform, parsed_data, event_time=history.created_at, force_time=True, tag=tag)
@@ -395,6 +398,9 @@ async def sync_all_webhook_history(
                             tag_list.extend([str(t).strip() for t in current_raw if t])
                     if getattr(m_obj, "internal_tags", None):
                         tag_list.extend([t.strip() for t in m_obj.internal_tags.split(',') if t.strip()])
+                    # Fallback para o Status Principal (event_type) se não houver tags configuradas
+                    if not tag_list and history.event_type:
+                        tag_list.append(history.event_type.replace("_", " ").title())
                     
                     tag = ", ".join(list(dict.fromkeys(tag_list))) if tag_list else None
                     upsert_webhook_lead(db, integration.client_id, integration.platform, parsed_data, event_time=history.created_at, force_time=True, tag=tag)

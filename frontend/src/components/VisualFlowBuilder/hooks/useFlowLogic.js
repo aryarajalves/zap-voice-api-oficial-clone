@@ -17,7 +17,6 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
 
     // Funnel Metadata State
     const [funnelName, setFunnelName] = useState('');
-    const [triggerPhrase, setTriggerPhrase] = useState('');
     const [allowedPhones, setAllowedPhones] = useState('');
     const [blockedPhones, setBlockedPhones] = useState('');
     const [showRestrictions, setShowRestrictions] = useState(false);
@@ -230,7 +229,7 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             const updatePayload = {
                 name: funnelName,
                 description: currentFunnel.description,
-                trigger_phrase: triggerPhrase,
+                trigger_phrase: null,
                 allowed_phones: allowedPhones.split(',').map(p => p.trim()).filter(p => p),
                 blocked_phones: blockedPhones.split(',').map(p => p.trim()).filter(p => p),
                 allowed_phone: null,
@@ -292,7 +291,6 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             if (res.ok) {
                 const data = await res.json();
                 setFunnelName(data.name || '');
-                setTriggerPhrase(data.trigger_phrase || '');
                 setAllowedPhones(Array.isArray(data.allowed_phones) ? data.allowed_phones.join(', ') : (data.allowed_phone || ''));
                 setBlockedPhones(Array.isArray(data.blocked_phones) ? data.blocked_phones.join(', ') : '');
                 setBusinessHoursStart(data.business_hours_start || '08:00');
@@ -319,7 +317,7 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
 
     return {
         nodes, setNodes, edges, setEdges, saving, funnelName, setFunnelName,
-        triggerPhrase, setTriggerPhrase, allowedPhones, setAllowedPhones,
+        allowedPhones, setAllowedPhones,
         blockedPhones, setBlockedPhones, showRestrictions, setShowRestrictions,
         businessHoursStart, setBusinessHoursStart, businessHoursEnd, setBusinessHoursEnd,
         businessHoursDays, setBusinessHoursDays, showBusinessHours, setShowBusinessHours,

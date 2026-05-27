@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from chatwoot_client import ChatwootClient
 from sqlalchemy import or_, desc, cast, String
 from typing import Optional, List, Dict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import models, schemas
 import json
@@ -315,12 +315,15 @@ def list_leads(
     event_type: Optional[str] = None,
     product_name: Optional[str] = None,
     tag: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
 ):
     """
     Retorna a lista de leads capturados via webhook, com filtros e busca.
+    Filtros de data (date_from, date_to) aceitam formato ISO 8601 (YYYY-MM-DD).
     """
     client_id = x_client_id if x_client_id else current_user.client_id
     query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
@@ -341,6 +344,22 @@ def list_leads(
 
     if tag:
         query = query.filter(models.WebhookLead.tags.ilike(f"%{tag}%"))
+
+    # Filtro de data de criação do contato
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.filter(models.WebhookLead.created_at >= dt_from)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de date_from inválido. Use YYYY-MM-DD.")
+
+    if date_to:
+        try:
+            # Incluir o dia inteiro: até 23:59:59
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1, seconds=-1)
+            query = query.filter(models.WebhookLead.created_at <= dt_to)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de date_to inválido. Use YYYY-MM-DD.")
 
     total = query.count()
     items = query.order_by(desc(models.WebhookLead.last_event_at)).offset(skip).limit(limit).all()
@@ -418,6 +437,8 @@ def export_leads_csv(
     product_name: Optional[str] = None,
     tag: Optional[str] = None,
     ids: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
@@ -454,6 +475,21 @@ def export_leads_csv(
 
         if tag:
             query = query.filter(models.WebhookLead.tags.ilike(f"%{tag}%"))
+
+        # Filtro de data (exportação também respeita o range selecionado)
+        if date_from:
+            try:
+                dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+                query = query.filter(models.WebhookLead.created_at >= dt_from)
+            except ValueError:
+                pass
+
+        if date_to:
+            try:
+                dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1, seconds=-1)
+                query = query.filter(models.WebhookLead.created_at <= dt_to)
+            except ValueError:
+                pass
 
     leads = query.order_by(desc(models.WebhookLead.last_event_at)).all()
 

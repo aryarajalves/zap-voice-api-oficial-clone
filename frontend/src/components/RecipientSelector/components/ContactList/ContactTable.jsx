@@ -8,8 +8,18 @@ const ContactTable = ({
     removeContact,
     displayLimit,
     setDisplayLimit,
-    filteredContactsCount
+    filteredContactsCount,
+    variableFilters = {},
+    setVariableFilters
 }) => {
+    const toggleVarFilter = (varKey) => {
+        setVariableFilters(prev => {
+            const current = prev[varKey] || 'full';
+            const next = current === 'full' ? 'first_name' : 'full';
+            return { ...prev, [varKey]: next };
+        });
+    };
+
     return (
         <div className="bg-slate-900/60 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
             <div className="max-h-[450px] overflow-y-auto premium-scrollbar">
@@ -18,9 +28,28 @@ const ContactTable = ({
                         <tr>
                             <th className="px-4 py-5 text-[10px] font-black uppercase text-slate-600 tracking-[0.2em] text-center w-12">#</th>
                             <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Número</th>
-                            {activeVarColumns.map(v => (
-                                <th key={v.key} className="px-4 py-5 text-[10px] font-black uppercase text-emerald-500/70 tracking-[0.2em] text-center">{v.label}</th>
-                            ))}
+                            {activeVarColumns.map(v => {
+                                const isFirstName = variableFilters[v.key] === 'first_name';
+                                return (
+                                    <th key={v.key} className="px-4 py-5 text-[10px] font-black uppercase text-center w-48">
+                                        <div className="flex flex-col items-center gap-1.5 justify-center">
+                                            <span className="text-emerald-500/70 tracking-[0.2em]">{v.label}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleVarFilter(v.key)}
+                                                className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all select-none border border-white/5 active:scale-95 ${
+                                                    isFirstName
+                                                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-slate-950 shadow-md shadow-green-500/20 border-green-500/20'
+                                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-750 hover:text-white'
+                                                }`}
+                                                title={isFirstName ? 'Enviando apenas a primeira palavra' : 'Enviando conteúdo completo'}
+                                            >
+                                                {isFirstName ? '✦ 1º Nome' : 'Inteiro'}
+                                            </button>
+                                        </div>
+                                    </th>
+                                );
+                            })}
                             {showValidation && <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] text-center">Status</th>}
                             {showValidation && <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] text-center">Janela 24h</th>}
                             <th className="px-8 py-5 text-right"></th>
@@ -35,11 +64,19 @@ const ContactTable = ({
                                 <td className="px-8 py-4 font-mono text-sm text-slate-200 tracking-wider">
                                     {c.phone}
                                 </td>
-                                {activeVarColumns.map(v => (
-                                    <td key={v.key} className="px-4 py-4 text-center text-xs text-emerald-300 font-medium max-w-[120px] truncate">
-                                        {c.vars?.[v.key] || <span className="text-slate-700">—</span>}
-                                    </td>
-                                ))}
+                                {activeVarColumns.map(v => {
+                                    const val = c.vars?.[v.key];
+                                    const isFirstName = variableFilters[v.key] === 'first_name';
+                                    const formattedVal = val && isFirstName 
+                                        ? String(val).trim().split(' ')[0] 
+                                        : val;
+                                    
+                                    return (
+                                        <td key={v.key} className="px-4 py-4 text-center text-xs text-emerald-300 font-medium max-w-[120px] truncate">
+                                            {formattedVal || <span className="text-slate-700">—</span>}
+                                        </td>
+                                    );
+                                })}
                                 {showValidation && (
                                     <td className="px-8 py-4 text-center">
                                         {c.is_blocked ? (

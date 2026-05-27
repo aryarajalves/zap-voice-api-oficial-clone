@@ -18,6 +18,7 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
 
     const selectedTemplateObj = bulk.templates.find(t => t.name === bulk.selectedTemplate);
     const templateVariables = bulk.extractTemplateVariables(selectedTemplateObj);
+    const templateButtons = bulk.extractTemplateButtons(selectedTemplateObj);
 
     // Helpers
     const handleParamChange = (key, value) => {
@@ -90,9 +91,10 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
                     openExpansion={(title, key, value) => bulk.setExpansionModal({ isOpen: true, title, key, value })}
                 />
             ) : (
-                <ExecutionStep 
+                <ExecutionStep
                     {...bulk}
                     templateVariables={templateVariables}
+                    templateButtons={templateButtons}
                     selectedInbox={bulk.selectionMetadata?.inbox_id}
                     setFinalContacts={bulk.handleRecipientSelect}
                 />

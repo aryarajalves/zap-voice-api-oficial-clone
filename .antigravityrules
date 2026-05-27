@@ -115,6 +115,8 @@
 - **Protocolo de Commits:** Sempre utilize o padrão Conventional Commits em português do Brasil.
 - **Atualização Obrigatória:** Sempre que realizar alterações, criar ou atualizar funcionalidades no repositório, você deve atualizar o `README.md` refletindo as novas funcionalidades, guias ou modificações efetuadas.
 
+---
 
-
-
+## 17. Regra de Preservação do Navegador do Usuário
+- **Proibição Absoluta:** O agente está terminantemente proibido de executar qualquer comando que mate, finalize ou feche o processo do Google Chrome do usuário (como `Stop-Process -Name chrome`, `taskkill /f /im chrome.exe` ou similares).
+- **Isolamento de Testes:** Qualquer automação de teste de interface (Cypress, Playwright, Puppeteer ou DevTools remotos) deve rodar de forma isolada, em modo headless, usando portas customizadas e perfis temporários de usuário (`--user-data-dir` exclusivo), sem jamais interferir na sessão ativa ou fechar abas do navegador do usuário.

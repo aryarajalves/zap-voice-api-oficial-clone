@@ -35,6 +35,13 @@ export default function WebhookLeads() {
         setSelectedTag={logic.setSelectedTag}
         availableFilters={logic.availableFilters}
         total={logic.total}
+        datePreset={logic.datePreset}
+        setDatePreset={logic.setDatePreset}
+        customDateFrom={logic.customDateFrom}
+        setCustomDateFrom={logic.setCustomDateFrom}
+        customDateTo={logic.customDateTo}
+        setCustomDateTo={logic.setCustomDateTo}
+        handleClearDateFilters={logic.handleClearDateFilters}
       />
 
       <Table 

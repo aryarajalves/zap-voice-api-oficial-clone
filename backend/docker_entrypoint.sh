@@ -40,7 +40,7 @@ if [ -n "$DATABASE_URL" ] && [ "$1" = "uvicorn" ]; then
     echo "🏗️  Aplicando migrações de esquema..."
     python scripts/database/create_database.py || echo "⚠️  Aviso: Não foi possível criar o banco automaticamente. Certifique-se de que ele existe."
     echo "🏗️  Aplicando migrações de esquema..."
-    python scripts/database/update_schema.py || { echo "🚨 ERRO CRÍTICO: Falha na migração/verificação do banco de dados!"; exit 1; }
+    python scripts/database/update_schema.py || echo "⚠️ Aviso: Falha ao aplicar migrações de esquema (timeout ou erro)."
 fi
 
 # Inicia a aplicação original (uvicorn)

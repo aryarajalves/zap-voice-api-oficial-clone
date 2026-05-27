@@ -177,13 +177,34 @@ async def handle_external_webhook(
         logger.info(f"🔍 [VARS] Extracted: {final_vars}")
 
         # 6. Process Automations (Background)
-        # Sincroniza Lead com o banco central de leads
+        # Monta as tags a partir do mapeamento encontrado
+        # Prioridade: chatwoot_label → internal_tags → event_type como fallback
+        auto_tag_list = []
+        try:
+            from core.utils import robust_extract_labels
+            if mapping.chatwoot_label:
+                extracted_labels = robust_extract_labels(mapping.chatwoot_label)
+                if extracted_labels:
+                    auto_tag_list.extend([str(t).strip() for t in extracted_labels if t])
+            if getattr(mapping, "internal_tags", None):
+                auto_tag_list.extend([t.strip() for t in mapping.internal_tags.split(',') if t.strip()])
+            # Fallback: usa o event_type como etiqueta se não houver nenhuma configurada
+            # NOTA: "outros" também é incluído — é o Status Principal exibido na interface
+            if not auto_tag_list and event_type:
+                auto_tag_list.append(event_type.replace("_", " ").title())
+        except Exception as tag_err:
+            logger.warning(f"⚠️ [WEBHOOK] Erro ao montar tags para lead: {tag_err}")
+
+        auto_tag = ", ".join(list(dict.fromkeys(auto_tag_list))) if auto_tag_list else None
+
+        # Sincroniza Lead com o banco central de leads (com tags do mapeamento)
         background_tasks.add_task(
             upsert_webhook_lead,
             SessionLocal(), 
             client_id=integration.client_id,
             platform=integration.platform,
-            parsed_data=final_vars
+            parsed_data=final_vars,
+            tag=auto_tag
         )
 
 

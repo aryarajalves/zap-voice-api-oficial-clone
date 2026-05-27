@@ -15,3 +15,26 @@ O repositório oficial do projeto é:
 4. O branch principal é o `main` — nunca fazer force push no `main`.
 5. Toda mensagem de commit (título e corpo) deve obrigatoriamente estar em **português do Brasil**.
 6. É OBRIGATÓRIO manter o arquivo `README.md` atualizado com a versão corrente e o Changelog das alterações antes de realizar qualquer commit ou push.
+
+## 🧹 Limpeza Obrigatória da Raiz Antes do Push
+
+**Antes de qualquer `git push`, o agente DEVE inspecionar a raiz do projeto e deletar os seguintes tipos de arquivo caso existam:**
+
+### Arquivos que DEVEM ser deletados se existirem na raiz (apenas arquivos inúteis/temporários):
+- `screenshot*.png` — prints de validação visual gerados pelos agentes
+- `fixed_layout_*.png`, `modal_saved_*.png` e qualquer outro `.png` de evidência
+- `chrome_*.log`, `chrome_err.log`, `chrome_headless.log`, etc. — logs do browser do agente
+- `zapvoice_debug.log` e qualquer outro `.log` solto na raiz
+- `test_*.db`, `zapvoice.db` e qualquer outro `.db` solto na raiz (bancos de teste temporários)
+
+### 🚫 PROIBIDO DELETAR:
+- **NUNCA deletar** arquivos de código Python (`.py`), componentes frontend (`.jsx`, `.js`, `.tsx`, `.ts`), testes unitários ou arquivos de estilo da aplicação.
+- O arquivo `verify_system.py` na raiz é protegido e nunca deve ser deletado.
+
+### Protocolo de execução:
+1. Rodar `git status` para ver todos os arquivos não rastreados (`??`) e modificados.
+2. Identificar na raiz qualquer arquivo de log, print temporário ou lixo que se encaixe nos padrões acima.
+3. **MANDATÓRIO:** O agente deve listar explicitamente para o usuário quais arquivos encontrou e pretende deletar.
+4. **PROIBIDO:** Nunca executar `git clean -fd` ou deletar arquivos de código/untracked sem consentimento explícito e sem exibir a listagem prévia.
+5. Deletar os arquivos de lixo apenas após listar/confirmar, antes de fazer o `git add` e o commit.
+6. Só então prosseguir com o commit e o push.

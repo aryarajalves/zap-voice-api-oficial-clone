@@ -17,6 +17,15 @@ vi.mock('./hooks/useWebhookLeads', () => ({
     selectedTag: '',
     setSelectedTag: vi.fn(),
     availableFilters: { tags: [] },
+    // Filtros de data
+    datePreset: '',
+    setDatePreset: vi.fn(),
+    customDateFrom: '',
+    setCustomDateFrom: vi.fn(),
+    customDateTo: '',
+    setCustomDateTo: vi.fn(),
+    handleClearDateFilters: vi.fn(),
+    // Seleção e modais
     selectedLeads: [],
     setIsDeleteModalOpen: vi.fn(),
     setLeadToDelete: vi.fn(),
@@ -29,7 +38,20 @@ vi.mock('./hooks/useWebhookLeads', () => ({
     handleSelectAll: vi.fn(),
     handleSelectLead: vi.fn(),
     setIsEditModalOpen: vi.fn(),
-    setLeadToEdit: vi.fn()
+    setLeadToEdit: vi.fn(),
+    isCleaningTags: false,
+    isDeleting: false,
+    isDeleteModalOpen: false,
+    leadToDelete: null,
+    isImportModalOpen: false,
+    isCreateModalOpen: false,
+    isEditModalOpen: false,
+    leadToEdit: null,
+    isCleanConfirmOpen: false,
+    setPage: vi.fn(),
+    setLimit: vi.fn(),
+    executeDelete: vi.fn(),
+    handleCleanTags: vi.fn(),
   })
 }));
 
@@ -48,5 +70,15 @@ describe('WebhookLeads Component', () => {
     expect(screen.getByPlaceholderText('Buscar por nome ou telefone...')).toBeDefined();
     expect(screen.getByText('Anterior')).toBeDefined();
     expect(screen.getByText('Próxima')).toBeDefined();
+  });
+
+  it('renderiza o botão de filtro por data', () => {
+    render(<WebhookLeads />);
+    expect(screen.getByText('Filtrar por data')).toBeDefined();
+  });
+
+  it('mostra o total de contatos', () => {
+    render(<WebhookLeads />);
+    expect(screen.getByText('Total: 0 contatos')).toBeDefined();
   });
 });

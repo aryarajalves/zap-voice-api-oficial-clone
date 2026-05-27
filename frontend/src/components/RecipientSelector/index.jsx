@@ -131,6 +131,8 @@ const RecipientSelector = ({
                     startValidation={hook.startValidation}
                     isValidating={hook.isValidating}
                     progress={hook.progress}
+                    variableFilters={hook.variableFilters}
+                    setVariableFilters={hook.setVariableFilters}
                 />
             )}
 

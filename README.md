@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.4)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.5)
 
-Bem-vindo à versão **3.8.4** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.5** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,13 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.8.5
+- **Filtro de Plataformas no Financeiro**: Adicionado seletor visual premium de plataformas (Hotmart, Kiwify, Eduzz, Todas) no painel de Vendas de Webhooks.
+- **Filtro de Período Temporal por Datas**: Implementação de inputs de data ("De" e "Até") no cabeçalho de filtros para consulta personalizada de faturamento.
+- **Formatação de Data sem Segundos**: Ocultação de segundos nos carimbos de data/hora no Histórico de Transações, mantendo a tela mais limpa.
+- **Correção da Exibição da Plataforma na Tabela**: Ajustada a listagem no frontend para ler e exibir o nome correto da plataforma (Hotmart, Kiwify, Eduzz) em vez de mostrar estaticamente a tag "ALL" nas linhas.
+- **Correção de Status Outros / Compra Aprovada**: Correção da lógica de mapeamento de status de webhooks para usar o tipo de evento detectado sem depender estritamente da chave status crua.
 
 ### v3.8.4
 - **Importação de Contatos pelo Chatwoot**: Nova funcionalidade de importação de leads diretamente do Chatwoot no modal `ContactImportModal`, com suporte a busca por nome/telefone, seleção múltipla e integração direta com a listagem de destinatários do Bulk Sender.

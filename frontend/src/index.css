@@ -174,3 +174,12 @@
 .animate-loading-bar {
     animation: loading-bar 2.5s ease-in-out infinite;
 }
+
+/* Esconder scrollbar mantendo scroll funcional */
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}

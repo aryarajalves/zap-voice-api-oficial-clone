@@ -5,6 +5,7 @@ import TemplateForm from './components/TemplateForm';
 import TemplateList from './components/TemplateList';
 import Modals from './components/Modals';
 import TemplateGuide from './components/TemplateGuide';
+import TemplateAssistant from './components/TemplateAssistant';
 
 const TemplateCreator = ({ onSuccess, refreshKey }) => {
     const logic = useTemplateCreator(onSuccess, refreshKey);
@@ -24,6 +25,9 @@ const TemplateCreator = ({ onSuccess, refreshKey }) => {
                 isOpen={logic.isGuideOpen} 
                 onClose={() => logic.setIsGuideOpen(false)} 
             />
+
+            {/* AI Assistant for Templates */}
+            <TemplateAssistant logic={logic} />
 
             {/* Overlay de Carregamento Promitente */}
             {logic.loading && (

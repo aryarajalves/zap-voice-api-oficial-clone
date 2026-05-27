@@ -13,6 +13,7 @@ from services.bulk_persistence import get_sent_phones_set, update_trigger_stats,
 from services.bulk_core import send_smart_message
 
 import zoneinfo
+import random
 from datetime import datetime, timezone, timedelta
 logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
@@ -172,6 +173,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         
         # Persist results
         db_msg = SessionLocal()
+        sent_message_ids = []
         try:
             for idx, res in enumerate(results):
                 meta = batch_meta[idx]
@@ -213,6 +215,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     db_msg.add(msg_status)
                     update_trigger_stats(db_msg, trigger_id, sent=1)
                     sent_count += 1
+                    sent_message_ids.append(message_id)
                 else:
                     update_trigger_stats(db_msg, trigger_id, failed=1)
                     failed_count += 1
@@ -234,6 +237,12 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     )
                     db_msg.add(fail_msg)
             db_msg.commit()
+            
+            # Disparar simulação de ciclo de vida assíncrona se SIMULATE_MESSAGING estiver ativo
+            import os
+            if os.getenv("SIMULATE_MESSAGING", "false").lower() in ("true", "1", "yes"):
+                for mid in sent_message_ids:
+                    asyncio.create_task(simulate_lifecycle(mid, trigger_id, c_id))
         finally:
             db_msg.close()
 
@@ -259,6 +268,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     "total_blocked": t_prog.total_blocked or 0,
                     "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
                     "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                    "total_paid_templates": t_prog.total_paid_templates or 0,
                     "total": total,
                     "total_contacts": total
                 })
@@ -294,6 +304,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 "total_blocked": t.total_blocked or 0,
                 "cost": float(t.total_cost) if t.total_cost else 0.0,
                 "total_cost": float(t.total_cost) if t.total_cost else 0.0,
+                "total_paid_templates": t.total_paid_templates or 0,
                 "total": total,
                 "total_contacts": total
             })
@@ -443,6 +454,7 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
                     "total_blocked": t_prog.total_blocked or 0,
                     "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
                     "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                    "total_paid_templates": t_prog.total_paid_templates or 0,
                     "total": total,
                     "total_contacts": total
                 })
@@ -478,8 +490,195 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
                 "total_blocked": t.total_blocked or 0,
                 "cost": float(t.total_cost) if t.total_cost else 0.0,
                 "total_cost": float(t.total_cost) if t.total_cost else 0.0,
+                "total_paid_templates": t.total_paid_templates or 0,
                 "total": total,
                 "total_contacts": total
             })
     finally:
         db_final.close()
+
+async def simulate_lifecycle(message_id: str, trigger_id: int, client_id: int):
+    from database import SessionLocal
+    import models
+    from rabbitmq_client import rabbitmq
+
+    logger.info(f"🔄 [SIMULATE] Iniciando simulação para message_id={message_id}, trigger_id={trigger_id}")
+
+    # 1. Simular entrega (delivered) - ~90% de sucesso
+    await asyncio.sleep(random.uniform(1.0, 3.0))
+    
+    db = SessionLocal()
+    try:
+        msg = db.query(models.MessageStatus).filter_by(message_id=message_id).first()
+        if not msg:
+            logger.warning(f"⚠️ [SIMULATE] Mensagem {message_id} não encontrada no banco para o Trigger {trigger_id}.")
+            return
+        
+        trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id).first()
+        
+        # 90% chance to deliver
+        if random.random() < 0.90:
+            msg.status = 'delivered'
+            msg.delivered_counted = True
+            
+            # Decidir se é pago ou grátis para simulação
+            is_paid = False
+            price_brl = 0.0
+            category = "service"
+            
+            if trigger and not trigger.is_free_message and (trigger.template_name or trigger.product_name == "SCALE_TEST"):
+                # 70% de chance de ser cobrado, para o usuário poder ver ambos os tipos
+                if random.random() < 0.70:
+                    is_paid = True
+                    price_brl = trigger.cost_per_unit or 0.35
+                    category = "marketing" if price_brl == 0.35 else "utility"
+                else:
+                    is_paid = False
+                    price_brl = 0.0
+                    category = "utility" # categoria de template gratuito
+            
+            msg.meta_price_brl = price_brl
+            msg.meta_price_category = category
+            msg.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            
+            # Increment trigger total_delivered e custos se aplicável
+            db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+            if is_paid:
+                db.execute(
+                    text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + 1 WHERE id = :tid"),
+                    {"cost": price_brl, "tid": trigger_id}
+                )
+            db.commit()
+            
+            # notify progress
+            await notify_progress(db, trigger_id)
+            
+            # 2. Simular visualização (read) - ~75% de chance se entregue
+            await asyncio.sleep(random.uniform(2.0, 5.0))
+            db.refresh(msg)
+            if random.random() < 0.75:
+                msg.status = 'read'
+                msg.read_counted = True
+                msg.updated_at = datetime.now(timezone.utc)
+                db.commit()
+                
+                # Increment trigger total_read
+                db.execute(text("UPDATE scheduled_triggers SET total_read = COALESCE(total_read, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+                db.commit()
+                
+                await notify_progress(db, trigger_id)
+                
+                # 3. Simular interação ou bloqueio
+                await asyncio.sleep(random.uniform(2.0, 5.0))
+                db.refresh(msg)
+                rand_val = random.random()
+                if rand_val < 0.35: # ~35% de chance de interação
+                    msg.status = 'interaction'
+                    msg.is_interaction = True
+                    msg.interaction_counted = True
+                    msg.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+                    
+                    # Increment trigger total_interactions
+                    db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+                    db.commit()
+                    
+                    await notify_progress(db, trigger_id)
+
+                    # Se houver interaction_funnel_id configurado, disparar o funil simulado
+                    if trigger and trigger.interaction_funnel_id:
+                        try:
+                            new_trig = models.ScheduledTrigger(
+                                client_id=client_id,
+                                funnel_id=trigger.interaction_funnel_id,
+                                contact_phone=msg.phone_number,
+                                contact_name=msg.contact_name or "Contato Simulado",
+                                status='processing',
+                                scheduled_time=datetime.now(timezone.utc),
+                                is_bulk=False,
+                                is_interaction=True,
+                                parent_id=trigger_id
+                            )
+                            db.add(new_trig)
+                            db.commit()
+                            db.refresh(new_trig)
+                            
+                            await rabbitmq.publish("zapvoice_funnel_executions", {
+                                "trigger_id": new_trig.id,
+                                "funnel_id": trigger.interaction_funnel_id,
+                                "contact_phone": msg.phone_number
+                            })
+                            logger.info(f"🚀 [SIMULATE] Funil de interação {trigger.interaction_funnel_id} iniciado para {msg.phone_number}")
+                        except Exception as e_funnel:
+                            logger.error(f"❌ [SIMULATE] Erro ao disparar funil de interação simulado: {e_funnel}")
+                elif rand_val < 0.43: # ~8% de chance de bloqueio
+                    msg.status = 'delivered' # mantem delivered
+                    msg.failure_reason = 'BLOCKED_VIA_BUTTON'
+                    msg.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+                    
+                    # Increment trigger total_blocked
+                    db.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+                    db.commit()
+                    
+                    await notify_progress(db, trigger_id)
+
+                    # Se houver block_funnel_id configurado, disparar o funil simulado
+                    if trigger and trigger.block_funnel_id:
+                        try:
+                            new_trig = models.ScheduledTrigger(
+                                client_id=client_id,
+                                funnel_id=trigger.block_funnel_id,
+                                contact_phone=msg.phone_number,
+                                contact_name=msg.contact_name or "Contato Simulado",
+                                status='processing',
+                                scheduled_time=datetime.now(timezone.utc),
+                                is_bulk=False,
+                                is_interaction=False,
+                                skip_block_check=True,
+                                parent_id=trigger_id
+                            )
+                            db.add(new_trig)
+                            db.commit()
+                            db.refresh(new_trig)
+                            
+                            await rabbitmq.publish("zapvoice_funnel_executions", {
+                                "trigger_id": new_trig.id,
+                                "funnel_id": trigger.block_funnel_id,
+                                "contact_phone": msg.phone_number
+                            })
+                            logger.info(f"🚀 [SIMULATE] Funil de bloqueio {trigger.block_funnel_id} iniciado para {msg.phone_number}")
+                        except Exception as e_funnel:
+                            logger.error(f"❌ [SIMULATE] Erro ao disparar funil de bloqueio simulado: {e_funnel}")
+    except Exception as e:
+        logger.error(f"Erro na simulação de ciclo de vida do wamid {message_id}: {e}")
+    finally:
+        db.close()
+
+async def notify_progress(db, trigger_id):
+    db.commit()
+    t_prog = db.query(models.ScheduledTrigger).get(trigger_id)
+    if t_prog:
+        await rabbitmq.publish_event("bulk_progress", {
+            "trigger_id": trigger_id,
+            "status": t_prog.status,
+            "sent": t_prog.total_sent or 0,
+            "total_sent": t_prog.total_sent or 0,
+            "failed": t_prog.total_failed or 0,
+            "total_failed": t_prog.total_failed or 0,
+            "delivered": t_prog.total_delivered or 0,
+            "total_delivered": t_prog.total_delivered or 0,
+            "read": t_prog.total_read or 0,
+            "total_read": t_prog.total_read or 0,
+            "interactions": t_prog.total_interactions or 0,
+            "total_interactions": t_prog.total_interactions or 0,
+            "blocked": t_prog.total_blocked or 0,
+            "total_blocked": t_prog.total_blocked or 0,
+            "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+            "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+            "total_paid_templates": t_prog.total_paid_templates or 0,
+            "total": t_prog.total_contacts or 0,
+            "total_contacts": t_prog.total_contacts or 0
+        })
+

@@ -11,6 +11,7 @@ export default function TemplateSelectorDropdown({ templates, selectedTemplateNa
         const tagsSet = new Set();
         templates.forEach(t => {
             if (t && Array.isArray(t.tags)) {
+                if (t.status && t.status.toUpperCase() !== 'APPROVED' && t.status.toUpperCase() !== 'ACTIVE') return;
                 t.tags.forEach(tag => {
                     if (tag && tag.trim()) {
                         tagsSet.add(tag.trim());
@@ -86,6 +87,7 @@ export default function TemplateSelectorDropdown({ templates, selectedTemplateNa
                         {templates
                             .filter(t => {
                                 if (!t || !t.name) return false;
+                                if (t.status && t.status.toUpperCase() !== 'APPROVED' && t.status.toUpperCase() !== 'ACTIVE') return false;
                                 const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
                                 const matchesTag = !selectedTag || (Array.isArray(t.tags) && t.tags.includes(selectedTag));
                                 return matchesSearch && matchesTag;
@@ -119,6 +121,7 @@ export default function TemplateSelectorDropdown({ templates, selectedTemplateNa
                         }
                         {templates.filter(t => {
                             if (!t || !t.name) return false;
+                            if (t.status && t.status.toUpperCase() !== 'APPROVED' && t.status.toUpperCase() !== 'ACTIVE') return false;
                             const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
                             const matchesTag = !selectedTag || (Array.isArray(t.tags) && t.tags.includes(selectedTag));
                             return matchesSearch && matchesTag;

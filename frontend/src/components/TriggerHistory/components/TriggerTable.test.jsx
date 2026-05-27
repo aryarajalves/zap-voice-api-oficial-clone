@@ -119,4 +119,25 @@ describe('TriggerTable Component', () => {
     expect(abortedBadge).toBeInTheDocument();
     expect(screen.getByText(/Disparo abortado por atraso/i)).toBeInTheDocument();
   });
+
+  it('deve calcular e exibir a economia com disparos gratuitos corretos', () => {
+    const savingsTrigger = {
+      id: 5,
+      is_bulk: true,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      total_sent: 10,
+      total_failed: 0,
+      total_delivered: 10,
+      total_paid_templates: 8,
+      total_cost: 2.80,
+      child_count: 0,
+      funnel: { name: 'Funil Economia' }
+    };
+    
+    render(<TriggerTable {...defaultProps} triggers={[savingsTrigger]} />);
+    
+    const economyText = screen.getByText(/economia de R\$ 0.70/i);
+    expect(economyText).toBeInTheDocument();
+  });
 });

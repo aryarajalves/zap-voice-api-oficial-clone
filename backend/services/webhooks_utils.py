@@ -573,14 +573,16 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         result['event_type'] = str(event_raw).lower().replace(".", "_")
 
     # Map status to a friendly name
-    raw_val = str(result.get('raw_status') or result.get('status') or payload.get("status") or payload.get("event") or "outros").upper()
+    raw_val = str(result.get('raw_status') or result.get('status') or payload.get("status") or payload.get("event") or result.get("event_type") or "outros").upper()
     friendly_map = {
         "APPROVED": "Compra Aprovada", "SALE_APPROVED": "Compra Aprovada", "PAID": "Compra Aprovada",
         "COMPLETED": "Compra Aprovada", "COMPLETE": "Compra Aprovada",
+        "COMPRA_APROVADA": "Compra Aprovada", "PIX_GERADO": "Pix Gerado", "BOLETO_IMPRESSO": "Boleto Impresso",
+        "REEMBOLSO": "Reembolso", "CARTAO_RECUSADO": "Cartão Recusado", "CARRINHO_ABANDONADO": "Carrinho Abandonado",
+        "PIX_EXPIRADO": "Pix Expirado", "EVENTO_ALUNO": "Evento do Aluno", "OUTROS": "Outros",
         "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso", 
         "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado", "ABANDONED": "Carrinho Abandonado",
         "WAITING": "Aguardando", "CANCELED": "Cancelado", "EXPIRED": "Expirado",
-        "EVENTO_ALUNO": "Evento do Aluno",
         "COMMISSION_PROCESSED": "Comissão Processada",
         "OPEN": "Aguardando o Pagamento",
         "WAITING_REFUND": "Aguardando Reembolso",

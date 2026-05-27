@@ -223,7 +223,8 @@ async def handle_whatsapp_event(data: dict):
                                             "blocked": trigger.total_blocked or 0,
                                             "total_blocked": trigger.total_blocked or 0,
                                             "cost": float(trigger.total_cost) if trigger.total_cost else 0.0,
-                                            "total_cost": float(trigger.total_cost) if trigger.total_cost else 0.0
+                                            "total_cost": float(trigger.total_cost) if trigger.total_cost else 0.0,
+                                            "total_paid_templates": trigger.total_paid_templates or 0
                                         })
                                     except Exception as ws_err:
                                         logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")
@@ -547,7 +548,8 @@ async def handle_whatsapp_event(data: dict):
                                                 "blocked": trigger_ref.total_blocked or 0,
                                                 "total_blocked": trigger_ref.total_blocked or 0,
                                                 "cost": float(trigger_ref.total_cost) if trigger_ref.total_cost else 0.0,
-                                                "total_cost": float(trigger_ref.total_cost) if trigger_ref.total_cost else 0.0
+                                                "total_cost": float(trigger_ref.total_cost) if trigger_ref.total_cost else 0.0,
+                                                "total_paid_templates": trigger_ref.total_paid_templates or 0
                                             })
                                     except Exception as ws_err:
                                         logger.error(f"⚠️ Erro ao publicar bulk_progress (bloqueado) via WS: {ws_err}")
@@ -590,8 +592,9 @@ async def handle_whatsapp_event(data: dict):
                                         status='processing',
                                         scheduled_time=datetime.now(timezone.utc),
                                         is_bulk=False,
-                                        is_interaction=True,
-                                        skip_block_check=True
+                                        is_interaction=False,
+                                        skip_block_check=True,
+                                        parent_id=message_record.trigger_id if message_record else None
                                     )
                                     db.add(new_trigger)
                                     db.commit()
@@ -611,18 +614,106 @@ async def handle_whatsapp_event(data: dict):
                         if not is_auto_blocked:
                             # Apenas incrementa se for de fato um clique em botão ou resposta interativa
                             is_button_click = msg.get("type") in ["button", "interactive"]
+                            
+                            # --- BUTTON_ACTIONS: Funil/Bloqueio por botão configurado no disparo ---
+                            action_type = None
+                            if is_button_click and user_input and message_record and trigger_ref:
+                                button_actions = getattr(trigger_ref, 'button_actions', None) or {}
+                                btn_key = user_input.strip()
+                                action = button_actions.get(btn_key)
+                                if action and action.get("type") in ("interaction", "block"):
+                                    action_type = action.get("type")
+
+                            # Se o clique de botão for do tipo 'block', não deve incrementar total_interactions e sim apenas total_blocked (tratado na action abaixo)
                             if is_button_click and message_record and not getattr(message_record, 'interaction_counted', False):
                                 message_record.interaction_counted = True
-                                message_record.is_interaction = True
-                                db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
-                                db.commit()
-                                logger.info(f"👆 [INTERACTION_COUNT] Clique em botão detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
-                        # ----------------------------------------------------------
+                                if action_type == "block":
+                                    message_record.is_interaction = False
+                                    db.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
+                                    db.commit()
+                                    logger.info(f"🚫 [BUTTON_BLOCK_COUNT] Bloqueio imediato via botão detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
+                                else:
+                                    message_record.is_interaction = True
+                                    db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
+                                    db.commit()
+                                    logger.info(f"👆 [INTERACTION_COUNT] Clique em botão detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
+
+                            if is_button_click and user_input and message_record and trigger_ref:
+                                button_actions = getattr(trigger_ref, 'button_actions', None) or {}
+                                btn_key = user_input.strip()
+                                action = button_actions.get(btn_key)
+                                if action and action.get("type") in ("interaction", "block"):
+                                    action_type = action.get("type")
+                                    action_funnel_id = action.get("funnel_id")
+                                    logger.info(f"🎯 [BUTTON_ACTION] Botão '{btn_key}' → tipo={action_type} funil={action_funnel_id} para {from_phone}")
+
+                                    async def _execute_button_action(act_type, act_funnel_id, phone, cid, convo_id, contact_name_val, block_trigger_id):
+                                        import random
+                                        await asyncio.sleep(random.randint(8, 12))
+                                        db_btn = SessionLocal()
+                                        try:
+                                            if act_type == "block":
+                                                suffix_b = phone[-8:]
+                                                already = db_btn.query(models.BlockedContact).filter(
+                                                    models.BlockedContact.client_id == cid,
+                                                    or_(
+                                                        models.BlockedContact.phone == phone,
+                                                        models.BlockedContact.phone.like(f"%{suffix_b}")
+                                                    )
+                                                ).first()
+                                                if not already:
+                                                    db_btn.add(models.BlockedContact(
+                                                        client_id=cid,
+                                                        phone=phone,
+                                                        name=contact_name_val or "Contato",
+                                                        reason="Botão de Bloqueio (Disparo em Massa)"
+                                                    ))
+                                                    db_btn.commit()
+                                                    logger.info(f"🚫 [BUTTON_BLOCK] Contato {phone} bloqueado via botão de disparo.")
+                                                db_btn.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": block_trigger_id})
+                                                db_btn.commit()
+
+                                            if act_funnel_id:
+                                                new_t = models.ScheduledTrigger(
+                                                    client_id=cid,
+                                                    funnel_id=act_funnel_id,
+                                                    conversation_id=convo_id,
+                                                    contact_phone=phone,
+                                                    contact_name=contact_name_val or phone,
+                                                    status='processing',
+                                                    scheduled_time=datetime.now(timezone.utc),
+                                                    is_bulk=False,
+                                                    is_interaction=(act_type == "interaction"),
+                                                    skip_block_check=(act_type == "block"),
+                                                    parent_id=block_trigger_id
+                                                )
+                                                db_btn.add(new_t)
+                                                db_btn.commit()
+                                                db_btn.refresh(new_t)
+                                                await rabbitmq.publish("zapvoice_funnel_executions", {
+                                                    "trigger_id": new_t.id,
+                                                    "funnel_id": act_funnel_id,
+                                                    "conversation_id": convo_id,
+                                                    "contact_phone": phone
+                                                })
+                                                logger.info(f"🚀 [BUTTON_ACTION_FUNNEL] Funil {act_funnel_id} iniciado para {phone} (tipo={act_type})")
+                                        except Exception as e_btn:
+                                            logger.error(f"❌ [BUTTON_ACTION] Erro ao executar ação do botão para {phone}: {e_btn}")
+                                        finally:
+                                            db_btn.close()
+
+                                    asyncio.create_task(_execute_button_action(
+                                        action_type,
+                                        action_funnel_id,
+                                        from_phone,
+                                        target_cid,
+                                        resolved_convo_id,
+                                        contacts_map.get(raw_from, "Contato"),
+                                        message_record.trigger_id
+                                    ))
+                                    continue
 
                         # --- [REATIVADO] GATILHO DE FUNIL VIA META ---
-                        # Voltamos a processar aqui porque o webhook do Chatwoot pode falhar ou atrasar.
-                        # O engine de execução (executor.py) já cuida de sincronizar com o Chatwoot via ensure_conversation.
-
                         if user_input:
                             # --- Verificar se o contato possui um funil pausado em botões ---
                             # Usa sufixo de 8 dígitos para tolerância de variações do 9° dígito brasileiro
@@ -712,49 +803,8 @@ async def handle_whatsapp_event(data: dict):
                                                 logger.info(f"🔄 [WA-RESUME] Retomando Funil {funnel_obj.id} ({funnel_obj.name}) para {from_phone} no nó {target_node_id}")
                                             continue
 
-                            text_clean = user_input.strip().lower()
-                            matched_funnel = db.query(models.Funnel).filter(
-                                models.Funnel.client_id.in_(candidate_cids),
-                                models.Funnel.is_active == True,
-                                or_(
-                                    func.lower(models.Funnel.trigger_phrase) == text_clean,
-                                    models.Funnel.trigger_phrase.ilike(f"%,{text_clean},%"),
-                                    models.Funnel.trigger_phrase.ilike(f"{text_clean},%"),
-                                    models.Funnel.trigger_phrase.ilike(f"%,{text_clean}")
-                                )
-                            ).first()
-
-                            if matched_funnel:
-                                parent_id = None
-                                # Tenta pegar o parent_id se foi uma resposta a uma mensagem rastreada
-                                try:
-                                    if 'trigger_ref' in locals() and trigger_ref:
-                                        parent_id = trigger_ref.id
-                                except: pass
-
-                                new_trigger = models.ScheduledTrigger(
-                                    client_id=target_cid,
-                                    funnel_id=matched_funnel.id,
-                                    conversation_id=resolved_convo_id,
-                                    contact_phone=from_phone,
-                                    contact_name=contacts_map.get(raw_from, "Contato"),
-                                    status='processing',
-                                    scheduled_time=datetime.now(timezone.utc),
-                                    is_bulk=False,
-                                    is_interaction=True,
-                                    parent_id=parent_id
-                                )
-                                db.add(new_trigger)
-                                db.commit()
-                                db.refresh(new_trigger)
-
-                                await rabbitmq.publish("zapvoice_funnel_executions", {
-                                    "trigger_id": new_trigger.id,
-                                    "funnel_id": matched_funnel.id,
-                                    "conversation_id": resolved_convo_id,
-                                    "contact_phone": from_phone
-                                })
-                                logger.info(f"🚀 [WA-TRIGGER] Funil {matched_funnel.id} ({matched_funnel.name}) iniciado para {from_phone} via Meta (Parent: {parent_id})")
+                            # Lógica de gatilho por palavra-chave (trigger_phrase) desativada conforme solicitação
+                            logger.info(f"ℹ️ [WA-TRIGGER] Gatilho por palavra-chave desativado. Ignorando input '{user_input}' para novos funis.")
                         # ---------------------------------------------
 
                     except Exception as e_inner:

@@ -39,7 +39,9 @@ const ContactList = ({
     removeContact,
     startValidation,
     isValidating,
-    progress
+    progress,
+    variableFilters,
+    setVariableFilters
 }) => {
     const activeVarColumns = useMemo(() => {
         if (!templateVariables || templateVariables.length === 0) return [];
@@ -133,6 +135,8 @@ const ContactList = ({
                 displayLimit={displayLimit}
                 setDisplayLimit={setDisplayLimit}
                 filteredContactsCount={filteredContacts.length}
+                variableFilters={variableFilters}
+                setVariableFilters={setVariableFilters}
             />
 
             <button
