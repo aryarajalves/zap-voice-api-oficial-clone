@@ -262,7 +262,7 @@ def test_play_dispatch_clones_followup(client, db_session):
         # Disparo original
         parent = models.ScheduledTrigger(
             client_id=test_client.id,
-            integration_id=integration_id,
+            integration_id=str(integration_id),
             event_type="abandono_carrinho",
             scheduled_time=datetime.now(timezone.utc) - timedelta(hours=1),
             status="failed",
@@ -277,7 +277,7 @@ def test_play_dispatch_clones_followup(client, db_session):
         # Follow-up original
         original_fu = models.ScheduledTrigger(
             client_id=test_client.id,
-            integration_id=integration_id,
+            integration_id=str(integration_id),
             event_type="abandono_carrinho",
             scheduled_time=datetime.now(timezone.utc) - timedelta(minutes=30),
             status="failed",
@@ -360,7 +360,7 @@ def test_bulk_play_dispatches_requeues_followup(client, db_session):
         # Disparo 1 (pai + filho follow-up)
         p1 = models.ScheduledTrigger(
             client_id=test_client.id,
-            integration_id=integration_id,
+            integration_id=str(integration_id),
             event_type="compra_aprovada",
             scheduled_time=datetime.now(timezone.utc) - timedelta(hours=2),
             status="failed",
@@ -374,7 +374,7 @@ def test_bulk_play_dispatches_requeues_followup(client, db_session):
 
         fu1 = models.ScheduledTrigger(
             client_id=test_client.id,
-            integration_id=integration_id,
+            integration_id=str(integration_id),
             event_type="compra_aprovada",
             scheduled_time=datetime.now(timezone.utc) - timedelta(hours=1),
             status="failed",
@@ -508,4 +508,103 @@ def test_get_dispatch_contacts_with_lead_tags(client, db_session):
         assert data["counts"]["delivered"] == 1
     finally:
         app.dependency_overrides.pop(dispatches_get_db, None)
+
+
+def test_dispatches_dynamic_statistics(client, db_session):
+    """
+    Testa que as estatísticas de disparos (stats) são retornadas corretamente e
+    refletem fielmente os valores agregados dos registros salvos no banco.
+    """
+    app.dependency_overrides[dispatches_get_db] = lambda: db_session
+    try:
+        db = db_session
+
+        test_client = models.Client(name="Stats Client")
+        db.add(test_client)
+        db.commit()
+        db.refresh(test_client)
+
+        integration_id = uuid.uuid4()
+        integration = models.WebhookIntegration(
+            id=integration_id,
+            client_id=test_client.id,
+            name="Stats Integration",
+            platform="hotmart",
+            status="active"
+        )
+        db.add(integration)
+
+        # Criar múltiplos disparos com dados de entrega e custos variados
+        t1 = models.ScheduledTrigger(
+            client_id=test_client.id,
+            integration_id=integration_id,
+            event_type="compra_aprovada",
+            scheduled_time=datetime.now(timezone.utc),
+            status="completed",
+            is_bulk=False,
+            contact_phone="5511999999991",
+            total_sent=10,
+            total_delivered=8,
+            total_read=6,
+            total_interactions=3,
+            total_cost=2.50
+        )
+        t2 = models.ScheduledTrigger(
+            client_id=test_client.id,
+            integration_id=integration_id,
+            event_type="compra_aprovada",
+            scheduled_time=datetime.now(timezone.utc),
+            status="completed",
+            is_bulk=False,
+            contact_phone="5511999999992",
+            total_sent=5,
+            total_delivered=4,
+            total_read=2,
+            total_interactions=1,
+            total_cost=1.20
+        )
+        db.add(t1)
+        db.add(t2)
+        db.commit()
+
+        from core.security import create_access_token
+        token = create_access_token({"sub": "statstest@test.com", "role": "super_admin"})
+        user = models.User(email="statstest@test.com", role="super_admin", client_id=test_client.id)
+        db.add(user)
+        db.commit()
+
+        headers = {
+            "X-Client-ID": str(test_client.id),
+            "Authorization": f"Bearer {token}"
+        }
+
+        response = client.get(f"/api/webhook-integrations/{integration_id}/dispatches", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "stats" in data
+        stats = data["stats"]
+        
+        # Totais esperados:
+        # total_sent = 10 + 5 = 15
+        # delivered = 8 + 4 = 12
+        # read = 6 + 2 = 8
+        # interactions = 3 + 1 = 4
+        # total_cost = 2.50 + 1.20 = 3.70
+        assert stats["total_dispatches"] == 15
+        assert stats["delivered"] == 12
+        assert stats["read"] == 8
+        assert stats["interactions"] == 4
+        assert stats["total_cost"] == 3.70
+
+        # Percentuais:
+        # delivered_pct = (12 / 15) * 100 = 80.0
+        # read_pct = (8 / 12) * 100 = 66.7
+        # interactions_pct = (4 / 8) * 100 = 50.0
+        assert stats["delivered_pct"] == 80.0
+        assert stats["read_pct"] == 66.7
+        assert stats["interactions_pct"] == 50.0
+    finally:
+        app.dependency_overrides.pop(dispatches_get_db, None)
+
 

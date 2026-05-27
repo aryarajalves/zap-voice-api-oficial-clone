@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import cast, String, or_
+from sqlalchemy import cast, String, or_, func
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 import uuid
@@ -118,6 +118,14 @@ def list_dispatches(
         
         # Adicionar contagem de funis filhos
         trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
+        trigger.interaction_child_count = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.parent_id == trigger.id,
+            models.ScheduledTrigger.is_interaction == True
+        ).count()
+        trigger.block_child_count = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.parent_id == trigger.id,
+            models.ScheduledTrigger.skip_block_check == True
+        ).count()
         
         # Buscar follow-up filho associado
         followup = db.query(models.ScheduledTrigger).filter(
@@ -131,7 +139,36 @@ def list_dispatches(
     if backfilled:
         db.commit()
 
-    return {"items": items, "total": total}
+    stats_result = query.with_entities(
+        func.sum(models.ScheduledTrigger.total_sent),
+        func.sum(models.ScheduledTrigger.total_delivered),
+        func.sum(models.ScheduledTrigger.total_read),
+        func.sum(models.ScheduledTrigger.total_interactions),
+        func.sum(models.ScheduledTrigger.total_cost)
+    ).first()
+
+    sum_sent = stats_result[0] or 0 if stats_result else 0
+    sum_delivered = stats_result[1] or 0 if stats_result else 0
+    sum_read = stats_result[2] or 0 if stats_result else 0
+    sum_interactions = stats_result[3] or 0 if stats_result else 0
+    sum_cost = stats_result[4] or 0.0 if stats_result else 0.0
+
+    delivered_pct = round((sum_delivered / sum_sent) * 100, 1) if sum_sent > 0 else 0.0
+    read_pct = round((sum_read / sum_delivered) * 100, 1) if sum_delivered > 0 else 0.0
+    interactions_pct = round((sum_interactions / sum_read) * 100, 1) if sum_read > 0 else 0.0
+
+    stats = {
+        "total_dispatches": sum_sent,
+        "delivered": sum_delivered,
+        "delivered_pct": delivered_pct,
+        "read": sum_read,
+        "read_pct": read_pct,
+        "interactions": sum_interactions,
+        "interactions_pct": interactions_pct,
+        "total_cost": round(sum_cost, 4)
+    }
+
+    return {"items": items, "total": total, "stats": stats}
 
 @router.post("/{integration_id}/backfill-costs", summary="Recalcular custos históricos dos disparos")
 def backfill_dispatch_costs(
@@ -247,11 +284,17 @@ async def play_dispatch(
         models.ScheduledTrigger.is_followup == True
     ).first()
 
-    mapping = db.query(models.WebhookEventMapping).filter(
-        models.WebhookEventMapping.integration_id == trigger.integration_id,
-        models.WebhookEventMapping.event_type == trigger.event_type,
-        models.WebhookEventMapping.is_active == True
-    ).first()
+    mapping = None
+    if trigger.integration_id:
+        try:
+            uuid_integration_id = uuid.UUID(str(trigger.integration_id))
+            mapping = db.query(models.WebhookEventMapping).filter(
+                models.WebhookEventMapping.integration_id == uuid_integration_id,
+                models.WebhookEventMapping.event_type == trigger.event_type,
+                models.WebhookEventMapping.is_active == True
+            ).first()
+        except ValueError:
+            pass
 
     has_followup_config = False
     if original_followup:
@@ -384,11 +427,17 @@ async def bulk_play_dispatches(
             models.ScheduledTrigger.is_followup == True
         ).first()
 
-        mapping = db.query(models.WebhookEventMapping).filter(
-            models.WebhookEventMapping.integration_id == trigger.integration_id,
-            models.WebhookEventMapping.event_type == trigger.event_type,
-            models.WebhookEventMapping.is_active == True
-        ).first()
+        mapping = None
+        if trigger.integration_id:
+            try:
+                uuid_integration_id = uuid.UUID(str(trigger.integration_id))
+                mapping = db.query(models.WebhookEventMapping).filter(
+                    models.WebhookEventMapping.integration_id == uuid_integration_id,
+                    models.WebhookEventMapping.event_type == trigger.event_type,
+                    models.WebhookEventMapping.is_active == True
+                ).first()
+            except ValueError:
+                pass
 
         has_followup_config = False
         if followup:

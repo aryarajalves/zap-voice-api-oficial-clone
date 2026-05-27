@@ -67,6 +67,11 @@ keys_simple.txt
 debug_run.txt
 tmp/
 
+# === Screenshots de validação (gerados pelos agentes) ===
+screenshot*.png
+fixed_layout_*.png
+modal_saved_*.png
+chrome_*.log
 
 # === OS Files ===
 .DS_Store

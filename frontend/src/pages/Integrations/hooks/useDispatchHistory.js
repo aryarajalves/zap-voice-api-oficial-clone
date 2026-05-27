@@ -23,6 +23,7 @@ export function useDispatchHistory(activeClient) {
   const [contactsFilter, setContactsFilter] = useState('all');
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [childrenModal, setChildrenModal] = useState({ isOpen: false, triggerId: null, triggerName: '', children: [], isLoading: false });
+  const [dispatchStats, setDispatchStats] = useState(null);
 
   const fetchDispatches = useCallback(async (integrationId, page = 1, limit = 20, search = '', event = '', start = '', end = '', type = '', isSilent = false) => {
     if (!activeClient || !integrationId) return;
@@ -37,6 +38,7 @@ export function useDispatchHistory(activeClient) {
         const data = await res.json();
         setDispatchHistory(data.items || []);
         setDispatchTotal(data.total || 0);
+        setDispatchStats(data.stats || null);
       }
     } catch (err) {
       console.error(err);
@@ -161,6 +163,7 @@ export function useDispatchHistory(activeClient) {
     dispatchHistory,
     setDispatchHistory,
     loadingDispatchHistory,
+    dispatchStats,
     isPlaying,
     isCancelling,
     dispatchSearch,

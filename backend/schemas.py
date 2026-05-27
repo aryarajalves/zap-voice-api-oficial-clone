@@ -118,6 +118,8 @@ class ScheduledTrigger(ScheduledTriggerBase):
     # Nested Funnels
     parent_id: Optional[int] = None
     child_count: Optional[int] = 0
+    interaction_child_count: Optional[int] = 0
+    block_child_count: Optional[int] = 0
     total_private_notes: Optional[int] = 0
     total_paid_templates: int = 0
     chatwoot_account_id: Optional[int] = None
@@ -227,9 +229,20 @@ class RecurringTrigger(RecurringTriggerBase):
     class Config:
         from_attributes = True
 
+class TriggerStats(BaseModel):
+    total_dispatches: int
+    delivered: int
+    delivered_pct: float
+    read: int
+    read_pct: float
+    interactions: int
+    interactions_pct: float
+    total_cost: float
+
 class TriggerListResponse(BaseModel):
     items: List[ScheduledTrigger]
     total: int
+    stats: Optional[TriggerStats] = None
 
 # --- WhatsApp Schemas ---
 
