@@ -1,12 +1,21 @@
+/* -------------------------------------------------------------
+   DIRETIVAS DO TAILWIND CSS
+   Carrega os estilos base, os componentes e os utilitários do Tailwind
+   ------------------------------------------------------------- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* -------------------------------------------------------------
+   CAMADA BASE (Estilos aplicados a tags HTML nativas)
+   ------------------------------------------------------------- */
 @layer base {
+    /* Evita transbordamento horizontal indesejado nas páginas */
     html, body {
         overflow-x: hidden;
     }
 
+    /* Suaviza transições de todos os elementos interativos comuns */
     button,
     input,
     select,
@@ -14,16 +23,20 @@
         @apply transition-all duration-200 ease-in-out;
     }
 
-    /* Botões: Escala maior */
+    /* Efeito hover (passar o mouse) em botões habilitados:
+       Aplica zoom suave (scale-105), borda azulada neon externa (ring) e sombra premium */
     button:hover:not(:disabled) {
         @apply scale-105 ring-2 ring-blue-500/50 ring-offset-2 dark:ring-offset-gray-900 shadow-lg;
     }
 
+    /* Efeito active (clique) em botões habilitados:
+       Dá um leve efeito de pressionamento físico reduzindo a escala (scale-95) */
     button:active:not(:disabled) {
         @apply scale-95;
     }
 
-    /* Campos de Entrada: Escala sutil e foco */
+    /* Efeito de foco/foco por clique em inputs, selects e textareas:
+       Aplica zoom sutil (scale-[1.01]), borda azul neon e remove a linha de outline padrão do browser */
     input:hover,
     select:hover,
     textarea:hover,
@@ -34,7 +47,11 @@
     }
 }
 
-/* React Flow Connection Styles */
+/* -------------------------------------------------------------
+   ESTILOS DO REACT FLOW (Construtor Visual de Funil)
+   ------------------------------------------------------------- */
+
+/* Customização dos Handles (os pontos de conexão/bolinhas nos nós do funil) */
 .react-flow__handle {
     width: 14px !important;
     height: 14px !important;
@@ -42,40 +59,42 @@
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
+/* Zoom do Handle ao passar o mouse para facilitar a conexão manual */
 .react-flow__handle:hover {
     transform: translate(-50%, -50%) scale(1.5) !important;
     box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
 }
 
-/* Feedback de quando está tentando conectar */
+/* Efeito pulsar do Handle ao arrastar uma linha de conexão para cima dele */
 .react-flow__handle-connecting {
     transform: translate(-50%, -50%) scale(1.5) !important;
     @apply bg-blue-500 ring-4 ring-blue-500/30 animate-pulse !important;
 }
 
-/* Feedback de conexão válida */
+/* Destaque do Handle verde indicando que a conexão é permitida e válida */
 .react-flow__handle-valid {
     transform: translate(-50%, -50%) scale(2) !important;
     @apply bg-green-500 ring-4 ring-green-500/40 !important;
 }
 
-/* Linha de conexão durante o arraste */
+/* Linha pontilhada azul neon durante o arraste da conexão entre nós */
 .react-flow__connection-path {
     @apply stroke-blue-500 stroke-[3] !important;
     stroke-dasharray: 5;
     animation: dashdraw 0.5s linear infinite;
 }
 
+/* Animação que faz a linha tracejada de arraste se movimentar em loop */
 @keyframes dashdraw {
     from {
         stroke-dashoffset: 10;
     }
-
     to {
         stroke-dashoffset: 0;
     }
 }
 
+/* Animação de rotação lenta (utilizada em ícones de carregamento/engrenagens) */
 @keyframes spin-slow {
     from {
         transform: rotate(0deg);
@@ -89,11 +108,15 @@
     animation: spin-slow 3s linear infinite;
 }
 
+/* Estilo padrão das conexões (arestas) salvas entre os nós do funil */
 .react-flow__edge-path {
     @apply stroke-blue-400 stroke-[2.5];
 }
 
-/* Custom Colors for Handles to pop more */
+/* -------------------------------------------------------------
+   CORES PERSONALIZADAS DOS HANDLES (Para realce visual e diferenciação)
+   Dá cores e sombras brilhantes específicas baseadas nas classes aplicadas aos nós
+   ------------------------------------------------------------- */
 .react-flow__handle.bg-blue-500 {
     background-color: #3b82f6 !important;
     box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
@@ -139,7 +162,10 @@
     box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
 }
 
-/* Premium Scrollbar */
+/* -------------------------------------------------------------
+   BARRA DE ROLAGEM PREMIUM (Premium Scrollbar)
+   Configura uma barra de rolagem ultrafina e elegante para WebKit (Chrome, Safari, Edge)
+   ------------------------------------------------------------- */
 .premium-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -149,6 +175,7 @@
     background: transparent;
 }
 
+/* Cor da alça de scroll com efeito indigo suave e opacidade reduzida */
 .premium-scrollbar::-webkit-scrollbar-thumb {
     background: rgba(99, 102, 241, 0.2);
     border-radius: 10px;
@@ -159,12 +186,16 @@
     background: rgba(99, 102, 241, 0.5);
 }
 
-/* Firefox */
+/* Suporte à barra de rolagem premium para Firefox */
 .premium-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: rgba(99, 102, 241, 0.2) transparent;
 }
-/* Loading Animations */
+
+/* -------------------------------------------------------------
+   ANIMAÇÃO DE CARREGAMENTO / LOADING BAR
+   Animação horizontal de preenchimento (usada em loadings lineares)
+   ------------------------------------------------------------- */
 @keyframes loading-bar {
     0% { transform: translateX(-100%); }
     50% { transform: translateX(100%); }
@@ -175,7 +206,9 @@
     animation: loading-bar 2.5s ease-in-out infinite;
 }
 
-/* Esconder scrollbar mantendo scroll funcional */
+/* -------------------------------------------------------------
+   OCULTAR BARRA DE ROLAGEM MANTENDO SCROLL FUNCIONAL
+   ------------------------------------------------------------- */
 .scrollbar-none::-webkit-scrollbar {
     display: none;
 }
