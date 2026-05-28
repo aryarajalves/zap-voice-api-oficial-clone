@@ -298,7 +298,48 @@ async def test_chatwoot_unbound_local_fix():
         print(f"Nota: Outro erro ocorreu (esperado devido a mocks incompletos), mas não foi UnboundLocalError: {e}")
         pass
 
+def test_pagtrust_webhook_payloads():
+    payload_billet = {
+      "name": "Erick Phelipe",
+      "email": "erick_phelipe@hotmail.com",
+      "price": "375.69",
+      "status": "billet_printed",
+      "payment_type": "PIX",
+      "phone_number": "999279430",
+      "phone_local_code": "64",
+      "prod_name": "COMO DEIXAR ELA LOUCA NA CAMA - D.U",
+      "payment_engine": "pagtrust"
+    }
+    
+    result = parse_webhook_payload("pagtrust", payload_billet)
+    assert result['name'] == "Erick Phelipe"
+    assert result['email'] == "erick_phelipe@hotmail.com"
+    assert result['phone'] == "5564999279430"
+    assert result['event_type'] == "pix_gerado"
+    assert result['raw_status'] == "Pix Gerado"
+    assert result['product_name'] == "COMO DEIXAR ELA LOUCA NA CAMA - D.U"
+
+    payload_pix = {
+      "name": "Erick Phelipe",
+      "email": "erick_phelipe@hotmail.com",
+      "price": "375.69",
+      "status": "pix_generated",
+      "payment_type": "PIX",
+      "phone_number": "999279430",
+      "phone_local_code": "64",
+      "prod_name": "COMO DEIXAR ELA LOUCA NA CAMA - D.U",
+      "payment_engine": "pagtrust"
+    }
+    
+    result = parse_webhook_payload("pagtrust", payload_pix)
+    assert result['name'] == "Erick Phelipe"
+    assert result['email'] == "erick_phelipe@hotmail.com"
+    assert result['phone'] == "5564999279430"
+    assert result['event_type'] == "pix_gerado"
+    assert result['raw_status'] == "Pix Gerado"
+
 if __name__ == "__main__":
     # Simples execução local para debug rápido
     test_eduzz_orbita_nested_payload_with_cellphone()
-    print("✅ Teste Eduzz OK")
+    test_pagtrust_webhook_payloads()
+    print("✅ Teste Eduzz & Pagtrust OK")

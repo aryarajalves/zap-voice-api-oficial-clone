@@ -81,6 +81,7 @@ const IntegrationFormModal = ({
                   <option value="hotmart">Hotmart</option>
                   <option value="kiwify">Kiwify</option>
                   <option value="eduzz">Eduzz</option>
+                  <option value="pagtrust">PagTrust</option>
                   <option value="elementor">Elementor / Webhook Genérico</option>
                   <option value="outra">Outra Plataforma</option>
                 </select>

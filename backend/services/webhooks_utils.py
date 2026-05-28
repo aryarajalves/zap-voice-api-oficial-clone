@@ -466,6 +466,48 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         result['payment_method'] = payment_method
         result['raw_status'] = status or event
 
+    elif platform_lower == 'pagtrust':
+        status = str(payload.get("status") or "").lower()
+        raw_status_val = status.upper()
+        if status in ["approved", "paid"]:
+            result['event_type'] = "compra_aprovada"
+        elif status in ["waiting_payment", "pending", "billet_printed", "pix_generated"]:
+            payment_method = str(payload.get("payment_type") or "").lower()
+            if payment_method == "pix":
+                result['event_type'] = "pix_gerado"
+                raw_status_val = "PIX_GERADO"
+            else:
+                result['event_type'] = "boleto_impresso"
+                raw_status_val = "BOLETO_IMPRESSO"
+        elif status in ["refunded", "chargeback"]:
+            result['event_type'] = "reembolso"
+        elif status in ["refused", "canceled", "declined"]:
+            result['event_type'] = "cartao_recusado"
+        elif status == "abandoned":
+            result['event_type'] = "carrinho_abandonado"
+            
+        result['name'] = payload.get("name") or payload.get("first_name")
+        result['email'] = payload.get("email")
+        
+        local_code = payload.get("phone_local_code") or payload.get("phone_checkout_local_code") or ""
+        num = payload.get("phone_number") or payload.get("phone_checkout_number") or ""
+        if local_code and num:
+            result['phone'] = f"{local_code}{num}"
+        else:
+            result['phone'] = num or local_code
+            
+        result['product_name'] = payload.get("prod_name")
+        result['currency'] = payload.get("currency") or "BRL"
+        result['event_time'] = payload.get("purchase_date") or payload.get("confirmation_purchase_date")
+        result['payment_method'] = payload.get("payment_type")
+        result['price'] = payload.get("price") or payload.get("full_price")
+        result['raw_status'] = raw_status_val
+        result['order_bump'] = str(payload.get("order_bump") or "").lower() == "true"
+        
+        result['utm_source'] = payload.get("utm_source")
+        result['utm_medium'] = payload.get("utm_medium")
+        result['utm_campaign'] = payload.get("utm_campaign")
+
     # Standardize Phone (Generic Fallback)
     if not result.get('phone'):
         result['phone'] = (

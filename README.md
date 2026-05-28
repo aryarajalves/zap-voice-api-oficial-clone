@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.6)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.8.7)
 
-Bem-vindo à versão **3.8.6** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
+Bem-vindo à versão **3.8.7** do **ZapVoice**! Este é um ecossistema robusto e profissional para o gerenciamento de automação de alta performance utilizando a **API Oficial do WhatsApp (Meta)**.
 
 ---
 
@@ -105,6 +105,13 @@ O sistema estará disponível em:
 ---
 
 ## 📝 Changelog
+
+### v3.8.7
+- **Filtro de Forma de Pagamento e Estatísticas de Conversão**:
+  - Adicionado seletor visual premium no Painel Financeiro para filtrar vendas por forma de pagamento (`Todas`, `Pix`, `Cartão de Crédito`, `Boleto`, `Outros`).
+  - Criação do componente `PaymentMethodStats` para exibir a quantidade de faturamento, total de vendas e a porcentagem de representatividade de cada forma de pagamento sobre o período selecionado.
+  - Modularização completa da página `SalesFinancial` em componentes focados e reutilizáveis (`TransactionsTable`, `PaymentMethodStats` e `index.jsx`).
+  - Suíte de testes automatizados dedicados em `frontend/src/pages/SalesFinancial/__tests__/SalesFinancial.test.jsx` cobrindo o cálculo de métricas e filtros.
 
 ### v3.8.6
 - **Filtro de Templates no Histórico de Disparos**: Adicionado seletor visual no frontend e suporte na API backend para filtrar o histórico de disparos e estatísticas por todos os templates, apenas taxas (templates pagos onde `sent_as == 'TEMPLATE'`) ou um template específico de forma dinâmica.

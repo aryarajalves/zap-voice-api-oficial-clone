@@ -1,0 +1,120 @@
+import pytest
+from routers.webhooks_public import parse_webhook_payload
+
+def test_pagtrust_webhook_approved_parsing():
+    payload = {
+      "aff": "",
+      "doc": "01239862229",
+      "off": "225992",
+      "sck": "facebookhQwK21wXxR[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — Cópia",
+      "src": "v3_7a3d87f9-57aa-49b2-8574-c62ac6e1bd74_698105a20d7dab617570d4b5_485_t-10_s-1",
+      "name": "Erick Phelipe",
+      "prod": "610828",
+      "xcod": "facebookhQwK21wXxR[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — Cópia",
+      "email": "erick_phelipe@hotmail.com",
+      "price": "375.69",
+      "funnel": "true",
+      "hotkey": "",
+      "hottok": "20972",
+      "status": "approved",
+      "cms_aff": "0.00",
+      "aff_name": "",
+      "currency": "BRL",
+      "utm_term": "[ABERTO ADV+] [BR] [ADS CAMPEÃO] — Cópia",
+      "last_name": "Erick Phelipe",
+      "prod_name": "COMO DEIXAR ELA LOUCA NA CAMA - D.U",
+      "cms_vendor": "375.69",
+      "first_name": "Erick Phelipe",
+      "full_price": "397.00",
+      "order_bump": "false",
+      "utm_medium": "cpc",
+      "utm_source": "facebook",
+      "transaction": "7126945",
+      "utm_content": "[ADS-CAMPEÃO PISCINA]::IwZXh0bg==::",
+      "address_comp": "",
+      "payment_type": "PIX",
+      "phone_number": "999279430",
+      "utm_campaign": "[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — Cópia",
+      "callback_type": "1",
+      "producer_name": "Sexologia Sem Tabu",
+      "purchase_date": "2026-05-28T17:28:31 -03:00Z",
+      "receiver_type": "SELLER",
+      "warranty_date": "2026-06-04T17:29:20 +00:00Z",
+      "payment_engine": "pagtrust",
+      "address_country": "Brasil",
+      "cms_marketplace": "21.31",
+      "subscriber_code": "",
+      "transaction_ext": "7126945",
+      "phone_local_code": "64",
+      "signature_status": "",
+      "currency_codefrom": "BRL",
+      "has_co_production": "false",
+      "producer_document": "53839969000117",
+      "recurrency_period": "",
+      "currency_code_from": "BRL",
+      "address_country_ISO": "BR",
+      "installments_number": "1",
+      "subscription_status": "",
+      "original_offer_price": "397.00",
+      "phone_checkout_number": "999279430",
+      "producer_legal_nature": "Pessoa Jurídica",
+      "name_subscription_plan": "COMO DEIXAR ELA LOUCA NA CAMA - D.U/2",
+      "productOfferPaymentMode": "pagamento_vista",
+      "phone_checkout_local_code": "64",
+      "confirmation_purchase_date": "2026-05-28T17:29:20 +00:00Z",
+      "subscription_anticipation_purchase": "false"
+    }
+
+    result = parse_webhook_payload("pagtrust", payload)
+
+    assert result["name"] == "Erick Phelipe"
+    assert result["first_name"] == "Erick"
+    assert result["email"] == "erick_phelipe@hotmail.com"
+    # Normalização de Telefone: 64 + 999279430 -> prefixado 55 -> 5564999279430
+    assert result["phone"] == "5564999279430"
+    assert result["platform"] == "pagtrust"
+    assert result["event_type"] == "compra_aprovada"
+    assert result["product_name"] == "COMO DEIXAR ELA LOUCA NA CAMA - D.U"
+    assert result["payment_method"] == "Pix"
+    assert result["price"] == "375.69"
+    assert result["utm_source"] == "facebook"
+    assert result["utm_medium"] == "cpc"
+    assert result["utm_campaign"] == "[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — Cópia"
+    assert result["raw_status"] == "Compra Aprovada"
+    assert result["order_bump"] is False
+
+def test_pagtrust_pending_pix_parsing():
+    payload = {
+        "status": "pending",
+        "payment_type": "PIX",
+        "phone_local_code": "11",
+        "phone_number": "988887777",
+        "prod_name": "Produto Teste",
+        "price": "100.00"
+    }
+
+    result = parse_webhook_payload("pagtrust", payload)
+
+    assert result["event_type"] == "pix_gerado"
+    assert result["raw_status"] == "Pix Gerado"
+    assert result["payment_method"] == "Pix"
+    assert result["phone"] == "5511988887777"
+
+def test_pagtrust_pending_billet_parsing():
+    payload = {
+        "status": "pending",
+        "payment_type": "BILLET",
+        "phone_local_code": "11",
+        "phone_number": "988887777",
+        "prod_name": "Produto Teste",
+        "price": "100.00"
+    }
+
+    result = parse_webhook_payload("pagtrust", payload)
+
+    assert result["event_type"] == "boleto_impresso"
+    assert result["raw_status"] == "Boleto Impresso"
+    assert result["payment_method"] == "Boleto"
+
+if __name__ == "__main__":
+    pytest.main([__file__])

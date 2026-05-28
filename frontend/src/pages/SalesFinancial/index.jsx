@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { API_URL } from '../config';
-import { fetchWithAuth } from '../AuthContext';
+import { API_URL } from '../../config';
+import { fetchWithAuth } from '../../AuthContext';
+import TransactionsTable from './components/TransactionsTable';
+import PaymentMethodStats from './components/PaymentMethodStats';
 
 const PERIOD_OPTIONS = [
   { value: 'daily', label: 'Por Dia' },
@@ -15,6 +17,22 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'pending', label: 'Aguardando Pagamento' },
   { value: 'refunded', label: 'Reembolsadas / Devolvidas' },
   { value: 'canceled', label: 'Canceladas / Recusadas' },
+];
+
+const PLATFORM_FILTER_OPTIONS = [
+  { value: 'all', label: 'Todas as Plataformas' },
+  { value: 'hotmart', label: 'Hotmart' },
+  { value: 'kiwify', label: 'Kiwify' },
+  { value: 'eduzz', label: 'Eduzz' },
+  { value: 'pagtrust', label: 'PagTrust' },
+];
+
+const PAYMENT_METHOD_OPTIONS = [
+  { value: 'all', label: 'Todas' },
+  { value: 'pix', label: 'Pix' },
+  { value: 'credit_card', label: 'Cartão de Crédito' },
+  { value: 'boleto', label: 'Boleto' },
+  { value: 'other', label: 'Outros' },
 ];
 
 function StatCard({ title, value, sub, color = 'blue', icon }) {
@@ -57,6 +75,7 @@ export default function SalesFinancial({ activeClient }) {
   const [period, setPeriod] = useState('monthly');
   const [status, setStatus] = useState('all');
   const [platform, setPlatform] = useState('all');
+  const [paymentMethod, setPaymentMethod] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [data, setData] = useState(null);
@@ -94,29 +113,25 @@ export default function SalesFinancial({ activeClient }) {
 
   const totals = data?.totals;
 
-  // Status Badge Helper
-  const getStatusBadge = (category, statusText) => {
-    const styles = {
-      approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800',
-      pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
-      refunded: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
-      canceled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
-      other: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-400 border-gray-200 dark:border-gray-700',
-    };
-    const style = styles[category] || styles.other;
-    return (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${style}`}>
-        {statusText}
-      </span>
-    );
+  const normalizeMethod = (method) => {
+    if (!method) return 'Outros';
+    const m = method.toLowerCase().trim();
+    if (m.includes('pix')) return 'Pix';
+    if (m.includes('boleto') || m.includes('billet')) return 'Boleto';
+    if (m.includes('cart') || m.includes('credit') || m.includes('débito') || m.includes('debit')) return 'Cartão de Crédito';
+    return 'Outros';
   };
 
-  const PLATFORM_FILTER_OPTIONS = [
-    { value: 'all', label: 'Todas as Plataformas' },
-    { value: 'hotmart', label: 'Hotmart' },
-    { value: 'kiwify', label: 'Kiwify' },
-    { value: 'eduzz', label: 'Eduzz' },
-  ];
+  // Filter transactions locally by payment method
+  const filteredTransactions = data?.transactions ? data.transactions.filter(tx => {
+    if (paymentMethod === 'all') return true;
+    const norm = normalizeMethod(tx.payment_method);
+    if (paymentMethod === 'pix') return norm === 'Pix';
+    if (paymentMethod === 'boleto') return norm === 'Boleto';
+    if (paymentMethod === 'credit_card') return norm === 'Cartão de Crédito';
+    if (paymentMethod === 'other') return norm === 'Outros';
+    return true;
+  }) : [];
 
   return (
     <div className="space-y-8">
@@ -202,6 +217,27 @@ export default function SalesFinancial({ activeClient }) {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 status === opt.value
                   ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Payment Method filter */}
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Forma de Pagto:</span>
+          {PAYMENT_METHOD_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                setPaymentMethod(opt.value);
+                setCurrentPageTx(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                paymentMethod === opt.value
+                  ? 'bg-emerald-600 text-white shadow-sm'
                   : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
@@ -347,181 +383,55 @@ export default function SalesFinancial({ activeClient }) {
               </div>
             </div>
 
-            {/* Ranking of products */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col justify-between">
-              <div>
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                  <h3 className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
-                    Ranking de Produtos
-                  </h3>
-                </div>
-                {data.top_products.length > 0 ? (
-                  <div className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                    {data.top_products.slice(0, 10).map((product, idx) => (
-                      <div key={idx} className="px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">
-                            {idx + 1}. {product.product_name}
-                          </p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">
-                            {product.sales_count} venda{product.sales_count !== 1 ? 's' : ''}
-                          </p>
+            {/* Stats Sidebar */}
+            <div className="space-y-6">
+              {/* Payment Method Stats */}
+              <PaymentMethodStats transactions={data.transactions || []} />
+
+              {/* Ranking of products */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col justify-between">
+                <div>
+                  <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
+                      Ranking de Produtos
+                    </h3>
+                  </div>
+                  {data.top_products.length > 0 ? (
+                    <div className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                      {data.top_products.slice(0, 10).map((product, idx) => (
+                        <div key={idx} className="px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">
+                              {idx + 1}. {product.product_name}
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500">
+                              {product.sales_count} venda{product.sales_count !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          <span className="text-sm font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
+                            R$ {product.total_revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
-                        <span className="text-sm font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
-                          R$ {product.total_revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-gray-400 dark:text-gray-500">
-                    Nenhum produto vendido no período.
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+                      Nenhum produto vendido no período.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Detailed Transactions List */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-4">
-              <h3 className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
-                Histórico de Transações
-                <span className="ml-2 text-xs font-normal text-gray-400 dark:text-gray-500">
-                  ({data.transactions.length} transaç{data.transactions.length === 1 ? 'ão' : 'ões'} encontrada{data.transactions.length === 1 ? '' : 's'})
-                </span>
-              </h3>
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                <span>Exibir</span>
-                <select
-                  value={pageSizeTx}
-                  onChange={e => { setPageSizeTx(Number(e.target.value)); setCurrentPageTx(1); }}
-                  className="px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <span>por página</span>
-              </div>
-            </div>
-
-            {data.transactions.length > 0 ? (() => {
-              const totalPages = Math.ceil(data.transactions.length / pageSizeTx);
-              const pageRows = data.transactions.slice((currentPageTx - 1) * pageSizeTx, currentPageTx * pageSizeTx);
-              const safeCurrentPage = Math.min(currentPageTx, totalPages);
-
-              return (
-                <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                          <th className="text-left px-6 py-3 font-medium">Data</th>
-                          <th className="text-left px-4 py-3 font-medium">Comprador</th>
-                          <th className="text-left px-4 py-3 font-medium">Produto</th>
-                          <th className="text-right px-4 py-3 font-medium">Valor</th>
-                          <th className="text-left px-4 py-3 font-medium">Plataforma</th>
-                          <th className="text-left px-4 py-3 font-medium">Forma Pagto</th>
-                          <th className="text-center px-6 py-3 font-medium">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pageRows.map((tx, i) => {
-                          const dateObj = new Date(tx.created_at);
-                          // Exclude seconds from the display
-                          const dateFormatted = dateObj.toLocaleString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          });
-                          return (
-                            <tr
-                              key={tx.id}
-                              className={`border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-50/50 dark:bg-gray-800/30'}`}
-                            >
-                              <td className="px-6 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                {dateFormatted}
-                              </td>
-                              <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">
-                                {tx.buyer_name}
-                              </td>
-                              <td className="px-4 py-3 text-gray-700 dark:text-gray-300 max-w-[200px] truncate">
-                                {tx.product_name}
-                              </td>
-                              <td className="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">
-                                R$ {tx.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs uppercase font-bold">
-                                  {tx.platform}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                                {tx.payment_method}
-                              </td>
-                              <td className="px-6 py-3 text-center whitespace-nowrap">
-                                {getStatusBadge(tx.category, tx.status)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {totalPages > 1 && (
-                    <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-4">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        Mostrando {(safeCurrentPage - 1) * pageSizeTx + 1}–{Math.min(safeCurrentPage * pageSizeTx, data.transactions.length)} de {data.transactions.length}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setCurrentPageTx(1)}
-                          disabled={safeCurrentPage === 1}
-                          className="px-2 py-1 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          «
-                        </button>
-                        <button
-                          onClick={() => setCurrentPageTx(p => Math.max(1, p - 1))}
-                          disabled={safeCurrentPage === 1}
-                          className="px-3 py-1 rounded text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Anterior
-                        </button>
-
-                        <span className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
-                          Página {safeCurrentPage} de {totalPages}
-                        </span>
-
-                        <button
-                          onClick={() => setCurrentPageTx(p => Math.min(totalPages, p + 1))}
-                          disabled={safeCurrentPage === totalPages}
-                          className="px-3 py-1 rounded text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Próxima
-                        </button>
-                        <button
-                          onClick={() => setCurrentPageTx(totalPages)}
-                          disabled={safeCurrentPage === totalPages}
-                          className="px-2 py-1 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          »
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
-            })() : (
-              <div className="text-center py-16 text-gray-400 dark:text-gray-500">
-                Nenhuma transação encontrada para os filtros selecionados.
-              </div>
-            )}
-          </div>
+          <TransactionsTable
+            transactions={filteredTransactions}
+            pageSizeTx={pageSizeTx}
+            setPageSizeTx={setPageSizeTx}
+            currentPageTx={currentPageTx}
+            setCurrentPageTx={setCurrentPageTx}
+          />
         </>
       )}
     </div>
