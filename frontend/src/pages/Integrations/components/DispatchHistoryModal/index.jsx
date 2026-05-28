@@ -44,7 +44,10 @@ const DispatchHistoryModal = ({
   fetchDispatches,
   setConfirmDeleteDispatch,
   fetchChildren,
-  dispatchStats
+  dispatchStats,
+  dispatchTemplateFilter,
+  setDispatchTemplateFilter,
+  distinctTemplates
 }) => {
   useEffect(() => {
     if (isOpen && integration?.id) {
@@ -56,7 +59,8 @@ const DispatchHistoryModal = ({
         dispatchEventFilter,
         dispatchStartDate,
         dispatchEndDate,
-        dispatchTypeFilter
+        dispatchTypeFilter,
+        dispatchTemplateFilter
       );
     }
   }, [
@@ -69,6 +73,7 @@ const DispatchHistoryModal = ({
     dispatchStartDate,
     dispatchEndDate,
     dispatchTypeFilter,
+    dispatchTemplateFilter,
     fetchDispatches
   ]);
 
@@ -184,6 +189,9 @@ const DispatchHistoryModal = ({
             fetchDispatches={fetchDispatches}
             integrationId={integration.id}
             dispatchLimit={dispatchLimit}
+            dispatchTemplateFilter={dispatchTemplateFilter}
+            setDispatchTemplateFilter={setDispatchTemplateFilter}
+            distinctTemplates={distinctTemplates}
           />
 
           {loadingDispatchHistory ? (

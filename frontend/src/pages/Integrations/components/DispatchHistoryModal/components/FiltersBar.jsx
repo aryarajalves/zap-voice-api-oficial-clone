@@ -17,11 +17,14 @@ const FiltersBar = ({
   setDispatchEndDate,
   fetchDispatches,
   integrationId,
-  dispatchLimit
+  dispatchLimit,
+  dispatchTemplateFilter,
+  setDispatchTemplateFilter,
+  distinctTemplates
 }) => {
   return (
     <div className="px-6 pt-4 pb-0 shrink-0">
-      <div className="mb-3 grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
+      <div className="mb-3 grid grid-cols-1 md:grid-cols-6 gap-3 items-end bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
         <div className="md:col-span-1">
           <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Buscar</label>
           <div className="relative group">
@@ -79,6 +82,30 @@ const FiltersBar = ({
           </div>
         </div>
 
+        <div>
+          <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Template</label>
+          <div className="relative">
+            <SearchableSelect
+              options={[
+                { value: "", label: "Todos os Disparos" },
+                { value: "all_templates", label: "Todos os Templates" },
+                { value: "taxas", label: "Taxas (Templates Pagos)" },
+                ...[...new Set(distinctTemplates || [])].filter(Boolean).sort().map(tpl => ({
+                  value: tpl,
+                  label: tpl
+                }))
+              ]}
+              value={dispatchTemplateFilter}
+              onChange={(val) => {
+                setDispatchTemplateFilter(val);
+                setDispatchPage(1);
+              }}
+              placeholder="Todos os Disparos"
+              colorClass="focus-within:ring-indigo-500/20"
+            />
+          </div>
+        </div>
+
         <div className="md:col-span-2 flex gap-3">
           <div className="flex-1">
             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Desde</label>
@@ -104,10 +131,11 @@ const FiltersBar = ({
                 setDispatchSearch('');
                 setDispatchEventFilter('');
                 setDispatchTypeFilter('');
+                setDispatchTemplateFilter('');
                 setDispatchStartDate('');
                 setDispatchEndDate('');
                 setDispatchPage(1);
-                fetchDispatches(integrationId, 1, dispatchLimit, '', '', '', '', '');
+                fetchDispatches(integrationId, 1, dispatchLimit, '', '', '', '', '', '', '');
               }}
               className="p-2.5 bg-white/5 hover:bg-orange-500/20 text-gray-400 hover:text-orange-500 rounded-xl transition-all border border-transparent hover:border-orange-500/20"
               title="Limpar Filtros e Resetar"

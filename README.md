@@ -107,6 +107,7 @@ O sistema estará disponível em:
 ## 📝 Changelog
 
 ### v3.8.6
+- **Filtro de Templates no Histórico de Disparos**: Adicionado seletor visual no frontend e suporte na API backend para filtrar o histórico de disparos e estatísticas por todos os templates, apenas taxas (templates pagos onde `sent_as == 'TEMPLATE'`) ou um template específico de forma dinâmica.
 - **Notificação de Contato Bloqueado**: Interceptação no frontend para disparar um Toast de erro ao tentar deletar contatos com o cadeado ativado, impedindo a abertura indesejada do modal de exclusão.
 - **Segurança Reforçada de Exclusão**: Redundância de validação na API backend com retorno HTTP 403 Forbidden para tentativas de remoção de contatos trancados.
 - **Bloqueio de Seleção em Lote**: Inputs checkbox de contatos trancados agora são exibidos desabilitados na interface, e a seleção múltipla ("Selecionar Todos") pula contatos bloqueados automaticamente.

@@ -243,6 +243,7 @@ class TriggerListResponse(BaseModel):
     items: List[ScheduledTrigger]
     total: int
     stats: Optional[TriggerStats] = None
+    distinct_templates: Optional[List[str]] = None
 
 # --- WhatsApp Schemas ---
 

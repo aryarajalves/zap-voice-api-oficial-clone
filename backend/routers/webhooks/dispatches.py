@@ -37,6 +37,7 @@ def list_dispatches(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     type_filter: Optional[str] = Query(None),  # free | paid | cancelled
+    template_filter: Optional[str] = Query(None),  # all_templates | taxas | specific template_name
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -68,6 +69,14 @@ def list_dispatches(
         query = query.filter(models.ScheduledTrigger.status != 'cancelled', models.ScheduledTrigger.sent_as == 'FREE_MESSAGE')
     elif type_filter == 'paid':
         query = query.filter(models.ScheduledTrigger.status != 'cancelled', models.ScheduledTrigger.sent_as == 'TEMPLATE')
+
+    if template_filter:
+        if template_filter == 'all_templates':
+            query = query.filter(models.ScheduledTrigger.template_name != None)
+        elif template_filter == 'taxas':
+            query = query.filter(models.ScheduledTrigger.status != 'cancelled', models.ScheduledTrigger.sent_as == 'TEMPLATE')
+        else:
+            query = query.filter(models.ScheduledTrigger.template_name == template_filter)
 
     if event_type:
         query = query.filter(models.ScheduledTrigger.event_type.ilike(event_type))
@@ -168,7 +177,14 @@ def list_dispatches(
         "total_cost": round(sum_cost, 4)
     }
 
-    return {"items": items, "total": total, "stats": stats}
+    distinct_templates_query = db.query(models.ScheduledTrigger.template_name).filter(
+        models.ScheduledTrigger.client_id == x_client_id,
+        models.ScheduledTrigger.integration_id == str(uuid_obj),
+        models.ScheduledTrigger.template_name != None
+    ).distinct()
+    distinct_templates = [row[0] for row in distinct_templates_query.all() if row[0]]
+
+    return {"items": items, "total": total, "stats": stats, "distinct_templates": distinct_templates}
 
 @router.post("/{integration_id}/backfill-costs", summary="Recalcular custos históricos dos disparos")
 def backfill_dispatch_costs(
