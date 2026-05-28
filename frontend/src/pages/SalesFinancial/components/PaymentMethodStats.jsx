@@ -23,19 +23,16 @@ export default function PaymentMethodStats({ transactions }) {
   let totalRevenue = 0;
 
   transactions.forEach(tx => {
-    // Only count for revenue if the sale/event is approved/paid
-    const isApproved = tx.event_type === 'compra_aprovada';
+    // Only count approved/paid sales
+    if (tx.event_type !== 'compra_aprovada') return;
+    
     const normalized = normalizeMethod(tx.payment_method);
     
     statsMap[normalized].count += 1;
-    if (isApproved) {
-      statsMap[normalized].revenue += tx.price || 0;
-    }
+    statsMap[normalized].revenue += tx.price || 0;
     
     totalCount += 1;
-    if (isApproved) {
-      totalRevenue += tx.price || 0;
-    }
+    totalRevenue += tx.price || 0;
   });
 
   const sortedStats = Object.keys(statsMap).map(key => {
@@ -53,7 +50,7 @@ export default function PaymentMethodStats({ transactions }) {
   }).sort((a, b) => b.count - a.count);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col justify-between h-full">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col justify-between">
       <div>
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <h3 className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
