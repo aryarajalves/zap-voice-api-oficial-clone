@@ -482,7 +482,13 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         elif status in ["refunded", "chargeback"]:
             result['event_type'] = "reembolso"
         elif status in ["refused", "canceled", "declined"]:
-            result['event_type'] = "cartao_recusado"
+            payment_method = str(payload.get("payment_type") or "").lower()
+            if payment_method == "pix":
+                result['event_type'] = "pix_expirado"
+                raw_status_val = "PIX_EXPIRADO"
+            else:
+                result['event_type'] = "cartao_recusado"
+                raw_status_val = "CARTAO_RECUSADO"
         elif status in ["abandoned", "abandoned_cart"]:
             result['event_type'] = "carrinho_abandonado"
             

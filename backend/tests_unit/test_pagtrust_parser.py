@@ -155,5 +155,81 @@ def test_pagtrust_abandoned_cart_new_format():
     assert result["phone"] == "5521981129505"
     assert result["product_name"] == "MUITO ALÉM DA CHUPADA - SST"
 
+def test_pagtrust_canceled_credit_card():
+    payload = {
+      "aff": "",
+      "doc": "04536115676",
+      "off": "225992",
+      "sck": "facebookhQwK21wXxR[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — CópiahQwK21wXxRcpchQwK21wXxR[ADS-CAMPEÃO PISCINA]hQwK21wXxR[ABERTO ADV+] [BR] [ADS CAMPEÃO] — Cópia",
+      "src": "v3_0fca73b1-99fe-4229-8976-f66a15d79731_698105a20d7dab617570d4b5_485_t-13_s-1",
+      "name": "Dalton Passos Junior ",
+      "prod": "610828",
+      "xcod": "facebookhQwK21wXxR[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — CópiahQwK21wXxRcpchQwK21wXxR[ADS-CAMPEÃO PISCINA]hQwK21wXxR[ABERTO ADV+] [BR] [ADS CAMPEÃO] — Cópia",
+      "email": "jrpassospersonal@gmail.com",
+      "price": "375.69",
+      "funnel": "true",
+      "hotkey": "",
+      "hottok": "20972",
+      "status": "canceled",
+      "cms_aff": "0.00",
+      "aff_name": "",
+      "currency": "BRL",
+      "utm_term": "[ABERTO ADV+] [BR] [ADS CAMPEÃO] — Cópia",
+      "last_name": "Dalton Passos Junior ",
+      "prod_name": "COMO DEIXAR ELA LOUCA NA CAMA - D.U",
+      "cms_vendor": "0.00",
+      "first_name": "Dalton Passos Junior ",
+      "full_price": "454.37",
+      "order_bump": "false",
+      "utm_medium": "cpc",
+      "utm_source": "facebook",
+      "transaction": "7127674",
+      "utm_content": "[ADS-CAMPEÃO PISCINA]::PAZXh0bgNhZW0BMABhZGlkAas65hFsTxFzcnRjBmFwcF9pZA81NjcwNjczNDMzNTI0MjcAAachgUghoblWoex-Oo0Q_66Mz0gza6rM9uh7wIILG42vot0YqDG9IjZ1zuoo-A_aem_9lt1-QqHcVGgNW-Yi3mEhw::",
+      "address_comp": "",
+      "payment_type": "CREDIT_CARD",
+      "phone_number": "991159556",
+      "utm_campaign": "[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — Cópia",
+      "callback_type": "1",
+      "producer_name": "Sexologia Sem Tabu",
+      "purchase_date": "2026-05-28T23:43:51 -03:00Z",
+      "receiver_type": "SELLER",
+      "warranty_date": "",
+      "payment_engine": "pagtrust",
+      "address_country": "Brasil",
+      "cms_marketplace": "0.00",
+      "subscriber_code": "",
+      "transaction_ext": "7127674",
+      "phone_local_code": "82",
+      "signature_status": "",
+      "currency_codefrom": "BRL",
+      "has_co_production": "false",
+      "producer_document": "53839969000117",
+      "recurrency_period": "",
+      "currency_code_from": "BRL",
+      "address_country_ISO": "BR",
+      "installments_number": "6",
+      "subscription_status": "",
+      "original_offer_price": "397.00",
+      "phone_checkout_number": "991159556",
+      "producer_legal_nature": "Pessoa Jurídica",
+      "name_subscription_plan": "COMO DEIXAR ELA LOUCA NA CAMA - D.U/2",
+      "productOfferPaymentMode": "multiplos_pagamentos",
+      "phone_checkout_local_code": "82",
+      "confirmation_purchase_date": "",
+      "subscription_anticipation_purchase": "false"
+    }
+
+    result = parse_webhook_payload("pagtrust", payload)
+
+    assert result["event_type"] == "cartao_recusado"
+    assert result["raw_status"] == "Cartão Recusado"
+    assert result["name"] == "Dalton Passos Junior "
+    assert result["email"] == "jrpassospersonal@gmail.com"
+    # Local code 82 + number 991159556 -> 5582991159556 (with 9-digit fix)
+    assert result["phone"] == "5582991159556"
+    assert result["price"] == "375.69"
+    assert result["product_name"] == "COMO DEIXAR ELA LOUCA NA CAMA - D.U"
+    assert result["payment_method"] == "Cartão de Crédito"
+
 if __name__ == "__main__":
     pytest.main([__file__])
