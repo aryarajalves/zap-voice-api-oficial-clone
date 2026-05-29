@@ -116,5 +116,44 @@ def test_pagtrust_pending_billet_parsing():
     assert result["raw_status"] == "Boleto Impresso"
     assert result["payment_method"] == "Boleto"
 
+def test_pagtrust_abandoned_cart_new_format():
+    payload = {
+      "sck": "instagramhQwK21wXxRbio-linkhQwK21wXxRorganicohQwK21wXxRbio-juliahQwK21wXxRmuito-alem-da-chupada",
+      "src": "v3_62822f8c-ce86-4d62-bb05-0bf79660b4aa_66db74b758b6bb000b57a015_20",
+      "xcod": "instagramhQwK21wXxRbio-linkhQwK21wXxRorganicohQwK21wXxRbio-juliahQwK21wXxRmuito-alem-da-chupada",
+      "hottok": "F9E7F77C-21F0-45B5-B7EC-20496F85CB9F",
+      "status": "abandoned_cart",
+      "buyerVO": {
+        "name": "João Marcelo Côrtes Alda",
+        "email": "joaoalda23@gmail.com",
+        "phone": "5521981129505"
+      },
+      "utm_term": "muito-alem-da-chupada",
+      "productId": 615963,
+      "webhookId": 2864,
+      "utm_medium": "organico",
+      "utm_source": "instagram",
+      "buyerVOName": "João Marcelo Côrtes Alda",
+      "productName": "MUITO ALÉM DA CHUPADA - SST",
+      "utm_content": "bio-julia",
+      "buyerVOEmail": "joaoalda23@gmail.com",
+      "hasNegotiate": 0,
+      "productUCode": "MUITO ALÉM DA CHUPADA - SST",
+      "utm_campaign": "bio-link",
+      "customerEmail": "joaoalda23@gmail.com",
+      "productCategory": 0,
+      "customerFullName": "João Marcelo Côrtes Alda",
+      "customerFullPhoneNumber": "5521981129505"
+    }
+
+    result = parse_webhook_payload("pagtrust", payload)
+
+    assert result["event_type"] == "carrinho_abandonado"
+    assert result["raw_status"] == "Carrinho Abandonado"
+    assert result["name"] == "João Marcelo Côrtes Alda"
+    assert result["email"] == "joaoalda23@gmail.com"
+    assert result["phone"] == "5521981129505"
+    assert result["product_name"] == "MUITO ALÉM DA CHUPADA - SST"
+
 if __name__ == "__main__":
     pytest.main([__file__])

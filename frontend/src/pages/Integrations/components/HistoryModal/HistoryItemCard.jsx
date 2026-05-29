@@ -41,7 +41,7 @@ const HistoryItemCard = ({
             {new Date(item.created_at).toLocaleString()}
           </span>
           <span className="px-3 py-1 bg-blue-50 dark:bg-blue-400/5 rounded-full text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-400/10">
-            {item.event_type || 'Evento não detectado'}
+            {item.processed_data?.raw_status || item.event_type || 'Evento não detectado'}
           </span>
         </div>
         <div className="flex items-center gap-3">

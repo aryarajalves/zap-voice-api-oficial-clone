@@ -483,11 +483,11 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             result['event_type'] = "reembolso"
         elif status in ["refused", "canceled", "declined"]:
             result['event_type'] = "cartao_recusado"
-        elif status == "abandoned":
+        elif status in ["abandoned", "abandoned_cart"]:
             result['event_type'] = "carrinho_abandonado"
             
-        result['name'] = payload.get("name") or payload.get("first_name")
-        result['email'] = payload.get("email")
+        result['name'] = payload.get("buyerVOName") or payload.get("customerFullName") or payload.get("buyerVO", {}).get("name") or payload.get("name") or payload.get("first_name")
+        result['email'] = payload.get("buyerVOEmail") or payload.get("customerEmail") or payload.get("buyerVO", {}).get("email") or payload.get("email")
         
         local_code = payload.get("phone_local_code") or payload.get("phone_checkout_local_code") or ""
         num = payload.get("phone_number") or payload.get("phone_checkout_number") or ""
@@ -496,7 +496,10 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         else:
             result['phone'] = num or local_code
             
-        result['product_name'] = payload.get("prod_name")
+        if not result.get('phone'):
+            result['phone'] = payload.get("customerFullPhoneNumber") or payload.get("buyerVO", {}).get("phone")
+            
+        result['product_name'] = payload.get("productName") or payload.get("productUCode") or payload.get("prod_name")
         result['currency'] = payload.get("currency") or "BRL"
         result['event_time'] = payload.get("purchase_date") or payload.get("confirmation_purchase_date")
         result['payment_method'] = payload.get("payment_type")
