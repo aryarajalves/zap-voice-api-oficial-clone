@@ -17,6 +17,9 @@ export function useAppLogic() {
     const [showBuilder, setShowBuilder] = useState(false);
     const [selectedFunnel, setSelectedFunnel] = useState(null);
     const [editingFunnel, setEditingFunnel] = useState(null);
+    const [isArchivedTab, setIsArchivedTab] = useState(false);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Modal States
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -27,6 +30,8 @@ export function useAppLogic() {
     const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
     const [isGlobalsModalOpen, setIsGlobalsModalOpen] = useState(false);
     const [isLabelsModalOpen, setIsLabelsModalOpen] = useState(false);
+    const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+    const [funnelForTag, setFunnelForTag] = useState(null);
     
     // Guide States
     const [isFunnelGuideOpen, setIsFunnelGuideOpen] = useState(false);
@@ -79,10 +84,11 @@ export function useAppLogic() {
     const fetchFunnels = useCallback(async () => {
         if (!activeClient) return;
         try {
-            const res = await fetchWithAuth(`${API_URL}/funnels`, {}, activeClient.id);
+            const res = await fetchWithAuth(`${API_URL}/funnels?is_archived=${isArchivedTab}`, {}, activeClient.id);
             const data = await res.json();
             if (Array.isArray(data)) {
                 setFunnels(data);
+                setCurrentPage(1);
             } else {
                 console.error("Formato inesperado de funis:", data);
                 setFunnels([]);
@@ -91,7 +97,7 @@ export function useAppLogic() {
             console.error("Erro ao buscar funis:", err);
             toast.error("Erro ao carregar funis.");
         }
-    }, [activeClient]);
+    }, [activeClient, isArchivedTab]);
 
     useEffect(() => {
         if (activeClient) {
@@ -253,6 +259,128 @@ export function useAppLogic() {
         setEditingFunnel(null);
     };
 
+    const handleArchiveFunnel = async (funnelId, archiveStatus) => {
+        const loadingToast = toast.loading(archiveStatus ? "Arquivando funil..." : "Desarquivando funil...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/funnels/${funnelId}/archive`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_archived: archiveStatus })
+            }, activeClient?.id);
+            
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success(archiveStatus ? "Funil arquivado!" : "Funil desarquivado!");
+                fetchFunnels();
+                setSelectedFunnelIds(prev => prev.filter(id => id !== funnelId));
+            } else {
+                throw new Error("Erro ao arquivar/desarquivar");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.dismiss(loadingToast);
+            toast.error("Erro ao alterar estado de arquivamento");
+        }
+    };
+
+    const handleTagFunnel = async (funnelId, tagValue) => {
+        const loadingToast = toast.loading("Salvando etiqueta...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/funnels/${funnelId}/tag`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tag: tagValue || null })
+            }, activeClient?.id);
+            
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success("Etiqueta atualizada com sucesso!");
+                fetchFunnels();
+            } else {
+                throw new Error("Erro ao salvar etiqueta");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.dismiss(loadingToast);
+            toast.error("Erro ao salvar etiqueta");
+        }
+    };
+
+    const handlePinFunnel = async (funnelId, pinStatus) => {
+        const loadingToast = toast.loading(pinStatus ? "Fixando funil no topo..." : "Desafixando funil...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/funnels/${funnelId}/pin`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_pinned: pinStatus })
+            }, activeClient?.id);
+            
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success(pinStatus ? "Funil fixado no topo!" : "Funil desafixado do topo!");
+                fetchFunnels();
+            } else {
+                const errData = await res.json();
+                throw new Error(errData.detail || "Erro ao alterar estado de fixação");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.dismiss(loadingToast);
+            toast.error(e.message || "Erro ao alterar estado de fixação");
+        }
+    };
+
+    const handleBulkArchive = async (archiveStatus) => {
+        if (selectedFunnelIds.length === 0) return;
+        const loadingToast = toast.loading(archiveStatus ? "Arquivando funis selecionados..." : "Desarquivando funis...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/funnels/bulk/archive`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ funnel_ids: selectedFunnelIds, is_archived: archiveStatus })
+            }, activeClient?.id);
+            
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success(archiveStatus ? "Funis arquivados!" : "Funis desarquivados!");
+                fetchFunnels();
+                setSelectedFunnelIds([]);
+            } else {
+                const errData = await res.json();
+                throw new Error(errData.detail || "Erro ao arquivar/desarquivar em lote");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.dismiss(loadingToast);
+            toast.error(e.message || "Erro ao alterar estado de arquivamento em lote");
+        }
+    };
+
+    const handleBulkTagConfirm = async (id, tagValue) => {
+        if (selectedFunnelIds.length === 0) return;
+        const loadingToast = toast.loading("Salvando etiqueta em lote...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/funnels/bulk/tag`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ funnel_ids: selectedFunnelIds, tag: tagValue || null })
+            }, activeClient?.id);
+            
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success("Etiquetas em lote atualizadas!");
+                fetchFunnels();
+                setSelectedFunnelIds([]);
+            } else {
+                throw new Error("Erro ao salvar etiquetas em lote");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.dismiss(loadingToast);
+            toast.error("Erro ao salvar etiquetas em lote");
+        }
+    };
+
     return {
         user, logout, activeClient,
         currentView, setCurrentView,
@@ -272,10 +400,17 @@ export function useAppLogic() {
         triggerHistoryRefreshKey, setTriggerHistoryRefreshKey,
         settingsRefreshKey, setSettingsRefreshKey,
         isTriggerModalOpen, setIsTriggerModalOpen,
+        isTagModalOpen, setIsTagModalOpen,
+        funnelForTag, setFunnelForTag,
         clientName, appBranding,
         selectedFunnelIds, setSelectedFunnelIds,
         fetchFunnels, fetchSettings,
+        isArchivedTab, setIsArchivedTab,
+        itemsPerPage, setItemsPerPage,
+        currentPage, setCurrentPage,
+        handleArchiveFunnel, handleTagFunnel, handlePinFunnel,
         handleCreateFunnel, handleEdit, confirmDelete, handleDelete,
-        toggleFunnelSelection, handleBulkDelete, toggleSelectAll, handleViewChange
+        toggleFunnelSelection, handleBulkDelete, toggleSelectAll, handleViewChange,
+        handleBulkArchive, handleBulkTagConfirm
     };
 }

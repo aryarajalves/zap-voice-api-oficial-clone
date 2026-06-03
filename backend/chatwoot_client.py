@@ -254,6 +254,22 @@ class ChatwootClient:
             return {"success": True}
         return await self._cw.add_label_to_conversation(conversation_id, labels, *args, **kwargs)
 
+    async def remove_label_from_conversation(self, conversation_id, labels, *args, **kwargs):
+        if self.simulate:
+            self._maybe_raise_ratelimit()
+            await asyncio.sleep(random.uniform(0.01, 0.05))
+            logger.info(f"🤖 [MOCK remove_label_from_conversation] Removendo labels {labels} da conversa {conversation_id}")
+            return {"success": True}
+        return await self._cw.remove_label_from_conversation(conversation_id, labels, *args, **kwargs)
+
+    async def remove_label_from_contact(self, contact_id, labels, *args, **kwargs):
+        if self.simulate:
+            self._maybe_raise_ratelimit()
+            await asyncio.sleep(random.uniform(0.01, 0.05))
+            logger.info(f"🤖 [MOCK remove_label_from_contact] Removendo labels {labels} do contato {contact_id}")
+            return {"success": True}
+        return await self._cw.remove_label_from_contact(contact_id, labels, *args, **kwargs)
+
     async def update_label(self, *args, **kwargs):
         if self.simulate:
             return {"success": True}

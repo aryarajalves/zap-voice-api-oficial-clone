@@ -48,6 +48,19 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
             db.close()
             return
             
+        is_bulk = False
+        if trigger.is_bulk:
+            is_bulk = True
+        elif trigger.parent_id:
+            parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
+            if parent_trigger and parent_trigger.is_bulk:
+                is_bulk = True
+
+        if is_bulk:
+            logger.info(f"⏭️ [DEFERRED_POST_DELIVERY] Trigger #{trigger_id} é um disparo em massa. Ignorando envio de nota privada.")
+            db.close()
+            return
+            
         message_record = db.query(models.MessageStatus).get(message_id)
         if not message_record:
             logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] MessageStatus {message_id} não encontrado.")
@@ -112,6 +125,18 @@ async def handle_whatsapp_event(data: dict):
                             models.MessageStatus.message_id == clean_id
                         ).first()
                         
+                        if not message_record and recipient:
+                            recipient_norm = normalize_phone_inbound(recipient)
+                            message_record = db.query(models.MessageStatus).filter(
+                                models.MessageStatus.phone_number == recipient_norm,
+                                models.MessageStatus.status == 'sent'
+                            ).order_by(models.MessageStatus.id.desc()).first()
+                            
+                            if message_record:
+                                logger.info(f"🔄 [STATUS_MATCH] Associando wamid {clean_id} ao MessageStatus ID {message_record.id} (anteriormente {message_record.message_id})")
+                                message_record.message_id = clean_id
+                                db.commit()
+                        
                         if message_record:
                             trigger = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
                             old_status = message_record.status
@@ -131,16 +156,40 @@ async def handle_whatsapp_event(data: dict):
                                         err = meta_errors[0]
                                         reason = f"Erro Meta {err.get('code')}: {err.get('message') or err.get('title')}"
                                     message_record.failure_reason = reason
-                                    
                                     if old_status != 'failed':
                                         db.execute(
                                             text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"),
                                             {"tid": trigger.id}
                                         )
+                                        if trigger.parent_id:
+                                            db.execute(
+                                                text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :pid"),
+                                                {"pid": trigger.parent_id}
+                                            )
                                 
                                 if status == 'delivered' and not message_record.delivered_counted:
                                     message_record.delivered_counted = True
-                                    db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
+                                    db.flush()
+                                    
+                                    # Recalculate unique delivered contacts
+                                    delivered_count = db.query(models.MessageStatus.phone_number).filter(
+                                        models.MessageStatus.trigger_id == trigger.id,
+                                        models.MessageStatus.status.in_(['delivered', 'read'])
+                                    ).distinct().count()
+                                    trigger.total_delivered = delivered_count
+                                    
+                                    if trigger.parent_id:
+                                        parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
+                                        if parent_trigger:
+                                            total_parent_delivered = db.query(models.MessageStatus.phone_number).join(
+                                                models.ScheduledTrigger,
+                                                models.MessageStatus.trigger_id == models.ScheduledTrigger.id
+                                            ).filter(
+                                                (models.ScheduledTrigger.id == parent_trigger.id) | 
+                                                (models.ScheduledTrigger.parent_id == parent_trigger.id),
+                                                models.MessageStatus.status.in_(['delivered', 'read'])
+                                            ).distinct().count()
+                                            parent_trigger.total_delivered = total_parent_delivered
                                     trigger_delivered = True
                                     is_first_charge = True
                                 
@@ -148,10 +197,50 @@ async def handle_whatsapp_event(data: dict):
                                     message_record.read_counted = True
                                     if not message_record.delivered_counted:
                                         message_record.delivered_counted = True
-                                        db.execute(text("UPDATE scheduled_triggers SET total_delivered = COALESCE(total_delivered, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
+                                        db.flush()
+                                        
+                                        # Recalculate unique delivered contacts
+                                        delivered_count = db.query(models.MessageStatus.phone_number).filter(
+                                            models.MessageStatus.trigger_id == trigger.id,
+                                            models.MessageStatus.status.in_(['delivered', 'read'])
+                                        ).distinct().count()
+                                        trigger.total_delivered = delivered_count
+                                        
+                                        if trigger.parent_id:
+                                            parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
+                                            if parent_trigger:
+                                                total_parent_delivered = db.query(models.MessageStatus.phone_number).join(
+                                                    models.ScheduledTrigger,
+                                                    models.MessageStatus.trigger_id == models.ScheduledTrigger.id
+                                                ).filter(
+                                                    (models.ScheduledTrigger.id == parent_trigger.id) | 
+                                                    (models.ScheduledTrigger.parent_id == parent_trigger.id),
+                                                    models.MessageStatus.status.in_(['delivered', 'read'])
+                                                ).distinct().count()
+                                                parent_trigger.total_delivered = total_parent_delivered
                                         trigger_delivered = True
                                         is_first_charge = True
-                                    db.execute(text("UPDATE scheduled_triggers SET total_read = COALESCE(total_read, 0) + 1 WHERE id = :tid"), {"tid": trigger.id})
+                                    
+                                    db.flush()
+                                    # Recalculate unique read contacts
+                                    read_count = db.query(models.MessageStatus.phone_number).filter(
+                                        models.MessageStatus.trigger_id == trigger.id,
+                                        models.MessageStatus.status == 'read'
+                                    ).distinct().count()
+                                    trigger.total_read = read_count
+                                    
+                                    if trigger.parent_id:
+                                        parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
+                                        if parent_trigger:
+                                            total_parent_read = db.query(models.MessageStatus.phone_number).join(
+                                                models.ScheduledTrigger,
+                                                models.MessageStatus.trigger_id == models.ScheduledTrigger.id
+                                            ).filter(
+                                                (models.ScheduledTrigger.id == parent_trigger.id) | 
+                                                (models.ScheduledTrigger.parent_id == parent_trigger.id),
+                                                models.MessageStatus.status == 'read'
+                                            ).distinct().count()
+                                            parent_trigger.total_read = total_parent_read
 
                                 if is_first_charge:
                                     # Extrair pricing da Meta
@@ -182,6 +271,11 @@ async def handle_whatsapp_event(data: dict):
                                         text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :tid"),
                                         {"cost": cost_to_add, "paid": paid_increment, "tid": trigger.id}
                                     )
+                                    if trigger.parent_id:
+                                        db.execute(
+                                            text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :pid"),
+                                            {"cost": cost_to_add, "paid": paid_increment, "pid": trigger.parent_id}
+                                        )
 
                                 # Disparar webhook de memória para qualquer template entregue.
                                 # A verificação de URL configurada fica no próprio serviço ai_memory,
@@ -202,29 +296,35 @@ async def handle_whatsapp_event(data: dict):
                                 logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id})")
                                 
                                 # Publicar progresso de bulk via WebSocket em tempo real
-                                if trigger.is_bulk:
+                                trigger_to_notify = trigger
+                                if trigger.parent_id:
+                                    parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
+                                    if parent_trigger and parent_trigger.is_bulk:
+                                        trigger_to_notify = parent_trigger
+                                        
+                                if trigger_to_notify.is_bulk:
                                     try:
-                                        db.refresh(trigger)
+                                        db.refresh(trigger_to_notify)
                                         await rabbitmq.publish_event("bulk_progress", {
-                                            "trigger_id": trigger.id,
-                                            "status": trigger.status,
-                                            "sent": trigger.total_sent or 0,
-                                            "total_sent": trigger.total_sent or 0,
-                                            "failed": trigger.total_failed or 0,
-                                            "total_failed": trigger.total_failed or 0,
-                                            "total_contacts": trigger.total_contacts or 0,
-                                            "total": trigger.total_contacts or 0,
-                                            "delivered": trigger.total_delivered or 0,
-                                            "total_delivered": trigger.total_delivered or 0,
-                                            "read": trigger.total_read or 0,
-                                            "total_read": trigger.total_read or 0,
-                                            "interactions": trigger.total_interactions or 0,
-                                            "total_interactions": trigger.total_interactions or 0,
-                                            "blocked": trigger.total_blocked or 0,
-                                            "total_blocked": trigger.total_blocked or 0,
-                                            "cost": float(trigger.total_cost) if trigger.total_cost else 0.0,
-                                            "total_cost": float(trigger.total_cost) if trigger.total_cost else 0.0,
-                                            "total_paid_templates": trigger.total_paid_templates or 0
+                                            "trigger_id": trigger_to_notify.id,
+                                            "status": trigger_to_notify.status,
+                                            "sent": trigger_to_notify.total_sent or 0,
+                                            "total_sent": trigger_to_notify.total_sent or 0,
+                                            "failed": trigger_to_notify.total_failed or 0,
+                                            "total_failed": trigger_to_notify.total_failed or 0,
+                                            "total_contacts": trigger_to_notify.total_contacts or 0,
+                                            "total": trigger_to_notify.total_contacts or 0,
+                                            "delivered": trigger_to_notify.total_delivered or 0,
+                                            "total_delivered": trigger_to_notify.total_delivered or 0,
+                                            "read": trigger_to_notify.total_read or 0,
+                                            "total_read": trigger_to_notify.total_read or 0,
+                                            "interactions": trigger_to_notify.total_interactions or 0,
+                                            "total_interactions": trigger_to_notify.total_interactions or 0,
+                                            "blocked": trigger_to_notify.total_blocked or 0,
+                                            "total_blocked": trigger_to_notify.total_blocked or 0,
+                                            "cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
+                                            "total_cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
+                                            "total_paid_templates": trigger_to_notify.total_paid_templates or 0
                                         })
                                     except Exception as ws_err:
                                         logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")
@@ -427,6 +527,27 @@ async def handle_whatsapp_event(data: dict):
                             db.add(new_window)
                             logger.info(f"🆕 [WINDOW-META] Nova janela criada para {from_phone} (Client: {target_cid}, Convo: {resolved_convo_id})")
                         db.commit()
+
+                        # Sincroniza o contato na tabela customizada do cliente (ex: contatos_monitorados)
+                        try:
+                            from services.window_manager import sync_contact_to_custom_table
+                            sender_name = contacts_map.get(raw_from, "Contato")
+                            # Busca o inbox_id correspondente caso esteja disponível
+                            inbox_id = None
+                            if resolved_convo_id:
+                                # Tenta ler o inbox_id associado da janela
+                                inbox_id = window.chatwoot_inbox_id if window else None
+                            
+                            sync_contact_to_custom_table(
+                                db=db,
+                                client_id=target_cid,
+                                phone=from_phone,
+                                name=sender_name,
+                                inbox_id=inbox_id,
+                                last_interaction_at=now_utc
+                            )
+                        except Exception as e_sync:
+                            logger.error(f"❌ Erro ao chamar sync_contact_to_custom_table no Meta Worker: {e_sync}")
                         
                         # Extrair o input do usuário (seja texto ou clique de botão)
                         user_input = None
@@ -469,147 +590,8 @@ async def handle_whatsapp_event(data: dict):
 
                         # --- Lógica de Auto-Bloqueio por Termo/Botão ---
                         is_auto_blocked = False
-                        if user_input:
-                            input_clean = user_input.strip().lower()
-                            
-                            # Buscar configurações de auto-bloqueio do banco
-                            configs_db = db.query(models.AppConfig).filter(
-                                models.AppConfig.client_id == target_cid,
-                                models.AppConfig.key.in_(["AUTO_BLOCK_KEYWORDS", "AUTO_BLOCK_FUNNEL_ID", "AUTO_BLOCK_LABEL"])
-                            ).all()
-                            
-                            auto_block_keywords = []
-                            auto_block_funnel_id = None
-                            auto_block_label = None
-                            
-                            for cfg in configs_db:
-                                if cfg.key == "AUTO_BLOCK_KEYWORDS" and cfg.value:
-                                    auto_block_keywords = [k.strip().lower() for k in cfg.value.split(",") if k.strip()]
-                                elif cfg.key == "AUTO_BLOCK_FUNNEL_ID" and cfg.value:
-                                    try:
-                                        auto_block_funnel_id = int(cfg.value)
-                                    except ValueError:
-                                        pass
-                                elif cfg.key == "AUTO_BLOCK_LABEL" and cfg.value:
-                                    auto_block_label = cfg.value.strip()
-                                    
-                            if input_clean in auto_block_keywords:
-                                is_auto_blocked = True
-                                logger.info(f"🚫 [AUTO_BLOCK] Mensagem '{user_input}' coincide com palavra-chave de bloqueio {auto_block_keywords} para o cliente {target_cid}")
-                                
-                                # Adicionar à tabela de bloqueados
-                                suffix = from_phone[-8:]
-                                exists = db.query(models.BlockedContact).filter(
-                                    models.BlockedContact.client_id == target_cid,
-                                    or_(
-                                        models.BlockedContact.phone == from_phone,
-                                        models.BlockedContact.phone.like(f"%{suffix}")
-                                    )
-                                ).first()
-                                if not exists:
-                                    new_block = models.BlockedContact(
-                                        client_id=target_cid,
-                                        phone=from_phone,
-                                        name=contacts_map.get(raw_from, "Contato"),
-                                        reason="Auto-Bloqueio (Gatilho)"
-                                    )
-                                    db.add(new_block)
-                                    db.commit()
-                                    logger.info(f"🚫 [AUTO_BLOCK] Contato {from_phone} bloqueado com sucesso.")
-                                    
-                                # Incrementar total_blocked em vez de total_interactions
-                                if message_record and not getattr(message_record, 'interaction_counted', False):
-                                    message_record.interaction_counted = True
-                                    message_record.is_interaction = False
-                                    db.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
-                                    db.commit()
-                                    logger.info(f"🚫 [AUTO_BLOCK_COUNT] Bloqueio contabilizado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
-                                    
-                                    # Publicar no WS
-                                    try:
-                                        trigger_ref = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
-                                        if trigger_ref and trigger_ref.is_bulk:
-                                            db.refresh(trigger_ref)
-                                            await rabbitmq.publish_event("bulk_progress", {
-                                                "trigger_id": trigger_ref.id,
-                                                "status": trigger_ref.status,
-                                                "sent": trigger_ref.total_sent or 0,
-                                                "total_sent": trigger_ref.total_sent or 0,
-                                                "failed": trigger_ref.total_failed or 0,
-                                                "total_failed": trigger_ref.total_failed or 0,
-                                                "total_contacts": trigger_ref.total_contacts or 0,
-                                                "total": trigger_ref.total_contacts or 0,
-                                                "delivered": trigger_ref.total_delivered or 0,
-                                                "total_delivered": trigger_ref.total_delivered or 0,
-                                                "read": trigger_ref.total_read or 0,
-                                                "total_read": trigger_ref.total_read or 0,
-                                                "interactions": trigger_ref.total_interactions or 0,
-                                                "total_interactions": trigger_ref.total_interactions or 0,
-                                                "blocked": trigger_ref.total_blocked or 0,
-                                                "total_blocked": trigger_ref.total_blocked or 0,
-                                                "cost": float(trigger_ref.total_cost) if trigger_ref.total_cost else 0.0,
-                                                "total_cost": float(trigger_ref.total_cost) if trigger_ref.total_cost else 0.0,
-                                                "total_paid_templates": trigger_ref.total_paid_templates or 0
-                                            })
-                                    except Exception as ws_err:
-                                        logger.error(f"⚠️ Erro ao publicar bulk_progress (bloqueado) via WS: {ws_err}")
-                                
-                                # Obter conversa no Chatwoot para aplicar etiquetas e disparar funil
-                                cw = ChatwootClient(client_id=target_cid)
-                                resolved_convo_id = None
-                                try:
-                                    conv_res = await cw.ensure_conversation(from_phone, contacts_map.get(raw_from, "Contato"))
-                                    if isinstance(conv_res, dict):
-                                        resolved_convo_id = conv_res.get("conversation_id")
-                                    elif isinstance(conv_res, int) or (isinstance(conv_res, str) and conv_res.isdigit()):
-                                        resolved_convo_id = int(conv_res)
-                                except Exception as e_conv:
-                                    logger.error(f"⚠️ [WINDOW-META] Erro ao sincronizar conversa com Chatwoot: {e_conv}")
-                                    
-                                # Aplicar etiqueta se configurada
-                                if auto_block_label and resolved_convo_id:
-                                    try:
-                                        await cw.add_label_to_conversation(resolved_convo_id, [auto_block_label])
-                                        logger.info(f"🏷️ [AUTO_BLOCK] Etiqueta '{auto_block_label}' adicionada à conversa {resolved_convo_id}.")
-                                    except Exception as e_label:
-                                        logger.error(f"⚠️ [AUTO_BLOCK] Erro ao adicionar etiqueta à conversa: {e_label}")
-                                        
-                                    if isinstance(conv_res, dict) and conv_res.get("contact_id"):
-                                        try:
-                                            await cw.add_label_to_contact(conv_res["contact_id"], [auto_block_label])
-                                            logger.info(f"🏷️ [AUTO_BLOCK] Etiqueta '{auto_block_label}' adicionada ao contato {conv_res['contact_id']}.")
-                                        except Exception as e_contact_label:
-                                            logger.error(f"⚠️ [AUTO_BLOCK] Erro ao adicionar etiqueta ao contato: {e_contact_label}")
-                                
-                                # Disparar funil se configurado
-                                if auto_block_funnel_id:
-                                    new_trigger = models.ScheduledTrigger(
-                                        client_id=target_cid,
-                                        funnel_id=auto_block_funnel_id,
-                                        conversation_id=resolved_convo_id,
-                                        contact_phone=from_phone,
-                                        contact_name=contacts_map.get(raw_from, "Contato"),
-                                        status='processing',
-                                        scheduled_time=datetime.now(timezone.utc),
-                                        is_bulk=False,
-                                        is_interaction=False,
-                                        skip_block_check=True,
-                                        parent_id=message_record.trigger_id if message_record else None
-                                    )
-                                    db.add(new_trigger)
-                                    db.commit()
-                                    db.refresh(new_trigger)
-                                    
-                                    await rabbitmq.publish("zapvoice_funnel_executions", {
-                                        "trigger_id": new_trigger.id,
-                                        "funnel_id": auto_block_funnel_id,
-                                        "conversation_id": resolved_convo_id,
-                                        "contact_phone": from_phone
-                                    })
-                                    logger.info(f"🚀 [AUTO_BLOCK_FUNNEL] Funil {auto_block_funnel_id} iniciado para {from_phone}")
-                                
-                                # Aborta o processamento da mensagem corrente
-                                continue
+                        if False:
+                            pass
 
                         if not is_auto_blocked:
                             # Apenas incrementa se for de fato um clique em botão ou resposta interativa
@@ -619,6 +601,16 @@ async def handle_whatsapp_event(data: dict):
                             action_type = None
                             if is_button_click and user_input and message_record and trigger_ref:
                                 button_actions = getattr(trigger_ref, 'button_actions', None) or {}
+                                # Fallback: se button_actions está nulo, buscar em trigger anterior com mesmo template
+                                if not button_actions and trigger_ref.template_name:
+                                    fallback_trigger = db.query(models.ScheduledTrigger).filter(
+                                        models.ScheduledTrigger.client_id == trigger_ref.client_id,
+                                        models.ScheduledTrigger.template_name == trigger_ref.template_name,
+                                        models.ScheduledTrigger.button_actions.isnot(None)
+                                    ).order_by(models.ScheduledTrigger.id.desc()).first()
+                                    if fallback_trigger:
+                                        button_actions = fallback_trigger.button_actions or {}
+                                        logger.info(f"🔁 [BUTTON_ACTION_FALLBACK] button_actions nulo no Trigger {trigger_ref.id}, usando fallback do Trigger {fallback_trigger.id}")
                                 btn_key = user_input.strip()
                                 action = button_actions.get(btn_key)
                                 if action and action.get("type") in ("interaction", "block"):
@@ -629,6 +621,7 @@ async def handle_whatsapp_event(data: dict):
                                 message_record.interaction_counted = True
                                 if action_type == "block":
                                     message_record.is_interaction = False
+                                    message_record.failure_reason = 'BLOCKED_VIA_BUTTON'
                                     db.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
                                     db.commit()
                                     logger.info(f"🚫 [BUTTON_BLOCK_COUNT] Bloqueio imediato via botão detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
@@ -640,6 +633,16 @@ async def handle_whatsapp_event(data: dict):
 
                             if is_button_click and user_input and message_record and trigger_ref:
                                 button_actions = getattr(trigger_ref, 'button_actions', None) or {}
+                                # Fallback: se button_actions está nulo, buscar em trigger anterior com mesmo template
+                                if not button_actions and trigger_ref.template_name:
+                                    fallback_trigger = db.query(models.ScheduledTrigger).filter(
+                                        models.ScheduledTrigger.client_id == trigger_ref.client_id,
+                                        models.ScheduledTrigger.template_name == trigger_ref.template_name,
+                                        models.ScheduledTrigger.button_actions.isnot(None)
+                                    ).order_by(models.ScheduledTrigger.id.desc()).first()
+                                    if fallback_trigger:
+                                        button_actions = fallback_trigger.button_actions or {}
+                                        logger.info(f"🔁 [BUTTON_ACTION_FALLBACK] button_actions nulo no Trigger {trigger_ref.id}, usando fallback do Trigger {fallback_trigger.id}")
                                 btn_key = user_input.strip()
                                 action = button_actions.get(btn_key)
                                 if action and action.get("type") in ("interaction", "block"):
@@ -670,8 +673,15 @@ async def handle_whatsapp_event(data: dict):
                                                     ))
                                                     db_btn.commit()
                                                     logger.info(f"🚫 [BUTTON_BLOCK] Contato {phone} bloqueado via botão de disparo.")
-                                                db_btn.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": block_trigger_id})
-                                                db_btn.commit()
+                                                
+                                                # Atualizar o status da mensagem original para registrar o bloqueio no histórico
+                                                msg_rec = db_btn.query(models.MessageStatus).filter(
+                                                    models.MessageStatus.trigger_id == block_trigger_id,
+                                                    models.MessageStatus.phone_number == phone
+                                                ).first()
+                                                if msg_rec:
+                                                    msg_rec.failure_reason = 'BLOCKED_VIA_BUTTON'
+                                                    db_btn.commit()
 
                                             if act_funnel_id:
                                                 new_t = models.ScheduledTrigger(

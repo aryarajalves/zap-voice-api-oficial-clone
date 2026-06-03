@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FiZap, FiActivity, FiCheckCircle, FiAlertCircle, FiX, FiUser, FiMessageSquare, FiCpu, FiClock, FiMusic, FiVideo, FiImage, FiFile, FiLayers } from 'react-icons/fi';
-import { API_URL } from '../../../config';
+import { FiZap, FiActivity, FiCheckCircle, FiAlertCircle, FiX, FiUser, FiMessageSquare, FiCpu, FiClock, FiMusic, FiVideo, FiImage, FiFile, FiLayers, FiRefreshCw } from 'react-icons/fi';
+import { API_URL, WS_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
 import { useClient } from '../../../contexts/ClientContext';
 import { toast } from 'react-hot-toast';
@@ -16,11 +16,68 @@ const resolveUrl = (url) => {
     return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
-const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onDelete }) => {
+const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onDelete, hideTabs = false }) => {
     useScrollLock(!!initialTrigger);
     const { activeClient } = useClient();
     const [trigger, setTrigger] = useState(initialTrigger);
     const [activeTab, setActiveTab] = useState('flow');
+    const [selectedNodeStats, setSelectedNodeStats] = useState(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [statsPage, setStatsPage] = useState(1);
+    const [statsPerPage, setStatsPerPage] = useState(20);
+    const [contactToCancel, setContactToCancel] = useState(null);
+    const [isCancellingContact, setIsCancellingContact] = useState(false);
+    
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${trigger.id}`, {}, activeClient?.id);
+            if (res.ok) {
+                const data = await res.json();
+                setTrigger(data);
+                toast.success("Informações atualizadas!");
+            } else {
+                toast.error("Falha ao atualizar dados.");
+            }
+        } catch (error) {
+            console.error("Erro ao atualizar trigger:", error);
+            toast.error("Falha ao atualizar dados.");
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    const handleCancelContactFunnel = async () => {
+        if (!contactToCancel) return;
+        setIsCancellingContact(true);
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/triggers/${contactToCancel.triggerId}/cancel`, 
+                { method: 'POST' }, 
+                activeClient?.id
+            );
+            if (res.ok) {
+                toast.success(`Funil parado para o contato ${contactToCancel.name || contactToCancel.phone}`);
+                setSelectedNodeStats(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        contacts: prev.contacts.filter(item => item.phone !== contactToCancel.phone)
+                    };
+                });
+                handleRefresh();
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                toast.error(errData.detail || "Falha ao parar funil para este contato.");
+            }
+        } catch (error) {
+            console.error("Erro ao cancelar funil do contato:", error);
+            toast.error("Falha ao parar funil para este contato.");
+        } finally {
+            setIsCancellingContact(false);
+            setContactToCancel(null);
+        }
+    };
 
     useEffect(() => {
         setTrigger(initialTrigger);
@@ -57,6 +114,178 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
         };
     }, [trigger?.status, trigger?.id, activeClient?.id]);
 
+    useEffect(() => {
+        if (!trigger) return;
+        let ws;
+        const wsBase = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+        const wsToken = localStorage.getItem('token');
+        const wsFinalUrl = wsToken ? `${wsBase}?token=${wsToken}` : wsBase;
+        
+        try {
+            ws = new WebSocket(wsFinalUrl);
+            ws.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (payload.event === "trigger_progress" && payload.data && payload.data.id === trigger.id) {
+                        setTrigger(prev => {
+                            if (!prev) return payload.data;
+                            return {
+                                ...payload.data,
+                                funnel: prev.funnel
+                            };
+                        });
+                    }
+                } catch (err) {
+                    console.error("Erro ao processar mensagem do WebSocket no modal:", err);
+                }
+            };
+        } catch (e) {
+            console.error("Falha ao criar WebSocket no modal:", e);
+        }
+        
+        return () => {
+            if (ws) ws.close();
+        };
+    }, [trigger?.id]);
+
+    const handleNodeStatClick = (nodeId, clickedStatus) => {
+        const rawHistory = Array.isArray(trigger.execution_history) ? trigger.execution_history : [];
+        const funnelNodes = trigger.funnel?.steps?.nodes || [];
+
+        // Mapa de nodeId -> ordem topológica (igual ao PipelineFlowViewer)
+        const nodeOrderMap = {};
+        const adj = {};
+        const inDegree = {};
+        
+        funnelNodes.forEach(node => {
+            adj[node.id] = [];
+            inDegree[node.id] = 0;
+        });
+        
+        const funnelEdges = trigger.funnel?.steps?.edges || [];
+        funnelEdges.forEach(edge => {
+            if (adj[edge.source] && adj[edge.target] !== undefined) {
+                adj[edge.source].push(edge.target);
+                inDegree[edge.target] = (inDegree[edge.target] || 0) + 1;
+            }
+        });
+        
+        let startNodes = funnelNodes.filter(node => 
+            node.type === 'start' || 
+            node.data?.isStart === true
+        ).map(n => n.id);
+        
+        if (startNodes.length === 0) {
+            startNodes = funnelNodes.filter(node => (inDegree[node.id] || 0) === 0).map(n => n.id);
+        }
+        
+        if (startNodes.length === 0 && funnelNodes.length > 0) {
+            startNodes = [funnelNodes[0].id];
+        }
+        
+        const queue = startNodes.map(id => ({ id, level: 0 }));
+        const visited = new Set();
+        
+        while (queue.length > 0) {
+            const { id, level } = queue.shift();
+            nodeOrderMap[id] = Math.max(nodeOrderMap[id] || 0, level);
+            
+            const visitKey = `${id}-${level}`;
+            if (visited.has(visitKey)) continue;
+            visited.add(visitKey);
+            
+            if (adj[id]) {
+                adj[id].forEach(nextId => {
+                    if (level < funnelNodes.length) {
+                        queue.push({ id: nextId, level: level + 1 });
+                    }
+                });
+            }
+        }
+        
+        funnelNodes.forEach((node, idx) => {
+            if (nodeOrderMap[node.id] === undefined) {
+                nodeOrderMap[node.id] = idx + 1000;
+            }
+        });
+
+        // Agrupar todos os logs por contato
+        const logsByContact = {};
+        rawHistory.forEach(log => {
+            const phone = log.extra?.contact_phone || log.extra?.contact_name || '__single__';
+            if (!logsByContact[phone]) logsByContact[phone] = [];
+            logsByContact[phone].push({
+                ...log,
+                nodeOrder: nodeOrderMap[log.node_id] ?? 999
+            });
+        });
+
+        const uniqueContactsMap = {};
+
+        Object.entries(logsByContact).forEach(([phone, contactLogs]) => {
+            // Encontrar o nó mais avançado que este contato atingiu (ignorando nós virtuais com order 999)
+            const realNodeLogs = contactLogs.filter(l => l.nodeOrder < 999);
+            const maxNodeOrder = realNodeLogs.length > 0 ? Math.max(...realNodeLogs.map(l => l.nodeOrder)) : -1;
+
+            // Pegar apenas o log deste contato para o nodeId solicitado
+            const logForNode = contactLogs.find(l => l.node_id === nodeId);
+            if (!logForNode) return;
+
+            const isWaiting = logForNode.status === 'waiting' || logForNode.status === 'processing';
+            const alreadyMoved = isWaiting && logForNode.nodeOrder < maxNodeOrder;
+
+            // Determinar a categoria real do contato neste nó
+            let effectiveStatus;
+            if (logForNode.status === 'completed' || alreadyMoved) {
+                effectiveStatus = 'completed';
+            } else if (isWaiting) {
+                effectiveStatus = 'waiting';
+            } else if (logForNode.status === 'failed') {
+                effectiveStatus = 'failed';
+            } else if (logForNode.status === 'cancelled') {
+                effectiveStatus = 'cancelled';
+            } else {
+                return;
+            }
+
+            // Incluir apenas se bate com o status clicado
+            if (effectiveStatus !== clickedStatus) return;
+
+            if (!uniqueContactsMap[phone]) {
+                uniqueContactsMap[phone] = {
+                    name: logForNode.extra?.contact_name || 'Contato ZapVoice',
+                    phone: logForNode.extra?.contact_phone || 'N/A',
+                    status: logForNode.status,
+                    timestamp: logForNode.timestamp,
+                    updated_at: logForNode.updated_at,
+                    targetTime: logForNode.extra?.target_time,
+                    error: logForNode.extra?.error,
+                    details: logForNode.details,
+                    convoId: logForNode.extra?.conversation_id || trigger.conversation_id,
+                    accountId: logForNode.extra?.account_id || trigger.chatwoot_account_id,
+                    triggerId: logForNode.extra?.trigger_id || trigger.id
+                };
+            }
+        });
+
+        const contactsList = Object.values(uniqueContactsMap);
+        const statusTitles = {
+            completed: 'Aprovados',
+            waiting: 'Na Fila',
+            failed: 'Falhas',
+            cancelled: 'Parados'
+        };
+
+        setSelectedNodeStats({
+            nodeId,
+            status: clickedStatus,
+            title: `Contatos - ${statusTitles[clickedStatus] || clickedStatus}`,
+            contacts: contactsList
+        });
+        setStatsPage(1);
+    };
+
+
     if (!trigger) return null;
 
     try {
@@ -87,8 +316,9 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
         });
 
         return createPortal(
-            <div className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-300">
-                <div className="bg-white dark:bg-gray-900 w-full max-w-2xl max-h-[90vh] rounded-[2.5rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+            <>
+                <div className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-300">
+                <div className="bg-white dark:bg-gray-900 w-full max-w-7xl h-[90vh] max-h-[95vh] rounded-[2.5rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
                     
                     <div className="p-6 pb-4 flex justify-between items-start">
                         <div className="flex items-center gap-4">
@@ -101,43 +331,63 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            {trigger.is_interaction && (
-                                <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center gap-2 text-emerald-500">
-                                    <FiZap size={16} className="animate-pulse" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest">Janela 24h Ativa</span>
-                                </div>
-                            )}
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col gap-2">
+                                {trigger.is_interaction && (
+                                    <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center gap-2 text-emerald-500">
+                                        <FiZap size={16} className="animate-pulse" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Janela 24h Ativa</span>
+                                    </div>
+                                )}
 
-                            {(activeClient?.chatwoot_url || trigger.chatwoot_url) && (
-                                (() => {
-                                    const accountId = trigger.chatwoot_account_id || activeClient?.chatwoot_account_id || history.find(h => h.extra?.account_id)?.extra?.account_id;
-                                    const convoId = trigger.conversation_id || history.find(h => h.extra?.conversation_id)?.extra?.conversation_id;
-                                    
-                                    if (accountId && convoId) {
-                                        let baseUrl = activeClient?.chatwoot_url || '';
-                                        if (!baseUrl && trigger.chatwoot_url) {
-                                            const idx = trigger.chatwoot_url.indexOf('/app/accounts/');
-                                            if (idx !== -1) {
-                                                baseUrl = trigger.chatwoot_url.substring(0, idx);
+                                {(activeClient?.chatwoot_url || trigger.chatwoot_url) && (
+                                    (() => {
+                                        const accountId = trigger.chatwoot_account_id || activeClient?.chatwoot_account_id || history.find(h => h.extra?.account_id)?.extra?.account_id;
+                                        const convoId = trigger.conversation_id || history.find(h => h.extra?.conversation_id)?.extra?.conversation_id;
+                                        
+                                        if (accountId && convoId) {
+                                            let baseUrl = activeClient?.chatwoot_url || '';
+                                            if (!baseUrl && trigger.chatwoot_url) {
+                                                const idx = trigger.chatwoot_url.indexOf('/app/accounts/');
+                                                if (idx !== -1) {
+                                                    baseUrl = trigger.chatwoot_url.substring(0, idx);
+                                                }
+                                            }
+                                            if (baseUrl) {
+                                                return (
+                                                    <a 
+                                                        href={`${baseUrl}/app/accounts/${accountId}/conversations/${convoId}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 active:scale-95"
+                                                    >
+                                                        <FiMessageSquare size={16} /> Ver no Chatwoot
+                                                    </a>
+                                                );
                                             }
                                         }
-                                        if (baseUrl) {
-                                            return (
-                                                <a 
-                                                    href={`${baseUrl}/app/accounts/${accountId}/conversations/${convoId}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 active:scale-95"
-                                                >
-                                                    <FiMessageSquare size={16} /> Ver no Chatwoot
-                                                </a>
-                                            );
-                                        }
-                                    }
-                                    return null;
-                                })()
-                            )}
+                                        return null;
+                                    })()
+                                )}
+                            </div>
+
+                            <button 
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                className="p-3 bg-gray-100 hover:bg-gray-250 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-2xl transition-all active:scale-90 flex items-center justify-center border border-gray-200/30 dark:border-white/5 shadow-sm"
+                                aria-label="Atualizar"
+                                title="Atualizar informações"
+                            >
+                                <FiRefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                            </button>
+
+                            <button 
+                                onClick={onClose}
+                                className="p-3 bg-gray-100 hover:bg-gray-250 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-2xl transition-all active:scale-90 flex items-center justify-center border border-gray-200/30 dark:border-white/5 shadow-sm"
+                                aria-label="Fechar"
+                            >
+                                <FiX size={20} />
+                            </button>
                         </div>
                     </div>
 
@@ -162,32 +412,34 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                         </div>
                     </div>
 
-                    <div className="px-6 pb-3 flex gap-2 border-b border-gray-100 dark:border-gray-800">
-                        <button 
-                            onClick={() => setActiveTab('flow')}
-                            className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
-                                activeTab === 'flow' 
-                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/10' 
-                                    : 'bg-white dark:bg-gray-850 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
-                            }`}
-                        >
-                            🔄 Fluxo Visual
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('timeline')}
-                            className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
-                                activeTab === 'timeline' 
-                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/10' 
-                                    : 'bg-white dark:bg-gray-850 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
-                            }`}
-                        >
-                            📋 Linha do Tempo
-                        </button>
-                    </div>
+                    {!hideTabs && (
+                        <div className="px-6 pb-3 flex gap-2 border-b border-gray-100 dark:border-gray-800">
+                            <button 
+                                onClick={() => setActiveTab('flow')}
+                                className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
+                                    activeTab === 'flow' 
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/10' 
+                                        : 'bg-white dark:bg-gray-850 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                🔄 Fluxo Visual
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('timeline')}
+                                className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
+                                    activeTab === 'timeline' 
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/10' 
+                                        : 'bg-white dark:bg-gray-850 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                📋 Linha do Tempo
+                            </button>
+                        </div>
+                    )}
 
                     {activeTab === 'flow' ? (
-                        <div className="flex-1 relative w-full" style={{ height: '300px', minHeight: '240px' }}>
-                            <PipelineFlowViewer trigger={trigger} />
+                        <div className="flex-1 relative w-full" style={{ height: '100%', minHeight: '450px' }}>
+                            <PipelineFlowViewer trigger={trigger} onNodeStatClick={handleNodeStatClick} />
                         </div>
                     ) : (
                         <div ref={scrollRef} className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar">
@@ -392,7 +644,192 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                         </button>
                     </div>
                 </div>
-            </div>,
+            </div>
+
+            {selectedNodeStats && (
+                    <div className="fixed inset-0 z-[21000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-[2rem] shadow-2xl border border-gray-150 dark:border-white/5 overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-200">
+                            <div className="p-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                                <h3 className="text-lg font-black text-gray-800 dark:text-white uppercase tracking-wider">{selectedNodeStats.title}</h3>
+                                <button onClick={() => setSelectedNodeStats(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-250 transition-colors">
+                                    <FiX size={20} />
+                                </button>
+                            </div>
+
+                            <div className="px-5 py-3 bg-gray-50/50 dark:bg-gray-900/20 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider text-[10px]">Mostrar:</span>
+                                    <select
+                                        value={statsPerPage}
+                                        onChange={(e) => {
+                                            setStatsPerPage(Number(e.target.value));
+                                            setStatsPage(1);
+                                        }}
+                                        className="bg-white dark:bg-gray-800 border border-gray-250 dark:border-gray-700 rounded-xl px-2.5 py-1 font-black text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer shadow-sm text-xs"
+                                    >
+                                        <option value={20}>20 por vez</option>
+                                        <option value={50}>50 por vez</option>
+                                        <option value={100}>100 por vez</option>
+                                    </select>
+                                </div>
+                                <div className="text-gray-500 dark:text-gray-400 font-black text-[10px] uppercase tracking-widest bg-gray-200/50 dark:bg-gray-800 px-2.5 py-1 rounded-lg">
+                                    Total: {selectedNodeStats.contacts.length}
+                                </div>
+                            </div>
+                            
+                            <div className="p-4 overflow-y-auto flex-1 divide-y divide-gray-105 dark:divide-gray-800 bg-gray-50/50 dark:bg-gray-950/20 min-h-[250px]">
+                                {selectedNodeStats.contacts.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-12 text-gray-400 font-medium">
+                                        Nenhum contato encontrado.
+                                    </div>
+                                ) : (
+                                    selectedNodeStats.contacts
+                                        .slice((statsPage - 1) * statsPerPage, statsPage * statsPerPage)
+                                        .map((c, i) => (
+                                        <div key={i} className="py-3 flex justify-between items-center gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-black text-gray-800 dark:text-white truncate">{c.name}</p>
+                                                <p className="text-[10px] text-gray-500 font-bold font-mono mt-0.5">{c.phone}</p>
+                                                <div className="mt-2 flex flex-col gap-1 text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100/50 dark:bg-gray-800/30 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800/50">
+                                                    {c.timestamp && (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-bold text-gray-400 dark:text-gray-500">📥 Entrada:</span>
+                                                            <span className="font-mono font-semibold text-gray-700 dark:text-gray-300">{new Date(c.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                                                        </div>
+                                                    )}
+                                                    {c.targetTime && (
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <span className="font-bold text-gray-400 dark:text-gray-500">⏱️ Prazo:</span>
+                                                            <span className="font-mono font-bold text-orange-500">{new Date(c.targetTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                                                        </div>
+                                                    )}
+                                                    {c.status === 'completed' && (
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <span className="font-bold text-gray-400 dark:text-gray-500">📤 Saída:</span>
+                                                            <span className="font-mono font-bold text-emerald-500">
+                                                                {c.updated_at 
+                                                                    ? new Date(c.updated_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                                                                    : new Date(c.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {c.error && (
+                                                    <p className="text-[9px] text-red-500 font-bold bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-lg mt-1 inline-block">
+                                                        ❌ {c.error}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {selectedNodeStats.status === 'waiting' && (
+                                                    <button
+                                                        onClick={() => setContactToCancel(c)}
+                                                        title="Parar funil para este contato"
+                                                        className="px-3 py-1.5 bg-red-100 hover:bg-red-200 dark:bg-red-950/30 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95 flex items-center gap-1 border border-red-200/30"
+                                                    >
+                                                        <FiX size={10} /> Parar Funil
+                                                    </button>
+                                                )}
+                                                
+                                                {c.convoId && c.accountId && (activeClient?.chatwoot_url || trigger.chatwoot_url) && (
+                                                    (() => {
+                                                        let baseUrl = activeClient?.chatwoot_url || '';
+                                                        if (!baseUrl && trigger.chatwoot_url) {
+                                                            const idx = trigger.chatwoot_url.indexOf('/app/accounts/');
+                                                            if (idx !== -1) {
+                                                                baseUrl = trigger.chatwoot_url.substring(0, idx);
+                                                            }
+                                                        }
+                                                        if (baseUrl) {
+                                                            return (
+                                                                <a 
+                                                                    href={`${baseUrl}/app/accounts/${c.accountId}/conversations/${c.convoId}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-md shadow-blue-500/20 active:scale-95 shrink-0 flex items-center gap-1"
+                                                                >
+                                                                    <FiMessageSquare size={10} /> Chat
+                                                                </a>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })()
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {selectedNodeStats.contacts.length > statsPerPage && (
+                                <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-55/50 dark:bg-gray-900/30 flex justify-between items-center">
+                                    <button
+                                        disabled={statsPage === 1}
+                                        onClick={() => setStatsPage(prev => Math.max(prev - 1, 1))}
+                                        className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 font-black rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all text-[10px] uppercase tracking-wider active:scale-95 border border-gray-200/20 shadow-sm"
+                                    >
+                                        ◀ Anterior
+                                    </button>
+                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-black uppercase tracking-widest">
+                                        Página <span className="font-mono text-xs text-blue-500 font-black">{statsPage}</span> de <span className="font-mono text-xs font-black">{Math.ceil(selectedNodeStats.contacts.length / statsPerPage)}</span>
+                                    </span>
+                                    <button
+                                        disabled={statsPage >= Math.ceil(selectedNodeStats.contacts.length / statsPerPage)}
+                                        onClick={() => setStatsPage(prev => Math.min(prev + 1, Math.ceil(selectedNodeStats.contacts.length / statsPerPage)))}
+                                        className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 font-black rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all text-[10px] uppercase tracking-wider active:scale-95 border border-gray-200/20 shadow-sm"
+                                    >
+                                        Próxima ▶
+                                    </button>
+                                </div>
+                            )}
+                            
+                            <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-end">
+                                <button 
+                                    onClick={() => setSelectedNodeStats(null)}
+                                    className="px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-xl hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-xs"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            {contactToCancel && (
+                <div className="fixed inset-0 z-[22000] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-[2rem] shadow-2xl border border-gray-150 dark:border-white/5 overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-4">
+                                <FiAlertCircle size={32} />
+                            </div>
+                            <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Parar Funil?</h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mt-2">
+                                Tem certeza de que deseja parar a execução do funil para o contato <strong className="text-gray-800 dark:text-white">{contactToCancel.name || contactToCancel.phone}</strong>?
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                Esta ação cancelará o agendamento atual e interromperá as próximas etapas deste contato.
+                            </p>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => setContactToCancel(null)}
+                                disabled={isCancellingContact}
+                                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 font-black rounded-xl transition-all uppercase tracking-widest text-xs"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleCancelContactFunnel}
+                                disabled={isCancellingContact}
+                                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-red-600/20"
+                            >
+                                {isCancellingContact ? 'Parando...' : 'Confirmar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            </>,
             document.body
         );
     } catch (e) {

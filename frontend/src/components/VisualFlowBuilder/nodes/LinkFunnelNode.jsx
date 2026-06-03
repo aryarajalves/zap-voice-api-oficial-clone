@@ -37,7 +37,7 @@ const LinkFunnelNode = ({ id, data }) => {
             >
                 <option value="">Selecione um Funil...</option>
                 {funnels.map(f => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
+                    <option key={f.id} value={f.id}>{f.is_pinned ? '📌 ' : ''}{f.name}{f.tag ? ` [${f.tag}]` : ''}</option>
                 ))}
             </select>
         </div>

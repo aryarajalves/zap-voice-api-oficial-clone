@@ -147,6 +147,8 @@ export function useWebhookLeads(activeClient) {
     if (activeClient?.id) {
       fetchLeads();
       fetchFilters();
+    } else {
+      setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClient?.id, page, eventType, selectedTag, limit, datePreset, customDateFrom, customDateTo]);

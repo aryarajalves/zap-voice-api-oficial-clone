@@ -393,3 +393,47 @@ def test_get_trigger_messages(app_client, auth_headers, db, client_obj, funnel):
     assert "items" in data
     assert "counts" in data
     assert data["counts"]["all"] >= 1
+
+
+# -- Test Button Actions Resolution --------------------------------------------
+
+def test_list_triggers_button_actions_resolution(app_client, auth_headers, db, client_obj, funnel):
+    # Criar um funil específico para a ação do botão
+    action_funnel = Funnel(name="Funil de Acao de Botao", client_id=client_obj.id, steps=[])
+    db.add(action_funnel)
+    db.commit()
+    db.refresh(action_funnel)
+
+    # Criar um trigger com button_actions apontando para o funil criado
+    t = ScheduledTrigger(
+        client_id=client_obj.id,
+        status="completed",
+        is_bulk=True,
+        scheduled_time=datetime.now(timezone.utc),
+        button_actions={
+            "Sim": {"type": "interaction", "funnel_id": action_funnel.id},
+            "Não": {"type": "block", "funnel_id": None}
+        }
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+
+    # 1. Testar listagem
+    resp = app_client.get("/api/triggers", headers=auth_headers)
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    
+    # Encontrar o trigger criado
+    trigger_item = next((item for item in items if item["id"] == t.id), None)
+    assert trigger_item is not None
+    assert trigger_item["button_actions"] is not None
+    assert trigger_item["button_actions"]["Sim"]["funnel_name"] == "Funil de Acao de Botao"
+    assert trigger_item["button_actions"]["Não"]["funnel_id"] is None
+
+    # 2. Testar obter detalhes de um disparo específico
+    resp_details = app_client.get(f"/api/triggers/{t.id}", headers=auth_headers)
+    assert resp_details.status_code == 200
+    trigger_details = resp_details.json()
+    assert trigger_details["button_actions"]["Sim"]["funnel_name"] == "Funil de Acao de Botao"
+

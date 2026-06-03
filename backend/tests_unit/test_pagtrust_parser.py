@@ -231,5 +231,121 @@ def test_pagtrust_canceled_credit_card():
     assert result["product_name"] == "COMO DEIXAR ELA LOUCA NA CAMA - D.U"
     assert result["payment_method"] == "Cartão de Crédito"
 
+def test_pagtrust_refund_parsing():
+    payload = {
+      "aff": "",
+      "doc": "44344790839",
+      "off": "223182",
+      "sck": "instagramhQwK21wXxRbio-linkhQwK21wXxRorganicohQwK21wXxRbio-juliahQwK21wXxRcomo-deixar-ela-louca",
+      "src": "v3_c0ea2c84-fedb-4e51-ae8a-cfb359cf2dbc_698105a20d7dab617570d4b5_485_t-14_s-1",
+      "name": "Miguel Moura",
+      "prod": "615962",
+      "xcod": "instagramhQwK21wXxRbio-linkhQwK21wXxRorganicohQwK21wXxRbio-juliahQwK21wXxRcomo-deixar-ela-louca",
+      "email": "miguelmouracvm23@gmail.com",
+      "price": "375.69",
+      "funnel": "true",
+      "hotkey": "",
+      "hottok": "20972",
+      "status": "refunded",
+      "cms_aff": "0.00",
+      "aff_name": "",
+      "currency": "BRL",
+      "utm_term": "como-deixar-ela-louca",
+      "last_name": "Miguel Moura",
+      "prod_name": "COMO DEIXAR ELA LOUCA NA CAMA - SST",
+      "cms_vendor": "0.00",
+      "first_name": "Miguel Moura",
+      "full_price": "454.37",
+      "order_bump": "false",
+      "utm_medium": "organico",
+      "utm_source": "instagram",
+      "transaction": "7127738",
+      "utm_content": "bio-julia",
+      "address_comp": "",
+      "payment_type": "CREDIT_CARD",
+      "phone_number": "995946311",
+      "utm_campaign": "bio-link",
+      "callback_type": "1",
+      "producer_name": "Sexologia Sem Tabu",
+      "purchase_date": "2026-05-29T00:57:09 -03:00Z",
+      "receiver_type": "SELLER",
+      "warranty_date": "2026-06-05T00:57:13 +00:00Z",
+      "payment_engine": "pagtrust",
+      "address_country": "Brasil",
+      "cms_marketplace": "0.00",
+      "subscriber_code": "",
+      "transaction_ext": "7127738",
+      "phone_local_code": "41",
+      "signature_status": "",
+      "currency_codefrom": "BRL",
+      "has_co_production": "false",
+      "producer_document": "53839969000117",
+      "recurrency_period": "",
+      "currency_code_from": "BRL",
+      "address_country_ISO": "BR",
+      "installments_number": "6",
+      "subscription_status": "",
+      "original_offer_price": "397.00",
+      "phone_checkout_number": "995946311",
+      "producer_legal_nature": "Pessoa Jurídica",
+      "name_subscription_plan": "COMO DEIXAR ELA LOUCA NA CAMA - SST - Oferta Padrão",
+      "productOfferPaymentMode": "multiplos_pagamentos",
+      "phone_checkout_local_code": "41",
+      "confirmation_purchase_date": "2026-05-29T00:57:13 +00:00Z",
+      "subscription_anticipation_purchase": "false"
+    }
+
+    result = parse_webhook_payload("pagtrust", payload)
+
+    assert result["event_type"] == "reembolso"
+    assert result["raw_status"] == "Reembolso"
+    assert result["name"] == "Miguel Moura"
+    assert result["email"] == "miguelmouracvm23@gmail.com"
+    # Local code 41 + number 995946311 -> 5541995946311 (com normalização de DDI 55)
+    assert result["phone"] == "5541995946311"
+    assert result["price"] == "375.69"
+    assert result["product_name"] == "COMO DEIXAR ELA LOUCA NA CAMA - SST"
+    assert result["payment_method"] == "Cartão de Crédito"
+
+def test_pagtrust_abandoned_cart_short_phone_parsing():
+    payload = {
+      "sck": "facebookhQwK21wXxR[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — CópiahQwK21wXxRcpchQwK21wXxR[ADS-CAMPEÃO PISCINA]hQwK21wXxR[ABERTO ADV+] [BR] [ADS CAMPEÃO] — Cópia",
+      "src": "v3_f1ca60ec-ff00-44af-915d-69f62f23c012_698105a20d7dab617570d4b5_483_t-13_s-1",
+      "xcod": "facebookhQwK21wXxR[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — CópiahQwK21wXxRcpchQwK21wXxR[ADS-CAMPEÃO PISCINA]hQwK21wXxR[ABERTO ADV+] [BR] [ADS CAMPEÃO] — Cópia",
+      "hottok": "F9E7F77C-21F0-45B5-B7EC-20496F85CB9F",
+      "status": "abandoned_cart",
+      "buyerVO": {
+        "name": "Fabio Campassi",
+        "email": "fabiocampassi@gmail.com",
+        "phone": "55119"
+      },
+      "utm_term": "[ABERTO ADV+] [BR] [ADS CAMPEÃO] — Cópia",
+      "productId": 610828,
+      "webhookId": 2864,
+      "utm_medium": "cpc",
+      "utm_source": "facebook",
+      "buyerVOName": "Fabio Campassi",
+      "productName": "COMO DEIXAR ELA LOUCA NA CAMA - D.U",
+      "utm_content": "[ADS-CAMPEÃO PISCINA]::PAZXh0bgNhZW0BMABhZGlkAas65hfFrNFzcnRjBmFwcF9pZA8xMjQwMjQ1NzQyODc0MTQAAacwQoo2YaKflncNx6gEqGEMEarQNT-X0BuCsd3K_l-RKuhLODXTnPmyOtwIdA_aem_iKkozQundNNlFLFgbTKluw::",
+      "buyerVOEmail": "fabiocampassi@gmail.com",
+      "hasNegotiate": 0,
+      "productUCode": "COMO DEIXAR ELA LOUCA NA CAMA - D.U",
+      "utm_campaign": "[06] [VENDA] [CBO] [1-3-1] [VALOR] [LP-PAGTRUST] [CDLC] [ADS PISCINA CAMPEÃO] — Cópia",
+      "customerEmail": "fabiocampassi@gmail.com",
+      "productCategory": 0,
+      "customerFullName": "Fabio Campassi",
+      "customerFullPhoneNumber": "55119"
+    }
+
+    result = parse_webhook_payload("pagtrust", payload)
+
+    assert result["event_type"] == "carrinho_abandonado"
+    assert result["raw_status"] == "Carrinho Abandonado"
+    assert result["name"] == "Fabio Campassi"
+    assert result["email"] == "fabiocampassi@gmail.com"
+    # Normalização de Telefone com 55119 -> 55119 (como tem menos de 12 dígitos e começa com 55, é mantido)
+    assert result["phone"] == "55119"
+    assert result["product_name"] == "COMO DEIXAR ELA LOUCA NA CAMA - D.U"
+
 if __name__ == "__main__":
     pytest.main([__file__])

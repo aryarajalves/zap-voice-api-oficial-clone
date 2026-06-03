@@ -44,6 +44,15 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 24/05/2026 | Timestamps de Funis | `funnels` | `created_at`, `updated_at` | `backend/add_funnel_timestamp_columns.py` |
 | 25/05/2026 | Arquivamento de Templates | `whatsapp_template_cache` | `is_archived` | `backend/scripts/add_archived_column_to_templates.py` |
 | 27/05/2026 | Funis de Interação e Bloqueio no Teste | `scheduled_triggers` | `interaction_funnel_id`, `block_funnel_id` | `backend/scripts/add_interactive_funnels_to_trigger.py` |
+| 30/05/2026 | Arquivamento e Etiquetas de Funis | `funnels` | `is_archived`, `tag` | `backend/add_funnel_archive_tag_columns.py` |
+| 30/05/2026 | Fixação de Funis no Topo | `funnels` | `is_pinned` | `backend/add_funnel_pinned_column.py` |
+| 30/05/2026 | Fixação de Templates no Topo | `whatsapp_template_cache` | `is_pinned` | `backend/add_template_pinned_column.py` |
+| 30/05/2026 | Configuração de Backup Automático | `backup_config` | Tabela nova: `enabled`, `interval_type`, `interval_value`, `retention_count`, `last_backup_at`, `next_backup_at`, `last_backup_filename`, `last_backup_status`, `last_backup_error` | `backend/migrations/add_backup_config_table.py` |
+| 30/05/2026 | Metadados de Backups (Pinar e Etiquetas) | `backup_metadata` | Tabela nova: `filename`, `is_pinned`, `tag` | `backend/migrations/add_backup_metadata_table.py` |
+| 30/05/2026 | Data de Início e Etiqueta Alternativa ManyChat | `webhook_event_mappings` | `manychat_start_date`, `manychat_tag_alternative` | `backend/scripts/database/add_manychat_alternative_tag_columns.py` |
+| 03/06/2026 | Persistência de Ações de Botões em Recorrências | `recurring_triggers` | `button_actions` | `backend/scripts/database/add_button_actions_to_recurring.py` |
+
+
 
 
 

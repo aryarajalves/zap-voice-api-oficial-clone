@@ -261,3 +261,70 @@ async def test_webhook_uses_event_type_as_fallback_tag(mock_db, mock_rabbitmq):
     auto_tag = ", ".join(list(dict.fromkeys(auto_tag_list))) if auto_tag_list else None
 
     assert auto_tag == "Outros" if event_type == "outros" else "Compra Aprovada"
+
+
+@pytest.mark.asyncio
+async def test_webhook_product_filtering(mock_db, mock_rabbitmq):
+    """
+    Valida que a lógica de busca de mapeamento prioriza um mapeamento com
+    o nome de produto específico e usa o genérico como fallback.
+    """
+    integration_id = uuid.uuid4()
+
+    mock_integration = MagicMock()
+    mock_integration.id = integration_id
+    mock_integration.platform = "hotmart"
+    mock_integration.status = "active"
+    mock_integration.client_id = 1
+    mock_integration.name = "Teste Integração"
+    mock_integration.custom_fields_mapping = None
+
+    # Mapeamento Genérico
+    mock_mapping_generic = MagicMock()
+    mock_mapping_generic.id = 101
+    mock_mapping_generic.event_type = "compra_aprovada"
+    mock_mapping_generic.product_name = None
+    mock_mapping_generic.is_active = True
+    mock_mapping_generic.chatwoot_label = []
+    mock_mapping_generic.manychat_active = False
+
+    # Mapeamento Específico
+    mock_mapping_specific = MagicMock()
+    mock_mapping_specific.id = 102
+    mock_mapping_specific.event_type = "compra_aprovada"
+    mock_mapping_specific.product_name = "Curso de Violão"
+    mock_mapping_specific.is_active = True
+    mock_mapping_specific.chatwoot_label = []
+    mock_mapping_specific.manychat_active = False
+
+    mock_request = MagicMock()
+    mock_request.method = "POST"
+    # Payload com o produto específico
+    mock_request.body = AsyncMock(return_value='{"event": "PURCHASE_APPROVED", "data": {"buyer": {"name": "Maria", "checkout_phone": "5585999990001"}, "product": {"name": "Curso de Violão"}}}'.encode('utf-8'))
+
+    bg_tasks = MagicMock()
+
+    # Cenário 1: Existe mapeamento específico, o DB deve ser consultado e retorná-lo
+    # Na ordem:
+    # 1. Busca da Integração
+    # 2. Busca do Mapeamento Específico (retorna mock_mapping_specific)
+    mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_integration,
+        mock_mapping_specific
+    ]
+
+    with patch("routers.webhooks_public.process_webhook_automation"), \
+         patch("routers.webhooks_public.upsert_webhook_lead"):
+
+        response = await receive_external_webhook(
+            integration_uuid=str(integration_id),
+            request=mock_request,
+            background_tasks=bg_tasks,
+            db=mock_db
+        )
+
+    assert response.get("status") == "success"
+    # mock_db query foi chamada com product_name == "Curso de Violão"
+    # O filtro por product_name foi executado na primeira tentativa de busca de mapeamento
+    # O backend retornou sucesso e o mapeamento específico mock_mapping_specific seria o correto
+

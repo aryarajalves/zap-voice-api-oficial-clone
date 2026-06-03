@@ -8,7 +8,7 @@ import LinkFunnelNode from './nodes/LinkFunnelNode';
 import ChatwootLabelNode from './nodes/ChatwootLabelNode';
 import UpdateContactNode from './nodes/UpdateContactNode';
 import TemplateNode from './nodes/TemplateNode';
-import LegacyDateNode from './nodes/LegacyDateNode';
+import DateNode from './nodes/DateNode';
 
 const nodeTypes = {
     messageNode: MessageNode,
@@ -21,7 +21,7 @@ const nodeTypes = {
     chatwoot_label: ChatwootLabelNode,
     updateContactNode: UpdateContactNode,
     templateNode: TemplateNode,
-    dateNode: LegacyDateNode
+    dateNode: DateNode
 };
 
 export default nodeTypes;

@@ -103,6 +103,22 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
             raw_msg_id = res.get("source_id") or str(res.get("id"))
             msg_id = raw_msg_id
 
+            # Criar o MessageStatus imediatamente para que os webhooks de status possam localizá-lo e atualizá-lo
+            msg_id_clean = str(msg_id).replace("wamid.", "")
+            existing_ms = db.query(models.MessageStatus).filter_by(message_id=msg_id_clean).first()
+            if not existing_ms:
+                db.add(models.MessageStatus(
+                    trigger_id=trigger.id,
+                    message_id=msg_id_clean,
+                    phone_number=contact_phone,
+                    status='sent',
+                    message_type='FREE_MESSAGE',
+                    content=final_content,
+                    publish_external_event=data.get("publishExternalEvent", False)
+                ))
+                trigger.total_sent = (trigger.total_sent or 0) + 1
+                db.commit()
+
             if not trigger.is_bulk:
                 log_node_execution(db, trigger, current_node_id, "processing", "Aguardando confirmação do WhatsApp...")
                 state, detail = await wait_for_delivery_sync(db, msg_id, trigger, current_node_id)
@@ -153,7 +169,7 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                         if inbox_id_str and str(inbox_id_str).isdigit():
                             effective_inbox_id = int(inbox_id_str)
                     
-                    conv = await chatwoot.ensure_conversation(contact_phone, name=trigger.contact_name or contact_phone, inbox_id=effective_inbox_id)
+                    conv = await chatwoot.ensure_conversation(contact_phone, trigger.contact_name or contact_phone, effective_inbox_id)
                     if conv and conv.get("conversation_id"):
                         conversation_id = conv.get("conversation_id")
                         trigger.conversation_id = conversation_id
@@ -193,12 +209,13 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                         if inbox_id_str and str(inbox_id_str).isdigit():
                             effective_inbox_id = int(inbox_id_str)
                     
-                    conv = await chatwoot.ensure_conversation(contact_phone, name=trigger.contact_name or contact_phone, inbox_id=effective_inbox_id)
+                    conv = await chatwoot.ensure_conversation(contact_phone, trigger.contact_name or contact_phone, effective_inbox_id)
                     if conv and conv.get("conversation_id"):
                         conversation_id = conv.get("conversation_id")
                         trigger.conversation_id = conversation_id
                         db.commit()
-                        await chatwoot.send_message(conversation_id, final_content)
+                        # Envia como nota privada para que apareça visualmente no Chatwoot sem ser reenviada via webhook
+                        await chatwoot.send_private_note(conversation_id, f"[Enviado via Meta]: {final_content}")
                 except Exception as e_sync:
                     logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar cópia no Chatwoot: {e_sync}")
             else:
@@ -209,17 +226,19 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
 
     if msg_id:
         msg_id_clean = str(msg_id).replace("wamid.", "")
-        db.add(models.MessageStatus(
-            trigger_id=trigger.id,
-            message_id=msg_id_clean,
-            phone_number=contact_phone,
-            status='sent',
-            message_type='FREE_MESSAGE',
-            content=final_content,
-            publish_external_event=data.get("publishExternalEvent", False)
-        ))
-        trigger.total_sent = (trigger.total_sent or 0) + 1
-        db.commit()
+        existing_ms = db.query(models.MessageStatus).filter_by(message_id=msg_id_clean).first()
+        if not existing_ms:
+            db.add(models.MessageStatus(
+                trigger_id=trigger.id,
+                message_id=msg_id_clean,
+                phone_number=contact_phone,
+                status='sent',
+                message_type='FREE_MESSAGE',
+                content=final_content,
+                publish_external_event=data.get("publishExternalEvent", False)
+            ))
+            trigger.total_sent = (trigger.total_sent or 0) + 1
+            db.commit()
 
     await publish_node_external_event(db, trigger, data, final_content, contact_phone, node_id=current_node_id)
     log_node_execution(db, trigger, current_node_id, "completed", "Mensagem enviada e sincronizada.", {"content": final_content})

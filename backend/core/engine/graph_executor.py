@@ -9,6 +9,7 @@ from .nodes.message import handle_message_node
 from .nodes.audio import handle_audio_node
 from .nodes.media import handle_media_node
 from .nodes.delay import handle_delay_node
+from .nodes.date import handle_date_node
 from .nodes.condition import handle_condition_node
 from .nodes.template import handle_template_node
 from .nodes.actions import handle_update_contact_node, handle_label_node, handle_randomizer_node, handle_link_funnel_node
@@ -47,6 +48,15 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
         logger.info(f"🚀 [GRAPH] Iniciando execução pelo Nó: {current_node_id} (Tipo: {start_node.get('type')})")
     
     while current_node_id:
+        try:
+            db.expire(trigger)
+            db.refresh(trigger)
+        except Exception:
+            pass
+        if trigger.status == 'cancelled':
+            logger.info(f"🛑 [GRAPH] Disparo {trigger.id} cancelado externamente. Interrompendo execução.")
+            return
+
         node = nodes.get(current_node_id)
         if not node: 
             logger.warning(f"⚠️ [GRAPH] Nó {current_node_id} não encontrado no dicionário de nós.")
@@ -84,6 +94,16 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
             if res == "break": 
                 logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Delay) pausou a execução (Scheduled).")
                 break
+            source_handle = res
+        elif node_type in ["date", "dateNode"]:
+            res = await handle_date_node(db, trigger, node, edges, funnel)
+            if res == "stop": 
+                logger.info(f"🛑 [GRAPH] Nó {current_node_id} (Date) interrompeu a execução.")
+                return
+            if res == "break": 
+                logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Date) pausou a execução (Scheduled).")
+                break
+            source_handle = res
         elif node_type in ["condition", "conditionNode"]:
             res = await handle_condition_node(db, trigger, node, chatwoot, contact_phone, edges, conversation_id)
             if res == "stop": return
@@ -103,6 +123,12 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
             await handle_link_funnel_node(db, trigger, node, contact_phone, conversation_id)
 
         next_node_id = get_next_node(current_node_id, edges, source_handle)
+        if not next_node_id and source_handle in ["default", "approach", "past"]:
+            # Fallbacks robustos para portas do DelayNode
+            next_node_id = get_next_node(current_node_id, edges, "default")
+            if not next_node_id:
+                next_node_id = get_next_node(current_node_id, edges, None)
+                
         if next_node_id:
             logger.info(f"➡️ [GRAPH] Avançando do Nó {current_node_id} para {next_node_id}")
             current_node_id = next_node_id

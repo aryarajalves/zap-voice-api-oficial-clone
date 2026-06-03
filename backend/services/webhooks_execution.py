@@ -160,6 +160,16 @@ async def execute_webhook_resend_logic(
                 mc_tag = compute_dynamic_manychat_tag(mapping)
             else:
                 mc_tag = mapping.manychat_tag
+                start_date = getattr(mapping, "manychat_start_date", None)
+                alt_tag = getattr(mapping, "manychat_tag_alternative", None)
+                if start_date and alt_tag:
+                    now_utc = datetime.now(timezone.utc)
+                    start_date_utc = start_date
+                    if start_date_utc.tzinfo is None:
+                        start_date_utc = start_date_utc.replace(tzinfo=timezone.utc)
+                    
+                    if now_utc >= start_date_utc:
+                        mc_tag = alt_tag
             
             logger.info(f"RESEND_MANYCHAT | Agendando sincronização para {mc_phone} ({mc_name}) com tag '{mc_tag}'")
             if background_tasks:

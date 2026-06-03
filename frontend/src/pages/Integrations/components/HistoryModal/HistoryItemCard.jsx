@@ -1,6 +1,26 @@
 import React from 'react';
 import { FiTrash2, FiPlay, FiCopy, FiEdit2, FiMaximize2, FiZap, FiRefreshCw, FiSettings, FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
 
+const translateError = (msg) => {
+  if (!msg) return "";
+  let text = String(msg);
+  
+  const translations = [
+    { regex: /No mapping found for event:/gi, replacement: "Nenhum mapeamento encontrado para o evento:" },
+    { regex: /Parameter value is not valid/gi, replacement: "O valor do parâmetro é inválido (ex: número de telefone incompleto/incorreto)" },
+    { regex: /Template name does not exist/gi, replacement: "O nome do template não existe" },
+    { regex: /Invalid parameter/gi, replacement: "Parâmetro inválido" },
+    { regex: /Phone field not found in payload/gi, replacement: "Campo de telefone não encontrado no payload" },
+    { regex: /Configuração do WhatsApp ausente/gi, replacement: "Configuração do WhatsApp ausente" },
+    { regex: /Duplicidade evitada/gi, replacement: "Duplicidade evitada" }
+  ];
+
+  for (const item of translations) {
+    text = text.replace(item.regex, item.replacement);
+  }
+  return text;
+};
+
 const HistoryItemCard = ({
   item,
   selectedHistoryIds,
@@ -333,11 +353,11 @@ const HistoryItemCard = ({
         {item.error_message && (
           item.status === 'skipped' ? (
             <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-400/5 rounded-xl border border-amber-100 dark:border-amber-400/20 text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-2">
-              <FiAlertTriangle size={14} /> <strong>Alerta:</strong> {String(item.error_message).replace(/No mapping found for event:/gi, "Nenhum mapeamento encontrado para o evento:")}
+              <FiAlertTriangle size={14} /> <strong>Alerta:</strong> {translateError(item.error_message)}
             </div>
           ) : (
             <div className="mt-4 p-3 bg-red-50 dark:bg-red-400/5 rounded-xl border border-red-100 dark:border-red-400/20 text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-2">
-              <FiXCircle size={14} /> <strong>Erro:</strong> {String(item.error_message).replace(/No mapping found for event:/gi, "Nenhum mapeamento encontrado para o evento:")}
+              <FiXCircle size={14} /> <strong>Erro:</strong> {translateError(item.error_message)}
             </div>
           )
         )}

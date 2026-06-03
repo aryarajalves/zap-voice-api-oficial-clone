@@ -231,3 +231,123 @@ def test_dispatch_now_success(app_client, auth_headers, pending_trigger):
 def test_dispatch_now_not_found(app_client, auth_headers):
     resp = app_client.post("/api/schedules/99999/dispatch", headers=auth_headers)
     assert resp.status_code == 404
+
+
+# -- POST /schedules/recurring/{rt_id}/trigger ---------------------------------
+
+def test_trigger_recurring_manual_success(app_client, auth_headers, db, client_obj, funnel):
+    from models import RecurringTrigger, ScheduledTrigger
+    
+    rt = RecurringTrigger(
+        client_id=client_obj.id,
+        funnel_id=funnel.id,
+        frequency="weekly",
+        scheduled_time="10:00",
+        is_active=True,
+        contacts_list=[{"phone": "5511999991111", "name": "User Recorrente Teste"}]
+    )
+    db.add(rt)
+    db.commit()
+    db.refresh(rt)
+    
+    resp = app_client.post(f"/api/schedules/recurring/{rt.id}/trigger", headers=auth_headers)
+    assert resp.status_code == 200
+    
+    data = resp.json()
+    assert "Disparo manual agendado com sucesso!" in data["message"]
+    assert "trigger_id" in data
+    
+    st_id = data["trigger_id"]
+    st = db.query(ScheduledTrigger).filter(ScheduledTrigger.id == st_id).first()
+    assert st is not None
+    assert st.is_recurring is True
+    assert st.is_bulk is True
+
+
+def test_get_recurring_contacts_por_tag_usa_chatwoot_live(app_client, auth_headers, db, client_obj, funnel):
+    """
+    Testa que o endpoint GET /recurring/{id}/contacts busca contatos em tempo real
+    do Chatwoot quando a recorrência usa tag, e NÃO usa o banco local desatualizado.
+    """
+    from models import RecurringTrigger
+    from unittest.mock import patch, AsyncMock
+    
+    rt = RecurringTrigger(
+        client_id=client_obj.id,
+        funnel_id=funnel.id,
+        frequency="weekly",
+        scheduled_time="10:00",
+        is_active=True,
+        tag="etiqueta-live",
+        contacts_list=None
+    )
+    db.add(rt)
+    db.commit()
+    db.refresh(rt)
+    
+    chatwoot_contacts = [
+        {"phone_number": "+5511999990001", "name": "Lead Chatwoot A", "email": "a@test.com", "id": 1},
+        {"phone_number": "+5511999990002", "name": "Lead Chatwoot B", "email": "b@test.com", "id": 2},
+    ]
+    
+    with patch("routers.schedules.ChatwootClient") as MockCW:
+        mock_inst = AsyncMock()
+        MockCW.return_value = mock_inst
+        mock_inst.get_contacts_by_label = AsyncMock(return_value=chatwoot_contacts)
+        
+        resp = app_client.get(f"/api/schedules/recurring/{rt.id}/contacts", headers=auth_headers)
+    
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "tag"
+    assert data["tag"] == "etiqueta-live"
+    assert data["count"] == 2
+    assert data.get("source") == "chatwoot_live"
+    phones = {c["phone"] for c in data["contacts"]}
+    assert "5511999990001" in phones
+    assert "5511999990002" in phones
+
+
+def test_get_recurring_contacts_fallback_banco_local_quando_chatwoot_falha(app_client, auth_headers, db, client_obj, funnel):
+    """
+    Testa que o endpoint usa o banco de dados local como fallback
+    quando o Chatwoot está inacessível.
+    """
+    from models import RecurringTrigger, WebhookLead
+    from unittest.mock import patch, AsyncMock
+    
+    # Criar lead no banco local com a tag
+    lead = WebhookLead(
+        client_id=client_obj.id,
+        phone="5511888880001",
+        name="Lead Local Fallback",
+        tags="tag-fallback"
+    )
+    db.add(lead)
+    
+    rt = RecurringTrigger(
+        client_id=client_obj.id,
+        funnel_id=funnel.id,
+        frequency="daily",
+        scheduled_time="09:00",
+        is_active=True,
+        tag="tag-fallback",
+        contacts_list=None
+    )
+    db.add(rt)
+    db.commit()
+    db.refresh(rt)
+    
+    with patch("routers.schedules.ChatwootClient") as MockCW:
+        mock_inst = AsyncMock()
+        MockCW.return_value = mock_inst
+        mock_inst.get_contacts_by_label = AsyncMock(side_effect=Exception("Chatwoot offline"))
+        
+        resp = app_client.get(f"/api/schedules/recurring/{rt.id}/contacts", headers=auth_headers)
+    
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "tag"
+    assert data.get("source") == "local_db_fallback"
+    assert data["count"] == 1
+    assert data["contacts"][0]["phone"] == "5511888880001"

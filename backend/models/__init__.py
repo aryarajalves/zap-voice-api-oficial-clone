@@ -3,6 +3,7 @@ from .auth import User
 from .client import Client, AppConfig, BlockedContact, ContactWindow
 from .funnel import Funnel, WebhookConfig, WebhookEvent
 from .invitation import UserInvitation, invitation_clients
+from .backup import BackupConfig, BackupMetadata
 from .trigger import (
     ScheduledTrigger, 
     MessageStatus, 
@@ -41,5 +42,7 @@ __all__ = [
     "WebhookLead",
     "RecurringTrigger",
     "StatusInfo",
-    "ProductStatus"
+    "ProductStatus",
+    "BackupConfig",
+    "BackupMetadata"
 ]

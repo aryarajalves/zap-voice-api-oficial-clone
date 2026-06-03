@@ -245,10 +245,12 @@ const ContactsModal = ({
                                                             ))}
                                                         </div>
                                                     )}
-                                                    {(contact.meta_price_brl !== undefined && contact.meta_price_brl !== null ? contact.meta_price_brl > 0 : !['FREE_MESSAGE', 'DIRECT_MESSAGE'].includes(contact.message_type)) ? (
-                                                        <span className="text-[9px] font-black uppercase tracking-tighter bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20">Template Pago</span>
-                                                    ) : (
-                                                        <span className="text-[9px] font-black uppercase tracking-tighter bg-cyan-500/10 text-cyan-500 px-1.5 py-0.5 rounded border border-cyan-500/20">Template Grátis</span>
+                                                    {contactsModal.isTemplate && (
+                                                        (contact.meta_price_brl !== undefined && contact.meta_price_brl !== null ? contact.meta_price_brl > 0 : !['FREE_MESSAGE', 'DIRECT_MESSAGE'].includes(contact.message_type)) ? (
+                                                            <span className="text-[9px] font-black uppercase tracking-tighter bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20">Template Pago</span>
+                                                        ) : (
+                                                            <span className="text-[9px] font-black uppercase tracking-tighter bg-cyan-500/10 text-cyan-500 px-1.5 py-0.5 rounded border border-cyan-500/20">Template Grátis</span>
+                                                        )
                                                     )}
                                                 </div>
 
@@ -266,12 +268,8 @@ const ContactsModal = ({
                                             </div>
                                         </div>
 
-                                        {/* Badges do lado direito */}
                                         <div className="flex items-center gap-3">
                                             <div className="text-right">
-                                                {contact.status === 'sent' && !contact.failure_reason && (
-                                                    <div className="text-[10px] text-blue-400 font-black uppercase tracking-widest animate-pulse">Aguardando...</div>
-                                                )}
                                                 {contact.failure_reason && (
                                                     <div className="text-xs text-red-500 font-bold max-w-[150px] truncate" title={contact.failure_reason}>
                                                         {contact.failure_reason === 'BLOCKED_VIA_BUTTON' ? 'BLOQUEOU O BOT' : contact.failure_reason}

@@ -51,8 +51,8 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     }, []);
 
     const setStartNode = useCallback((id, type) => {
-        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode' && type !== 'delayNode') {
-            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio', 'Template' ou 'Smart Delay' podem ser o nó inicial! 🚫");
+        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode' && type !== 'delayNode' && type !== 'dateNode') {
+            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio', 'Template', 'Smart Delay' ou 'Agendamento Data' podem ser o nó inicial! 🚫");
             return;
         }
 
@@ -130,6 +130,10 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             defaultData.time = 10;
             defaultData.unit = 'seconds';
             defaultData.useRandom = false;
+        } else if (type === 'dateNode') {
+            defaultData.mode = 'date';
+            defaultData.dateValue = '';
+            defaultData.timeValue = '12:00';
         } else if (type === 'messageNode') {
             defaultData.content = '';
             defaultData.variations = [];
@@ -141,7 +145,7 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
 
         setNodes((nds) => {
             const hasStartNode = nds.some(n => n.data?.isStart);
-            const isStartingType = ['messageNode', 'mediaNode', 'audioNode', 'templateNode', 'delayNode'].includes(type);
+            const isStartingType = ['messageNode', 'mediaNode', 'audioNode', 'templateNode', 'delayNode', 'dateNode'].includes(type);
 
             if (!hasStartNode && isStartingType) {
                 defaultData.isStart = true;

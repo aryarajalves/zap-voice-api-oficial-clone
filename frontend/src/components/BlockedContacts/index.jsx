@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { FiSlash } from 'react-icons/fi';
 import ConfirmModal from '../ConfirmModal';
 import { useBlockedContacts } from './hooks/useBlockedContacts';
-import { useAutoBlockSettings } from './hooks/useAutoBlockSettings';
-import KeywordSection from './components/KeywordSection';
 import BlockedTabs from './components/BlockedTabs';
 import ManualInput from './components/ManualInput';
 import FileUpload from './components/FileUpload';
@@ -14,7 +12,6 @@ import { ProgressOverlay, LoadingOverlay } from './components/Overlays';
 
 export default function BlockedContactsModular() {
     const hook = useBlockedContacts();
-    const autoBlock = useAutoBlockSettings();
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false, title: '', message: '', onConfirm: () => { }, isDangerous: false, confirmText: 'Confirmar'
     });
@@ -52,14 +49,6 @@ export default function BlockedContactsModular() {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            {/* Seção de Gatilhos */}
-            <KeywordSection
-                keywords={autoBlock.keywords}
-                newKeyword={autoBlock.newKeyword}
-                setNewKeyword={autoBlock.setNewKeyword}
-                addKeyword={autoBlock.addKeyword}
-                removeKeyword={autoBlock.removeKeyword}
-            />
 
             {/* Seção de Adição */}
             <div className="bg-white/10 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/5 transition-all duration-200">
@@ -122,6 +111,7 @@ export default function BlockedContactsModular() {
                 toggleSelectAll={hook.toggleSelectAll}
                 onBulkDelete={confirmBulkDelete}
                 onUnblock={confirmUnblockSingle}
+                onExport={hook.exportBlockedContacts}
                 currentPage={hook.currentPage}
                 setCurrentPage={hook.setCurrentPage}
                 itemsPerPage={hook.itemsPerPage}

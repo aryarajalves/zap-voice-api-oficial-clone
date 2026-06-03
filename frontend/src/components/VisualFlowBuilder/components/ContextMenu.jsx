@@ -1,18 +1,18 @@
 import React from 'react';
-import { FiMessageSquare, FiImage, FiMic, FiClock, FiCpu, FiShuffle, FiLink, FiTag, FiUser } from 'react-icons/fi';
+import { FiMessageSquare, FiImage, FiMic, FiClock, FiCpu, FiShuffle, FiLink, FiTag, FiUser, FiCalendar } from 'react-icons/fi';
 
 const ContextMenu = ({ top, left, onClose, onAddNode }) => {
     return (
         <div
             style={{ top, left }}
-            className="absolute z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 w-52 overflow-hidden animate-fade-in"
+            className="absolute z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 w-60 max-h-[360px] flex flex-col overflow-hidden animate-fade-in"
             onMouseLeave={onClose}
         >
-            <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
                 <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Adicionar Nó</span>
                 <kbd className="text-[10px] text-gray-400 font-mono">ESC</kbd>
             </div>
-            <div className="flex flex-col p-1 gap-0.5">
+            <div className="flex-grow flex flex-col p-1 gap-0.5 overflow-y-scroll overflow-x-hidden premium-scrollbar">
                 <button onClick={() => onAddNode('messageNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 rounded-md transition text-left group">
                     <div className="bg-blue-100 dark:bg-blue-900/50 p-1 rounded group-hover:bg-blue-200 transition"><FiMessageSquare className="text-blue-500" /></div> Mensagem
                 </button>
@@ -24,6 +24,9 @@ const ContextMenu = ({ top, left, onClose, onAddNode }) => {
                 </button>
                 <button onClick={() => onAddNode('delayNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 hover:text-yellow-600 rounded-md transition text-left group">
                     <div className="bg-yellow-100 dark:bg-yellow-900/50 p-1 rounded group-hover:bg-yellow-200 transition"><FiClock className="text-yellow-500" /></div> Delay
+                </button>
+                <button onClick={() => onAddNode('dateNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-600 rounded-md transition text-left group">
+                    <div className="bg-violet-100 dark:bg-violet-900/50 p-1 rounded group-hover:bg-violet-200 transition"><FiCalendar className="text-violet-500" /></div> Agendar Data
                 </button>
                 <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
                 <button onClick={() => onAddNode('conditionNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:text-purple-600 rounded-md transition text-left group">

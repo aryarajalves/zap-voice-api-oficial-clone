@@ -32,7 +32,7 @@ describe('TriggerTable Component', () => {
     },
     {
       id: 2,
-      is_bulk: true,
+      is_bulk: false,
       status: 'completed',
       created_at: new Date().toISOString(),
       total_sent: 10,
@@ -140,4 +140,157 @@ describe('TriggerTable Component', () => {
     const economyText = screen.getByText(/economia de R\$ 0.70/i);
     expect(economyText).toBeInTheDocument();
   });
+
+  it('não deve renderizar estatísticas de economia ou disparos grátis quando funnel_id está definido', () => {
+    const funnelTrigger = {
+      id: 5,
+      is_bulk: true,
+      funnel_id: 123,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      total_sent: 10,
+      total_failed: 0,
+      total_delivered: 10,
+      total_paid_templates: 8,
+      total_cost: 2.80,
+      child_count: 0,
+      funnel: { name: 'Funil Economia' }
+    };
+    
+    const { queryByText } = render(<TriggerTable {...defaultProps} triggers={[funnelTrigger]} />);
+    
+    const economyText = queryByText(/economia de R\$/i);
+    expect(economyText).not.toBeInTheDocument();
+    const freeText = queryByText(/disparos grátis/i);
+    expect(freeText).not.toBeInTheDocument();
+  });
+
+  it('deve renderizar o botão "Ver Fluxo Visual" e chamar handleViewPipeline ao ser clicado', () => {
+    const triggerWithFunnel = {
+      id: 6,
+      is_bulk: true,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      funnel_id: 10,
+      funnel: { name: 'Funil Visual' },
+      execution_history: [{ node_id: 'node-1', status: 'completed' }]  // pelo menos 1 interação
+    };
+    
+    const handleViewPipelineMock = vi.fn();
+    
+    const { getByTitle } = render(
+      <TriggerTable 
+        {...defaultProps} 
+        triggers={[triggerWithFunnel]} 
+        handleViewPipeline={handleViewPipelineMock}
+      />
+    );
+    
+    const visualFlowButton = getByTitle('Ver Fluxo de Automação Visual');
+    expect(visualFlowButton).toBeInTheDocument();
+    
+    visualFlowButton.click();
+    expect(handleViewPipelineMock).toHaveBeenCalledWith(6);
+  });
+
+  it('deve ocultar o botão "Ver Fluxo Visual" quando execution_history está vazio ou sem node_id (sem interações reais de funil)', () => {
+    // Caso 1: histórico vazio
+    const triggerSemHistorico = {
+      id: 8,
+      is_bulk: false,
+      status: 'sent',
+      created_at: new Date().toISOString(),
+      funnel_id: 10,
+      funnel: { name: 'Funil Sem Histórico' },
+      execution_history: []
+    };
+
+    const { queryByTitle, rerender } = render(
+      <TriggerTable 
+        {...defaultProps} 
+        triggers={[triggerSemHistorico]} 
+      />
+    );
+    expect(queryByTitle('Ver Fluxo de Automação Visual')).not.toBeInTheDocument();
+
+    // Caso 2: template enviado (tem histórico) mas ninguém clicou no botão ainda (sem node_id)
+    const templateEnviadoSemClique = {
+      id: 9,
+      is_bulk: true,
+      status: 'sent',
+      created_at: new Date().toISOString(),
+      funnel_id: null,
+      button_actions: { 'Sim': { funnel_id: 99 } },
+      execution_history: [
+        { node_id: null, status: 'completed', details: 'Template enviado' },
+        { node_id: undefined, status: 'completed', details: 'Contato notificado' }
+      ]
+    };
+
+    rerender(
+      <TriggerTable 
+        {...defaultProps} 
+        triggers={[templateEnviadoSemClique]} 
+      />
+    );
+    expect(queryByTitle('Ver Fluxo de Automação Visual')).not.toBeInTheDocument();
+  });
+
+  it('deve renderizar o botão "Ver Fluxo Visual" para template com button_actions e funnel_id nulo', () => {
+    const triggerWithButtonActions = {
+      id: 7,
+      is_bulk: true,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      funnel_id: null,
+      button_actions: { 'Btn': { 'funnel_id': 321 } },
+      execution_history: [{ node_id: 'node-1', status: 'completed' }]  // pelo menos 1 interação
+    };
+    
+    const { getByTitle } = render(
+      <TriggerTable 
+        {...defaultProps} 
+        triggers={[triggerWithButtonActions]} 
+      />
+    );
+    
+    const visualFlowButton = getByTitle('Ver Fluxo de Automação Visual');
+    expect(visualFlowButton).toBeInTheDocument();
+  });
+
+  it('deve renderizar a lista de botões e suas ações vinculadas', () => {
+    const triggerWithButtons = {
+      id: 10,
+      is_bulk: true,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      button_actions: {
+        'Quero Desconto': { type: 'interaction', funnel_id: 11, funnel_name: 'Funil Cupom 10%' },
+        'Sair': { type: 'block', funnel_id: 22, funnel_name: 'Funil Descadastrar' },
+        'Sem Funil': { type: 'interaction', funnel_id: null }
+      }
+    };
+
+    render(
+      <TriggerTable 
+        {...defaultProps} 
+        triggers={[triggerWithButtons]} 
+      />
+    );
+
+    // Deve exibir o título da seção
+    expect(screen.getByText(/Botões e Ações:/i)).toBeInTheDocument();
+
+    // Deve exibir os botões com seus respectivos textos e funis
+    expect(screen.getByText('Quero Desconto')).toBeInTheDocument();
+    expect(screen.getByText('🔥 Interação: Funil Cupom 10%')).toBeInTheDocument();
+
+    expect(screen.getByText('Sair')).toBeInTheDocument();
+    expect(screen.getByText('🚫 Bloqueio: Funil Descadastrar')).toBeInTheDocument();
+
+    expect(screen.getByText('Sem Funil')).toBeInTheDocument();
+    expect(screen.getByText('Sem ação vinculada')).toBeInTheDocument();
+  });
 });
+
+

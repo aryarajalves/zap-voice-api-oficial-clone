@@ -2,7 +2,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { 
     FiMessageSquare, FiMusic, FiImage, FiClock, FiGitMerge, 
-    FiZap, FiLayers, FiAlertCircle, FiCheck, FiPlay, FiUser 
+    FiZap, FiLayers, FiUser, FiCalendar 
 } from 'react-icons/fi';
 
 const getNodeConfig = (type, data) => {
@@ -13,7 +13,7 @@ const getNodeConfig = (type, data) => {
                 icon: FiMessageSquare,
                 color: 'text-blue-500',
                 bgColor: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200/50 dark:border-blue-800/30',
-                title: 'Mensagem de Texto'
+                title: 'Mensagem'
             };
         case 'audioNode':
         case 'audio':
@@ -73,6 +73,14 @@ const getNodeConfig = (type, data) => {
                 bgColor: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/30',
                 title: 'Adicionar Etiqueta'
             };
+        case 'dateNode':
+        case 'date':
+            return {
+                icon: FiCalendar,
+                color: 'text-violet-500',
+                bgColor: 'bg-violet-50 dark:bg-violet-950/30 border-violet-200/50 dark:border-violet-800/30',
+                title: 'Agendamento Data'
+            };
         default:
             return {
                 icon: FiZap,
@@ -87,42 +95,34 @@ const getStatusStyles = (status) => {
     switch (status) {
         case 'completed':
             return {
-                borderClass: 'border-green-500 dark:border-green-600 ring-2 ring-green-500/20 shadow-lg shadow-green-500/10',
-                badgeBg: 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400 border-green-200 dark:border-green-800/30',
-                badgeText: 'Concluído',
-                icon: FiCheck
+                borderClass: 'border-green-500/60 dark:border-green-600/50',
             };
         case 'processing':
         case 'started':
             return {
-                borderClass: 'border-blue-500 dark:border-blue-600 ring-2 ring-blue-500/40 shadow-lg shadow-blue-500/30 animate-pulse',
-                badgeBg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 border-blue-200 dark:border-blue-800/30 animate-pulse',
-                badgeText: 'Enviando',
-                icon: FiPlay
+                borderClass: 'border-blue-500/60 dark:border-blue-600/50',
             };
         case 'waiting':
         case 'suspended':
             return {
-                borderClass: 'border-orange-500 dark:border-orange-600 ring-2 ring-orange-500/40 shadow-lg shadow-orange-500/30 animate-pulse',
-                badgeBg: 'bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400 border-orange-200 dark:border-orange-800/30',
-                badgeText: status === 'waiting' ? 'Aguardando' : 'Suspenso',
-                icon: FiClock
+                borderClass: 'border-orange-500/60 dark:border-orange-600/50',
             };
         case 'failed':
             return {
-                borderClass: 'border-red-500 dark:border-red-600 ring-2 ring-red-500/20 shadow-lg shadow-red-500/10',
-                badgeBg: 'bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400 border-red-200 dark:border-red-800/30',
-                badgeText: 'Falhou',
-                icon: FiAlertCircle
+                borderClass: 'border-red-500/60 dark:border-red-600/50',
             };
         default:
             return {
-                borderClass: 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700',
-                badgeBg: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border-gray-200/50 dark:border-gray-700/50',
-                badgeText: 'Pendente',
-                icon: null
+                borderClass: 'border-gray-200 dark:border-gray-800',
             };
     }
+};
+
+const resolveUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    const baseUrl = (window.API_URL || '').replace(/\/api\/*$/, '') || 'http://localhost:8000';
+    return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
 const PipelineNode = ({ id, data }) => {
@@ -131,11 +131,34 @@ const PipelineNode = ({ id, data }) => {
     const status = data.status || 'pending';
     const statusStyles = getStatusStyles(status);
     const IconComponent = config.icon;
-    const StatusIcon = statusStyles.icon;
     
     // Contadores para disparos em massa
     const showCounters = data.bulkStats && typeof data.bulkStats === 'object';
     const stats = data.bulkStats || {};
+
+    // Determina o nome amigável a exibir com base no tipo se o label for genérico
+    let displayName = data.label || data.name || '';
+    if (!displayName || displayName.toLowerCase() === 'passo') {
+        if (type === 'message' || type === 'messageNode') {
+            displayName = 'Mensagem';
+        } else if (type === 'date' || type === 'dateNode') {
+            displayName = 'Agendamento Data';
+        } else if (type === 'audio' || type === 'audioNode') {
+            displayName = 'Áudio';
+        } else if (type === 'media' || type === 'mediaNode') {
+            displayName = 'Mídia / Arquivo';
+        } else if (type === 'delay' || type === 'delayNode') {
+            displayName = 'Agendamento Delay';
+        } else if (type === 'condition' || type === 'conditionNode') {
+            displayName = 'Condição';
+        } else if (type === 'randomizer' || type === 'randomizerNode') {
+            displayName = 'Divisor A/B';
+        } else if (type === 'labelNode' || type === 'chatwoot_label') {
+            displayName = 'Adicionar Etiqueta';
+        } else {
+            displayName = 'Passo';
+        }
+    }
 
     return (
         <div className={`w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-2xl border transition-all duration-300 ${statusStyles.borderClass}`}>
@@ -149,7 +172,7 @@ const PipelineNode = ({ id, data }) => {
             />
             
             {/* Header do Nó */}
-            <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
+            <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
                 <div className={`p-1.5 rounded-lg border ${config.bgColor} flex items-center justify-center shrink-0`}>
                     <IconComponent className={config.color} size={16} />
                 </div>
@@ -158,14 +181,8 @@ const PipelineNode = ({ id, data }) => {
                         {config.title}
                     </p>
                     <p className="text-xs font-black text-gray-800 dark:text-white truncate">
-                        {data.label || data.name || 'Passo'}
+                        {displayName}
                     </p>
-                </div>
-                
-                {/* Badge de Status */}
-                <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border shrink-0 flex items-center gap-1 ${statusStyles.badgeBg}`}>
-                    {StatusIcon && <StatusIcon size={8} />}
-                    {statusStyles.badgeText}
                 </div>
             </div>
 
@@ -189,6 +206,30 @@ const PipelineNode = ({ id, data }) => {
                     </p>
                 )}
 
+                {/* Exibição específica para Agendamento Data */}
+                {(type === 'dateNode' || type === 'date') && (
+                    <div className="space-y-1.5 w-full">
+                        <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1.5 bg-violet-50/50 dark:bg-violet-950/10 p-2 rounded-xl border border-violet-100/30 dark:border-violet-800/20 w-full justify-center">
+                            📅 {(() => {
+                                const mode = data.mode || 'date';
+                                if (mode === 'date') {
+                                    return `Agendado: ${data.dateValue || 'Não configurada'}`;
+                                } else if (mode === 'time') {
+                                    return `Horário: ${data.timeValue || '12:00'}`;
+                                } else {
+                                    return `${data.dateValue || 'Sem data'} às ${data.timeValue || '12:00'}`;
+                                }
+                            })()}
+                        </p>
+                        {data.enableLateBypass && (
+                            <div className="flex justify-between items-center px-2.5 py-1 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-950/20 rounded-xl border border-gray-100/50 dark:border-gray-800/30">
+                                <span>⏱️ Limite Atraso:</span>
+                                <span className="text-red-500 dark:text-red-400 font-black">{data.maxDelayValue || 3} {data.maxDelayUnit === 'minutes' ? 'Minutos' : 'Horas'}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Exibição específica para Condições */}
                 {type === 'conditionNode' && (
                     <div className="text-[10px] font-bold text-gray-400 space-y-1">
@@ -197,31 +238,104 @@ const PipelineNode = ({ id, data }) => {
                     </div>
                 )}
 
+                {/* Pré-visualização de Mídia no Passo */}
+                {(type === 'media' || type === 'mediaNode' || type === 'audio' || type === 'audioNode' || data.mediaUrl || data.media_url || data.url) && (
+                    (() => {
+                        const mediaUrl = data.mediaUrl || data.media_url || data.url;
+                        if (!mediaUrl) return null;
+                        const isImg = mediaUrl.match(/\.(jpeg|jpg|gif|png|webp)/i);
+                        const isVid = mediaUrl.match(/\.(mp4|webm|mov|avi|m4v|3gp)/i) || type === 'video' || type === 'videoNode';
+                        const isAud = mediaUrl.match(/\.(mp3|ogg|wav|aac)/i) || type === 'audio' || type === 'audioNode';
+                        
+                        return (
+                            <div className="mt-2 border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-950/20 flex flex-col">
+                                {isImg ? (
+                                    <img src={resolveUrl(mediaUrl)} alt="Mídia" className="object-cover w-full max-h-24 rounded-t-lg" />
+                                ) : isVid ? (
+                                    <div className="relative w-full max-h-24 rounded-t-lg overflow-hidden bg-black flex items-center justify-center">
+                                        <video src={resolveUrl(mediaUrl)} className="w-full h-full max-h-24 object-cover" muted playsInline />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                            <span className="text-[9px] text-white font-black uppercase tracking-wider bg-black/60 px-2 py-0.5 rounded flex items-center gap-1">
+                                                🎥 Vídeo
+                                            </span>
+                                        </div>
+                                    </div>
+                                ) : isAud ? (
+                                    <div className="p-2 text-[10px] text-purple-500 font-black uppercase tracking-wider flex items-center gap-1.5">
+                                        🎵 Áudio de Automação
+                                    </div>
+                                ) : (
+                                    <div className="p-2 text-[10px] text-blue-500 font-black uppercase tracking-wider flex items-center gap-1.5">
+                                        📁 Arquivo de Mídia
+                                    </div>
+                                )}
+                                {data.caption && (
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 italic px-2 py-1.5 border-t border-gray-100 dark:border-gray-800 leading-snug line-clamp-2">
+                                        💬 {data.caption}
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })()
+                )}
+
                 {/* Estatísticas Agregadas para Envio em Massa */}
                 {showCounters && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                        <div className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800">
-                            <span className="text-green-500 text-xs font-black">{stats.sent || 0}</span>
-                            <span>Enviados</span>
+                    <div 
+                        className="nodrag nopan mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-wider"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        <div 
+                            className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 py-1.5 rounded-l-xl transition-all group/sent" 
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('completed'); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            title="Ver contatos enviados"
+                        >
+                            <span className="text-green-500 text-sm font-black group-hover/sent:scale-110 transition-transform">{stats.sent || 0}</span>
+                            <span className="text-green-600/70 dark:text-green-500/70">Aprovados</span>
                         </div>
-                        <div className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800">
-                            <span className="text-orange-500 text-xs font-black">{stats.waiting || 0}</span>
-                            <span>Fila</span>
+                        <div 
+                            className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 py-1.5 transition-all group/queue" 
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('waiting'); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            title="Ver contatos na fila"
+                        >
+                            <span className="text-orange-500 text-sm font-black group-hover/queue:scale-110 transition-transform">{stats.waiting || 0}</span>
+                            <span className="text-orange-600/70 dark:text-orange-500/70">Fila</span>
                         </div>
-                        <div className="flex flex-col items-center flex-1">
-                            <span className="text-red-500 text-xs font-black">{stats.failed || 0}</span>
-                            <span>Falhas</span>
+                        <div 
+                            className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-1.5 transition-all group/fail" 
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('failed'); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            title="Ver contatos com falhas"
+                        >
+                            <span className="text-red-500 text-sm font-black group-hover/fail:scale-110 transition-transform">{stats.failed || 0}</span>
+                            <span className="text-red-600/70 dark:text-red-500/70">Falhas</span>
+                        </div>
+                        <div 
+                            className="flex flex-col items-center flex-1 cursor-pointer hover:bg-gray-55 dark:hover:bg-gray-800 py-1.5 rounded-r-xl transition-all group/cancel" 
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('cancelled'); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            title="Ver contatos parados"
+                        >
+                            <span className="text-gray-450 dark:text-gray-400 text-sm font-black group-hover/cancel:scale-110 transition-transform">{stats.cancelled || 0}</span>
+                            <span className="text-gray-500/75 dark:text-gray-400/75">Parados</span>
                         </div>
                     </div>
                 )}
 
-                {/* Indicador de Contato Ativo (Pulse neon) */}
+
+                {/* Indicador de Contato Ativo (Sem Blink) */}
                 {data.isActive && (
-                    <div className="mt-2 flex items-center justify-center gap-2 py-1 px-3 bg-blue-500/10 border border-blue-500/20 rounded-xl animate-pulse text-blue-500 text-[10px] font-black uppercase tracking-wider">
-                        <FiUser size={12} className="animate-bounce" />
+                    <div className="mt-2 flex items-center justify-center gap-2 py-1 px-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-500 text-[10px] font-black uppercase tracking-wider">
+                        <FiUser size={12} />
                         <span>Contato ativo aqui</span>
-                        <span className="flex h-2 w-2 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative flex h-2 w-2">
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                         </span>
                     </div>
@@ -229,12 +343,33 @@ const PipelineNode = ({ id, data }) => {
             </div>
 
             {/* Source handle para conexões de saída */}
-            <Handle 
-                type="source" 
-                position={Position.Bottom} 
-                className="w-3 h-3 bg-blue-500 border-2 border-white dark:border-gray-900" 
-                style={{ bottom: -6 }}
-            />
+            {((type === 'dateNode' || type === 'date') && data.enableLateBypass) ? (
+                <>
+                    <Handle 
+                        type="source" 
+                        position={Position.Bottom} 
+                        id="default"
+                        className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" 
+                        style={{ bottom: -6, left: '30%' }}
+                        title="No Horário"
+                    />
+                    <Handle 
+                        type="source" 
+                        position={Position.Bottom} 
+                        id="late"
+                        className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" 
+                        style={{ bottom: -6, left: '70%' }}
+                        title="Atrasado"
+                    />
+                </>
+            ) : (
+                <Handle 
+                    type="source" 
+                    position={Position.Bottom} 
+                    className="w-3 h-3 bg-blue-500 border-2 border-white dark:border-gray-900" 
+                    style={{ bottom: -6 }}
+                />
+            )}
         </div>
     );
 };

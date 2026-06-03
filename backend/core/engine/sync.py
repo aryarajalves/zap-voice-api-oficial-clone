@@ -14,13 +14,26 @@ async def wait_for_delivery_sync(db, message_id, trigger, current_node_id, timeo
 
     start_time = time.time()
     clean_id = str(message_id).replace("wamid.", "")
+    
+    # Busca inicial para obter a chave primária (ID do banco de dados)
+    status_record = db.query(models.MessageStatus).filter(
+        (models.MessageStatus.message_id == message_id) |
+        (models.MessageStatus.message_id == clean_id)
+    ).first()
+    
+    record_db_id = status_record.id if status_record else None
     last_log_time = 0
     
     while time.time() - start_time < timeout:
-        status_record = db.query(models.MessageStatus).filter(
-            (models.MessageStatus.message_id == message_id) |
-            (models.MessageStatus.message_id == clean_id)
-        ).first()
+        if record_db_id:
+            status_record = db.query(models.MessageStatus).get(record_db_id)
+        else:
+            status_record = db.query(models.MessageStatus).filter(
+                (models.MessageStatus.message_id == message_id) |
+                (models.MessageStatus.message_id == clean_id)
+            ).first()
+            if status_record:
+                record_db_id = status_record.id
         
         if status_record:
             if status_record.status in ['delivered', 'read', 'interaction']:

@@ -80,6 +80,8 @@ class ScheduledTrigger(Base):
 
     client = relationship("Client", back_populates="triggers")
     funnel = relationship("Funnel", back_populates="triggers", foreign_keys=[funnel_id])
+    interaction_funnel = relationship("Funnel", foreign_keys=[interaction_funnel_id])
+    block_funnel = relationship("Funnel", foreign_keys=[block_funnel_id])
     messages = relationship("MessageStatus", back_populates="trigger", cascade="all, delete-orphan")
     children = relationship("ScheduledTrigger", backref=backref("parent", remote_side=[id]), cascade="all, delete-orphan")
 
@@ -177,6 +179,8 @@ class WebhookEventMapping(Base):
     manychat_name = Column(String, nullable=True)
     manychat_phone = Column(String, nullable=True)
     manychat_tag = Column(String, nullable=True)
+    manychat_start_date = Column(DateTime(timezone=True), nullable=True)
+    manychat_tag_alternative = Column(String, nullable=True)
     
     manychat_tag_automation = Column(Boolean, default=False)
     manychat_tag_include_date = Column(Boolean, default=True)
@@ -227,6 +231,7 @@ class WhatsAppTemplateCache(Base):
     components = Column(JSON, nullable=True)
     tags = Column(Text, nullable=True)
     is_archived = Column(Boolean, default=False, nullable=False)
+    is_pinned = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -307,6 +312,7 @@ class RecurringTrigger(Base):
     is_active = Column(Boolean, default=True)
     last_run_at = Column(DateTime(timezone=True), nullable=True)
     next_run_at = Column(DateTime(timezone=True), index=True, nullable=True)
+    button_actions = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())

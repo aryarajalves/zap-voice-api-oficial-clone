@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { FiCheck, FiClock, FiAlertCircle, FiZap, FiTrash2, FiTag, FiPlus, FiX, FiArchive } from 'react-icons/fi';
+import { FiCheck, FiClock, FiAlertCircle, FiZap, FiTrash2, FiTag, FiPlus, FiX, FiArchive, FiBookmark } from 'react-icons/fi';
 import ConfirmModal from '../../../ConfirmModal';
 
 const TemplateItem = ({ tpl, logic }) => {
-    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen, updateTemplateTags, templates, deleteTemplateTagGlobal, archiveTemplate, unarchiveTemplate } = logic;
+    const { handleEdit, setTemplateToDelete, setIsDeleteModalOpen, updateTemplateTags, templates, deleteTemplateTagGlobal, archiveTemplate, unarchiveTemplate, handlePinTemplate } = logic;
     const [showTagPopover, setShowTagPopover] = useState(false);
     const [newTagInput, setNewTagInput] = useState('');
     const [tempTags, setTempTags] = useState(tpl.tags || []);
@@ -47,13 +47,36 @@ const TemplateItem = ({ tpl, logic }) => {
     };
 
     return (
-        <div className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 hover:border-blue-200 dark:hover:border-blue-800 transition-all group">
+        <div className={`p-4 rounded-xl border-2 transition-all group relative ${
+            tpl.is_pinned 
+                ? 'border-amber-500 bg-amber-500/[0.04] dark:border-amber-500/30 shadow-md shadow-amber-500/5 dark:shadow-amber-500/10' 
+                : 'border-gray-150 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 hover:border-blue-200 dark:hover:border-blue-800'
+        }`}>
             <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate" title={tpl.name}>
-                        {tpl.name}
+                    <p className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate flex items-center gap-1.5" title={tpl.name}>
+                        {tpl.is_pinned && <span className="text-amber-500 animate-pulse text-xs shrink-0">📌</span>}
+                        <span className="truncate">{tpl.name}</span>
                     </p>
                     <p className="text-[10px] text-gray-500 font-medium">{tpl.category} • {tpl.language}</p>
+                    {tpl.created_at && (() => {
+                        try {
+                            const date = new Date(tpl.created_at);
+                            // Formatar para fuso horário de Brasília
+                            const formatted = date.toLocaleString('pt-BR', {
+                                timeZone: 'America/Sao_Paulo',
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                            });
+                            return <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">Criado em: {formatted}</p>;
+                        } catch (err) {
+                            return null;
+                        }
+                    })()}
                 </div>
                 <div className="flex flex-col items-end gap-1">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${['APPROVED', 'ACTIVE'].includes(tpl.status) ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
@@ -102,11 +125,29 @@ const TemplateItem = ({ tpl, logic }) => {
                             handleOpenPopover();
                         }
                     }}
-                    className="p-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-all flex items-center justify-center"
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded bg-violet-50 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-800 transition-all flex items-center justify-center border border-violet-100 dark:border-violet-800/30"
                     title="Gerenciar Etiquetas"
                 >
                     <FiTag size={10} />
                 </button>
+
+                {/* Botão de Fixar / Desafixar */}
+                {!tpl.is_archived && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handlePinTemplate(tpl.id, !tpl.is_pinned);
+                        }}
+                        className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all flex items-center justify-center border ${
+                            tpl.is_pinned 
+                                ? 'bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-800 border-amber-100 dark:border-amber-800/30' 
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 border-gray-250 dark:border-gray-650'
+                        }`}
+                        title={tpl.is_pinned ? "Desafixar do Topo" : "Fixar no Topo"}
+                    >
+                        <FiBookmark size={10} fill={tpl.is_pinned ? "currentColor" : "none"} />
+                    </button>
+                )}
 
                 {showTagPopover && (
                     <div 

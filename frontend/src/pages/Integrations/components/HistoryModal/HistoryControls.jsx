@@ -50,6 +50,15 @@ const HistoryControls = ({
 
       <div className="flex items-center gap-6">
         <button
+          onClick={() => fetchHistory(integrationId, webhookHistoryStatusFilter, webhookHistorySearch)}
+          className="flex items-center gap-2 text-[11px] font-bold bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl border border-gray-200 dark:border-white/5 transition-all active:scale-95 group"
+          title="Atualizar registros do histórico"
+        >
+          <FiRefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
+          ATUALIZAR
+        </button>
+
+        <button
           onClick={() => handleSyncAllHistory(integrationId)}
           disabled={isSyncingAll}
           className="flex items-center gap-2 text-[11px] font-bold bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white px-4 py-2 rounded-xl border border-blue-500/20 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-blue-500/10 group"

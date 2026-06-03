@@ -58,6 +58,19 @@ async def handle_audio_node(db, trigger, node, chatwoot, conversation_id, contac
         res = await chatwoot.send_attachment(conversation_id, file_url, "audio")
         if res and isinstance(res, dict) and res.get("id"):
             msg_id = res.get("source_id") or str(res.get("id"))
+            
+            # Criar o MessageStatus imediatamente para que os webhooks de status possam localizá-lo e atualizá-lo
+            msg_id_clean = str(msg_id).replace("wamid.", "")
+            new_ms = models.MessageStatus(
+                trigger_id=trigger.id, message_id=msg_id_clean, phone_number=contact_phone,
+                status='sent', message_type='FREE_MESSAGE', content=f"[Áudio: {file_url}]",
+                publish_external_event=data.get("publishExternalEvent", False)
+            )
+            if data.get("sendPrivateNote") and data.get("privateNoteContent"):
+                new_ms.pending_private_note = apply_vars_func(data.get("privateNoteContent"))
+            db.add(new_ms)
+            db.commit()
+
             if not trigger.is_bulk:
                 log_node_execution(db, trigger, current_node_id, "processing", "Aguardando confirmação do WhatsApp...")
                 state, detail = await wait_for_delivery_sync(db, msg_id, trigger, current_node_id)
@@ -76,11 +89,21 @@ async def handle_audio_node(db, trigger, node, chatwoot, conversation_id, contac
             return "abort"
     else:
         res = await chatwoot.send_audio_official(contact_phone, file_url)
-        if not getattr(trigger, 'is_interaction', False):
-            await asyncio.sleep(10)
         if res and not res.get("error"):
             msg_id = res.get("messages", [{}])[0].get("id", "direct_meta")
             
+            # Criar o MessageStatus imediatamente para que os webhooks de status possam localizá-lo e atualizá-lo
+            msg_id_clean = str(msg_id).replace("wamid.", "")
+            new_ms = models.MessageStatus(
+                trigger_id=trigger.id, message_id=msg_id_clean, phone_number=contact_phone,
+                status='sent', message_type='FREE_MESSAGE', content=f"[Áudio: {file_url}]",
+                publish_external_event=data.get("publishExternalEvent", False)
+            )
+            if data.get("sendPrivateNote") and data.get("privateNoteContent"):
+                new_ms.pending_private_note = apply_vars_func(data.get("privateNoteContent"))
+            db.add(new_ms)
+            db.commit()
+
             # --- NOVO: Sincronizar o envio com o Chatwoot ---
             try:
                 logger.info(f"🔄 [SYNC_CHATWOOT] Sincronizando áudio enviado via Meta Direto para {contact_phone}")
@@ -102,23 +125,14 @@ async def handle_audio_node(db, trigger, node, chatwoot, conversation_id, contac
                     logger.info(f"✅ [SYNC_CHATWOOT] Cópia do áudio postada no Chatwoot (Conversa {conversation_id})")
             except Exception as e_sync:
                 logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar áudio no Chatwoot: {e_sync}")
+            
+            if not getattr(trigger, 'is_interaction', False):
+                await asyncio.sleep(10)
         else:
             trigger.status = 'failed'
             trigger.failure_reason = f"Meta API (Audio): {res.get('error') if res else 'Unknown'}"
             db.commit()
             return "abort"
-    
-    if msg_id:
-        msg_id_clean = str(msg_id).replace("wamid.", "")
-        new_ms = models.MessageStatus(
-            trigger_id=trigger.id, message_id=msg_id_clean, phone_number=contact_phone,
-            status='sent', message_type='FREE_MESSAGE', content=f"[Áudio: {file_url}]",
-            publish_external_event=data.get("publishExternalEvent", False)
-        )
-        if data.get("sendPrivateNote") and data.get("privateNoteContent"):
-            new_ms.pending_private_note = apply_vars_func(data.get("privateNoteContent"))
-        db.add(new_ms)
-        db.commit()
 
     await publish_node_external_event(db, trigger, data, f"[Áudio: {file_url}]", contact_phone, node_id=current_node_id, event_type="funnel_audio_sent")
     log_node_execution(db, trigger, current_node_id, "completed", "Áudio enviado e sincronizado.")

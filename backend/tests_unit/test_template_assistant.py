@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi import HTTPException
 import os
 import models
-from routers.whatsapp import assistant_chat
+from routers.whatsapp_profile import assistant_chat
 
 class MockUser:
     def __init__(self, client_id=1):

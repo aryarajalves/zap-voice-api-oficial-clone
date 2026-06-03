@@ -369,7 +369,42 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
         db_item = SessionLocal()
         try:
             conv_id = (c.get('id') or c.get('conversation_id') or 0) if isinstance(c, dict) else 0
-            await execute_funnel(funnel_id, conv_id, trigger_id, phone, db_item)
+            
+            t_parent = db_item.query(models.ScheduledTrigger).get(trigger_id)
+            child_trigger = models.ScheduledTrigger(
+                client_id=c_id,
+                funnel_id=funnel_id,
+                conversation_id=conv_id,
+                contact_phone=phone,
+                contact_name=name,
+                status='processing',
+                scheduled_time=datetime.now(timezone.utc),
+                is_bulk=False,
+                parent_id=trigger_id,
+                product_name="HIDDEN_CHILD",
+                chatwoot_label=t_parent.chatwoot_label if t_parent else None,
+                private_message=t_parent.private_message if t_parent else None,
+                private_message_delay=t_parent.private_message_delay if t_parent else 5,
+                private_message_concurrency=t_parent.private_message_concurrency if t_parent else 1
+            )
+            db_item.add(child_trigger)
+            db_item.commit()
+            db_item.refresh(child_trigger)
+            
+            # Criar registro inicial de status de mensagem para aparecer no "Ver Enviados" imediatamente
+            init_status = models.MessageStatus(
+                trigger_id=child_trigger.id,
+                message_id=f"funnel_init_{child_trigger.id}",
+                phone_number=phone,
+                contact_name=name or phone,
+                status='sent',
+                message_type='FREE_MESSAGE',
+                content=f"[Funil Iniciado] {t_parent.funnel.name if t_parent and t_parent.funnel else 'Funil'}"
+            )
+            db_item.add(init_status)
+            db_item.commit()
+            
+            await execute_funnel(funnel_id, conv_id, child_trigger.id, phone, db_item)
             return {"status": "sent", "phone": phone}
         except Exception as e:
             err_msg = str(e)
@@ -407,12 +442,31 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
         db_persist = SessionLocal()
         try:
             for r in results:
-                if not r: continue
                 if r["status"] == "sent":
                     sent_count += 1
+                    db_persist.execute(text("UPDATE scheduled_triggers SET total_sent = COALESCE(total_sent, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
                 elif r["status"] == "blocked":
-                    # Registrar bloqueio se necessário
-                    db_persist.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+                    failed_count += 1
+                    db_persist.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1, total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+                    fail_msg = models.MessageStatus(
+                        trigger_id=trigger_id,
+                        phone_number=r["phone"],
+                        status='failed',
+                        failure_reason=r.get("reason", "Contato na lista de bloqueio."),
+                        content=f"Falha no Funil: {funnel_id}"
+                    )
+                    db_persist.add(fail_msg)
+                elif r["status"] == "skipped":
+                    failed_count += 1
+                    db_persist.execute(text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+                    fail_msg = models.MessageStatus(
+                        trigger_id=trigger_id,
+                        phone_number=r["phone"],
+                        status='failed',
+                        failure_reason=r.get("reason", "Duplicidade de contato ou já enviado."),
+                        content=f"Falha no Funil: {funnel_id}"
+                    )
+                    db_persist.add(fail_msg)
                 elif r["status"] == "failed":
                     failed_count += 1
                     db_persist.execute(text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
@@ -467,12 +521,15 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
     try:
         t = db_final.query(models.ScheduledTrigger).get(trigger_id)
         if t and t.status != 'cancelled':
-            t.status = 'completed' if failed_count == 0 else 'processed'
-            t.total_sent = sent_count
-            t.total_failed = failed_count
             from services.engine import log_node_execution
             log_node_execution(db_final, t, node_id='DELIVERY', status='completed')
-            db_final.commit()
+            # Refresh / re-get the trigger to avoid losing changes due to db.expire in log_node_execution
+            t = db_final.query(models.ScheduledTrigger).get(trigger_id)
+            if t:
+                t.status = 'completed' if failed_count == 0 else 'processed'
+                t.total_sent = sent_count
+                t.total_failed = failed_count
+                db_final.commit()
             await rabbitmq.publish_event("bulk_progress", {
                 "trigger_id": trigger_id,
                 "status": t.status,

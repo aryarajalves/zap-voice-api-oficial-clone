@@ -1,7 +1,7 @@
 import React from 'react';
-import { FiSearch, FiTrash2 } from 'react-icons/fi';
+import { FiSearch, FiTrash2, FiDownload } from 'react-icons/fi';
 
-export default function Filters({ searchTerm, setSearchTerm, selectedCount, onBulkDelete }) {
+export default function Filters({ searchTerm, setSearchTerm, selectedCount, onBulkDelete, onExport }) {
     return (
         <div className="p-6 border-b border-white/5 bg-white/5 dark:bg-gray-900/30 flex justify-between items-center flex-wrap gap-4">
             <h3 className="font-bold text-gray-700 dark:text-white">Filtros e Ações</h3>
@@ -15,6 +15,14 @@ export default function Filters({ searchTerm, setSearchTerm, selectedCount, onBu
                         <FiTrash2 /> Excluir {selectedCount} selecionados
                     </button>
                 )}
+
+                <button
+                    onClick={onExport}
+                    className="px-4 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-sm font-bold hover:bg-emerald-500/20 transition-all flex items-center gap-2"
+                    title="Exportar contatos para CSV"
+                >
+                    <FiDownload /> Exportar Lista
+                </button>
 
                 <div className="relative">
                     <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />

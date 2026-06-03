@@ -16,9 +16,34 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     const [monitoringTrigger, setMonitoringTrigger] = useState(null);
     const [triggerType, setTriggerType] = useState(initialTriggerType);
 
+    // Auto-refresh do pipeline modal enquanto o trigger ainda está em execução
+    useEffect(() => {
+        const ACTIVE_STATUSES = ['processing', 'queued'];
+        if (!monitoringTrigger || !ACTIVE_STATUSES.includes(monitoringTrigger.status)) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetchWithAuth(`${API_URL}/triggers/${monitoringTrigger.id}`, {}, activeClient?.id);
+                if (res.ok) {
+                    const updated = await res.json();
+                    setMonitoringTrigger(updated);
+                    // Para o polling quando o trigger concluiu
+                    if (!ACTIVE_STATUSES.includes(updated.status)) {
+                        clearInterval(interval);
+                    }
+                }
+            } catch (_) {
+                // Silencioso — não interrompe a UI por falha de refresh
+            }
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [monitoringTrigger?.id, monitoringTrigger?.status, activeClient?.id]);
+
     useEffect(() => {
         setTriggerType(initialTriggerType);
     }, [initialTriggerType]);
+
     
     // Hooks modularizados
     const {
@@ -271,8 +296,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                     const start = (contactsPage - 1) * contactsPerPage;
                     const paginated = raw.slice(start, start + contactsPerPage);
                     const formatted = paginated.map(c => {
-                        const phone = typeof c === 'string' ? c : (c.phone || c.whatsapp || c.telefone || c.contact_phone || c.number || '');
-                        const name = typeof c === 'object' ? (c.nome || c.name || c.full_name || c.contact_name || c['{{1}}'] || c['1'] || '') : '';
+                        const phone = typeof c === 'string' ? c : (c.phone || c.whatsapp || c.telefone || c.contact_phone || c.phone_number || c.number || c.meta?.sender?.phone_number || '');
+                        const name = typeof c === 'object' ? (c.nome || c.name || c.full_name || c.contact_name || c.meta?.sender?.name || c['{{1}}'] || c['1'] || '') : '';
                         return {
                             phone_number: phone,
                             contact_name: name,

@@ -85,7 +85,8 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
                 nodeTypes={nodeTypes}
                 nodesDraggable={false}
                 nodesConnectable={false}
-                elementsSelectable={false}
+                elementsSelectable={true}
+                selectNodesOnDrag={false}
                 panOnDrag={true}
                 zoomOnScroll={true}
                 preventScrolling={true}
@@ -97,12 +98,14 @@ const FlowCameraOrchestrator = ({ trigger, nodes, edges }) => {
                 fitViewOptions={{ padding: 0.15, maxZoom: 0.85 }}
             >
                 <Background color="#94a3b8" opacity={0.15} gap={16} size={1.5} />
+                {/* Suprime o highlight azul de seleção do ReactFlow */}
+                <style>{`.react-flow__node.selected > div { box-shadow: none !important; outline: none !important; }`}</style>
             </ReactFlow>
         </div>
     );
 };
 
-const PipelineFlowViewer = ({ trigger }) => {
+const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
     const rawHistory = useMemo(() => {
         return Array.isArray(trigger.execution_history) ? trigger.execution_history : [];
     }, [trigger.execution_history]);
@@ -120,33 +123,135 @@ const PipelineFlowViewer = ({ trigger }) => {
         return Array.isArray(funnelSteps.edges) ? funnelSteps.edges : [];
     }, [funnelSteps.edges]);
 
-    // 2. Mapear logs de execução e calcular contadores
+    // 2. Calcular a ordem topológica real dos nós usando BFS para detectar "já passou por aqui"
+    const nodeOrderMap = useMemo(() => {
+        const order = {};
+        const adj = {};
+        const inDegree = {};
+        
+        // Inicializar
+        rawNodes.forEach(node => {
+            adj[node.id] = [];
+            inDegree[node.id] = 0;
+        });
+        
+        // Construir adjacência e in-degree
+        rawEdges.forEach(edge => {
+            if (adj[edge.source] && adj[edge.target] !== undefined) {
+                adj[edge.source].push(edge.target);
+                inDegree[edge.target] = (inDegree[edge.target] || 0) + 1;
+            }
+        });
+        
+        // Encontrar nós iniciais
+        let startNodes = rawNodes.filter(node => 
+            node.type === 'start' || 
+            node.data?.isStart === true
+        ).map(n => n.id);
+        
+        if (startNodes.length === 0) {
+            // Fallback para nós com in-degree 0
+            startNodes = rawNodes.filter(node => (inDegree[node.id] || 0) === 0).map(n => n.id);
+        }
+        
+        if (startNodes.length === 0 && rawNodes.length > 0) {
+            // Fallback absoluto
+            startNodes = [rawNodes[0].id];
+        }
+        
+        // BFS para computar níveis reais
+        const queue = startNodes.map(id => ({ id, level: 0 }));
+        const visited = new Set();
+        
+        while (queue.length > 0) {
+            const { id, level } = queue.shift();
+            
+            // Registra o maior nível alcançado para este nó
+            order[id] = Math.max(order[id] || 0, level);
+            
+            // Para evitar loops infinitos em grafos cíclicos
+            const visitKey = `${id}-${level}`;
+            if (visited.has(visitKey)) continue;
+            visited.add(visitKey);
+            
+            if (adj[id]) {
+                adj[id].forEach(nextId => {
+                    // Evita propagação excessiva em ciclos limitando a profundidade máxima ao número de nós
+                    if (level < rawNodes.length) {
+                        queue.push({ id: nextId, level: level + 1 });
+                    }
+                });
+            }
+        }
+        
+        // Para qualquer nó remanescente que não foi alcançado, define nível baseado no index arbitrário como fallback
+        rawNodes.forEach((node, idx) => {
+            if (order[node.id] === undefined) {
+                order[node.id] = idx + 1000;
+            }
+        });
+        
+        return order;
+    }, [rawNodes, rawEdges]);
+
+    // 3. Mapear logs de execução e calcular contadores com lógica inteligente
     const { nodeStatuses, nodeStats } = useMemo(() => {
         const statuses = {};
         const stats = {};
-        
+
+        // Agrupar todos os logs por contato (o backend sempre enriquece com contact_phone,
+        // tanto para bulk quanto para triggers individuais de funil)
+        const logsByContact = {};
+
         rawHistory.forEach(log => {
             const nodeId = log.node_id;
             if (!nodeId) return;
 
-            // Registrar o último status de execução do nó
+            // Registrar o último status de execução do nó (para colorir bordas)
             statuses[nodeId] = log.status;
 
-            // Calcular contadores agregados para disparos em massa
             if (!stats[nodeId]) {
-                stats[nodeId] = { sent: 0, waiting: 0, failed: 0 };
+                stats[nodeId] = { sent: 0, waiting: 0, failed: 0, cancelled: 0 };
             }
-            if (log.status === 'completed') {
-                stats[nodeId].sent++;
-            } else if (log.status === 'waiting' || log.status === 'processing') {
-                stats[nodeId].waiting++;
-            } else if (log.status === 'failed') {
-                stats[nodeId].failed++;
-            }
+
+            // Identificar o contato pelo telefone (sempre disponível após enriquecimento do backend)
+            const phone = log.extra?.contact_phone || log.extra?.contact_name || '__single__';
+            if (!logsByContact[phone]) logsByContact[phone] = [];
+            logsByContact[phone].push({
+                node_id: nodeId,
+                status: log.status,
+                nodeOrder: nodeOrderMap[nodeId] ?? 999
+            });
+        });
+
+        // Classificação inteligente: para cada contato, detectar se já avançou além de um nó waiting
+        Object.values(logsByContact).forEach(contactLogs => {
+            // Ignorar nós virtuais (como 'DISCOVERY', 'INITIAL_SECURITY', 'FINISH') que têm order 999
+            const realNodeLogs = contactLogs.filter(l => l.nodeOrder < 999);
+            const maxNodeOrder = realNodeLogs.length > 0 ? Math.max(...realNodeLogs.map(l => l.nodeOrder)) : -1;
+
+            contactLogs.forEach(log => {
+                const nodeId = log.node_id;
+                if (!stats[nodeId]) stats[nodeId] = { sent: 0, waiting: 0, failed: 0, cancelled: 0 };
+
+                const isWaiting = log.status === 'waiting' || log.status === 'processing';
+                // Se o contato tem um log em nó posterior = já passou por este nó
+                const alreadyMoved = isWaiting && log.nodeOrder < maxNodeOrder;
+
+                if (log.status === 'completed' || alreadyMoved) {
+                    stats[nodeId].sent++;
+                } else if (isWaiting) {
+                    stats[nodeId].waiting++;
+                } else if (log.status === 'failed') {
+                    stats[nodeId].failed++;
+                } else if (log.status === 'cancelled') {
+                    stats[nodeId].cancelled++;
+                }
+            });
         });
 
         return { nodeStatuses: statuses, nodeStats: stats };
-    }, [rawHistory]);
+    }, [rawHistory, nodeOrderMap]);
 
     // 3. Processar os nós para exibição no React Flow
     const flowNodes = useMemo(() => {
@@ -163,43 +268,43 @@ const PipelineFlowViewer = ({ trigger }) => {
                     type: node.type,  // Copia o tipo original do nó para renderização customizada
                     status,
                     isActive,
-                    bulkStats: trigger.is_bulk ? nodeStats[nodeId] : null
+                    bulkStats: nodeStats[nodeId] || null,
+                    onStatClick: (clickedStatus) => {
+                        if (onNodeStatClick) {
+                            onNodeStatClick(nodeId, clickedStatus);
+                        }
+                    }
                 }
             };
         });
-    }, [rawNodes, nodeStatuses, nodeStats, trigger.current_node_id, trigger.is_bulk]);
+    }, [rawNodes, nodeStatuses, nodeStats, trigger.current_node_id, trigger.is_bulk, onNodeStatClick]);
 
-    // 4. Processar e colorir as conexões (edges) com efeitos neon
+    // 4. Processar e colorir as conexões (edges) de forma estática e discreta
     const flowEdges = useMemo(() => {
         return rawEdges.map(edge => {
             const sourceStatus = nodeStatuses[edge.source];
             const targetStatus = nodeStatuses[edge.target];
-            const isTargetActive = edge.target === trigger.current_node_id;
 
             let edgeStyle = {};
-            let isAnimated = false;
 
             if (sourceStatus === 'completed' && targetStatus === 'completed') {
-                // Caminho concluído: Linha verde neon espessa e animada
-                edgeStyle = { stroke: '#10b981', strokeWidth: 3.5, filter: 'drop-shadow(0 0 2px rgba(16,185,129,0.3))' };
-                isAnimated = true;
-            } else if (isTargetActive || (sourceStatus === 'completed' && (targetStatus === 'waiting' || targetStatus === 'processing'))) {
-                // Caminho ativo/em andamento: Linha azul neon pulsante e animada
-                edgeStyle = { stroke: '#3b82f6', strokeWidth: 3.5, filter: 'drop-shadow(0 0 3px rgba(59,130,246,0.4))' };
-                isAnimated = true;
+                // Caminho concluído: linha verde sutil e estática
+                edgeStyle = { stroke: '#10b981', strokeWidth: 2, opacity: 0.7 };
+            } else if (sourceStatus === 'completed') {
+                // Saindo de um nó concluído: linha cinza um pouco mais visível
+                edgeStyle = { stroke: '#64748b', strokeWidth: 1.5, opacity: 0.5 };
             } else {
-                // Caminho pendente/não percorrido: Linha cinza sutil sem animação
-                edgeStyle = { stroke: '#94a3b8', strokeWidth: 1.5, opacity: 0.4 };
-                isAnimated = false;
+                // Caminho pendente: linha cinza discreta
+                edgeStyle = { stroke: '#94a3b8', strokeWidth: 1.5, opacity: 0.35 };
             }
 
             return {
                 ...edge,
-                animated: isAnimated,
+                animated: false, // Sem animação em nenhuma aresta
                 style: edgeStyle
             };
         });
-    }, [rawEdges, nodeStatuses, trigger.current_node_id]);
+    }, [rawEdges, nodeStatuses]);
 
     // 5. Caso não seja um funil válido, exibe tela de aviso amigável
     if (rawNodes.length === 0) {

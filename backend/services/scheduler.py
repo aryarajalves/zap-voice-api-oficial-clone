@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 from rabbitmq_client import rabbitmq
 from core.logger import setup_logger
 from core.recurrent_logic import calculate_next_run
+from chatwoot_client import ChatwootClient
 
 logger = setup_logger(__name__)
 
@@ -171,22 +172,28 @@ async def process_recurring_triggers(db, now_utc):
         is_aborted = delay_minutes > 30.0
         
         # Determine contacts
-        final_contacts = rt.contacts_list or []
-        if rt.tag:
-            logger.info(f"🔍 Re-filtrando contatos pela tag: {rt.tag}")
-            leads = db.query(models.WebhookLead).filter(
-                models.WebhookLead.client_id == rt.client_id,
-                models.WebhookLead.tags.ilike(f"%{rt.tag}%")
-            ).all()
+        exclusions = set(rt.exclusion_list or [])
+        final_contacts = []
+        if rt.contacts_list:
+            final_contacts = [c for c in rt.contacts_list if c.get('phone') not in exclusions]
             
-            tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
-            if rt.contacts_list:
-                phones_in_list = {c.get('phone') for c in final_contacts}
-                for tc in tag_contacts:
-                    if tc['phone'] not in phones_in_list:
-                        final_contacts.append(tc)
-            else:
-                final_contacts = tag_contacts
+        if rt.tag:
+            logger.info(f"🔍 Filtrando contatos da etiqueta no banco local pela tag: {rt.tag}")
+            tag_contacts = []
+            try:
+                leads = db.query(models.WebhookLead).filter(
+                    models.WebhookLead.client_id == rt.client_id,
+                    models.WebhookLead.tags.ilike(f"%{rt.tag}%")
+                ).all()
+                tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
+                logger.info(f"📦 Banco local retornou {len(tag_contacts)} contatos com a tag '{rt.tag}'")
+            except Exception as e:
+                logger.error(f"❌ Erro ao buscar tag '{rt.tag}' no banco local: {e}")
+            
+            phones_in_list = {c.get('phone') for c in final_contacts}
+            for tc in tag_contacts:
+                if tc['phone'] not in phones_in_list and tc['phone'] not in exclusions:
+                    final_contacts.append(tc)
 
         if is_aborted:
             failure_reason = f"Disparo abortado: Limite de atraso (30 minutos) excedido. O disparo deveria ter ocorrido às {scheduled_time_utc.strftime('%H:%M:%S')} UTC, mas o scheduler executou às {now_utc.strftime('%H:%M:%S')} UTC ({int(delay_minutes)} minutos de atraso)."
@@ -210,6 +217,7 @@ async def process_recurring_triggers(db, now_utc):
                 is_bulk=True,
                 is_recurring=True,
                 recurring_trigger_id=rt.id,
+                button_actions=rt.button_actions,
                 scheduled_time=scheduled_time_utc,
                 failure_reason=failure_reason
             )
@@ -236,6 +244,7 @@ async def process_recurring_triggers(db, now_utc):
                 is_bulk=True,
                 is_recurring=True,
                 recurring_trigger_id=rt.id,
+                button_actions=rt.button_actions,
                 scheduled_time=now_utc
             )
             db.add(new_st)

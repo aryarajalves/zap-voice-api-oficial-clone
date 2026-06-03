@@ -4,10 +4,10 @@ from main import app
 
 def test_version_consistency():
     """
-    Test case to ensure that the version in main.py is consistent with 3.8.7.
+    Test case to ensure that the version in main.py is consistent with 3.9.0.
     """
     # Test FastAPI app version
-    assert app.version == "3.8.7"
+    assert app.version == "3.9.0"
     
     # Test Root response version
     # Since we can't easily call the async root function here without a client, 
@@ -20,7 +20,7 @@ def test_version_consistency():
     if os.path.exists(frontend_pkg_path):
         with open(frontend_pkg_path, "r") as f:
             pkg_data = json.load(f)
-            assert pkg_data["version"] == "3.8.7"
+            assert pkg_data["version"] == "3.9.0"
     else:
         # If running in a context where frontend is not available, just pass
         pass

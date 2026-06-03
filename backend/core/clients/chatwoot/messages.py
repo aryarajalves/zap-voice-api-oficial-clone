@@ -58,7 +58,7 @@ class ChatwootMessagesMixin:
         upload_headers = self.headers.copy()
         upload_headers.pop("Content-Type", None)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             try:
                 mime_type, _ = mimetypes.guess_type(file_path)
                 if not mime_type:
@@ -153,7 +153,7 @@ class ChatwootMessagesMixin:
         file_path = None
         try:
             self.log_debug(f"DEBUG: File not found locally. Attempting to download from URL: {url}")
-            async with httpx.AsyncClient(timeout=30.0) as dl_client:
+            async with httpx.AsyncClient(timeout=60.0) as dl_client:
                 dl_response = await dl_client.get(url)
                 if dl_response.status_code == 200:
                      filename = url.split("/")[-1]

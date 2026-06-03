@@ -37,6 +37,7 @@ const ContactList = ({
     templateVariables,
     showValidation,
     removeContact,
+    unblockContact,
     startValidation,
     isValidating,
     progress,
@@ -132,6 +133,7 @@ const ContactList = ({
                 activeVarColumns={activeVarColumns}
                 showValidation={showValidation}
                 removeContact={removeContact}
+                unblockContact={unblockContact}
                 displayLimit={displayLimit}
                 setDisplayLimit={setDisplayLimit}
                 filteredContactsCount={filteredContacts.length}

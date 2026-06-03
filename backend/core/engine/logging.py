@@ -25,6 +25,13 @@ def log_node_execution(db, trigger, node_id, status, details=None, extra_data=No
             logger.warning(f"⚠️ [LOG] Trigger não encontrado para logging: {node_id}")
             return
 
+        # Enriquecer extra_data com os dados do contato para garantir consistência no frontend
+        enriched_extra = dict(extra_data) if extra_data is not None else {}
+        if "contact_name" not in enriched_extra and trigger.contact_name:
+            enriched_extra["contact_name"] = trigger.contact_name
+        if "contact_phone" not in enriched_extra and trigger.contact_phone:
+            enriched_extra["contact_phone"] = trigger.contact_phone
+
         history = list(trigger.execution_history or [])
         entry = next((item for item in history if item['node_id'] == node_id), None)
         
@@ -35,16 +42,16 @@ def log_node_execution(db, trigger, node_id, status, details=None, extra_data=No
             entry['status'] = status
             entry['updated_at'] = datetime.now(timezone.utc).isoformat()
             if details: entry['details'] = details
-            if extra_data: 
+            if enriched_extra: 
                 if 'extra' not in entry: entry['extra'] = {}
-                entry['extra'].update(extra_data)
+                entry['extra'].update(enriched_extra)
         else:
             history.append({
                 "node_id": node_id,
                 "status": status,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "details": details,
-                "extra": extra_data or {}
+                "extra": enriched_extra
             })
             
         trigger.execution_history = list(history)

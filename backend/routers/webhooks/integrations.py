@@ -38,6 +38,36 @@ def list_webhook_integrations(
     
     logger.info(f"🔍 [WEBHOOKS] Listando integrações para client_id {x_client_id}: {len(integrations)} encontradas.")
     
+    import re
+    from services.webhooks import parse_webhook_payload
+    from sqlalchemy.orm.attributes import flag_modified
+    has_changes = False
+    for integration in integrations:
+        if not integration.discovered_products:
+            history = db.query(models.WebhookHistory).filter(models.WebhookHistory.integration_id == integration.id).all()
+            discovered = set()
+            for entry in history:
+                payload = entry.payload
+                if not payload: continue
+                try:
+                    parsed = parse_webhook_payload(integration.platform, payload)
+                    product_name = parsed.get("product_name")
+                    is_bump = parsed.get("order_bump") or parsed.get("e_order_bump")
+                    if product_name and not is_bump:
+                        parts = [p.strip() for p in str(product_name).split('|')]
+                        for p in parts:
+                            p_clean = re.sub(r'\s*\([^)]*?(R\$|\$|€|£|BRL|USD|EUR|US\$|R\$ )[\d\.,\s]+[^)]*?\)', '', p)
+                            p_clean = re.sub(r'\s*-?\s*(R\$|\$|€|£|BRL|USD|EUR|US\$)\s*[\d\.,]+', '', p_clean).strip()
+                            if p_clean: discovered.add(p_clean)
+                except Exception:
+                    pass
+            if discovered:
+                integration.discovered_products = sorted(list(discovered))
+                flag_modified(integration, "discovered_products")
+                has_changes = True
+    if has_changes:
+        db.commit()
+        
     return integrations
 
 @router.get("/{integration_id}", response_model=schemas.WebhookIntegration, summary="Obter detalhes de uma integração")
@@ -59,6 +89,33 @@ def read_webhook_integration(
     
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
+        
+    if not integration.discovered_products:
+        import re
+        from services.webhooks import parse_webhook_payload
+        from sqlalchemy.orm.attributes import flag_modified
+        history = db.query(models.WebhookHistory).filter(models.WebhookHistory.integration_id == integration.id).all()
+        discovered = set()
+        for entry in history:
+            payload = entry.payload
+            if not payload: continue
+            try:
+                parsed = parse_webhook_payload(integration.platform, payload)
+                product_name = parsed.get("product_name")
+                is_bump = parsed.get("order_bump") or parsed.get("e_order_bump")
+                if product_name and not is_bump:
+                    parts = [p.strip() for p in str(product_name).split('|')]
+                    for p in parts:
+                        p_clean = re.sub(r'\s*\([^)]*?(R\$|\$|€|£|BRL|USD|EUR|US\$|R\$ )[\d\.,\s]+[^)]*?\)', '', p)
+                        p_clean = re.sub(r'\s*-?\s*(R\$|\$|€|£|BRL|USD|EUR|US\$)\s*[\d\.,]+', '', p_clean).strip()
+                        if p_clean: discovered.add(p_clean)
+            except Exception:
+                pass
+        if discovered:
+            integration.discovered_products = sorted(list(discovered))
+            flag_modified(integration, "discovered_products")
+            db.commit()
+            
     return integration
 
 @router.post("", response_model=schemas.WebhookIntegration, summary="Criar nova integração de webhook")

@@ -96,6 +96,7 @@ const IntegrationFormModal = ({
               funnels={funnels}
               chatwootLabels={chatwootLabels}
               setIsMappingGuideOpen={setIsMappingGuideOpen}
+              discoveredProducts={formData.discovered_products || []}
             />
           </form>
         </div>

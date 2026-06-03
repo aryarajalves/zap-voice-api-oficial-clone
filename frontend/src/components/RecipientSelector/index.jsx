@@ -8,6 +8,7 @@ import TagSelector from './components/TagSelector';
 import ContactList from './components/ContactList';
 import ColumnSelectorModal from './components/Modals/ColumnSelectorModal';
 import ProcessingOverlay from './components/Modals/ProcessingOverlay';
+import ConfirmModal from '../ConfirmModal';
 
 const RecipientSelector = ({
     onSelect,
@@ -24,6 +25,11 @@ const RecipientSelector = ({
         requireOpenWindow,
         templateVariables,
         exclusionList
+    });
+
+    const [confirmUnblock, setConfirmUnblock] = React.useState({
+        isOpen: false,
+        phone: null
     });
 
     // Prevent page reload during validation/processing
@@ -128,6 +134,7 @@ const RecipientSelector = ({
                     templateVariables={templateVariables}
                     showValidation={showValidation}
                     removeContact={hook.removeContact}
+                    unblockContact={(phone) => setConfirmUnblock({ isOpen: true, phone })}
                     startValidation={hook.startValidation}
                     isValidating={hook.isValidating}
                     progress={hook.progress}
@@ -135,6 +142,19 @@ const RecipientSelector = ({
                     setVariableFilters={hook.setVariableFilters}
                 />
             )}
+
+            <ConfirmModal 
+                isOpen={confirmUnblock.isOpen}
+                title="Desbloquear Contato"
+                message={`Deseja remover o número ${confirmUnblock.phone} da lista de bloqueio global?`}
+                confirmText="Desbloquear"
+                isDangerous={true}
+                onClose={() => setConfirmUnblock({ isOpen: false, phone: null })}
+                onConfirm={() => {
+                    hook.unblockContact(confirmUnblock.phone);
+                    setConfirmUnblock({ isOpen: false, phone: null });
+                }}
+            />
 
             <ProcessingOverlay 
                 isVisible={hook.isReadingFile}

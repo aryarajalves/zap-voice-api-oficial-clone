@@ -289,10 +289,10 @@ export const useBulkSender = (onViewChange, onSuccess) => {
                         vars: processedVars
                     };
                 }),
-                exclusion_list: exclusionList,
+                exclusion_list: [...new Set([...exclusionList, ...(selectionMetadata?.tagExclusions || [])])],
                 delay_seconds: delayUnit === 'minutes' ? delaySeconds * 60 : delaySeconds,
                 concurrency_limit: concurrency,
-                schedule_at: scheduledTime || new Date().toISOString(),
+                schedule_at: scheduledTime ? new Date(scheduledTime).toISOString() : new Date().toISOString(),
                 chatwoot_label: selectedChatwootLabels,
                 template_name: selectedTemplate,
                 language: selectedTemplateObj.language || 'pt_BR',
@@ -305,7 +305,17 @@ export const useBulkSender = (onViewChange, onSuccess) => {
 
             let res;
             if (isRecurring) {
-                const rtPayload = { ...payload, frequency: recurrenceFrequency, days_of_week: recurrenceDaysOfWeek, day_of_month: recurrenceDayOfMonth ? [parseInt(recurrenceDayOfMonth)] : [], scheduled_time: recurrenceTime, is_active: true };
+                const isTagMode = selectionMetadata?.mode === 'tag';
+                const rtPayload = { 
+                    ...payload, 
+                    frequency: recurrenceFrequency, 
+                    days_of_week: recurrenceDaysOfWeek, 
+                    day_of_month: recurrenceDayOfMonth ? [parseInt(recurrenceDayOfMonth)] : [], 
+                    scheduled_time: (recurrenceDaysOfWeek && recurrenceDaysOfWeek.length > 0) ? recurrenceDaysOfWeek[0].time : recurrenceTime, 
+                    is_active: true,
+                    tag: isTagMode ? selectionMetadata.tag : null,
+                    contacts_list: payload.contacts_list
+                };
                 res = await fetchWithAuth(`${API_URL}/schedules/recurring`, { method: 'POST', body: JSON.stringify(rtPayload) }, activeClient.id);
             } else {
                 res = await fetchWithAuth(`${API_URL}/bulk-send/schedule`, { method: 'POST', body: JSON.stringify(payload) }, activeClient.id);
@@ -314,7 +324,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
             if (res.ok) {
                 toast.success("Disparo processado com sucesso!");
                 if (onSuccess) onSuccess();
-                if (onViewChange) onViewChange('history');
+                if (onViewChange) onViewChange(isRecurring ? 'recurring_schedules' : 'history');
             } else {
                 const errData = await res.json();
                 toast.error(errData.detail || "Falha ao processar disparo.");

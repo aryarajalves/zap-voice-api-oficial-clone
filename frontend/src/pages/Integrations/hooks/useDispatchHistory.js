@@ -11,6 +11,7 @@ export function useDispatchHistory(activeClient) {
   const [dispatchSearch, setDispatchSearch] = useState('');
   const [dispatchEventFilter, setDispatchEventFilter] = useState('');
   const [dispatchTypeFilter, setDispatchTypeFilter] = useState('');
+  const [dispatchStatusFilter, setDispatchStatusFilter] = useState('');
   const [dispatchTemplateFilter, setDispatchTemplateFilter] = useState('');
   const [distinctTemplates, setDistinctTemplates] = useState([]);
   const [dispatchStartDate, setDispatchStartDate] = useState('');
@@ -27,12 +28,12 @@ export function useDispatchHistory(activeClient) {
   const [childrenModal, setChildrenModal] = useState({ isOpen: false, triggerId: null, triggerName: '', children: [], isLoading: false });
   const [dispatchStats, setDispatchStats] = useState(null);
 
-  const fetchDispatches = useCallback(async (integrationId, page = 1, limit = 20, search = '', event = '', start = '', end = '', type = '', template = '', isSilent = false) => {
+  const fetchDispatches = useCallback(async (integrationId, page = 1, limit = 20, search = '', event = '', start = '', end = '', type = '', template = '', status = '', isSilent = false) => {
     if (!activeClient || !integrationId) return;
     if (!isSilent) setLoadingDispatchHistory(true);
     try {
       const res = await fetchWithAuth(
-        `${API_URL}/webhook-integrations/${integrationId}/dispatches?page=${page}&limit=${limit}&search=${search}&event_type=${event}&start_date=${start}&end_date=${end}&type=${type}&template_filter=${template}`,
+        `${API_URL}/webhook-integrations/${integrationId}/dispatches?page=${page}&limit=${limit}&search=${search}&event_type=${event}&start_date=${start}&end_date=${end}&type=${type}&template_filter=${template}&status=${status}`,
         {},
         activeClient.id
       );
@@ -57,7 +58,7 @@ export function useDispatchHistory(activeClient) {
       const res = await fetchWithAuth(`${API_URL}/webhook-integrations/${integrationId}/dispatches/${dispatchId}/play`, { method: 'POST' }, activeClient.id);
       if (res.ok) {
         toast.success('Disparo iniciado manualmente');
-        fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter, true);
+        fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter, dispatchStatusFilter, true);
       }
     } catch (err) {
       console.error(err);
@@ -86,7 +87,7 @@ export function useDispatchHistory(activeClient) {
       if (res.ok) {
         toast.success('Registros removidos');
         if (type === 'bulk') setSelectedDispatchIds([]);
-        fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter);
+        fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter, dispatchStatusFilter);
       }
     } catch (err) {
       console.error(err);
@@ -120,7 +121,7 @@ export function useDispatchHistory(activeClient) {
       const res = await fetchWithAuth(`${API_URL}/webhook-integrations/${integrationId}/dispatches/backfill-costs`, { method: 'POST' }, activeClient.id);
       if (res.ok) {
         toast.success('Custos recalculados com sucesso');
-        fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter, true);
+        fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter, dispatchStatusFilter, true);
       }
     } catch (err) {
       console.error(err);
@@ -175,6 +176,8 @@ export function useDispatchHistory(activeClient) {
     setDispatchEventFilter,
     dispatchTypeFilter,
     setDispatchTypeFilter,
+    dispatchStatusFilter,
+    setDispatchStatusFilter,
     dispatchTemplateFilter,
     setDispatchTemplateFilter,
     distinctTemplates,

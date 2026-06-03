@@ -6,7 +6,6 @@ const ScheduleGuide = ({ isOpen, onClose }) => {
   return (
     <div
       className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
         style={{ background: 'linear-gradient(160deg, #0f1a0a 0%, #111827 100%)', border: '1px solid rgba(251,191,36,0.2)' }}>

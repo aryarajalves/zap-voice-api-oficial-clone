@@ -35,6 +35,26 @@ const getFollowupConfig = (status, scheduledTime) => {
   }
 };
 
+const translateError = (msg) => {
+  if (!msg) return "";
+  let text = String(msg);
+  
+  const translations = [
+    { regex: /No mapping found for event:/gi, replacement: "Nenhum mapeamento encontrado para o evento:" },
+    { regex: /Parameter value is not valid/gi, replacement: "O valor do parâmetro é inválido (ex: número de telefone incompleto/incorreto)" },
+    { regex: /Template name does not exist/gi, replacement: "O nome do template não existe" },
+    { regex: /Invalid parameter/gi, replacement: "Parâmetro inválido" },
+    { regex: /Phone field not found in payload/gi, replacement: "Campo de telefone não encontrado no payload" },
+    { regex: /Configuração do WhatsApp ausente/gi, replacement: "Configuração do WhatsApp ausente" },
+    { regex: /Duplicidade evitada/gi, replacement: "Duplicidade evitada" }
+  ];
+
+  for (const item of translations) {
+    text = text.replace(item.regex, item.replacement);
+  }
+  return text;
+};
+
 const DispatchTableRow = ({
   item,
   selectedDispatchIds,
@@ -113,7 +133,7 @@ const DispatchTableRow = ({
           </div>
           {(item.status === 'cancelled' || item.status === 'failed') && item.failure_reason && (
             <div className="text-[9px] text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-lg mt-1 leading-tight max-w-[220px] break-words italic font-bold">
-              ⚠️  {item.failure_reason}
+              ⚠️  {translateError(item.failure_reason)}
             </div>
           )}
         </div>

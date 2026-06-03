@@ -158,6 +158,35 @@ def unblock_contact(
     db.commit()
     return None
 
+@router.delete("/by_phone/{phone}", status_code=status.HTTP_204_NO_CONTENT)
+def unblock_contact_by_phone(
+    phone: str,
+    current_user: User = Depends(require_premium),
+    db: Session = Depends(get_db),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+):
+    """
+    Unblock a contact by phone number.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    clean_phone = "".join(filter(str.isdigit, phone))
+    if not clean_phone:
+        raise HTTPException(status_code=400, detail="Número de telefone inválido.")
+        
+    suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+    
+    contact = db.query(BlockedContact).filter(
+        BlockedContact.client_id == client_id,
+        BlockedContact.phone.like(f"%{suffix}")
+    ).first()
+    
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contato não encontrado na lista de bloqueio.")
+        
+    db.delete(contact)
+    db.commit()
+    return None
+
 @router.post("/unblock_bulk")
 def unblock_bulk(
     data: BulkUnblockRequest,

@@ -41,10 +41,21 @@ export function ScheduleCard({ schedule, onTrigger, onFetchContacts, onOpenEdit,
                         <h4 className="text-lg font-black text-white truncate w-full pt-2">
                             {schedule.template_name?.split('|').pop() || 'Template'}
                         </h4>
-                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                            <FiFilter size={10} className="text-blue-500" />
-                            {schedule.tag ? `Etiqueta: ${schedule.tag}` : 'Lista Estática'}
-                        </p>
+                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                <FiFilter size={10} className="text-blue-500" />
+                                {schedule.tag ? `Etiqueta: ${schedule.tag}` : 'Lista Estática'}
+                            </p>
+                            {schedule.exclusion_list?.length > 0 && (
+                                <span 
+                                    className="flex items-center gap-1 px-2 py-0.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-full text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-rose-500/20 transition-colors"
+                                    onClick={() => onFetchContacts(schedule.id)}
+                                    title={`${schedule.exclusion_list.length} contato(s) ignorado(s) — clique para gerenciar`}
+                                >
+                                    🚫 {schedule.exclusion_list.length} ignorado{schedule.exclusion_list.length > 1 ? 's' : ''}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 

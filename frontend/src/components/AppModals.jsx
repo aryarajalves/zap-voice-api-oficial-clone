@@ -5,6 +5,7 @@ import GlobalsModal from './GlobalsModal';
 import ChatwootLabelsModal from './ChatwootLabelsModal';
 import TriggerFunnelModal from './TriggerFunnelModal';
 import ConfirmModal from './ConfirmModal';
+import FunnelTagModal from './FunnelTagModal';
 import { FunnelGuide, BlockedGuide, HistoryGuide, ScheduleGuide } from './GuideModals';
 
 const AppModals = ({ logic }) => {
@@ -59,6 +60,13 @@ const AppModals = ({ logic }) => {
         message={`Tem certeza que deseja excluir ${logic.selectedFunnelIds.length} funis selecionados? Esta ação não pode ser desfeita.`}
         confirmText="Excluir Todos"
         isDangerous={true}
+      />
+
+      <FunnelTagModal
+        isOpen={logic.isTagModalOpen}
+        onClose={() => logic.setIsTagModalOpen(false)}
+        onConfirm={logic.funnelForTag === 'bulk' ? logic.handleBulkTagConfirm : logic.handleTagFunnel}
+        funnel={logic.funnelForTag === 'bulk' ? { id: 'bulk', tag: '' } : logic.funnelForTag}
       />
 
       {/* Guia Modals */}

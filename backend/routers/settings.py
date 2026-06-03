@@ -82,6 +82,9 @@ def read_settings(
         # Incluir o Token de Verificação da Meta (vindo do ENV ou padrão)
         import os
         masked_settings["WHATSAPP_VERIFY_TOKEN"] = os.getenv("WHATSAPP_VERIFY_TOKEN", "zapvoice_oficial")
+        
+        # Incluir a URL base pública do webhook configurada no backend
+        masked_settings["WEBHOOK_BASE_URL"] = os.getenv("WEBHOOK_BASE_URL", "")
 
         print(f"[SETTINGS] Returning masked settings: {list(masked_settings.keys())}")
         return masked_settings
@@ -229,11 +232,20 @@ def fetch_synced_contacts(
         
         contacts = []
         for row in result:
+            dt = row[3]
+            if dt:
+                # Se a data veio sem fuso horário do banco, forçamos UTC antes da exportação
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                dt_str = dt.isoformat()
+            else:
+                dt_str = None
+                
             contacts.append({
                 "phone": row[0],
                 "name": row[1],
                 "inbox_id": row[2],
-                "last_interaction_at": row[3].isoformat() if row[3] else None
+                "last_interaction_at": dt_str
             })
         
         return {"items": contacts, "total": total}

@@ -1,13 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { FiX, FiUsers, FiEdit2, FiZap, FiTrash2, FiEye, FiCheck, FiFolder, FiMessageSquare, FiSearch, FiSave, FiLink, FiAlertCircle } from 'react-icons/fi';
+import { FiX, FiUsers, FiEdit2, FiZap, FiTrash2, FiEye, FiCheck, FiFolder, FiMessageSquare, FiSearch, FiSave, FiLink, FiAlertCircle, FiRotateCcw, FiRefreshCw } from 'react-icons/fi';
 import TemplatePreview from '../BulkSender/common/TemplatePreview';
 import { toast } from 'react-hot-toast';
 
-export function ViewContactsModal({ viewingContacts, onClose }) {
+export function ViewContactsModal({ viewingContacts, onClose, onSaveExclusions, isSavingExclusions, onRefreshContacts }) {
+    const [localExclusions, setLocalExclusions] = useState([]);
+    const [filterType, setFilterType] = useState('all'); // 'all' | 'active' | 'excluded'
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    useEffect(() => {
+        if (viewingContacts) {
+            setLocalExclusions(viewingContacts.exclusion_list || []);
+            setFilterType('all');
+        }
+    }, [viewingContacts]);
+
     if (!viewingContacts) return null;
+
+    const contacts = viewingContacts.contacts || [];
+
+    const handleToggleExclusion = (phone) => {
+        setLocalExclusions(prev => {
+            if (prev.includes(phone)) {
+                return prev.filter(p => p !== phone);
+            } else {
+                return [...prev, phone];
+            }
+        });
+    };
+
+    const hasChanges = JSON.stringify([...localExclusions].sort()) !== JSON.stringify([...(viewingContacts.exclusion_list || [])].sort());
+
+    const activeContacts = contacts.filter(c => !localExclusions.includes(c.phone));
+    const excludedContacts = contacts.filter(c => localExclusions.includes(c.phone));
+
+    const displayedContacts = contacts.filter(c => {
+        const isExcluded = localExclusions.includes(c.phone);
+        if (filterType === 'active') return !isExcluded;
+        if (filterType === 'excluded') return isExcluded;
+        return true;
+    });
+
+    const handleSave = async () => {
+        if (onSaveExclusions) {
+            await onSaveExclusions(viewingContacts.id, localExclusions);
+        }
+    };
+
+    const handleRefresh = async () => {
+        if (onRefreshContacts) {
+            setIsRefreshing(true);
+            try {
+                await onRefreshContacts(viewingContacts.id);
+                toast.success("Contatos atualizados com sucesso!");
+            } catch (err) {
+                toast.error("Erro ao atualizar contatos.");
+            } finally {
+                setIsRefreshing(false);
+            }
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden shadow-2xl relative">
+            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
                 <div className="p-8 border-b border-white/5 flex items-center justify-between">
                     <div>
                         <h3 className="text-2xl font-black text-white flex items-center gap-3">
@@ -20,39 +76,107 @@ export function ViewContactsModal({ viewingContacts, onClose }) {
                                 : 'Lista estática de destinatários'}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-3 hover:bg-white/5 rounded-2xl transition-colors">
-                        <FiX className="text-slate-400" />
+                    <div className="flex items-center gap-2">
+                        {onRefreshContacts && (
+                            <button 
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                className="p-3 hover:bg-white/5 rounded-2xl transition-colors flex items-center gap-2 text-slate-400 hover:text-white"
+                                title="Atualizar contatos da lista"
+                            >
+                                <FiRefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-blue-400' : ''}`} />
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-3 hover:bg-white/5 rounded-2xl transition-colors">
+                            <FiX className="text-slate-400" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Filtros rápidos de status */}
+                <div className="px-8 py-4 bg-slate-950/20 border-b border-white/5 flex items-center gap-2">
+                    <button
+                        onClick={() => setFilterType('all')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
+                    >
+                        Todos ({contacts.length})
+                    </button>
+                    <button
+                        onClick={() => setFilterType('active')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'active' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
+                    >
+                        Ativos ({activeContacts.length})
+                    </button>
+                    <button
+                        onClick={() => setFilterType('excluded')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'excluded' ? 'bg-rose-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
+                    >
+                        Removidos ({excludedContacts.length})
                     </button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {viewingContacts.contacts.length === 0 ? (
+                <div className="flex-1 overflow-y-auto p-6 space-y-2 premium-scrollbar">
+                    {displayedContacts.length === 0 ? (
                         <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">
-                            Nenhum contato encontrado
+                            Nenhum contato nesta visualização
                         </div>
                     ) : (
-                        viewingContacts.contacts.map((contact, i) => (
-                            <div key={i} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 transition-all">
-                                <div className="space-y-0.5">
-                                    <div className="text-sm font-black text-white">{contact.name}</div>
-                                    <div className="text-[10px] text-slate-500 font-bold">{contact.email || '-'}</div>
+                        displayedContacts.map((contact, i) => {
+                            const isExcluded = localExclusions.includes(contact.phone);
+                            return (
+                                <div 
+                                    key={i} 
+                                    className={`flex items-center justify-between p-4 border rounded-2xl transition-all ${isExcluded ? 'bg-rose-950/10 border-rose-500/10 opacity-60' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                                >
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-sm font-black text-white">{contact.name}</div>
+                                            {isExcluded && (
+                                                <span className="px-2 py-0.5 bg-rose-500/10 text-rose-400 rounded-full font-black text-[9px] uppercase tracking-widest border border-rose-500/20">
+                                                    Removido
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-bold">{contact.email || '-'}</div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`font-black text-xs tabular-nums ${isExcluded ? 'text-slate-500 line-through' : 'text-blue-400'}`}>
+                                            {contact.phone}
+                                        </div>
+                                        <button
+                                            onClick={() => handleToggleExclusion(contact.phone)}
+                                            className={`p-2 rounded-xl border transition-all ${isExcluded ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20 text-rose-400'}`}
+                                            title={isExcluded ? "Adicionar de volta ao disparo" : "Remover do disparo"}
+                                        >
+                                            {isExcluded ? <FiRotateCcw size={14} /> : <FiTrash2 size={14} />}
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="text-blue-400 font-black text-xs tabular-nums">{contact.phone}</div>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
 
                 <div className="p-6 bg-slate-800/40 border-t border-white/5 flex items-center justify-between">
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                        Total de contatos: <span className="text-white text-sm">{viewingContacts.count}</span>
+                        Total nesta lista: <span className="text-white text-sm">{displayedContacts.length}</span>
                     </span>
-                    <button 
-                        onClick={onClose}
-                        className="px-8 py-3 bg-white text-slate-900 rounded-2xl font-black text-xs hover:bg-slate-100 transition-all active:scale-95 shadow-xl"
-                    >
-                        FECHAR
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={onClose}
+                            className="px-6 py-3 bg-slate-800 text-slate-300 rounded-2xl font-black text-xs hover:bg-slate-700 transition-all active:scale-95"
+                        >
+                            FECHAR
+                        </button>
+                        <button 
+                            onClick={handleSave}
+                            disabled={!hasChanges || isSavingExclusions}
+                            className={`px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs transition-all active:scale-95 shadow-xl shadow-blue-900/40 flex items-center gap-2 ${(!hasChanges || isSavingExclusions) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {isSavingExclusions && <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>}
+                            SALVAR ALTERAÇÕES
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -210,15 +334,6 @@ export function EditScheduleModal({ selectedSchedule, editFreq, setEditFreq, edi
                         </div>
                     )}
 
-                    <div className="space-y-4">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">{editFreq === 'weekly' ? 'Horário Padrão (Fallback)' : 'Horário Padrão para Novos Dias'}</label>
-                        <input
-                            type="time"
-                            value={editTime}
-                            onChange={(e) => setEditTime(e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-white font-bold text-xl outline-none focus:border-blue-500/50 shadow-inner"
-                        />
-                    </div>
                 </div>
 
                 <div className="p-8 bg-slate-800/40 border-t border-white/5 grid grid-cols-2 gap-4">

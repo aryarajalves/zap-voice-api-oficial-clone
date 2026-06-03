@@ -39,7 +39,9 @@ export default function RecurringSchedules() {
         templates,
         funnels,
         isUpdatingMessage,
-        handleUpdateMessage
+        handleUpdateMessage,
+        isUpdatingExclusions,
+        handleUpdateExclusions
     } = useRecurringSchedules(activeClient);
 
     if (isLoading && schedules.length === 0) {
@@ -97,7 +99,10 @@ export default function RecurringSchedules() {
 
             <ViewContactsModal 
                 viewingContacts={viewingContacts} 
-                onClose={() => setViewingContacts(null)} 
+                onClose={() => setViewingContacts(null)}
+                onSaveExclusions={handleUpdateExclusions}
+                isSavingExclusions={isUpdatingExclusions}
+                onRefreshContacts={fetchContacts}
             />
 
             <ConfirmActionModal 

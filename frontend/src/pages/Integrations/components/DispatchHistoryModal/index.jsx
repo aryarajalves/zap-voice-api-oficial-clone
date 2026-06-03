@@ -17,6 +17,8 @@ const DispatchHistoryModal = ({
   setDispatchEventFilter,
   dispatchTypeFilter,
   setDispatchTypeFilter,
+  dispatchStatusFilter,
+  setDispatchStatusFilter,
   dispatchStartDate,
   setDispatchStartDate,
   dispatchEndDate,
@@ -60,7 +62,8 @@ const DispatchHistoryModal = ({
         dispatchStartDate,
         dispatchEndDate,
         dispatchTypeFilter,
-        dispatchTemplateFilter
+        dispatchTemplateFilter,
+        dispatchStatusFilter
       );
     }
   }, [
@@ -74,6 +77,7 @@ const DispatchHistoryModal = ({
     dispatchEndDate,
     dispatchTypeFilter,
     dispatchTemplateFilter,
+    dispatchStatusFilter,
     fetchDispatches
   ]);
 
@@ -182,6 +186,8 @@ const DispatchHistoryModal = ({
             setDispatchPage={setDispatchPage}
             dispatchTypeFilter={dispatchTypeFilter}
             setDispatchTypeFilter={setDispatchTypeFilter}
+            dispatchStatusFilter={dispatchStatusFilter}
+            setDispatchStatusFilter={setDispatchStatusFilter}
             dispatchStartDate={dispatchStartDate}
             setDispatchStartDate={setDispatchStartDate}
             dispatchEndDate={dispatchEndDate}
@@ -344,7 +350,7 @@ const DispatchHistoryModal = ({
           <div className="flex items-center gap-6">
             <button
               type="button"
-              onClick={() => fetchDispatches(integration.id, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate)}
+              onClick={() => fetchDispatches(integration.id, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter, dispatchStatusFilter)}
               className="flex items-center gap-2 text-[10px] font-black text-white/40 hover:text-white tracking-widest uppercase transition-colors"
             >
               <FiRefreshCw size={12} /> Atualizar Fila

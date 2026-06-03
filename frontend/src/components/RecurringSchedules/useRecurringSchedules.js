@@ -133,7 +133,7 @@ export function useRecurringSchedules(activeClient) {
                     frequency: editFreq,
                     days_of_week: editFreq === 'weekly' ? editDays : null,
                     day_of_month: editFreq === 'monthly' ? editDays : null,
-                    scheduled_time: editTime
+                    scheduled_time: (editDays && editDays.length > 0) ? editDays[0].time : editTime
                 })
             }, activeClient.id);
 
@@ -183,12 +183,40 @@ export function useRecurringSchedules(activeClient) {
             const response = await fetchWithAuth(`${API_URL}/schedules/recurring/${id}/contacts`, {}, activeClient.id);
             if (response.ok) {
                 const data = await response.json();
-                setViewingContacts(data);
+                setViewingContacts({ ...data, id }); // guardar o ID do trigger para salvar depois
             } else {
                 toast.error('Erro ao buscar contatos');
             }
         } catch {
             toast.error('Erro ao buscar contatos');
+        }
+    };
+
+    const [isUpdatingExclusions, setIsUpdatingExclusions] = useState(false);
+    const handleUpdateExclusions = async (id, exclusionList) => {
+        setIsUpdatingExclusions(true);
+        try {
+            const response = await fetchWithAuth(`${API_URL}/schedules/recurring/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exclusion_list: exclusionList })
+            }, activeClient.id);
+
+            if (response.ok) {
+                toast.success('Lista de exclusões atualizada com sucesso!');
+                fetchContacts(id);
+                fetchSchedules();
+                return true;
+            } else {
+                const err = await response.json();
+                toast.error(err.detail || 'Erro ao atualizar lista de exclusões');
+                return false;
+            }
+        } catch (err) {
+            toast.error('Erro de conexão ao salvar exclusões');
+            return false;
+        } finally {
+            setIsUpdatingExclusions(false);
         }
     };
 
@@ -267,6 +295,8 @@ export function useRecurringSchedules(activeClient) {
         funnels,
         isLoadingFunnels,
         isUpdatingMessage,
-        handleUpdateMessage
+        handleUpdateMessage,
+        isUpdatingExclusions,
+        handleUpdateExclusions
     };
 }

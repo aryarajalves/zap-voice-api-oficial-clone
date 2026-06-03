@@ -38,6 +38,9 @@ class FunnelBase(BaseModel):
     business_hours_start: Optional[str] = Field("08:00", description="Horário de início do período comercial (HH:MM, America/Sao_Paulo)", example="08:00")
     business_hours_end: Optional[str] = Field("18:00", description="Horário de fim do período comercial (HH:MM, America/Sao_Paulo)", example="18:00")
     business_hours_days: Optional[List[int]] = Field(default=[0,1,2,3,4], description="Dias da semana com horário comercial (0=Seg, 6=Dom)")
+    is_archived: Optional[bool] = Field(False, description="Se verdadeiro, o funil está arquivado")
+    tag: Optional[str] = Field(None, description="Etiqueta para classificar o funil")
+    is_pinned: Optional[bool] = Field(False, description="Se verdadeiro, o funil está fixado no topo")
 
 class FunnelCreate(FunnelBase):
     pass
@@ -53,6 +56,14 @@ class Funnel(FunnelBase):
 class FunnelBulkDelete(BaseModel):
     funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para excluir")
 
+class FunnelBulkArchive(BaseModel):
+    funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para arquivar/desarquivar")
+    is_archived: bool = Field(True, description="Status de arquivamento a ser aplicado")
+
+class FunnelBulkTag(BaseModel):
+    funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para atualizar a etiqueta")
+    tag: Optional[str] = Field(None, description="Etiqueta a ser aplicada (null para remover)")
+
 # --- Trigger Schemas ---
 
 class ScheduledTriggerBase(BaseModel):
@@ -67,6 +78,10 @@ class ScheduledTrigger(ScheduledTriggerBase):
     id: int
     created_at: datetime
     funnel: Optional[Funnel] = None
+    interaction_funnel_id: Optional[int] = None
+    block_funnel_id: Optional[int] = None
+    interaction_funnel: Optional[Funnel] = None
+    block_funnel: Optional[Funnel] = None
     
     # Bulk send fields
     is_bulk: bool = Field(False, description="Indica se faz parte de um envio em massa")
@@ -100,6 +115,7 @@ class ScheduledTrigger(ScheduledTriggerBase):
     integration_id: Optional[str] = None
     is_free_message: bool = False
     is_interaction: bool = False
+    skip_block_check: bool = False
     is_followup: bool = Field(False, description="Indica se é um disparo de follow-up")
     followup_status: Optional[str] = Field(None, description="Status do disparo de follow-up associado")
     followup_scheduled_time: Optional[datetime] = Field(None, description="Horário de disparo do follow-up associado")
@@ -107,6 +123,31 @@ class ScheduledTrigger(ScheduledTriggerBase):
     is_recurring: bool = Field(False, description="Indica se faz parte de uma recorrência")
     recurring_trigger_id: Optional[int] = Field(None, description="ID da recorrência de origem")
     chatwoot_label: Optional[List[str]] = Field(default_factory=list)
+    button_actions: Optional[Dict[str, Any]] = None
+
+    @field_validator('button_actions', mode='before')
+    @classmethod
+    def parse_button_actions(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, list):
+            if not v:
+                return {}
+            return {}
+        if isinstance(v, str):
+            v_trimmed = v.strip()
+            if not v_trimmed:
+                return {}
+            try:
+                parsed = json.loads(v_trimmed)
+                if isinstance(parsed, dict):
+                    return parsed
+            except:
+                pass
+            return {}
+        return {}
 
     @field_validator('chatwoot_label', mode='before')
     @classmethod
@@ -194,11 +235,37 @@ class RecurringTriggerBase(BaseModel):
     private_message: Optional[str] = None
     private_message_delay: int = 5
     private_message_concurrency: int = 1
-
+ 
     direct_message: Optional[str] = None
     direct_message_params: Optional[List[dict]] = None
-
+ 
     is_active: bool = True
+    button_actions: Optional[Dict[str, Any]] = None
+
+    @field_validator('button_actions', mode='before')
+    @classmethod
+    def parse_button_actions(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, list):
+            if not v:
+                return {}
+            return {}
+        if isinstance(v, str):
+            v_trimmed = v.strip()
+            if not v_trimmed:
+                return {}
+            try:
+                import json
+                parsed = json.loads(v_trimmed)
+                if isinstance(parsed, dict):
+                    return parsed
+            except:
+                pass
+            return {}
+        return {}
 
 class RecurringTriggerUpdate(BaseModel):
     frequency: Optional[str] = None
@@ -214,6 +281,8 @@ class RecurringTriggerUpdate(BaseModel):
     template_language: Optional[str] = None
     template_components: Optional[List[dict]] = None
     funnel_id: Optional[int] = None
+    exclusion_list: Optional[List[str]] = None
+    button_actions: Optional[Dict[str, Any]] = None
 
 class RecurringTriggerCreate(RecurringTriggerBase):
     pass
@@ -322,6 +391,8 @@ class WebhookEventMappingBase(BaseModel):
     manychat_name: Optional[str] = Field(None, description="Campo dinâmico nome ManyChat")
     manychat_phone: Optional[str] = Field(None, description="Campo dinâmico telefone ManyChat")
     manychat_tag: Optional[str] = Field(None, description="Tag para adicionar no ManyChat")
+    manychat_start_date: Optional[datetime] = Field(None, description="Data de início para a etiqueta alternativa")
+    manychat_tag_alternative: Optional[str] = Field(None, description="Etiqueta alternativa a aplicar a partir da data de início")
     manychat_tag_automation: Optional[bool] = Field(False, description="Ativar automação de tag dinâmica")
     manychat_tag_include_date: Optional[bool] = Field(True, description="Incluir data DD-MM-YYYY na etiqueta")
     manychat_tag_prefix: Optional[str] = Field(None, description="Prefixo da tag dinâmica")

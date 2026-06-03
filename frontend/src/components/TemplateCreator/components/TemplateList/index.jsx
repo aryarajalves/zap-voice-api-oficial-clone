@@ -75,7 +75,7 @@ const TemplateList = ({ logic }) => {
                     </button>
                 </div>
 
-                <div className="space-y-3 max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-3 max-h-[700px] overflow-y-auto pl-1 pr-3 py-1 custom-scrollbar">
                     {filteredTemplates.length === 0 && !fetchingTemplates && (
                         <div className="text-center py-10 text-gray-400">
                             <p className="text-sm">Nenhum template encontrado.</p>

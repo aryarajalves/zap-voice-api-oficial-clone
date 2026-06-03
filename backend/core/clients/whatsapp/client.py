@@ -224,15 +224,37 @@ class WhatsAppClient:
             from database import SessionLocal
             from models import WhatsAppTemplateCache
             db = SessionLocal()
+            incoming_ids = {int(t["id"]) for t in templates if t.get("id")}
             for t in templates:
+                if not t.get("id"):
+                    continue
                 existing = db.query(WhatsAppTemplateCache).get(int(t["id"]))
                 if existing:
                     existing.name, existing.language, existing.body, existing.components = t["name"], t["language"], t["body_text"], t["components"]
                 else:
-                    db.add(WhatsAppTemplateCache(id=int(t["id"]), client_id=self.client_id, name=t["name"], language=t["language"], body=t["body_text"], components=t["components"]))
+                    db.add(WhatsAppTemplateCache(
+                        id=int(t["id"]),
+                        client_id=self.client_id,
+                        name=t["name"],
+                        language=t["language"],
+                        body=t["body_text"],
+                        components=t["components"],
+                        is_archived=False,
+                        is_pinned=False
+                    ))
+            # Desafixar e arquivar localmente qualquer template deste cliente que não esteja mais ativo na API da Meta
+            db.query(WhatsAppTemplateCache).filter(
+                WhatsAppTemplateCache.client_id == self.client_id,
+                WhatsAppTemplateCache.id.notin_(incoming_ids)
+            ).update({
+                WhatsAppTemplateCache.is_archived: True,
+                WhatsAppTemplateCache.is_pinned: False
+            }, synchronize_session=False)
             db.commit()
             db.close()
-        except: pass
+        except Exception as e:
+            logger.error(f"Erro ao sincronizar cache de templates: {e}")
+
 
     def _build_template_components(self, data):
         components = []

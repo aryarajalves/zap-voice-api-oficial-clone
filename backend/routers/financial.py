@@ -328,21 +328,34 @@ def get_financial_sales(
             continue
 
         # Classify totals
-        if evt == "compra_aprovada":
-            totals["total_revenue"] += price_val
-            totals["total_sales"] += 1
-            product_stats[p_name]["sales_count"] += 1
-            product_stats[p_name]["total_revenue"] += price_val
-        elif evt == "reembolso":
-            totals["total_refunds"] += 1
-        elif evt in ["pix_gerado", "boleto_impresso"]:
-            totals["total_pending"] += 1
-
         # Adjust UTC to Brasilia Timezone for period grouping
         dt_utc = h.created_at
         if dt_utc.tzinfo is None:
             dt_utc = dt_utc.replace(tzinfo=timezone.utc)
         dt_br = dt_utc.astimezone(tz_br)
+
+        # Classify totals
+        if evt == "compra_aprovada":
+            totals["total_revenue"] += price_val
+            totals["total_sales"] += 1
+            product_stats[p_name]["sales_count"] += 1
+            product_stats[p_name]["total_revenue"] += price_val
+            
+            day_key = dt_br.strftime("%Y-%m-%d")
+            buckets[day_key]["revenue"] += price_val
+            buckets[day_key]["sales_count"] += 1
+        elif evt == "reembolso":
+            totals["total_refunds"] += 1
+            totals["total_revenue"] -= price_val
+            totals["total_sales"] -= 1
+            product_stats[p_name]["sales_count"] -= 1
+            product_stats[p_name]["total_revenue"] -= price_val
+            
+            day_key = dt_br.strftime("%Y-%m-%d")
+            buckets[day_key]["revenue"] -= price_val
+            buckets[day_key]["sales_count"] -= 1
+        elif evt in ["pix_gerado", "boleto_impresso"]:
+            totals["total_pending"] += 1
 
         transactions.append({
             "id": h.id,
@@ -356,11 +369,6 @@ def get_financial_sales(
             "event_type": evt,
             "category": tx_status_category
         })
-
-        if evt == "compra_aprovada":
-            day_key = dt_br.strftime("%Y-%m-%d")
-            buckets[day_key]["revenue"] += price_val
-            buckets[day_key]["sales_count"] += 1
 
     def group_key(day_str: str, period: str) -> str:
         d = datetime.strptime(day_str, "%Y-%m-%d")

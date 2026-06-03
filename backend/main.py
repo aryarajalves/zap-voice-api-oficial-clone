@@ -53,6 +53,7 @@ from routers import (
     settings,       # Configurações gerais do sistema
     chatwoot,       # Integração com o Chatwoot
     whatsapp,       # Conexão e envio via WhatsApp
+    whatsapp_profile, # Configurações e Perfil do WhatsApp
     blocked,        # Lista de contatos bloqueados
     clients,        # Gerenciamento de clientes/tenants
     uploads,        # Upload de arquivos (áudios, imagens, docs)
@@ -60,7 +61,8 @@ from routers import (
     health,         # Healthcheck da API
     webhooks_public, # Webhooks públicos (WordPress, Hotmart, etc.)
     leads,          # Gestão de leads captados externamente
-    financial       # Controle financeiro e planos
+    financial,      # Controle financeiro e planos
+    backup          # Backup do banco de dados (Super Admin)
 )
 
 # Webhook de entrada do Chatwoot (recebe eventos em tempo real)
@@ -112,17 +114,17 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 app = FastAPI(
     title="ZapVoice API Oficial",
-    version="3.8.7",
+    version="3.9.0",
     docs_url="/docs" if DEBUG else None,
     redoc_url="/redoc" if DEBUG else None,
     openapi_url="/openapi.json" if DEBUG else None,
     description="""
-## 🚀 ZapVoice API v3.8.7
+## 🚀 ZapVoice API v3.9.0
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
 ### Funcionalidades
-* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.8.7** do **ZapVoice**!
+* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.9.0** do **ZapVoice**!
 * **Agendamento Inteligente:** Otimização de filas e prevenção de bloqueios.
 
 ### Autenticação
@@ -142,6 +144,17 @@ if SENTRY_DSN:
 # Configuração do limitador de requisições
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Erro de validação em {request.method} {request.url.path}: {exc.errors()} | Body: {await request.body()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
 
 # Servindo arquivos estáticos
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -219,12 +232,14 @@ app.include_router(chatwoot.router, prefix="/api", tags=["Chatwoot"])
 app.include_router(auth.router, prefix="/api", tags=["Auth"])
 app.include_router(clients.router, prefix="/api", tags=["Clients"])
 app.include_router(whatsapp.router, prefix="/api", tags=["WhatsApp"])
+app.include_router(whatsapp_profile.router, prefix="/api", tags=["WhatsApp"])
 app.include_router(settings.router, prefix="/api", tags=["Settings"])
 app.include_router(blocked.router, prefix="/api", tags=["Blocked"])
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(global_vars.router, prefix="/api")
 app.include_router(leads.router, prefix="/api", tags=["Leads"])
 app.include_router(financial.router, prefix="/api", tags=["Financial"])
+app.include_router(backup.router, prefix="/api", tags=["Backup"])
 
 # --- Fim dos Webhooks ---
 
@@ -264,6 +279,8 @@ async def startup_event():
             logger.info("🔕 [SCHEDULER] Desativado nesta instância (ENABLE_SCHEDULER=false).")
 
         asyncio.create_task(system_monitor_task())
+        # Inicia a task de backup agendado
+        asyncio.create_task(backup_scheduler_task())
         await asyncio.sleep(3)
         try:
             await event_listener()
@@ -435,6 +452,46 @@ async def system_monitor_task():
         # logger.debug("Estatísticas de sistema enviadas.") # Reduzir spam
         await asyncio.sleep(5) # Intervalo de atualização
 
+async def backup_scheduler_task():
+    """Verifica periodicamente se há um backup agendado a executar."""
+    from database import SessionLocal
+    from models import BackupConfig
+    from routers.backup import _run_backup_job
+
+    await asyncio.sleep(30)  # Aguarda o sistema estabilizar antes de começar
+    logger.info("⏰ [BACKUP-SCHEDULER] Task de backup agendado iniciada.")
+
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                config = db.query(BackupConfig).first()
+                if (
+                    config
+                    and config.enabled
+                    and config.interval_type != "manual"
+                    and config.next_backup_at is not None
+                ):
+                    now = datetime.now(timezone.utc)
+                    next_at = config.next_backup_at
+                    if next_at.tzinfo is None:
+                        from datetime import timezone as tz
+                        next_at = next_at.replace(tzinfo=timezone.utc)
+
+                    if now >= next_at:
+                        config_id = config.id
+                        logger.info(f"⏰ [BACKUP-SCHEDULER] Disparando backup agendado (próximo era {next_at.isoformat()})...")
+                        loop = asyncio.get_event_loop()
+                        await loop.run_in_executor(None, _run_backup_job, "", config_id)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"❌ [BACKUP-SCHEDULER] Erro na verificação de agendamento: {e}")
+
+        await asyncio.sleep(60)  # Verifica a cada 60 segundos
+
+
+
 async def event_listener():
     """Conecta ao RabbitMQ para ouvir eventos de progresso e repassar ao Frontend"""
     await asyncio.sleep(5) 
@@ -443,6 +500,7 @@ async def event_listener():
         await rabbitmq.subscribe_events(manager.broadcast)
     except Exception as e:
         logger.error(f"Erro ao iniciar listener de eventos: {e}")
+
 
 # Endpoint WebSocket
 @app.websocket("/ws")
@@ -530,7 +588,7 @@ async def root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "3.8.7",
+        "version": "3.9.0",
         "mode": "production"
     }
 

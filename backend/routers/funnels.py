@@ -19,6 +19,7 @@ def get_db():
 def list_funnels(
     skip: int = 0,
     limit: int = 100,
+    is_archived: Optional[bool] = False,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
@@ -26,10 +27,121 @@ def list_funnels(
     """
     Retorna uma lista paginada de todos os funis de automação cadastrados.
     """
-    funnels = db.query(models.Funnel).filter(
+    query = db.query(models.Funnel).filter(
         models.Funnel.client_id == x_client_id
-    ).offset(skip).limit(limit).all()
+    )
+    if is_archived is not None:
+        query = query.filter(models.Funnel.is_archived == is_archived)
+        
+    funnels = query.order_by(models.Funnel.is_pinned.desc(), models.Funnel.id.desc()).offset(skip).limit(limit).all()
     return funnels
+
+@router.patch("/funnels/bulk/archive", summary="Arquivar/Desarquivar múltiplos funis")
+def archive_funnels_bulk(
+    payload: schemas.FunnelBulkArchive,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    funnels = db.query(models.Funnel).filter(
+        models.Funnel.id.in_(payload.funnel_ids),
+        models.Funnel.client_id == x_client_id
+    ).all()
+    
+    if payload.is_archived:
+        for f in funnels:
+            if f.is_pinned:
+                raise HTTPException(status_code=400, detail="Não é possível arquivar um ou mais funis que estão fixados no topo.")
+                
+    for f in funnels:
+        f.is_archived = payload.is_archived
+        
+    db.commit()
+    return {"message": f"{len(funnels)} funis atualizados com sucesso", "updated_count": len(funnels)}
+
+@router.patch("/funnels/bulk/tag", summary="Atualizar etiqueta de múltiplos funis")
+def tag_funnels_bulk(
+    payload: schemas.FunnelBulkTag,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    funnels = db.query(models.Funnel).filter(
+        models.Funnel.id.in_(payload.funnel_ids),
+        models.Funnel.client_id == x_client_id
+    ).all()
+    
+    for f in funnels:
+        f.tag = payload.tag
+        
+    db.commit()
+    return {"message": f"{len(funnels)} funis atualizados com sucesso", "updated_count": len(funnels)}
+
+@router.delete("/funnels/bulk", summary="Excluir múltiplos funis")
+def delete_funnels_bulk(
+    payload: schemas.FunnelBulkDelete,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Remove permanentemente múltiplos funis do sistema de uma vez.
+    """
+    # Busca todos os funis que pertencem ao cliente e estão na lista de IDs
+    query = db.query(models.Funnel).filter(
+        models.Funnel.id.in_(payload.funnel_ids),
+        models.Funnel.client_id == x_client_id
+    )
+    
+    funnels_to_delete = query.all()
+    count = len(funnels_to_delete)
+    
+    if count == 0:
+        return {"message": "Nenhum funil encontrado para excluir", "deleted_count": 0}
+        
+    for f in funnels_to_delete:
+        if f.is_pinned:
+            raise HTTPException(status_code=400, detail="Não é possível excluir um ou mais funis que estão fixados no topo.")
+    
+    funnel_ids = [f.id for f in funnels_to_delete]
+
+    # 1. Update Triggers (History)
+    db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.funnel_id.in_(funnel_ids)
+    ).update({models.ScheduledTrigger.funnel_id: None}, synchronize_session=False)
+
+    # 1.1 Update Webhook Event Mappings
+    db.query(models.WebhookEventMapping).filter(
+        models.WebhookEventMapping.funnel_id.in_(funnel_ids)
+    ).update({models.WebhookEventMapping.funnel_id: None}, synchronize_session=False)
+
+    # 1.2 Update Recurring Triggers
+    db.query(models.RecurringTrigger).filter(
+        models.RecurringTrigger.funnel_id.in_(funnel_ids)
+    ).update({models.RecurringTrigger.funnel_id: None}, synchronize_session=False)
+
+
+    # 2. Delete Webhooks
+    # First delete events to avoid Foreign Key violation
+    webhook_ids_query = db.query(models.WebhookConfig.id).filter(
+        models.WebhookConfig.funnel_id.in_(funnel_ids)
+    ).all()
+    webhook_ids = [w[0] for w in webhook_ids_query]
+    
+    if webhook_ids:
+        db.query(models.WebhookEvent).filter(
+            models.WebhookEvent.webhook_id.in_(webhook_ids)
+        ).delete(synchronize_session=False)
+
+    db.query(models.WebhookConfig).filter(
+        models.WebhookConfig.funnel_id.in_(funnel_ids)
+    ).delete(synchronize_session=False)
+
+    for f in funnels_to_delete:
+        db.delete(f)
+    
+    db.commit()
+    return {"message": f"{count} funis excluídos com sucesso", "deleted_count": count}
 
 @router.get("/funnels/{funnel_id}", response_model=schemas.Funnel, summary="Obter detalhes de um funil")
 def read_funnel(
@@ -92,6 +204,8 @@ def create_funnel(
         business_hours_start=funnel.business_hours_start,
         business_hours_end=funnel.business_hours_end,
         business_hours_days=funnel.business_hours_days,
+        is_archived=funnel.is_archived,
+        tag=funnel.tag,
         client_id=x_client_id
     )
     db.add(db_funnel)
@@ -135,6 +249,8 @@ def update_funnel(
     db_funnel.business_hours_start = funnel_update.business_hours_start
     db_funnel.business_hours_end = funnel_update.business_hours_end
     db_funnel.business_hours_days = funnel_update.business_hours_days
+    db_funnel.is_archived = funnel_update.is_archived
+    db_funnel.tag = funnel_update.tag
     
     steps_data = funnel_update.steps
     if isinstance(steps_data, list):
@@ -146,67 +262,79 @@ def update_funnel(
     db.refresh(db_funnel)
     return db_funnel
 
-@router.delete("/funnels/bulk", summary="Excluir múltiplos funis")
-def delete_funnels_bulk(
-    payload: schemas.FunnelBulkDelete,
+@router.patch("/funnels/{funnel_id}/archive", response_model=schemas.Funnel, summary="Arquivar/Desarquivar funil")
+def archive_funnel(
+    funnel_id: int,
+    payload: dict,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    """
-    Remove permanentemente múltiplos funis do sistema de uma vez.
-    """
-    # Busca todos os funis que pertencem ao cliente e estão na lista de IDs
-    query = db.query(models.Funnel).filter(
-        models.Funnel.id.in_(payload.funnel_ids),
+    db_funnel = db.query(models.Funnel).filter(
+        models.Funnel.id == funnel_id,
         models.Funnel.client_id == x_client_id
-    )
-    
-    funnels_to_delete = query.all()
-    count = len(funnels_to_delete)
-    
-    if count == 0:
-        return {"message": "Nenhum funil encontrado para excluir", "deleted_count": 0}
-    
-    funnel_ids = [f.id for f in funnels_to_delete]
-
-    # 1. Update Triggers (History)
-    db.query(models.ScheduledTrigger).filter(
-        models.ScheduledTrigger.funnel_id.in_(funnel_ids)
-    ).update({models.ScheduledTrigger.funnel_id: None}, synchronize_session=False)
-
-    # 1.1 Update Webhook Event Mappings
-    db.query(models.WebhookEventMapping).filter(
-        models.WebhookEventMapping.funnel_id.in_(funnel_ids)
-    ).update({models.WebhookEventMapping.funnel_id: None}, synchronize_session=False)
-
-    # 1.2 Update Recurring Triggers
-    db.query(models.RecurringTrigger).filter(
-        models.RecurringTrigger.funnel_id.in_(funnel_ids)
-    ).update({models.RecurringTrigger.funnel_id: None}, synchronize_session=False)
-
-
-    # 2. Delete Webhooks
-    # First delete events to avoid Foreign Key violation
-    webhook_ids_query = db.query(models.WebhookConfig.id).filter(
-        models.WebhookConfig.funnel_id.in_(funnel_ids)
-    ).all()
-    webhook_ids = [w[0] for w in webhook_ids_query]
-    
-    if webhook_ids:
-        db.query(models.WebhookEvent).filter(
-            models.WebhookEvent.webhook_id.in_(webhook_ids)
-        ).delete(synchronize_session=False)
-
-    db.query(models.WebhookConfig).filter(
-        models.WebhookConfig.funnel_id.in_(funnel_ids)
-    ).delete(synchronize_session=False)
-
-    for f in funnels_to_delete:
-        db.delete(f)
-    
+    ).first()
+    if not db_funnel:
+        raise HTTPException(status_code=404, detail="Funnel not found")
+        
+    is_archived = payload.get("is_archived", True)
+    if is_archived and db_funnel.is_pinned:
+        raise HTTPException(status_code=400, detail="Não é possível arquivar um funil que está fixado no topo.")
+        
+    db_funnel.is_archived = is_archived
     db.commit()
-    return {"message": f"{count} funis excluídos com sucesso", "deleted_count": count}
+    db.refresh(db_funnel)
+    return db_funnel
+
+@router.patch("/funnels/{funnel_id}/tag", response_model=schemas.Funnel, summary="Atualizar etiqueta do funil")
+def tag_funnel(
+    funnel_id: int,
+    payload: dict,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    db_funnel = db.query(models.Funnel).filter(
+        models.Funnel.id == funnel_id,
+        models.Funnel.client_id == x_client_id
+    ).first()
+    if not db_funnel:
+        raise HTTPException(status_code=404, detail="Funnel not found")
+        
+    db_funnel.tag = payload.get("tag")
+    db.commit()
+    db.refresh(db_funnel)
+    return db_funnel
+
+@router.patch("/funnels/{funnel_id}/pin", response_model=schemas.Funnel, summary="Fixar/Desafixar funil no topo")
+def pin_funnel(
+    funnel_id: int,
+    payload: dict,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    db_funnel = db.query(models.Funnel).filter(
+        models.Funnel.id == funnel_id,
+        models.Funnel.client_id == x_client_id
+    ).first()
+    if not db_funnel:
+        raise HTTPException(status_code=404, detail="Funnel not found")
+        
+    is_pinned = payload.get("is_pinned", False)
+    if is_pinned:
+        pinned_count = db.query(models.Funnel).filter(
+            models.Funnel.client_id == x_client_id,
+            models.Funnel.is_pinned == True,
+            models.Funnel.id != funnel_id
+        ).count()
+        if pinned_count >= 3:
+            raise HTTPException(status_code=400, detail="Você só pode fixar até 3 funis no topo!")
+            
+    db_funnel.is_pinned = is_pinned
+    db.commit()
+    db.refresh(db_funnel)
+    return db_funnel
 
 @router.delete("/funnels/{funnel_id}", summary="Excluir funil")
 def delete_funnel(
@@ -224,6 +352,9 @@ def delete_funnel(
     ).first()
     if not db_funnel:
         raise HTTPException(status_code=404, detail="Funnel not found")
+        
+    if db_funnel.is_pinned:
+        raise HTTPException(status_code=400, detail="Não é possível excluir um funil que está fixado no topo.")
     
     # 1. Handle ScheduledTriggers (History)
     # Set funnel_id to NULL to preserve history involved in this funnel

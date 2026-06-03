@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { FiImage, FiUploadCloud, FiClock, FiTrash2 } from 'react-icons/fi';
+import { FiImage, FiUploadCloud, FiClock, FiTrash2, FiMaximize2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { useClient } from '../../../contexts/ClientContext';
 import { API_URL } from '../../../config';
 import NodeHeader from '../components/NodeHeader';
 import VariableSelector from '../components/VariableSelector';
 import ConfirmModal from '../../ConfirmModal';
+import ExpandTextModal from '../../BulkSender/common/ExpandTextModal';
 import { PortalContext } from '../index';
 
 const resolveUrl = (url) => {
@@ -20,6 +21,7 @@ const MediaNode = ({ id, data }) => {
     const { activeClient } = useClient();
     const [uploading, setUploading] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const portalContainer = React.useContext(PortalContext);
 
     const handleUpload = async (e) => {
@@ -99,14 +101,24 @@ const MediaNode = ({ id, data }) => {
                         <FiTrash2 size={14} />
                     </button>
                     <div className="mt-2 relative">
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-[9px] font-bold text-gray-400 uppercase">Legenda (Opcional)</span>
+                        <div className="flex justify-between items-center mb-1 gap-2">
+                            <span className="text-[9px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                Legenda (Opcional)
+                                <button
+                                    type="button"
+                                    onClick={() => setIsModalOpen(true)}
+                                    className="nodrag text-gray-450 hover:text-pink-500 transition-colors p-0.5"
+                                    title="Maximizar Legenda"
+                                >
+                                    <FiMaximize2 size={10} />
+                                </button>
+                            </span>
                             <VariableSelector onSelect={(v) => data.onChange(id, { caption: (data.caption || '') + v })} />
                         </div>
-                        <input
-                            type="text"
+                        <textarea
                             placeholder="Legenda (opcional)"
-                            className="nodrag nopan w-full text-xs p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            rows={2}
+                            className="nodrag nopan w-full text-xs p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-y"
                             value={data.caption || ''}
                             onChange={(e) => data.onChange(id, { caption: e.target.value })}
                         />
@@ -154,6 +166,15 @@ const MediaNode = ({ id, data }) => {
                 cancelText="Cancelar"
                 isDangerous={true}
                 container={portalContainer || document.body}
+            />
+
+            <ExpandTextModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                title="Legenda da Mídia"
+                value={data.caption || ''}
+                onSave={(key, val) => data.onChange(id, { caption: val })}
+                fieldKey="caption"
             />
         </div>
     );

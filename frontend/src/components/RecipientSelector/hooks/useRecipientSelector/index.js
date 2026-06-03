@@ -96,23 +96,15 @@ export const useRecipientSelector = ({
         });
     }, [contacts, searchTerm, filterOpenOnly, filterBlockedOnly, dddSearch, exclusionList]);
 
-    const displayedContacts = useMemo(() => {
-        return filteredContacts.slice(0, displayLimit);
-    }, [filteredContacts, displayLimit]);
-
     const selectedList = useMemo(() => {
         return getDispatchList(filteredContacts);
     }, [filteredContacts]);
 
-    const lastOnSelectRef = useRef(null);
-    useEffect(() => {
-        const payload = { list: selectedList, mode, tag: '', isValidated, variableFilters }; // Tag is handled by the subhook but here it is empty for the payload stringification
-        const payloadStr = JSON.stringify(payload);
-        if (lastOnSelectRef.current !== payloadStr) {
-            onSelect(selectedList, { mode, tag: '', isValidated, variableFilters });
-            lastOnSelectRef.current = payloadStr;
-        }
-    }, [selectedList, mode, isValidated, onSelect, variableFilters]);
+    const displayedContacts = useMemo(() => {
+        return filteredContacts.slice(0, displayLimit);
+    }, [filteredContacts, displayLimit]);
+
+    const [originalTagPhones, setOriginalTagPhones] = useState([]);
 
     // Sub-hooks
     const fileImport = useFileImport({ 
@@ -141,8 +133,23 @@ export const useRecipientSelector = ({
         setWorkingMessage, 
         setIsProcessing, 
         setShowList, 
-        setIsValidated 
+        setIsValidated,
+        setOriginalTagPhones
     });
+
+    const lastOnSelectRef = useRef(null);
+    useEffect(() => {
+        const currentTag = mode === 'tag' ? tags.selectedTag : '';
+        const tagExclusions = mode === 'tag' 
+            ? originalTagPhones.filter(phone => !selectedList.some(c => c.phone === phone))
+            : [];
+        const payload = { list: selectedList, mode, tag: currentTag, tagExclusions, isValidated, variableFilters };
+        const payloadStr = JSON.stringify(payload);
+        if (lastOnSelectRef.current !== payloadStr) {
+            onSelect(selectedList, { mode, tag: currentTag, tagExclusions, isValidated, variableFilters });
+            lastOnSelectRef.current = payloadStr;
+        }
+    }, [selectedList, mode, isValidated, onSelect, variableFilters, tags.selectedTag, originalTagPhones]);
 
     // Core Handlers
     const removeContact = (phone) => {
@@ -154,6 +161,7 @@ export const useRecipientSelector = ({
         setContacts([]);
         setInputText('');
         setTagVariables({});
+        setOriginalTagPhones([]);
         toast.success("Lista limpa com sucesso!");
     };
 
@@ -245,6 +253,31 @@ export const useRecipientSelector = ({
         toast.success("DDI 55 adicionado ao texto!");
     };
 
+    const unblockContact = async (phone) => {
+        try {
+            const res = await fetchWithAuth(`${API_URL}/blocked/by_phone/${phone}`, {
+                method: 'DELETE'
+            }, activeClient.id);
+
+            if (res && res.ok) {
+                setContacts(prev => prev.map(c => {
+                    if (c.phone === phone) {
+                        return { ...c, is_blocked: false };
+                    }
+                    return c;
+                }));
+                toast.success(`Número ${phone} removido da lista de bloqueio!`);
+            } else {
+                let errData = {};
+                try { errData = await res.json(); } catch(e) {}
+                toast.error(errData.detail || "Erro ao desbloquear contato.");
+            }
+        } catch (err) {
+            console.error("Erro ao remover da lista de bloqueio:", err);
+            toast.error("Erro ao remover da lista de bloqueio.");
+        }
+    };
+
     return {
         mode, setMode,
         inputText, setInputText,
@@ -266,6 +299,7 @@ export const useRecipientSelector = ({
         displayedContacts,
         selectedList,
         removeContact,
+        unblockContact,
         clearAll,
         copyToClipboard,
         parseContacts,

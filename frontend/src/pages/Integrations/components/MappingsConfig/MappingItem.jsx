@@ -25,7 +25,8 @@ const MappingItem = ({
   followupTemplateVars,
   addFollowupVariable,
   removeFollowupVariable,
-  updateFollowupVariable
+  updateFollowupVariable,
+  discoveredProducts
 }) => {
   return (
     <div className="group bg-white dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden hover:border-blue-500/30 transition-all duration-300">
@@ -40,7 +41,7 @@ const MappingItem = ({
           </div>
           <div>
             <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-widest">
-              Gatilho #{mIndex + 1}: {EVENT_TYPES.find(e => e.value === mapping.event_type)?.label || 'Evento'}
+              Gatilho #{mIndex + 1}: {EVENT_TYPES.find(e => e.value === mapping.event_type)?.label || 'Evento'}{mapping.product_name ? ` (${mapping.product_name})` : ''}
             </span>
             {!isExpanded && mapping.template_id && (
               <div className="text-[9px] text-gray-500 font-bold mt-0.5">
@@ -75,7 +76,7 @@ const MappingItem = ({
       {/* Corpo do Gatilho */}
       {isExpanded && (
         <div className="p-5 space-y-6 animate-in slide-in-from-top-4 duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             {/* Evento */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
@@ -88,6 +89,23 @@ const MappingItem = ({
               >
                 {EVENT_TYPES.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Produto do Gatilho */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
+                <FiSettings size={12} /> Produto do Gatilho
+              </label>
+              <select
+                value={mapping.product_name || ''}
+                onChange={(e) => updateMapping(mIndex, 'product_name', e.target.value || null)}
+                className="w-full bg-gray-50 dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 transition-all outline-none shadow-inner cursor-pointer"
+              >
+                <option value="">Todos os Produtos</option>
+                {(discoveredProducts || []).map(prod => (
+                  <option key={prod} value={prod}>{prod}</option>
                 ))}
               </select>
             </div>
@@ -112,7 +130,7 @@ const MappingItem = ({
                 <FiRefreshCw size={12} /> Funil ZapVoice
               </label>
               <SearchableSelect
-                options={(funnels || []).map(f => ({ value: f.id, label: f.name }))}
+                options={(funnels || []).map(f => ({ value: f.id, label: `${f.is_pinned ? '📌 ' : ''}${f.name}${f.tag ? ` [${f.tag}]` : ''}` }))}
                 value={mapping.funnel_id}
                 onChange={(val) => updateMapping(mIndex, 'funnel_id', val)}
                 placeholder="Selecione um Funil..."

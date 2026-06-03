@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign } from 'react-icons/fi';
+import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase } from 'react-icons/fi';
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
@@ -60,6 +60,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'admin' },
         { id: 'users', label: 'Gestão de Usuários', icon: FiUsers, roles: ['super_admin'], category: 'admin' },
         { id: 'monitoring', label: 'Monitoramento', icon: FiActivity, roles: ['super_admin'], category: 'admin' },
+        { id: 'backup_db', label: 'Backup Banco', icon: FiDatabase, roles: ['super_admin'], category: 'admin' },
         ...(SIMULATE_MESSAGING ? [{ id: 'stress_test', label: 'Teste de Escala', icon: FiZap, roles: ['super_admin'], category: 'admin' }] : []),
     ];
 
@@ -165,7 +166,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                 </button>
                 <div className="px-4 py-1 mt-1 border-t border-gray-100 dark:border-white/5 opacity-50">
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium tracking-widest uppercase text-center">
-                        ZapVoice v3.8.7
+                        ZapVoice v3.9.0
                     </p>
                 </div>
             </div>

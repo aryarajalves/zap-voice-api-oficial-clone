@@ -23,7 +23,7 @@ Este documento centraliza as definições de comportamento do sistema e os requi
     - **Delay Inteligente**: Aguardar 5 segundos apenas após a confirmação de que o template chegou ao WhatsApp do contato (uma única vez).
     - **Busca/Criação**: Localizar a última conversa ou criar uma nova se não existir.
     - **Gestão de Etiquetas**: Sempre adicionar novas etiquetas às existentes (modo Append), preservando o histórico do contato.
-    - **Nota Privada**: Postar o conteúdo do disparo como Nota Privada se configurado na UI.
+    - **Nota Privada**: Postar o conteúdo do disparo como Nota Privada se configurado na UI. *Nota: Para disparos em massa, nenhuma nota privada deve ser enviada (desativado completamente).*
 
 ### 5. Gestão de Blacklist e Retentativas
 - **Isolamento de Blacklist**: A lista de contatos bloqueados é 100% isolada por cliente (`client_id`), sem compartilhamento global.
@@ -122,6 +122,10 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
     - **Resposta**: Sim, o trigger filho herdará as mesmas etiquetas para garantir a consistência das tags.
 - [x] [NOVO] Caso o template falhe em ser enviado pela API da Meta, o funil filho associado não deve ser criado nem executado, marcando apenas o template como falha. Concorda com este comportamento?
     - **Resposta**: Sim, se o envio do template pai falhar, o funil filho correspondente não será criado nem executado.
+- [x] [NOVO] No nó de agendamento de data (DateNode), a tolerância de atraso deve ser configurada em minutos, horas ou ambos?
+    - **Resposta**: Ambos. O sistema permitirá selecionar a unidade (minutos ou horas) na interface.
+- [x] [NOVO] Caso a execução seja considerada "atrasada" e siga para o caminho `late`, mas o usuário não tenha conectado nenhum nó a esta porta, o fluxo deve ser encerrado ou seguir pelo caminho `default` como fallback?
+    - **Resposta**: Deve ser encerrado (o fluxo de automação é finalizado se a porta `late` não possuir nenhuma conexão).
 
 ## 📋 Histórico de Decisões
 As perguntas iniciais sobre regras de negócio foram todas respondidas e integradas às seções acima. O sistema segue o modelo de isolamento total entre clientes e automação robusta com retentativas configuradas.

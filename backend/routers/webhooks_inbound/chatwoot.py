@@ -80,6 +80,21 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
                             db.add(models.ContactWindow(client_id=client_id, phone=clean_phone, chatwoot_inbox_id=inbox_id, last_interaction_at=now_utc, chatwoot_conversation_id=conversation.get("id")))
                             logger.info(f"🆕 [WINDOW] Nova janela criada para {clean_phone}")
                         db.commit()
+
+                        # Sincroniza o contato na tabela customizada do cliente (ex: contatos_monitorados)
+                        try:
+                            from services.window_manager import sync_contact_to_custom_table
+                            sender_name = sender.get("name") or conversation.get("meta", {}).get("sender", {}).get("name")
+                            sync_contact_to_custom_table(
+                                db=db,
+                                client_id=client_id,
+                                phone=clean_phone,
+                                name=sender_name,
+                                inbox_id=inbox_id,
+                                last_interaction_at=now_utc
+                            )
+                        except Exception as e_sync:
+                            logger.error(f"❌ Erro ao chamar sync_contact_to_custom_table no Chatwoot: {e_sync}")
                         
                         # Cancelar follow-ups pendentes devido a interacao detectada no Chatwoot
                         from services.triggers_service import cancel_pending_followups_for_phone

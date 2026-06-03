@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiEyeOff, FiEye, FiShield, FiPlus, FiTrash2, FiCopy, FiTag, FiEdit2 } from 'react-icons/fi';
-import { API_URL } from '../../../config';
+import { API_URL, WEBHOOK_BASE_URL } from '../../../config';
 import { toast } from 'react-hot-toast';
 
 const ChatwootTab = ({
@@ -248,12 +248,16 @@ const ChatwootTab = ({
                         <p className="font-semibold text-indigo-800 dark:text-indigo-300 mb-2">📍 URL do Webhook (cole no Chatwoot):</p>
                         <div className="flex items-center gap-2">
                             <code className="bg-white dark:bg-gray-900 px-3 py-1.5 rounded border border-indigo-200 dark:border-indigo-700 select-all text-xs flex-1">
-                                {API_URL}/webhooks/chatwoot_events{activeClient?.id ? `?client_id=${activeClient.id}` : ''}
+                                {(() => {
+                                    const baseUrl = formData.WEBHOOK_BASE_URL || WEBHOOK_BASE_URL || API_URL.replace(/\/api\/*$/, '');
+                                    return `${baseUrl}/api/webhooks/chatwoot_events${activeClient?.id ? `?client_id=${activeClient.id}` : ''}`;
+                                })()}
                             </code>
                             <button
                                 type="button"
                                 onClick={() => {
-                                    const webhookUrl = `${API_URL}/webhooks/chatwoot_events${activeClient?.id ? `?client_id=${activeClient.id}` : ''}`;
+                                    const baseUrl = formData.WEBHOOK_BASE_URL || WEBHOOK_BASE_URL || API_URL.replace(/\/api\/*$/, '');
+                                    const webhookUrl = `${baseUrl}/api/webhooks/chatwoot_events${activeClient?.id ? `?client_id=${activeClient.id}` : ''}`;
                                     navigator.clipboard.writeText(webhookUrl);
                                     toast.success('URL copiada!');
                                 }}

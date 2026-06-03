@@ -12,7 +12,8 @@ export const useTagManagement = ({
     setWorkingMessage, 
     setIsProcessing, 
     setShowList, 
-    setIsValidated 
+    setIsValidated,
+    setOriginalTagPhones
 }) => {
     const [availableTags, setAvailableTags] = useState([]);
     const [selectedTag, setSelectedTag] = useState('');
@@ -110,6 +111,10 @@ export const useTagManagement = ({
                     }
                     return [...prev, ...uniqueIncoming];
                 });
+                
+                if (setOriginalTagPhones) {
+                    setOriginalTagPhones(incoming.map(c => c.phone));
+                }
                 
                 setShowList(true);
                 setIsValidated(false);

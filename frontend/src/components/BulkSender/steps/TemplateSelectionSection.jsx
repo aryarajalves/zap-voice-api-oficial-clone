@@ -46,14 +46,14 @@ const TemplateSelectionSection = ({
                     >
                         <span className={selectedTemplate ? "text-white" : "text-slate-500"}>
                             {selectedTemplate 
-                                ? `${selectedTemplate} (${getTemplateCategoryInfo(selectedTemplate, templates).type})` 
+                                ? `${(templates?.find(t => t.name === selectedTemplate)?.is_pinned) ? '📌 ' : ''}${selectedTemplate} (${getTemplateCategoryInfo(selectedTemplate, templates).type})` 
                                 : (isLoadingTemplates ? "Carregando templates..." : "-- Escolha um template cadastrado --")}
                         </span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className={`text-slate-500 group-hover:text-green-500 transition-all ${isTemplateDropdownOpen ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9" /></svg>
                     </div>
 
                     {isTemplateDropdownOpen && (
-                        <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border-2 border-white/10 rounded-2xl shadow-2xl z-[100] overflow-hidden">
+                        <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border-2 border-white/10 rounded-2xl shadow-2xl z-[9999] overflow-hidden">
                             <div className="p-4 border-b border-white/5 bg-black/20 space-y-3">
                                 <div className="relative">
                                     <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
@@ -98,7 +98,7 @@ const TemplateSelectionSection = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="max-h-40 overflow-y-auto premium-scrollbar">
+                            <div className="max-h-72 overflow-y-auto premium-scrollbar relative z-[9999]">
                                 <div 
                                     onClick={(e) => {
                                         e.preventDefault();
@@ -134,7 +134,9 @@ const TemplateSelectionSection = ({
                                             className={`px-6 py-3 hover:bg-green-500/10 cursor-pointer transition-colors flex flex-col gap-1 ${selectedTemplate === t.name ? 'bg-green-500/5' : ''}`}
                                         >
                                             <div className="flex justify-between items-center gap-2">
-                                                <span className="text-xs font-bold text-white truncate max-w-[60%]">{t.name}</span>
+                                                <span className="text-xs font-bold text-white truncate max-w-[60%]">
+                                                    {t.is_pinned ? '📌 ' : ''}{t.name}
+                                                </span>
                                                 {t.tags && t.tags.length > 0 && (
                                                     <div className="flex flex-wrap gap-1 justify-end max-w-[40%]">
                                                         {t.tags.map(tag => (

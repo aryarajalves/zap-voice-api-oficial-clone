@@ -200,7 +200,7 @@ const ExecutionStep = ({
                                 className={`w-full py-7 rounded-[2rem] font-black text-xl uppercase tracking-[0.4em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-6 group relative overflow-hidden ${isSending ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-emerald-900/40'}`}
                             >
                                 <div className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 skew-x-12"></div>
-                                {isSending ? 'Processando...' : scheduledTime || isRecurring ? 'Agendar Disparo' : 'Iniciar Disparo'}
+                                {isSending ? 'Processando...' : isRecurring ? 'Agendar Disparo Recorrente' : scheduledTime ? 'Agendar Disparo' : 'Iniciar Disparo'}
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className={isSending ? 'animate-spin' : 'group-hover:translate-x-2 transition-transform'}><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                             </button>
                             

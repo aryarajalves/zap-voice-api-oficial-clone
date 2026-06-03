@@ -17,6 +17,9 @@ class Funnel(Base):
     allowed_phones = Column(JSON, nullable=True)
     blocked_phones = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
+    is_archived = Column(Boolean, default=False, nullable=False)
+    tag = Column(String, nullable=True, index=True)
+    is_pinned = Column(Boolean, default=False, nullable=False)
 
     business_hours_start = Column(String, nullable=True, default="08:00")
     business_hours_end = Column(String, nullable=True, default="18:00")

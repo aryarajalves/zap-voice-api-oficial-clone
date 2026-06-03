@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Body
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel, Field
+import uuid
 import models, schemas
 from core.deps import get_current_user, get_db
 from rabbitmq_client import rabbitmq
@@ -77,6 +79,16 @@ async def cancel_trigger(trigger_id: int, db: Session = Depends(get_db), current
          
     trigger.status = "cancelled"
     db.commit()
+    
+    # Adicionar log de execução do nó como cancelado para que a interface de detalhes de contatos mostre corretamente!
+    try:
+        from core.engine.logging import log_node_execution
+        current_node = trigger.current_node_id or 'DELIVERY'
+        log_node_execution(db, trigger, node_id=current_node, status="cancelled", details="Disparo cancelado pelo usuário.")
+    except Exception as e_log:
+        import logging
+        logging.getLogger("FastAPI.CancelTrigger").error(f"Erro ao registrar log de cancelamento: {e_log}")
+
     await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": current_user.client_id})
     return {"message": "Trigger cancelled successfully"}
 
@@ -115,3 +127,102 @@ async def start_now_trigger(trigger_id: int, db: Session = Depends(get_db), curr
     if result is None: raise HTTPException(status_code=404, detail="Trigger not found")
     if result == "already_processing": raise HTTPException(status_code=400, detail="O disparo já está sendo processado.")
     return result
+
+class ManualInteractionPayload(BaseModel):
+    phones: List[str] = Field(..., description="Lista de telefones para ativar a interação")
+
+@router.post("/{trigger_id}/manual-interaction", summary="Ativar funil de interação manualmente")
+async def trigger_manual_interaction(
+    trigger_id: int,
+    payload: ManualInteractionPayload,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id, client_id=client_id).first()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo não encontrado.")
+    
+    if not trigger.interaction_funnel_id:
+        raise HTTPException(status_code=400, detail="Este disparo não possui um funil de interação configurado.")
+    
+    from services.utils.phone_utils import normalize_phone
+    from datetime import datetime, timezone
+    
+    triggered_count = 0
+    for phone_raw in payload.phones:
+        phone = normalize_phone(phone_raw)
+        if not phone:
+            continue
+            
+        # 1. Tentar encontrar a mensagem correspondente
+        msg = db.query(models.MessageStatus).filter_by(trigger_id=trigger_id, phone_number=phone).first()
+        if msg:
+            if msg.status != 'interaction':
+                msg.status = 'interaction'
+                msg.is_interaction = True
+                if not msg.interaction_counted:
+                    msg.interaction_counted = True
+                    trigger.total_interactions = (trigger.total_interactions or 0) + 1
+        else:
+            # Se não existir, criar uma mensagem fictícia para o relatório
+            msg = models.MessageStatus(
+                trigger_id=trigger_id,
+                message_id=f"manual_int_{uuid.uuid4().hex[:12]}",
+                phone_number=phone,
+                contact_name="Contato Manual",
+                status='interaction',
+                is_interaction=True,
+                interaction_counted=True,
+                message_type='FREE_MESSAGE',
+                content="[Interação Manual]"
+            )
+            db.add(msg)
+            trigger.total_interactions = (trigger.total_interactions or 0) + 1
+            trigger.total_contacts = (trigger.total_contacts or 0) + 1
+            trigger.total_sent = (trigger.total_sent or 0) + 1
+            trigger.total_delivered = (trigger.total_delivered or 0) + 1
+            
+        db.commit()
+        
+        # 2. Criar a trigger filha para o funil de interação
+        child_trigger = models.ScheduledTrigger(
+            client_id=client_id,
+            funnel_id=trigger.interaction_funnel_id,
+            conversation_id=msg.chatwoot_conversation_id or 0,
+            contact_phone=phone,
+            contact_name=msg.contact_name or "Contato Manual",
+            status='processing',
+            scheduled_time=datetime.now(timezone.utc),
+            is_bulk=False,
+            is_interaction=True,
+            parent_id=trigger_id
+        )
+        db.add(child_trigger)
+        db.commit()
+        db.refresh(child_trigger)
+        
+        # Criar registro inicial de status de mensagem para a trigger filha
+        init_status = models.MessageStatus(
+            trigger_id=child_trigger.id,
+            message_id=f"funnel_init_{child_trigger.id}",
+            phone_number=phone,
+            contact_name=msg.contact_name or phone,
+            status='sent',
+            message_type='FREE_MESSAGE',
+            content=f"[Funil Iniciado] {trigger.funnel.name if trigger.funnel else 'Funil'}"
+        )
+        db.add(init_status)
+        db.commit()
+        
+        # Publicar no RabbitMQ para executar o funil de interação
+        await rabbitmq.publish("zapvoice_funnel_executions", {
+            "trigger_id": child_trigger.id,
+            "funnel_id": trigger.interaction_funnel_id,
+            "contact_phone": phone
+        })
+        triggered_count += 1
+        
+    await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": trigger.status, "client_id": client_id})
+    return {"status": "success", "triggered_count": triggered_count}

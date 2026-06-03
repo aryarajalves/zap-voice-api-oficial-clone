@@ -57,6 +57,32 @@ class ChatwootLabelsMixin:
         payload = {"labels": merged_labels}
         return await self._request("POST", f"conversations/{conversation_id}/labels", json=payload)
 
+    async def remove_label_from_conversation(self, conversation_id: int, labels: Union[str, List[str]]):
+        labels_to_remove = self._normalize_labels(labels)
+        if not labels_to_remove: return None
+        
+        existing_labels = await self.get_conversation_labels(conversation_id)
+        remaining_labels = [l for l in existing_labels if l not in labels_to_remove]
+        
+        if len(remaining_labels) == len(existing_labels):
+            return {"payload": existing_labels}
+
+        payload = {"labels": remaining_labels}
+        return await self._request("POST", f"conversations/{conversation_id}/labels", json=payload)
+
+    async def remove_label_from_contact(self, contact_id: int, labels: Union[str, List[str]]):
+        labels_to_remove = self._normalize_labels(labels)
+        if not labels_to_remove: return None
+        
+        existing_labels = await self.get_contact_labels(contact_id)
+        remaining_labels = [l for l in existing_labels if l not in labels_to_remove]
+        
+        if len(remaining_labels) == len(existing_labels):
+            return {"payload": existing_labels}
+
+        payload = {"labels": remaining_labels}
+        return await self._request("POST", f"contacts/{contact_id}/labels", json=payload)
+
     def _normalize_labels(self, labels: Union[str, List[str]]) -> List[str]:
         from core.utils import robust_extract_labels
         return robust_extract_labels(labels)

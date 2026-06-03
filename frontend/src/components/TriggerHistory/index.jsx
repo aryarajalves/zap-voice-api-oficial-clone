@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ConfirmModal from '../ConfirmModal';
 import { useTriggerHistory } from './hooks/useTriggerHistory';
 import TriggerFilters, { Pagination } from './components/TriggerFilters';
@@ -9,6 +9,7 @@ import EditParamsModal from './components/EditParamsModal';
 import ErrorReportModal from './components/ErrorReportModal';
 import ChildrenFunnelsModal from './components/ChildrenFunnelsModal';
 import BulkSummaryBar from './components/BulkSummaryBar';
+import ManualInteractionModal from './components/ManualInteractionModal';
 
 const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType: initialTriggerTypeProp = 'all' }) => {
     const {
@@ -24,6 +25,8 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType:
         handleViewContacts, handleEditParams,
         contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal
     } = useTriggerHistory(refreshKey, initialTriggerTypeProp);
+
+    const [manualInteractionTriggerId, setManualInteractionTriggerId] = useState(null);
 
     const handleActionWrapper = () => {
         if (modalConfig.type === 'bulk_delete') {
@@ -57,7 +60,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType:
                             className="appearance-none pl-10 pr-10 py-2.5 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-sm font-bold text-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all cursor-pointer hover:border-blue-500/50 min-w-[220px]"
                         >
                             <option value="all">📋 Tudo</option>
-                            <option value="single">🚀 Histórico de Funis</option>
+                            <option value="single">🚀 Disparo de Funil</option>
                             <option value="bulk">📤 Disparos em Massa</option>
                             <option value="recurring">🔄 Disparos Recorrentes</option>
                         </select>
@@ -138,6 +141,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType:
                 handleStartNow={handleStartNow} handleCancel={handleCancel}
                 handleRetry={handleRetry} handleDelete={handleDelete}
                 user={user} confirmBulkDelete={confirmBulkDelete}
+                onManualInteraction={(id) => setManualInteractionTriggerId(id)}
             />
 
             <Pagination 
@@ -157,8 +161,17 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, triggerType:
                     onClose={() => setMonitoringTrigger(null)} 
                     onStop={handleCancel}
                     onDelete={handleDelete}
+                    hideTabs={true}
                 />
             )}
+
+            <ManualInteractionModal
+                isOpen={!!manualInteractionTriggerId}
+                onClose={() => setManualInteractionTriggerId(null)}
+                triggerId={manualInteractionTriggerId}
+                onRefresh={fetchHistory}
+            />
+
         </div>
     );
 };

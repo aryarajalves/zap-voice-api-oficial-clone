@@ -361,6 +361,36 @@ export function useBlockedContacts() {
 
     const totalPages = itemsPerPage === 'all' ? 1 : Math.ceil(filteredContacts.length / itemsPerPage);
 
+    const exportBlockedContacts = () => {
+        if (filteredContacts.length === 0) {
+            toast.error("Nenhum contato bloqueado para exportar.");
+            return;
+        }
+
+        const headers = ["Telefone", "Nome", "Motivo", "Data/Hora"];
+        const rows = filteredContacts.map(c => [
+            c.phone,
+            c.name || "",
+            c.reason || "",
+            c.created_at ? new Date(c.created_at).toLocaleString('pt-BR') : ""
+        ]);
+
+        const csvContent = [
+            headers.join(";"),
+            ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(";"))
+        ].join("\n");
+
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `contatos_bloqueados_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("Lista de contatos bloqueados exportada com sucesso!");
+    };
+
     const toggleSelectAll = (checked) => {
         if (checked) {
             const visibleIds = paginatedContacts.map(c => c.id);
@@ -391,6 +421,6 @@ export function useBlockedContacts() {
         phoneColSearch, setPhoneColSearch, nameColSearch, setNameColSearch,
         handleFileUpload, processMappedImport, handleBlockManual,
         add55ToManualInput, performUnblock, handleBulkDelete, filteredContacts,
-        paginatedContacts, totalPages, toggleSelectAll, toggleSelectRow
+        paginatedContacts, totalPages, toggleSelectAll, toggleSelectRow, exportBlockedContacts
     };
 }

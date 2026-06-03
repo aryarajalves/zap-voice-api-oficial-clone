@@ -6,6 +6,7 @@ const ContactTable = ({
     activeVarColumns,
     showValidation,
     removeContact,
+    unblockContact,
     displayLimit,
     setDisplayLimit,
     filteredContactsCount,
@@ -43,7 +44,7 @@ const ContactTable = ({
                                                         : 'bg-slate-800 text-slate-400 hover:bg-slate-750 hover:text-white'
                                                 }`}
                                                 title={isFirstName ? 'Enviando apenas a primeira palavra' : 'Enviando conteúdo completo'}
-                                            >
+                                             >
                                                 {isFirstName ? '✦ 1º Nome' : 'Inteiro'}
                                             </button>
                                         </div>
@@ -80,7 +81,15 @@ const ContactTable = ({
                                 {showValidation && (
                                     <td className="px-8 py-4 text-center">
                                         {c.is_blocked ? (
-                                            <span className="text-[10px] font-black text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl border border-red-500/20 uppercase tracking-wider">Bloqueado</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => unblockContact(c.phone)}
+                                                className="text-[10px] font-black text-red-400 bg-red-500/10 hover:bg-red-500/25 px-3 py-1.5 rounded-xl border border-red-500/20 uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer inline-flex items-center gap-1.5 group/unblock"
+                                                title="Remover este contato da lista de bloqueio"
+                                            >
+                                                <span>Bloqueado</span>
+                                                <span className="text-[8px] text-red-500/50 group-hover/unblock:text-red-400/90 lowercase tracking-normal">(desbloquear)</span>
+                                            </button>
                                         ) : c.status === 'pending' ? (
                                             <span className="inline-flex w-2 h-2 rounded-full bg-slate-700 animate-pulse"></span>
                                         ) : c.status === 'verified' ? (

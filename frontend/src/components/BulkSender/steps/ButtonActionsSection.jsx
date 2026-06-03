@@ -103,9 +103,9 @@ const ButtonActionsSection = ({ templateButtons, buttonActions, setButtonActions
                                         value={action.funnel_id || ''}
                                         onChange={(e) => setFunnel(btnText, e.target.value || null)}
                                     >
-                                        <option value="">— Nenhum funil —</option>
+                                        <option value="" className="bg-slate-900 text-white">— Nenhum funil —</option>
                                         {funnels.map((f) => (
-                                            <option key={f.id} value={f.id}>{f.name}</option>
+                                            <option key={f.id} value={f.id} className="bg-slate-900 text-white">{f.is_pinned ? '📌 ' : ''}{f.name}{f.tag ? ` [${f.tag}]` : ''}</option>
                                         ))}
                                     </select>
                                     {action.type === 'block' && (

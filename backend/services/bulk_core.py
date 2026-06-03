@@ -30,38 +30,78 @@ async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, n
 
         # Nota privada com o conteúdo da mensagem enviada
         if note_content:
-            logger.info(f"📝 [BULK] Enfileirando nota privada na conversa {resolved_conv_id} via RabbitMQ")
-            from rabbitmq_client import rabbitmq
-            await rabbitmq.publish("chatwoot_private_messages", {
-                "client_id": chatwoot.client_id,
-                "phone": phone,
-                "message": note_content,
-                "trigger_id": trigger_id,
-                "conversation_id": resolved_conv_id,
-                "delay": 5
-            })
-            
+            is_bulk = False
             if trigger_id:
                 from database import SessionLocal
                 import models
-                db = SessionLocal()
+                db_trig = SessionLocal()
                 try:
-                    clean_phone = "".join(filter(str.isdigit, str(phone)))
-                    msg_rec = db.query(models.MessageStatus).filter(
-                        models.MessageStatus.trigger_id == trigger_id,
-                        models.MessageStatus.phone_number.like(f"%{clean_phone[-10:]}")
-                    ).first()
-                    if msg_rec:
-                        msg_rec.private_note_posted = True
-                        msg_rec.chatwoot_conversation_id = resolved_conv_id
-                        db.commit()
-                        logger.info(f"✅ [BULK-POST-SEND] Marcou private_note_posted como True para {phone} no Trigger {trigger_id}")
-                    else:
-                        logger.warning(f"⚠️ [BULK-POST-SEND] Registro MessageStatus não encontrado para {phone} no Trigger {trigger_id}")
-                except Exception as e_db:
-                    logger.error(f"❌ [BULK-POST-SEND] Erro ao atualizar private_note_posted no banco: {e_db}")
+                    trigger = db_trig.query(models.ScheduledTrigger).get(trigger_id)
+                    if trigger:
+                        if trigger.is_bulk:
+                            is_bulk = True
+                        elif trigger.parent_id:
+                            parent_trigger = db_trig.query(models.ScheduledTrigger).get(trigger.parent_id)
+                            if parent_trigger and parent_trigger.is_bulk:
+                                is_bulk = True
+                except Exception as e_trig:
+                    logger.error(f"❌ [BULK] Erro ao verificar se trigger #{trigger_id} é bulk: {e_trig}")
                 finally:
-                    db.close()
+                    db_trig.close()
+
+            if is_bulk:
+                logger.info(f"⏭️ [BULK] Disparo em massa detectado para Trigger #{trigger_id}. Ignorando envio de nota privada.")
+                if trigger_id:
+                    from database import SessionLocal
+                    import models
+                    db = SessionLocal()
+                    try:
+                        clean_phone = "".join(filter(str.isdigit, str(phone)))
+                        msg_rec = db.query(models.MessageStatus).filter(
+                            models.MessageStatus.trigger_id == trigger_id,
+                            models.MessageStatus.phone_number.like(f"%{clean_phone[-10:]}")
+                        ).first()
+                        if msg_rec:
+                            msg_rec.private_note_posted = False
+                            msg_rec.chatwoot_conversation_id = resolved_conv_id
+                            db.commit()
+                    except Exception as e_db:
+                        logger.error(f"❌ [BULK-POST-SEND] Erro ao atualizar status no banco: {e_db}")
+                    finally:
+                        db.close()
+            else:
+                logger.info(f"📝 [BULK] Enfileirando nota privada na conversa {resolved_conv_id} via RabbitMQ")
+                from rabbitmq_client import rabbitmq
+                await rabbitmq.publish("chatwoot_private_messages", {
+                    "client_id": chatwoot.client_id,
+                    "phone": phone,
+                    "message": note_content,
+                    "trigger_id": trigger_id,
+                    "conversation_id": resolved_conv_id,
+                    "delay": 5
+                })
+                
+                if trigger_id:
+                    from database import SessionLocal
+                    import models
+                    db = SessionLocal()
+                    try:
+                        clean_phone = "".join(filter(str.isdigit, str(phone)))
+                        msg_rec = db.query(models.MessageStatus).filter(
+                            models.MessageStatus.trigger_id == trigger_id,
+                            models.MessageStatus.phone_number.like(f"%{clean_phone[-10:]}")
+                        ).first()
+                        if msg_rec:
+                            msg_rec.private_note_posted = True
+                            msg_rec.chatwoot_conversation_id = resolved_conv_id
+                            db.commit()
+                            logger.info(f"✅ [BULK-POST-SEND] Marcou private_note_posted como True para {phone} no Trigger {trigger_id}")
+                        else:
+                            logger.warning(f"⚠️ [BULK-POST-SEND] Registro MessageStatus não encontrado para {phone} no Trigger {trigger_id}")
+                    except Exception as e_db:
+                        logger.error(f"❌ [BULK-POST-SEND] Erro ao atualizar private_note_posted no banco: {e_db}")
+                    finally:
+                        db.close()
 
         # Etiquetas (se configuradas)
         if chatwoot_label:

@@ -15,6 +15,7 @@ export default function ContactList({
     toggleSelectAll,
     onBulkDelete,
     onUnblock,
+    onExport,
     currentPage,
     setCurrentPage,
     itemsPerPage,
@@ -30,6 +31,7 @@ export default function ContactList({
                 setSearchTerm={setSearchTerm} 
                 selectedCount={selectedIds.size} 
                 onBulkDelete={onBulkDelete} 
+                onExport={onExport}
             />
 
             {loading ? (

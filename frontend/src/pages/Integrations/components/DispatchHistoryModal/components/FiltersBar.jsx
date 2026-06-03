@@ -11,6 +11,8 @@ const FiltersBar = ({
   setDispatchPage,
   dispatchTypeFilter,
   setDispatchTypeFilter,
+  dispatchStatusFilter,
+  setDispatchStatusFilter,
   dispatchStartDate,
   setDispatchStartDate,
   dispatchEndDate,
@@ -24,7 +26,7 @@ const FiltersBar = ({
 }) => {
   return (
     <div className="px-6 pt-4 pb-0 shrink-0">
-      <div className="mb-3 grid grid-cols-1 md:grid-cols-6 gap-3 items-end bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
+      <div className="mb-3 grid grid-cols-1 md:grid-cols-7 gap-3 items-end bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
         <div className="md:col-span-1">
           <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Buscar</label>
           <div className="relative group">
@@ -56,6 +58,29 @@ const FiltersBar = ({
                 setDispatchPage(1);
               }}
               placeholder="Todos os Eventos"
+              colorClass="focus-within:ring-indigo-500/20"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Status</label>
+          <div className="relative">
+            <SearchableSelect
+              options={[
+                { value: "", label: "Todos os Status" },
+                { value: "completed", label: "Sucesso / Enviados" },
+                { value: "failed", label: "Erro / Falhas" },
+                { value: "processing", label: "Processando" },
+                { value: "queued", label: "Fila / Pendentes" },
+                { value: "cancelled", label: "Cancelados" }
+              ]}
+              value={dispatchStatusFilter}
+              onChange={(val) => {
+                setDispatchStatusFilter(val);
+                setDispatchPage(1);
+              }}
+              placeholder="Todos os Status"
               colorClass="focus-within:ring-indigo-500/20"
             />
           </div>
@@ -131,11 +156,12 @@ const FiltersBar = ({
                 setDispatchSearch('');
                 setDispatchEventFilter('');
                 setDispatchTypeFilter('');
+                setDispatchStatusFilter('');
                 setDispatchTemplateFilter('');
                 setDispatchStartDate('');
                 setDispatchEndDate('');
                 setDispatchPage(1);
-                fetchDispatches(integrationId, 1, dispatchLimit, '', '', '', '', '', '', '');
+                fetchDispatches(integrationId, 1, dispatchLimit, '', '', '', '', '', '', '', '');
               }}
               className="p-2.5 bg-white/5 hover:bg-orange-500/20 text-gray-400 hover:text-orange-500 rounded-xl transition-all border border-transparent hover:border-orange-500/20"
               title="Limpar Filtros e Resetar"

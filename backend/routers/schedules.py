@@ -8,9 +8,46 @@ from core.deps import get_current_user
 from core.permissions import require_premium, require_user
 from models import User, RecurringTrigger, WebhookLead
 from core.recurrent_logic import calculate_next_run
+from chatwoot_client import ChatwootClient
 import schemas
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
+
+def normalize_phone(phone: str) -> str:
+    """
+    Normaliza um número de telefone removendo todos os caracteres não-numéricos.
+    Usado para garantir que a comparação entre exclusion_list e phones retornados
+    pelo Chatwoot funcione independentemente do formato (+55, 55, etc).
+    """
+    return "".join(filter(str.isdigit, phone or ""))
+
+def phones_match(phone_a: str, phone_b: str) -> bool:
+    """
+    Compara dois phones normalizados. Aceita match tanto pelo número completo
+    quanto por sufixo (ex: '5585456571' bate com '558585456571').
+    """
+    a = normalize_phone(phone_a)
+    b = normalize_phone(phone_b)
+    if not a or not b:
+        return False
+    # Match exato
+    if a == b:
+        return True
+    # Match por sufixo (um pode ter DDI e outro não)
+    return a.endswith(b) or b.endswith(a)
+
+def is_in_exclusions(phone: str, exclusions: set) -> bool:
+    """Verifica se um phone está na lista de exclusões usando comparação flexível."""
+    phone_norm = normalize_phone(phone)
+    if phone_norm in exclusions:
+        return True
+    # Tenta match por sufixo com cada exclusão
+    for excl in exclusions:
+        excl_norm = normalize_phone(excl)
+        if phone_norm and excl_norm:
+            if phone_norm.endswith(excl_norm) or excl_norm.endswith(phone_norm):
+                return True
+    return False
 
 def get_db():
     db = SessionLocal()
@@ -316,7 +353,7 @@ def update_recurring_schedule(
     return record
 
 @router.post("/recurring/{rt_id}/trigger", summary="Disparar uma recorrência manualmente agora")
-def trigger_recurring_manual(
+async def trigger_recurring_manual(
     rt_id: int,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
@@ -337,21 +374,36 @@ def trigger_recurring_manual(
         raise HTTPException(status_code=404, detail="Recorrência não encontrada")
     
     # Resolve Contacts
-    final_contacts = rt.contacts_list or []
-    if rt.tag:
-        leads = db.query(WebhookLead).filter(
-            WebhookLead.client_id == client_id,
-            WebhookLead.tags.ilike(f"%{rt.tag}%")
-        ).all()
+    exclusions = set(rt.exclusion_list or [])
+    final_contacts = []
+    if rt.contacts_list:
+        final_contacts = [c for c in rt.contacts_list if c.get('phone') not in exclusions]
         
-        tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
-        if rt.contacts_list:
-            phones_in_list = {c.get('phone') for c in final_contacts}
-            for tc in tag_contacts:
-                if tc['phone'] not in phones_in_list:
-                    final_contacts.append(tc)
-        else:
-            final_contacts = tag_contacts
+    if rt.tag:
+        # Buscar em tempo real do Chatwoot para garantir que removidos da etiqueta não apareçam
+        try:
+            chatwoot = ChatwootClient(client_id=client_id)
+            cw_contacts = await chatwoot.get_contacts_by_label(rt.tag)
+            tag_contacts = []
+            for c in cw_contacts:
+                phone_raw = c.get("phone_number") or ""
+                phone_digits = "".join(filter(str.isdigit, phone_raw))
+                if len(phone_digits) >= 8:
+                    tag_contacts.append({"phone": phone_digits, "name": c.get("name")})
+        except Exception as e:
+            # Fallback para banco local se Chatwoot não estiver acessível
+            from core.logger import logger
+            logger.warning(f"⚠️ [RECURRING TRIGGER] Fallback para banco local ao buscar etiqueta '{rt.tag}': {e}")
+            leads = db.query(WebhookLead).filter(
+                WebhookLead.client_id == client_id,
+                WebhookLead.tags.ilike(f"%{rt.tag}%")
+            ).all()
+            tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
+        
+        phones_in_list = {c.get('phone') for c in final_contacts}
+        for tc in tag_contacts:
+            if tc['phone'] not in phones_in_list and tc['phone'] not in exclusions:
+                final_contacts.append(tc)
 
     if not final_contacts:
         raise HTTPException(status_code=400, detail="Nenhum contato encontrado para esta recorrência (filtro de etiqueta retornou vazio).")
@@ -371,6 +423,8 @@ def trigger_recurring_manual(
         private_message_concurrency=rt.private_message_concurrency,
         status='queued',
         is_bulk=True,
+        is_recurring=True,
+        button_actions=rt.button_actions,
         scheduled_time=datetime.now(timezone.utc)
     )
     db.add(new_st)
@@ -380,7 +434,7 @@ def trigger_recurring_manual(
     return {"message": "Disparo manual agendado com sucesso!", "trigger_id": new_st.id}
 
 @router.get("/recurring/{rt_id}/contacts")
-def get_recurring_contacts(
+async def get_recurring_contacts(
     rt_id: int,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
@@ -398,25 +452,94 @@ def get_recurring_contacts(
     if not record:
         raise HTTPException(status_code=404, detail="Recorrência não encontrada")
     
-    # If using static contacts_list
-    if record.contacts_list:
-        return {"contacts": record.contacts_list, "mode": "static", "count": len(record.contacts_list)}
-    
-    # If using tag
+    exclusions = set(record.exclusion_list or [])
+    # Se usar etiqueta, buscar no banco local de Leads (tabela WebhookLead) que é onde as etiquetas de contato são armazenadas
     if record.tag:
-        leads = db.query(WebhookLead).filter(
-            WebhookLead.client_id == client_id,
-            WebhookLead.tags.ilike(f"%{record.tag}%")
-        ).all()
+        from core.logger import logger
         
         contacts = []
-        for lead in leads:
+        source = "local_db"
+        live_phones = set()
+        
+        try:
+            leads = db.query(WebhookLead).filter(
+                WebhookLead.client_id == client_id,
+                WebhookLead.tags.ilike(f"%{record.tag}%")
+            ).all()
+            for lead in leads:
+                live_phones.add(lead.phone)
+                contacts.append({
+                    "phone": lead.phone,
+                    "name": lead.name or "Sem Nome",
+                    "email": lead.email or "-",
+                    "is_excluded": is_in_exclusions(lead.phone, exclusions)
+                })
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar contatos da etiqueta no banco local: {e}")
+        
+        # Mesclar com o snapshot original se disponível
+        if record.contacts_list:
+            for c in record.contacts_list:
+                phone = c.get('phone')
+                if phone:
+                    phone_digits = "".join(filter(str.isdigit, str(phone)))
+                    if not is_in_exclusions(phone_digits, live_phones):
+                        # Contato estava no snapshot original mas não está mais ativo na etiqueta
+                        # Forçamos a exclusão para aparecer como "Removido"
+                        exclusions.add(phone_digits)
+                        contacts.append({
+                            "phone": phone_digits,
+                            "name": c.get('name') or "Sem Nome",
+                            "email": c.get('email', '-'),
+                            "is_excluded": True
+                        })
+        # Garantir que todo contato que está na lista de exclusão apareça na resposta
+        existing_phones = {c["phone"] for c in contacts}
+        for excluded_phone in exclusions:
+            if excluded_phone not in existing_phones:
+                contacts.append({
+                    "phone": excluded_phone,
+                    "name": "Contato Removido",
+                    "email": "-",
+                    "is_excluded": True
+                })
+                        
+        return {
+            "contacts": contacts, 
+            "mode": "tag", 
+            "tag": record.tag, 
+            "count": len(contacts),
+            "exclusion_list": list(exclusions),
+            "source": source
+        }
+    
+    # Se usar lista estática (sem tag)
+    if record.contacts_list:
+        contacts = []
+        for c in record.contacts_list:
             contacts.append({
-                "phone": lead.phone,
-                "name": lead.name or "Sem Nome",
-                "email": lead.email
+                "phone": c.get('phone'),
+                "name": c.get('name') or "Sem Nome",
+                "email": c.get('email', '-'),
+                "is_excluded": is_in_exclusions(c.get('phone', ''), exclusions)
             })
             
-        return {"contacts": contacts, "mode": "tag", "tag": record.tag, "count": len(contacts)}
+        # Garantir que todo contato que está na lista de exclusão apareça na resposta
+        existing_phones = {c["phone"] for c in contacts}
+        for excluded_phone in exclusions:
+            if excluded_phone not in existing_phones:
+                contacts.append({
+                    "phone": excluded_phone,
+                    "name": "Contato Removido",
+                    "email": "-",
+                    "is_excluded": True
+                })
+                
+        return {
+            "contacts": contacts, 
+            "mode": "static", 
+            "count": len(contacts),
+            "exclusion_list": list(exclusions)
+        }
     
-    return {"contacts": [], "mode": "none", "count": 0}
+    return {"contacts": [], "mode": "none", "count": 0, "exclusion_list": []}

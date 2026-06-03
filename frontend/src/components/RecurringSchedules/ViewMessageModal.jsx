@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FiX, FiEdit2, FiFolder, FiMessageSquare, FiSearch, FiSave, FiLink } from 'react-icons/fi';
 import TemplatePreview from '../BulkSender/common/TemplatePreview';
 import TemplateSelectorDropdown from './TemplateSelectorDropdown';
+import ButtonActionsSection from '../BulkSender/steps/ButtonActionsSection';
 import { toast } from 'react-hot-toast';
 
 export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, templates, funnels, isUpdating }) {
@@ -13,6 +14,7 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
     const [selectedFunnelId, setSelectedFunnelId] = useState('');
     const [directMessage, setDirectMessage] = useState('');
     const [templateParams, setTemplateParams] = useState({});
+    const [buttonActions, setButtonActions] = useState({});
 
     const convertComponentsToParams = (components) => {
         if (!components || !Array.isArray(components)) return {};
@@ -47,12 +49,21 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
             if (viewingMessageSchedule.template_name) {
                 setSelectedTemplateName(viewingMessageSchedule.template_name);
                 setTemplateParams(convertComponentsToParams(viewingMessageSchedule.template_components));
+                setButtonActions(viewingMessageSchedule.button_actions || {});
             } else {
                 setSelectedTemplateName('');
                 setTemplateParams({});
+                setButtonActions({});
             }
         }
     }, [viewingMessageSchedule]);
+
+    const extractTemplateButtons = (templateObj) => {
+        if (!templateObj?.components) return [];
+        const buttonsComp = templateObj.components.find(c => c.type === 'BUTTONS');
+        if (!buttonsComp?.buttons) return [];
+        return buttonsComp.buttons.map(b => b.text).filter(Boolean);
+    };
 
     const extractTemplateVariables = (templateObj) => {
         if (!templateObj) return [];
@@ -82,7 +93,8 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
             template_language: null,
             template_components: null,
             funnel_id: null,
-            direct_message: null
+            direct_message: null,
+            button_actions: null
         };
 
         if (sendType === 'template') {
@@ -93,6 +105,7 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
             const tObj = templates.find(t => t.name === selectedTemplateName);
             payload.template_name = selectedTemplateName;
             payload.template_language = tObj?.language || 'pt_BR';
+            payload.button_actions = Object.keys(buttonActions).length > 0 ? buttonActions : null;
             
             // Reconstruir template_components
             const components = [];
@@ -264,6 +277,18 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
                                                         );
                                                     })}
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {/* Configuração de Ações de Botões se o template possuir botões */}
+                                        {extractTemplateButtons(selectedTemplateObj).length > 0 && (
+                                            <div className="pt-4 border-t border-white/5">
+                                                <ButtonActionsSection 
+                                                    templateButtons={extractTemplateButtons(selectedTemplateObj)} 
+                                                    buttonActions={buttonActions} 
+                                                    setButtonActions={setButtonActions} 
+                                                    funnels={funnels} 
+                                                />
                                             </div>
                                         )}
 

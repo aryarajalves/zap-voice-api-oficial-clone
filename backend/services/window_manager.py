@@ -155,3 +155,65 @@ async def get_best_conversation(
         f"Falling back to original conversation {current_conversation_id}."
     )
     return current_conversation_id
+
+
+def sync_contact_to_custom_table(
+    db: Session,
+    client_id: int,
+    phone: str,
+    name: str,
+    inbox_id: Optional[int],
+    last_interaction_at: datetime
+):
+    """
+    Sincroniza um contato que interagiu com o sistema na tabela customizada do cliente (ex: contatos_monitorados).
+    Cria a tabela se ela não existir e executa um UPSERT robusto tanto para PostgreSQL quanto para SQLite.
+    """
+    from config_loader import get_setting
+    from sqlalchemy import text
+    
+    sync_table_raw = get_setting("SYNC_CONTACTS_TABLE", "contatos_monitorados", client_id=client_id)
+    if not sync_table_raw:
+        return
+        
+    # Saneamento básico do nome da tabela para evitar SQL Injection
+    safe_table = "".join(c for c in sync_table_raw if c.isalnum() or c == '_')
+    clean_phone = "".join(filter(str.isdigit, str(phone)))
+    
+    if not clean_phone:
+        return
+
+    try:
+        # 1. Garantir que a tabela existe
+        create_sql = text(f"""
+            CREATE TABLE IF NOT EXISTS {safe_table} (
+                phone VARCHAR(50) PRIMARY KEY,
+                name VARCHAR(255),
+                inbox_id INTEGER,
+                last_interaction_at TIMESTAMP WITH TIME ZONE
+            )
+        """)
+        db.execute(create_sql)
+        db.commit()
+        
+        # 2. Executar o UPSERT (compatível com SQLite e PostgreSQL)
+        upsert_sql = text(f"""
+            INSERT INTO {safe_table} (phone, name, inbox_id, last_interaction_at)
+            VALUES (:phone, :name, :inbox_id, :last_interaction_at)
+            ON CONFLICT (phone) DO UPDATE SET
+                name = EXCLUDED.name,
+                inbox_id = EXCLUDED.inbox_id,
+                last_interaction_at = EXCLUDED.last_interaction_at
+        """)
+        db.execute(upsert_sql, {
+            "phone": clean_phone,
+            "name": name or f"Contato_{clean_phone[-4:]}",
+            "inbox_id": inbox_id,
+            "last_interaction_at": last_interaction_at
+        })
+        db.commit()
+        logger.info(f"✨ [SYNC-TABLE] Contato {clean_phone} sincronizado com sucesso na tabela {safe_table}!")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ [SYNC-TABLE] Erro ao sincronizar contato na tabela {safe_table}: {e}")
+

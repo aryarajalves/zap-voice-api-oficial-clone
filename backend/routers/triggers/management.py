@@ -19,7 +19,12 @@ def get_trigger(
     Retorna os detalhes de um disparo específico.
     """
     client_id = x_client_id if x_client_id else current_user.client_id
-    trigger = db.query(models.ScheduledTrigger).filter(
+    from sqlalchemy.orm import joinedload
+    trigger = db.query(models.ScheduledTrigger).options(
+        joinedload(models.ScheduledTrigger.funnel),
+        joinedload(models.ScheduledTrigger.interaction_funnel),
+        joinedload(models.ScheduledTrigger.block_funnel)
+    ).filter(
         models.ScheduledTrigger.id == trigger_id,
         models.ScheduledTrigger.client_id == client_id,
         models.ScheduledTrigger.status != 'deleted_pending'
@@ -48,11 +53,90 @@ def get_trigger(
     if base_url.endswith("/"):
         base_url = base_url[:-1]
     
+    # Sempre buscar logs de execução dos filhos se existirem (e.g. disparos em lote ou botões)
+    child_triggers = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.parent_id == trigger.id
+    ).all()
+    
+    if child_triggers:
+        # Se o pai não tem funnel_id direto, tenta obter do primeiro filho
+        if not trigger.funnel_id:
+            for child in child_triggers:
+                if child.funnel_id:
+                    trigger.funnel_id = child.funnel_id
+                    trigger.funnel = child.funnel
+                    break
+        
+        parent_hist = list(trigger.execution_history or [])
+        # Enriquecer o histórico do pai
+        parent_contact_name = trigger.contact_name or trigger.contact_phone or 'Contato ZapVoice'
+        parent_contact_phone = trigger.contact_phone
+        enriched_parent_hist = []
+        for entry in parent_hist:
+            enriched_entry = entry.copy()
+            if 'extra' not in enriched_entry or not isinstance(enriched_entry['extra'], dict):
+                enriched_entry['extra'] = {}
+            else:
+                enriched_entry['extra'] = enriched_entry['extra'].copy()
+            enriched_entry['extra']['contact_name'] = parent_contact_name
+            enriched_entry['extra']['contact_phone'] = parent_contact_phone
+            enriched_entry['extra']['trigger_id'] = trigger.id
+            enriched_parent_hist.append(enriched_entry)
+            
+        combined_child_hist = []
+        for child in child_triggers:
+            child_contact_name = child.contact_name or child.contact_phone or 'Contato ZapVoice'
+            child_contact_phone = child.contact_phone
+            for entry in (child.execution_history or []):
+                enriched_entry = entry.copy()
+                if 'extra' not in enriched_entry or not isinstance(enriched_entry['extra'], dict):
+                    enriched_entry['extra'] = {}
+                else:
+                    enriched_entry['extra'] = enriched_entry['extra'].copy()
+                enriched_entry['extra']['contact_name'] = child_contact_name
+                enriched_entry['extra']['contact_phone'] = child_contact_phone
+                enriched_entry['extra']['trigger_id'] = child.id
+                combined_child_hist.append(enriched_entry)
+        
+        trigger.execution_history = enriched_parent_hist + combined_child_hist
+        trigger.is_bulk = True
+    else:
+        # Single trigger - enriquecer seu próprio histórico
+        parent_hist = list(trigger.execution_history or [])
+        parent_contact_name = trigger.contact_name or trigger.contact_phone or 'Contato ZapVoice'
+        parent_contact_phone = trigger.contact_phone
+        enriched_parent_hist = []
+        for entry in parent_hist:
+            enriched_entry = entry.copy()
+            if 'extra' not in enriched_entry or not isinstance(enriched_entry['extra'], dict):
+                enriched_entry['extra'] = {}
+            else:
+                enriched_entry['extra'] = enriched_entry['extra'].copy()
+            enriched_entry['extra']['contact_name'] = parent_contact_name
+            enriched_entry['extra']['contact_phone'] = parent_contact_phone
+            enriched_entry['extra']['trigger_id'] = trigger.id
+            enriched_parent_hist.append(enriched_entry)
+        trigger.execution_history = enriched_parent_hist
+
     convo_id = trigger.conversation_id
     if convo_id and account_id:
         trigger.chatwoot_url = f"{base_url}/app/accounts/{account_id}/conversations/{convo_id}"
     else:
         trigger.chatwoot_url = None
+
+    if trigger.button_actions:
+        resolved_actions = {}
+        for btn_text, action in trigger.button_actions.items():
+            if isinstance(action, dict):
+                act_copy = action.copy()
+                funnel_id = action.get("funnel_id")
+                if funnel_id:
+                    funnel = db.query(models.Funnel).filter(models.Funnel.id == funnel_id).first()
+                    act_copy["funnel_name"] = funnel.name if funnel else "Funil não encontrado"
+                resolved_actions[btn_text] = act_copy
+            else:
+                resolved_actions[btn_text] = action
+        trigger.button_actions = resolved_actions
         
     return trigger
 
@@ -74,7 +158,12 @@ def list_triggers(
     """
     Retorna lista de disparos (triggers) paginada.
     """
-    query = db.query(models.ScheduledTrigger)
+    from sqlalchemy.orm import joinedload
+    query = db.query(models.ScheduledTrigger).options(
+        joinedload(models.ScheduledTrigger.funnel),
+        joinedload(models.ScheduledTrigger.interaction_funnel),
+        joinedload(models.ScheduledTrigger.block_funnel)
+    )
     client_id = x_client_id if x_client_id else current_user.client_id
     query = query.filter(models.ScheduledTrigger.client_id == client_id)
     
@@ -116,11 +205,18 @@ def list_triggers(
         if trigger_type == 'bulk':
             query = query.filter(
                 models.ScheduledTrigger.is_bulk == True,
+                models.ScheduledTrigger.funnel_id == None,
                 models.ScheduledTrigger.is_recurring == False,
                 or_(models.ScheduledTrigger.product_name != 'SCALE_TEST', models.ScheduledTrigger.product_name == None)
             )
         elif trigger_type == 'single':
-            query = query.filter(models.ScheduledTrigger.is_bulk == False, models.ScheduledTrigger.is_recurring == False)
+            query = query.filter(
+                or_(
+                    models.ScheduledTrigger.funnel_id != None,
+                    models.ScheduledTrigger.is_bulk == False
+                ),
+                models.ScheduledTrigger.is_recurring == False
+            )
         elif trigger_type == 'recurring':
             query = query.filter(models.ScheduledTrigger.is_recurring == True)
         elif trigger_type == 'scale_test':
@@ -128,6 +224,20 @@ def list_triggers(
 
     total = query.count()
     triggers = query.order_by(models.ScheduledTrigger.created_at.desc()).offset(skip).limit(limit).all()
+
+    # Coletar todos os funnel_ids únicos nas button_actions dos triggers retornados
+    funnel_ids = set()
+    for trigger in triggers:
+        if trigger.button_actions:
+            for btn_text, action in trigger.button_actions.items():
+                if isinstance(action, dict) and action.get("funnel_id"):
+                    funnel_ids.add(action.get("funnel_id"))
+                    
+    # Buscar os funis correspondentes de uma vez
+    funnel_names = {}
+    if funnel_ids:
+        funnels = db.query(models.Funnel).filter(models.Funnel.id.in_(list(funnel_ids))).all()
+        funnel_names = {f.id: f.name for f in funnels}
 
     for trigger in triggers:
         if trigger.sent_as is None and trigger.messages:
@@ -153,6 +263,20 @@ def list_triggers(
         if followup:
             trigger.followup_status = followup.status
             trigger.followup_scheduled_time = followup.scheduled_time
+
+        # Resolver button_actions na memória
+        if trigger.button_actions:
+            resolved_actions = {}
+            for btn_text, action in trigger.button_actions.items():
+                if isinstance(action, dict):
+                    act_copy = action.copy()
+                    funnel_id = action.get("funnel_id")
+                    if funnel_id:
+                        act_copy["funnel_name"] = funnel_names.get(funnel_id, "Funil não encontrado")
+                    resolved_actions[btn_text] = act_copy
+                else:
+                    resolved_actions[btn_text] = action
+            trigger.button_actions = resolved_actions
 
     return {"items": triggers, "total": total}
 

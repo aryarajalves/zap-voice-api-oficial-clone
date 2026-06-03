@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiEyeOff, FiEye, FiCopy, FiImage, FiUpload, FiShield, FiAlertCircle, FiZap } from 'react-icons/fi';
-import { resolveUrl } from '../../../config';
+import { resolveUrl, WEBHOOK_BASE_URL } from '../../../config';
 
 const tierMapping = {
     'TIER_250': '250',
@@ -16,6 +16,9 @@ const WhatsAppTab = ({
     whatsappName, setWhatsappName, handleUpdateWhatsAppName, isUpdatingWaName,
     handleRegisterWhatsAppNumber, isRegisteringWa, handleWhatsAppLogoUpload, isUpdatingWaLogo
 }) => {
+    const baseWebhookUrl = formData.WEBHOOK_BASE_URL || WEBHOOK_BASE_URL || resolveUrl('/').replace(/\/$/, '');
+    const metaWebhookUrl = `${baseWebhookUrl}/api/meta`.replace('http://', 'https://');
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {/* WhatsApp Section */}
@@ -268,12 +271,12 @@ const WhatsAppTab = ({
                                         <input 
                                             type="text" 
                                             readOnly 
-                                            value={resolveUrl('/api/meta').replace('http://', 'https://')}
+                                            value={metaWebhookUrl}
                                             className="flex-1 bg-white/70 dark:bg-black/40 border border-gray-100 dark:border-white/5 rounded-xl px-3 py-2.5 text-xs font-mono text-gray-600 dark:text-gray-400 focus:outline-none"
                                         />
                                         <button 
                                             type="button"
-                                            onClick={() => copyToClipboard(resolveUrl('/api/meta').replace('http://', 'https://'), "URL do Webhook")}
+                                            onClick={() => copyToClipboard(metaWebhookUrl, "URL do Webhook")}
                                             className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 rounded-xl text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all shadow-sm active:scale-95"
                                             title="Copiar URL"
                                         >

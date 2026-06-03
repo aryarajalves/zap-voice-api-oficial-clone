@@ -409,6 +409,39 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         }
     };
 
+    const handlePinTemplate = async (templateId, pinStatus) => {
+        if (!activeClient) return false;
+        const loadingToast = toast.loading(pinStatus ? "Fixando template no topo..." : "Desafixando template...");
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/whatsapp/templates/${templateId}/pin`,
+                {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_pinned: pinStatus })
+                },
+                activeClient.id
+            );
+
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success(pinStatus ? "Template fixado no topo!" : "Template desafixado do topo!");
+                fetchTemplates();
+                return true;
+            } else {
+                const err = await res.json();
+                toast.dismiss(loadingToast);
+                toast.error(err.detail || "Erro ao fixar/desafixar template.");
+                return false;
+            }
+        } catch (error) {
+            console.error("Error pinning template:", error);
+            toast.dismiss(loadingToast);
+            toast.error("Erro de conexão ao fixar template.");
+            return false;
+        }
+    };
+
     return {
         activeClient,
         loading,
@@ -454,6 +487,7 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
         updateTemplateTags,
         deleteTemplateTagGlobal,
         archiveTemplate,
-        unarchiveTemplate
+        unarchiveTemplate,
+        handlePinTemplate
     };
 };

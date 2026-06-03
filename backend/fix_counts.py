@@ -34,20 +34,23 @@ def fix_counts():
         triggers = db.query(models.ScheduledTrigger).all()
         
         for t in triggers:
-            # Recalculate from message_status
-            sent = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == t.id).count()
-            delivered = db.query(models.MessageStatus).filter(
-                models.MessageStatus.trigger_id == t.id,
+            # Recalculate from message_status, including child triggers if this is a parent trigger
+            child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == t.id).all()]
+            all_trigger_ids = [t.id] + child_ids
+            
+            sent = db.query(models.MessageStatus.phone_number).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids)).distinct().count()
+            delivered = db.query(models.MessageStatus.phone_number).filter(
+                models.MessageStatus.trigger_id.in_(all_trigger_ids),
                 models.MessageStatus.status.in_(['delivered', 'read'])
-            ).count()
-            read = db.query(models.MessageStatus).filter(
-                models.MessageStatus.trigger_id == t.id,
+            ).distinct().count()
+            read = db.query(models.MessageStatus.phone_number).filter(
+                models.MessageStatus.trigger_id.in_(all_trigger_ids),
                 models.MessageStatus.status == 'read'
-            ).count()
+            ).distinct().count()
             
             # PAÍD TEMPLATES: Delivered/Read AND message_type is TEMPLATE
             paid_templates = db.query(models.MessageStatus).filter(
-                models.MessageStatus.trigger_id == t.id,
+                models.MessageStatus.trigger_id.in_(all_trigger_ids),
                 models.MessageStatus.status.in_(['delivered', 'read']),
                 models.MessageStatus.message_type == 'TEMPLATE'
             ).count()

@@ -222,3 +222,22 @@ def test_block_bulk_skips_duplicates(app_client, auth_headers, blocked_contact):
     )
     assert resp.status_code == 200
     assert resp.json()["already_blocked_count"] == 1
+
+
+# -- DELETE /blocked/by_phone/{phone} ------------------------------------------
+
+def test_unblock_contact_by_phone_success(app_client, auth_headers, db, client_obj):
+    contact = BlockedContact(client_id=client_obj.id, phone="5585911112222")
+    db.add(contact)
+    db.commit()
+    resp = app_client.delete(f"/api/blocked/by_phone/5585911112222", headers=auth_headers)
+    assert resp.status_code == 204
+
+    # Assert deleted
+    assert db.query(BlockedContact).filter(BlockedContact.id == contact.id).first() is None
+
+
+def test_unblock_contact_by_phone_not_found(app_client, auth_headers):
+    resp = app_client.delete("/api/blocked/by_phone/5585900000000", headers=auth_headers)
+    assert resp.status_code == 404
+

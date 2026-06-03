@@ -47,6 +47,15 @@ async def handle_template_node(db, trigger, node, chatwoot, conversation_id, con
                 
                 if fb_msg_id:
                     fb_msg_clean = fb_msg_id.replace("wamid.", "")
+                    
+                    db.add(models.MessageStatus(
+                        trigger_id=trigger.id, message_id=fb_msg_clean, phone_number=contact_phone,
+                        status='sent', message_type='FREE_MESSAGE', content=fallback_msg,
+                        publish_external_event=data.get("publishExternalEvent", False)
+                    ))
+                    trigger.total_sent = (trigger.total_sent or 0) + 1
+                    db.commit()
+
                     if not trigger.is_bulk:
                         log_node_execution(db, trigger, current_node_id, "processing", "Aguardando confirmação (Fallback)...")
                         state, detail = await wait_for_delivery_sync(db, fb_msg_clean, trigger, current_node_id)
@@ -58,13 +67,6 @@ async def handle_template_node(db, trigger, node, chatwoot, conversation_id, con
                             return "abort"
                         if not getattr(trigger, 'is_interaction', False): await asyncio.sleep(10)
 
-                    db.add(models.MessageStatus(
-                        trigger_id=trigger.id, message_id=fb_msg_clean, phone_number=contact_phone,
-                        status='sent', message_type='FREE_MESSAGE', content=fallback_msg,
-                        publish_external_event=data.get("publishExternalEvent", False)
-                    ))
-                    trigger.total_sent = (trigger.total_sent or 0) + 1
-                    db.commit()
                     fallback_sent = True
                     template_name = None
             except Exception as e:
@@ -88,17 +90,6 @@ async def handle_template_node(db, trigger, node, chatwoot, conversation_id, con
             raw_id = result["messages"][0].get("id")
             wamid = raw_id.replace("wamid.", "") if raw_id else raw_id
             if wamid:
-                if not trigger.is_bulk:
-                    log_node_execution(db, trigger, current_node_id, "processing", "Aguardando confirmação (Template)...")
-                    state, detail = await wait_for_delivery_sync(db, wamid, trigger, current_node_id)
-                    if state == "suspended": return "stop"
-                    if state == "failed":
-                        trigger.status = 'failed'
-                        trigger.failure_reason = detail
-                        db.commit()
-                        return "abort"
-                    if not getattr(trigger, 'is_interaction', False): await asyncio.sleep(10)
-
                 template_body = None
                 try:
                     tpl_cache = db.query(models.WhatsAppTemplateCache).filter(models.WhatsAppTemplateCache.name == template_name, models.WhatsAppTemplateCache.client_id == trigger.client_id).first()
@@ -122,6 +113,17 @@ async def handle_template_node(db, trigger, node, chatwoot, conversation_id, con
                 db.add(new_ms)
                 trigger.total_sent = (trigger.total_sent or 0) + 1
                 db.commit()
+
+                if not trigger.is_bulk:
+                    log_node_execution(db, trigger, current_node_id, "processing", "Aguardando confirmação (Template)...")
+                    state, detail = await wait_for_delivery_sync(db, wamid, trigger, current_node_id)
+                    if state == "suspended": return "stop"
+                    if state == "failed":
+                        trigger.status = 'failed'
+                        trigger.failure_reason = detail
+                        db.commit()
+                        return "abort"
+                    if not getattr(trigger, 'is_interaction', False): await asyncio.sleep(10)
                     
                 await publish_node_external_event(db, trigger, data, template_body or f"[Template: {template_name}]", contact_phone, node_id=current_node_id, event_type="funnel_template_sent")
                 log_node_execution(db, trigger, current_node_id, "completed", f"Template: {template_name}", {"template_name": template_name, "content": template_body or f"Template: {template_name}"})

@@ -6,6 +6,7 @@ export const EVENT_TYPES = [
   { value: 'compra_aprovada', label: 'Compra Aprovada' },
   { value: 'carrinho_abandonado', label: 'Carrinho Abandonado' },
   { value: 'cartao_recusado', label: 'Cartão Recusado' },
+  { value: 'reembolso', label: 'Reembolso' },
   { value: 'form_submission', label: 'Formulário / Elementor' },
   { value: 'evento_aluno', label: 'Evento de Aluno' },
   { value: 'outros', label: 'Qualquer / Outro' }

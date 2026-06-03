@@ -6,150 +6,224 @@ const BulkGuideModal = ({ isOpen, onClose }) => {
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
         >
-            <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
-                style={{ background: 'linear-gradient(160deg, #0a1628 0%, #0f1f14 100%)', border: '1px solid rgba(52,211,153,0.2)' }}>
+            <div className="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-[2rem] shadow-2xl overflow-hidden"
+                style={{ background: 'linear-gradient(160deg, #0b1528 0%, #061f12 100%)', border: '1px solid rgba(16,185,129,0.3)' }}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 py-6 border-b border-white/5"
-                    style={{ background: 'linear-gradient(90deg, rgba(52,211,153,0.12) 0%, transparent 100%)' }}>
+                    style={{ background: 'linear-gradient(90deg, rgba(16,185,129,0.15) 0%, transparent 100%)' }}>
                     <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl"
-                            style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.35)' }}>
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-lg"
+                            style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', boxShadow: '0 0 20px rgba(16,185,129,0.2)' }}>
                             🚀
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-white">Guia do Disparo em Massa</h2>
-                            <p className="text-sm text-slate-400">Entenda cada etapa e como enviar mensagens com inteligência.</p>
+                            <h2 className="text-2xl font-black text-white tracking-tight">Manual Completo: Disparo em Massa</h2>
+                            <p className="text-xs text-slate-400 font-medium">Entenda todos os recursos, etapas e configurações para dominar a tela de disparos.</p>
                         </div>
                     </div>
+                    <button 
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-white transition-colors text-2xl font-bold p-1 hover:bg-white/5 rounded-lg w-8 h-8 flex items-center justify-center"
+                    >
+                        &times;
+                    </button>
                 </div>
 
                 {/* Conteúdo */}
-                <div className="overflow-y-auto flex-1 px-8 py-6 space-y-4" style={{ scrollbarWidth: 'thin', scrollbarColor: '#1e3a2f transparent' }}>
+                <div className="overflow-y-auto flex-1 px-8 py-6 space-y-6" style={{ scrollbarWidth: 'thin', scrollbarColor: '#10b981 transparent' }}>
 
-                    {/* Card 1 — Visão Geral */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #34d399' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">📡</span>
-                            <h3 className="font-bold text-white text-sm">O que é o Disparo em Massa?</h3>
+                    {/* Visão Geral */}
+                    <div className="rounded-3xl p-6" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #10b981' }}>
+                        <div className="flex items-center gap-3 mb-2">
+                            <span className="text-xl">📡</span>
+                            <h3 className="font-black text-white text-base">O que é e como funciona?</h3>
                         </div>
-                        <p className="text-slate-300 text-sm leading-relaxed">Permite enviar um <b className="text-white">template aprovado pela Meta</b> para centenas ou milhares de contatos de uma vez. Cada envio é individualizado e pode conter variáveis personalizadas por contato.</p>
-                        <p className="text-emerald-400 text-xs mt-2 italic">💡 Use junto com Funis e Agendamentos para criar sequências automáticas de relacionamento.</p>
+                        <p className="text-slate-300 text-sm leading-relaxed">
+                            O <b>Disparo em Massa (Bulk Sender)</b> é uma ferramenta oficial de alta performance que permite enviar templates homologados pela Meta para listas de contatos personalizadas. Ao contrário de disparos informais, este método garante <b>máxima entrega</b> com total conformidade com as regras do WhatsApp.
+                        </p>
                     </div>
 
-                    {/* Card 2 — Passo 1: Configuração */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #6366f1' }}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-6 h-6 rounded-full bg-indigo-500 text-white text-xs font-black flex items-center justify-center shrink-0">1</span>
-                            <h3 className="font-bold text-white text-sm">Etapa 1 — Configuração de Template</h3>
-                        </div>
-                        <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: 'rgba(99,102,241,0.1)' }}>
-                            <p className="text-slate-300 text-xs leading-relaxed">Um único template enviado para toda a lista. Você preenche as variáveis (ex: nome, data) com valores fixos ou por contato.</p>
-                        </div>
-                    </div>
+                    {/* Bloco Etapas do Fluxo */}
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-white/5 pb-2">Etapas do Processo de Disparo</h4>
 
-                    {/* Card 3 — Variáveis */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #a78bfa' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">🔡</span>
-                            <h3 className="font-bold text-white text-sm">Variáveis do Template</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Etapa 1 */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(99,102,241,0.03)', border: '1px solid rgba(99,102,241,0.1)', borderLeft: '4px solid #6366f1' }}>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="w-7 h-7 rounded-full bg-indigo-500 text-white text-xs font-black flex items-center justify-center shrink-0">1</span>
+                                <h3 className="font-black text-white text-sm">Etapa 1: Configuração</h3>
+                            </div>
+                            <ul className="text-slate-400 text-xs space-y-2 list-disc pl-4 leading-relaxed">
+                                <li><b>Escolha do Template:</b> Selecione um dos templates oficiais importados diretamente do seu WhatsApp Business.</li>
+                                <li><b>Preenchimento de Variáveis:</b> Defina os valores que preencherão as variáveis <code className="text-indigo-300 font-mono">{"{{1}}"}</code>, <code className="text-indigo-300 font-mono">{"{{2}}"}</code> do template.</li>
+                                <li><b>Automatizações de Etiquetas:</b> Vincule etiquetas do Chatwoot para serem aplicadas à conversa no momento do envio.</li>
+                            </ul>
                         </div>
-                        <p className="text-slate-300 text-sm leading-relaxed mb-3">Campos <b className="text-white">{'{{1}}'}, {'{{2}}'}</b> etc. aparecem ao selecionar o template. Preencha-os com o valor fixo desejado ou deixe em branco para ser preenchido por coluna do CSV.</p>
-                        <div className="rounded-xl p-3 font-mono text-xs text-purple-300 leading-relaxed" style={{ background: 'rgba(0,0,0,0.3)' }}>
-                            {'{{1}}'} = Nome do cliente → "Maria"<br/>
-                            {'{{2}}'} = Data → "15/03/2026"
-                        </div>
-                        <p className="text-purple-400 text-xs mt-2 italic">💡 Use o botão ⛶ para expandir o campo e editar textos longos com conforto.</p>
-                    </div>
 
-                    {/* Card 4 — Mensagem Direta */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #f59e0b' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">💬</span>
-                            <h3 className="font-bold text-white text-sm">Mensagem Direta Pós-Envio</h3>
-                        </div>
-                        <p className="text-slate-300 text-sm leading-relaxed">Mensagem de texto livre enviada <b className="text-white">imediatamente após</b> o template, quando a janela de 24h já estiver aberta. Ideal para complementar o template com um texto mais pessoal.</p>
-                        <p className="text-amber-400 text-xs mt-2 italic">💡 Suporta botões de resposta rápida para qualificar o lead logo após o disparo.</p>
-                    </div>
-
-                    {/* Card 5 — Mensagem Privada */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #10b981' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">⏱️</span>
-                            <h3 className="font-bold text-white text-sm">Mensagem Privada com Delay</h3>
-                        </div>
-                        <p className="text-slate-300 text-sm leading-relaxed">Segunda mensagem enviada com um <b className="text-white">atraso configurável</b> (ex: 30 min, 2h). Enviada apenas internamente no Chatwoot como nota, ou também para o contato.</p>
-                        <div className="mt-3 space-y-1.5">
-                            <p className="text-slate-400 text-xs"><span className="text-emerald-400 font-bold">Delay:</span> tempo de espera antes do envio da 2ª mensagem.</p>
-                            <p className="text-slate-400 text-xs"><span className="text-emerald-400 font-bold">Concorrência:</span> quantas mensagens privadas são enviadas simultaneamente.</p>
+                        {/* Etapa 2 */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(59,130,246,0.03)', border: '1px solid rgba(59,130,246,0.1)', borderLeft: '4px solid #3b82f6' }}>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="w-7 h-7 rounded-full bg-blue-500 text-white text-xs font-black flex items-center justify-center shrink-0">2</span>
+                                <h3 className="font-black text-white text-sm">Etapa 2: Destinatários e Envio</h3>
+                            </div>
+                            <ul className="text-slate-400 text-xs space-y-2 list-disc pl-4 leading-relaxed">
+                                <li><b>Filtros de Destinatários:</b> Selecione de onde virão os contatos (manuais, importação de arquivo, contatos com etiquetas específicas).</li>
+                                <li><b>Regras de Velocidade:</b> Defina o delay e concorrência ideais para o disparo seguro.</li>
+                                <li><b>Ações de Botões e Agendamento:</b> Configure ações inteligentes para cliques em botões e defina se o disparo será imediato ou programado.</li>
+                            </ul>
                         </div>
                     </div>
 
-                    {/* Card 6 — Passo 2: Contatos */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #3b82f6' }}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-black flex items-center justify-center shrink-0">2</span>
-                            <h3 className="font-bold text-white text-sm">Etapa 2 — Contatos e Envio</h3>
+                    {/* Detalhamento dos Recursos da Tela */}
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 border-b border-white/5 pb-2">Recursos Detalhados da Tela</h4>
+
+                    <div className="space-y-4">
+                        {/* 1. Variáveis do Template */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #a78bfa' }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                                <span className="text-lg">🔡</span>
+                                <h3 className="font-black text-white text-sm">Preenchimento Inteligente de Variáveis</h3>
+                            </div>
+                            <p className="text-slate-300 text-xs leading-relaxed mb-3">
+                                Os campos dinâmicos do seu template (<code className="text-purple-300 font-mono">{"{{1}}"}</code>, <code className="text-purple-300 font-mono">{"{{2}}"}</code>) podem ser preenchidos de duas formas:
+                            </p>
+                            <ul className="text-slate-400 text-xs space-y-1.5 list-disc pl-4 mb-3">
+                                <li><b>Valor Fixo:</b> Digite um valor direto para que todos os contatos recebam exatamente o mesmo texto (ex: <i>"Cupom: DESCONTO10"</i>).</li>
+                                <li><b>Valor Dinâmico (por Planilha/Contatos):</b> Deixe o campo em branco ou configure a correspondência para puxar o nome ou dados específicos de cada contato importado via planilha CSV/Excel.</li>
+                            </ul>
+                            <div className="bg-purple-950/20 p-3 rounded-2xl border border-purple-500/10 text-[11px] text-purple-300 font-mono space-y-1">
+                                <div>💡 <b>Dica:</b> Use o botão de expansão <span className="text-white">⛶</span> ao lado de cada campo para editar variáveis mais longas de forma confortável.</div>
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            {[
-                                { label: 'Lista Manual', desc: 'Cole números diretamente ou importe um CSV/Excel com coluna de telefone.' },
-                                { label: 'Lista de Exclusão', desc: 'Números nesta lista serão pulados. Ideal para quem já recebeu ou pediu para sair.' },
-                                { label: 'Delay entre envios', desc: 'Intervalo em segundos entre cada mensagem. Valores menores são mais rápidos mas aumentam o risco de bloqueio.' },
-                                { label: 'Concorrência', desc: 'Quantas mensagens são enviadas em paralelo. Recomendado: 1-3 para contas novas.' },
-                            ].map(item => (
-                                <div key={item.label} className="flex items-start gap-3 p-2.5 rounded-xl" style={{ background: 'rgba(59,130,246,0.08)' }}>
-                                    <span className="text-blue-300 font-bold text-xs shrink-0 mt-0.5 w-28">{item.label}</span>
-                                    <p className="text-slate-400 text-xs leading-relaxed">{item.desc}</p>
+
+                        {/* 2. Fluxo Automático de Etiquetas */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #ec4899' }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                                <span className="text-lg">🏷️</span>
+                                <h3 className="font-black text-white text-sm">Fluxo Automático Pós-Envio (Etiquetas Chatwoot)</h3>
+                            </div>
+                            <p className="text-slate-300 text-xs leading-relaxed">
+                                No bloco <b>Fluxo Automático Pós-Envio</b>, você pode selecionar etiquetas (ex: <i>"Campanha_Maio"</i>, <i>"Lead_Frio"</i>). Assim que o disparo for realizado, o sistema marcará automaticamente a conversa de cada destinatário no Chatwoot com essas etiquetas, facilitando sua organização e futuros filtros.
+                            </p>
+                        </div>
+
+                        {/* 3. Ações dos Botões */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #8b5cf6' }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                                <span className="text-lg">⚡</span>
+                                <h3 className="font-black text-white text-sm">Ações Inteligentes dos Botões do Template</h3>
+                            </div>
+                            <p className="text-slate-300 text-xs leading-relaxed mb-3">
+                                Se o seu template contiver botões de resposta rápida homologados pela Meta, você pode configurar comportamentos automáticos para o momento em que o cliente clicar no botão:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="p-3 bg-slate-800/40 rounded-2xl border border-white/5">
+                                    <span className="text-slate-400 font-bold text-xs">❌ Nenhum</span>
+                                    <p className="text-slate-500 text-[10px] mt-1">Apenas recebe a resposta no painel sem nenhuma automação.</p>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Card 7 — Agendamento */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #ec4899' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">📅</span>
-                            <h3 className="font-bold text-white text-sm">Agendamento</h3>
-                        </div>
-                        <p className="text-slate-300 text-sm leading-relaxed">Programe o disparo para uma <b className="text-white">data e hora futura</b>. O sistema enfileira o disparo e executa automaticamente, mesmo que você feche o navegador.</p>
-                        <p className="text-pink-400 text-xs mt-2 italic">💡 Combine com a seção "Agenda de Disparos" para visualizar e gerenciar todos os envios programados.</p>
-                    </div>
-
-                    {/* Card 8 — Custos */}
-                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: '3px solid #f97316' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">💰</span>
-                            <h3 className="font-bold text-white text-sm">Estimativa de Custo (Meta)</h3>
-                        </div>
-                        <p className="text-slate-300 text-sm leading-relaxed mb-3">Cada template enviado tem um custo cobrado pela Meta. Os valores estimados são:</p>
-                        <div className="grid grid-cols-3 gap-2">
-                            {[
-                                { cat: 'Marketing', price: 'R$ 0,35', color: 'text-indigo-300' },
-                                { cat: 'Utilidade', price: 'R$ 0,07', color: 'text-emerald-300' },
-                                { cat: 'Autenticação', price: 'R$ 0,05', color: 'text-blue-300' },
-                            ].map(item => (
-                                <div key={item.cat} className="text-center p-2.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.25)' }}>
-                                    <p className={`font-black text-sm ${item.color}`}>{item.price}</p>
-                                    <p className="text-slate-500 text-[10px] mt-0.5">{item.cat}</p>
+                                <div className="p-3 bg-emerald-950/20 rounded-2xl border border-emerald-500/10">
+                                    <span className="text-emerald-400 font-bold text-xs">⚡ Interação / Funil</span>
+                                    <p className="text-emerald-500/80 text-[10px] mt-1">Dispara um funil de automação configurado no ZapVoice 5-8s após o clique do lead.</p>
                                 </div>
-                            ))}
+                                <div className="p-3 bg-rose-950/20 rounded-2xl border border-rose-500/10">
+                                    <span className="text-rose-400 font-bold text-xs">🚫 Bloqueio</span>
+                                    <p className="text-rose-500/80 text-[10px] mt-1">Insere o contato na lista de bloqueios automaticamente se ele clicar (ex: botão <i>"Sair da Lista"</i>).</p>
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-orange-400 text-xs mt-3 italic">⚠️ Valores podem variar conforme tabela oficial da Meta para o Brasil.</p>
+
+                        {/* 4. Lista de Exclusão */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #f59e0b' }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                                <span className="text-lg">🛡️</span>
+                                <h3 className="font-black text-white text-sm">Gerenciador de Lista de Exclusão</h3>
+                            </div>
+                            <p className="text-slate-300 text-xs leading-relaxed mb-2">
+                                Evite enviar mensagens para pessoas indesejadas, clientes antigos ou leads que solicitaram a exclusão:
+                            </p>
+                            <ul className="text-slate-400 text-xs space-y-1.5 list-disc pl-4">
+                                <li><b>Exclusão Manual:</b> Cole números diretamente para serem limpos da sua fila atual de disparos.</li>
+                                <li><b>Exclusão via Etiquetas ou CSV:</b> Importe uma planilha de exclusão ou carregue contatos vinculados a tags de bloqueio para cruzamento automático da base.</li>
+                            </ul>
+                        </div>
+
+                        {/* 5. Atraso e Concorrência */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #06b6d4' }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                                <span className="text-lg">⚙️</span>
+                                <h3 className="font-black text-white text-sm">Configurações de Envio e Segurança</h3>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <span className="text-cyan-400 font-bold text-xs">Atraso de Envio (Delay)</span>
+                                    <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                                        Tempo de espera configurado em segundos ou minutos entre o envio de cada mensagem. <b>Recomendamos no mínimo 15 segundos</b> para disparos volumosos, evitando a detecção de spam e garantindo a entrega saudável.
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-cyan-400 font-bold text-xs">Concorrência</span>
+                                    <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                                        Quantidade de mensagens processadas de forma simultânea (paralelo). O recomendado é manter entre 1 e 3 processos ativos em contas normais para garantir a cadência e integridade da fila do servidor.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 6. Agendamento */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #f43f5e' }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                                <span className="text-lg">📅</span>
+                                <h3 className="font-black text-white text-sm">Agendamento Único e Recorrente</h3>
+                            </div>
+                            <p className="text-slate-300 text-xs leading-relaxed mb-2">
+                                Programe seus disparos para datas e horas específicas:
+                            </p>
+                            <ul className="text-slate-400 text-xs space-y-1.5 list-disc pl-4">
+                                <li><b>Agendamento Único:</b> Escolha uma data e horário no futuro. O sistema fará todo o processamento de forma 100% autônoma.</li>
+                                <li><b>Agendamento Recorrente:</b> Defina disparos automáticos diários, semanais ou mensais com hora marcada para manter seus leads sempre engajados.</li>
+                            </ul>
+                        </div>
+
+                        {/* 7. Custos da API da Meta */}
+                        <div className="rounded-3xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderLeft: '4px solid #eab308' }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                                <span className="text-lg">💰</span>
+                                <h3 className="font-black text-white text-sm">Estimador de Custos Oficiais</h3>
+                            </div>
+                            <p className="text-slate-300 text-xs leading-relaxed mb-3">
+                                No topo da Etapa 2, o sistema exibe automaticamente um cálculo de custo estimado com base no total de destinatários válidos selecionados e na categoria do template:
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[
+                                    { cat: 'Marketing', price: 'R$ 0,35', color: 'text-rose-300' },
+                                    { cat: 'Utilidade', price: 'R$ 0,07', color: 'text-emerald-300' },
+                                    { cat: 'Autenticação', price: 'R$ 0,05', color: 'text-blue-300' },
+                                ].map(item => (
+                                    <div key={item.cat} className="text-center p-2 rounded-2xl" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                                        <p className={`font-black text-xs ${item.color}`}>{item.price}</p>
+                                        <p className="text-slate-500 text-[9px] mt-0.5">{item.cat}</p>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-slate-500 text-[10px] mt-3 italic leading-relaxed">
+                                * Nota: Os custos exibidos são estimativas baseadas na tabela padrão da Meta para o Brasil e dependem do modelo de faturamento da sua conta WhatsApp Business.
+                            </p>
+                        </div>
                     </div>
 
                 </div>
 
                 {/* Footer */}
-                <div className="px-8 py-5 border-t border-white/5 flex justify-end" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                <div className="px-8 py-5 border-t border-white/5 flex justify-end" style={{ background: 'rgba(0,0,0,0.3)' }}>
                     <button
                         onClick={onClose}
-                        className="px-8 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105 active:scale-95"
-                        style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', boxShadow: '0 4px 20px rgba(16,185,129,0.35)' }}
+                        className="px-10 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-white transition-all hover:scale-105 active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 4px 20px rgba(16,185,129,0.3)' }}
                     >
-                        Entendido!
+                        Entendido, vamos lá!
                     </button>
                 </div>
             </div>

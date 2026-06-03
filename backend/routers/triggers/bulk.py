@@ -184,7 +184,8 @@ async def register_bulk_send(
             total_failed=total_failed,
             cost_per_unit=payload.get("cost_per_unit", 0.0),
             total_cost=0.0,
-            scheduled_time=datetime.now(timezone.utc)
+            scheduled_time=datetime.now(timezone.utc),
+            button_actions=payload.get("button_actions")
         )
         db.add(trigger)
     
@@ -239,7 +240,8 @@ async def reserve_bulk_send(
         private_message=payload.get("private_message"),
         private_message_delay=payload.get("private_message_delay", 5),
         private_message_concurrency=payload.get("private_message_concurrency", 1),
-        scheduled_time=datetime.now(timezone.utc)
+        scheduled_time=datetime.now(timezone.utc),
+        button_actions=payload.get("button_actions")
     )
     db.add(trigger)
     db.commit()

@@ -101,20 +101,20 @@ def test_financial_sales_endpoint(client, db_session):
         assert response.status_code == 200
         res_data = response.json()
 
-        # 4. Verify Totals
+        # 4. Verify Totals (Net)
         totals = res_data["totals"]
-        assert totals["total_revenue"] == 298.90  # 199.90 + 99.00
-        assert totals["total_sales"] == 2
+        assert totals["total_revenue"] == 99.00  # 199.90 + 99.00 - 199.90 (reembolso) = 99.00
+        assert totals["total_sales"] == 1        # 2 aprovadas - 1 reembolso = 1
         assert totals["total_refunds"] == 1
         assert totals["total_pending"] == 1
 
         # 5. Verify top products
         top_products = res_data["top_products"]
         assert len(top_products) == 2
-        assert top_products[0]["product_name"] == "Product Gold"
-        assert top_products[0]["total_revenue"] == 199.90
-        assert top_products[1]["product_name"] == "Product Silver"
-        assert top_products[1]["total_revenue"] == 99.00
+        assert top_products[0]["product_name"] == "Product Silver"
+        assert top_products[0]["total_revenue"] == 99.00
+        assert top_products[1]["product_name"] == "Product Gold"
+        assert top_products[1]["total_revenue"] == 0.0
 
         # 6. Verify status filtering (approved)
         response_approved = client.get("/api/financial/sales?status=approved")

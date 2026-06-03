@@ -133,15 +133,6 @@ const SchedulingSection = ({
                             </div>
                         )}
 
-                        <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
-                            <label className="text-[9px] font-black text-slate-600 uppercase px-1">{recurrenceFrequency === 'weekly' ? 'Horário Padrão (Fallback)' : 'Horário de Disparo (Todos os Dias)'}</label>
-                            <input
-                                type="time"
-                                value={recurrenceTime}
-                                onChange={(e) => setRecurrenceTime(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white font-bold outline-none focus:border-blue-500/50"
-                            />
-                        </div>
                     </div>
                 )}
             </div>

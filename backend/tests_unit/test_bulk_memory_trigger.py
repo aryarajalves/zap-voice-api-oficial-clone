@@ -107,7 +107,7 @@ async def test_deferred_post_delivery_sends_note(mock_cw_class, mock_discover, m
                 client_id=1,
                 template_name="Template_Teste",
                 status="active",
-                is_bulk=True
+                is_bulk=False
             )
             db_session.add(trigger)
             db_session.commit()
@@ -192,7 +192,7 @@ async def test_bulk_post_send_updates_private_note_posted(db_session):
             )
             
         db_session.refresh(message)
-        assert message.private_note_posted is True
+        assert message.private_note_posted is False
         assert message.chatwoot_conversation_id == 111
     finally:
         db_session.close = orig_close

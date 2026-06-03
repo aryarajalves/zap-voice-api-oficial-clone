@@ -41,7 +41,7 @@ async def test_receive_external_webhook_ignored_when_mapping_inactive(mock_db, m
     
     # ── MOCK REQUEST ──────────────────────────────────────────────────────────
     mock_request = MagicMock()
-    mock_request.body = AsyncMock(return_value=b'{"event": "PURCHASE_APPROVED"}')
+    mock_request.body = AsyncMock(return_value=b'{"event": "PURCHASE_APPROVED", "data": {"buyer": {"name": "Test User", "checkout_phone": "5511999999999"}}}')
     mock_request.json = AsyncMock(return_value={
         "event": "PURCHASE_APPROVED",
         "data": {
@@ -63,6 +63,13 @@ async def test_receive_external_webhook_ignored_when_mapping_inactive(mock_db, m
     assert response["status"] == "skipped"
     assert "no_mapping_found" in response["reason"]
     assert mock_rabbitmq.publish.call_count == 0
+
+    # Ensure processed_data was extracted and populated anyway
+    assert mock_db.add.call_count == 1
+    added_history = mock_db.add.call_args[0][0]
+    assert added_history.processed_data is not None
+    assert added_history.processed_data["name"] == "Test User"
+    assert added_history.processed_data["phone"] == "5511999999999"
 
 @pytest.mark.anyio
 async def test_receive_external_webhook_active_mapping_works(mock_db, mock_rabbitmq):

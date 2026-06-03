@@ -22,28 +22,28 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     if not trigger:
         return None
 
-    # 1. Buscar todos os status de mensagem associados
-    statuses = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id).all()
+    # 1. Buscar todos os status de mensagem associados (do próprio trigger ou de seus filhos)
+    child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
+    all_trigger_ids = [trigger_id] + child_ids
+    statuses = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids)).all()
 
     # 2. Inicializar contadores
-    sent = 0
-    delivered = 0
-    read = 0
+    sent_phones = set()
+    delivered_phones = set()
+    read_phones = set()
     failed = 0
     total_cost = 0.0
     paid_templates = 0
 
     # 3. Processar cada registro
     for ms in statuses:
-        if ms.status == 'sent':
-            sent += 1
-        elif ms.status == 'delivered':
-            sent += 1
-            delivered += 1
-        elif ms.status == 'read' or ms.is_interaction:
-            sent += 1
-            delivered += 1
-            read += 1
+        # Contagem por contato único
+        if ms.status in ['sent', 'delivered', 'read'] or ms.is_interaction:
+            sent_phones.add(ms.phone_number)
+            if ms.status in ['delivered', 'read'] or ms.is_interaction:
+                delivered_phones.add(ms.phone_number)
+                if ms.status == 'read' or ms.is_interaction:
+                    read_phones.add(ms.phone_number)
         elif ms.status == 'failed':
             failed += 1
         
@@ -56,6 +56,10 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
             elif trigger.cost_per_unit and ms.message_type != 'FREE_MESSAGE':
                  total_cost += float(trigger.cost_per_unit)
                  paid_templates += 1
+
+    sent = len(sent_phones)
+    delivered = len(delivered_phones)
+    read = len(read_phones)
 
     # 4. Atualizar o Trigger
     trigger.total_sent = sent
