@@ -347,9 +347,12 @@ class BackupService:
                 timeout=300
             )
 
-            if result.returncode != 0:
+            if result.returncode not in (0, 1):
                 stderr_msg = result.stderr.decode("utf-8", errors="replace")
                 raise RuntimeError(f"pg_restore falhou (código {result.returncode}): {stderr_msg}")
+            elif result.returncode == 1:
+                stderr_msg = result.stderr.decode("utf-8", errors="replace")
+                logger.warning(f"⚠️ [RESTORE] pg_restore concluído com avisos/erros não-fatais (código 1): {stderr_msg}")
 
             logger.info("✅ [RESTORE] Restauração do banco de dados concluída com sucesso!")
 

@@ -446,6 +446,38 @@ class TestBackupServiceLogic:
         with pytest.raises(ValueError, match="inválido"):
             svc.delete_backup("backup\\..\\file")
 
+    def test_restore_backup_with_warnings_code_1_success(self):
+        """Testa que restore_backup não falha quando o pg_restore retorna código 1."""
+        from services.backup_service import BackupService
+        import os
+        from unittest.mock import patch, MagicMock
+
+        svc = BackupService()
+        svc.bucket_name = "test-bucket"
+
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://user:password@host:5432/dbname"}), \
+             patch.object(svc, "_get_s3") as mock_get_s3, \
+             patch("sqlalchemy.create_engine") as mock_create_engine, \
+             patch("services.backup_service.subprocess.run") as mock_run, \
+             patch("services.backup_service.gzip.open") as mock_gzip, \
+             patch("services.backup_service.open") as mock_open:
+
+            mock_s3 = MagicMock()
+            mock_get_s3.return_value = mock_s3
+
+            # Mock pg_restore returning code 1 (warnings)
+            mock_process = MagicMock()
+            mock_process.returncode = 1
+            mock_process.stderr = b"pg_restore: warning: unrecognized configuration parameter transaction_timeout"
+            mock_run.return_value = mock_process
+
+            # Execute restore
+            svc.restore_backup("test_backup.dump.gz")
+
+            # Asserts
+            mock_s3.download_file.assert_called_once()
+            mock_run.assert_called_once()
+
 
 # ─── Testes de Restauração ────────────────────────────────────────────────────
 
