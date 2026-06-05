@@ -12,11 +12,11 @@ class StorageClient:
     def __init__(self):
         from config_loader import get_setting
 
-        self.endpoint_url = get_setting("S3_ENDPOINT_URL")
-        self.access_key = get_setting("S3_ACCESS_KEY")
-        self.secret_key = get_setting("S3_SECRET_KEY")
-        self.bucket_name = get_setting("S3_BUCKET_NAME") or "zapvoice-files"
-        self.region = get_setting("S3_REGION") or "us-east-1"
+        self.endpoint_url = os.getenv("S3_ENDPOINT_URL")
+        self.access_key = os.getenv("S3_ACCESS_KEY")
+        self.secret_key = os.getenv("S3_SECRET_KEY")
+        self.bucket_name = os.getenv("S3_BUCKET_NAME") or "zapvoice-files"
+        self.region = os.getenv("S3_REGION") or "us-east-1"
 
         if self.endpoint_url: self.endpoint_url = self.endpoint_url.split('#')[0].strip().strip('"').strip("'")
         if self.access_key: self.access_key = self.access_key.split('#')[0].strip().strip('"').strip("'")
