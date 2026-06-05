@@ -141,13 +141,27 @@ def create_webhook_integration(
                         detail="O tempo de espera do Follow-up deve ser no mínimo 1."
                     )
 
+    # Limpar e validar unicidade global do custom_slug
+    clean_slug = None
+    if integration.custom_slug and isinstance(integration.custom_slug, str):
+        clean_slug = integration.custom_slug.strip().lower()
+        if clean_slug:
+            existing = db.query(models.WebhookIntegration).filter(
+                models.WebhookIntegration.custom_slug == clean_slug
+            ).first()
+            if existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Este slug personalizado já está em uso por outra integração."
+                )
+
     try:
         db_integration = models.WebhookIntegration(
             name=integration.name,
             platform=integration.platform,
             status=integration.status,
             custom_fields_mapping=integration.custom_fields_mapping,
-            custom_slug=integration.custom_slug,
+            custom_slug=clean_slug if clean_slug else None,
             product_filtering=getattr(integration, 'product_filtering', False),
             product_whitelist=getattr(integration, 'product_whitelist', []),
             discovered_products=getattr(integration, 'discovered_products', []),
@@ -211,6 +225,8 @@ def create_webhook_integration(
                     manychat_tag_prefix=getattr(mapping, 'manychat_tag_prefix', None),
                     manychat_tag_rotation_time=getattr(mapping, 'manychat_tag_rotation_time', "08:00"),
                     manychat_tag_rotation_day=getattr(mapping, 'manychat_tag_rotation_day', 0),
+                    manychat_start_date=getattr(mapping, 'manychat_start_date', None),
+                    manychat_tag_alternative=getattr(mapping, 'manychat_tag_alternative', None),
                     product_name=getattr(mapping, 'product_name', None),
                     is_active=mapping.is_active,
                     followup_active=getattr(mapping, 'followup_active', False),
@@ -275,6 +291,22 @@ def update_webhook_integration(
     if not db_integration:
         raise HTTPException(status_code=404, detail="Integration not found")
     
+    # Validação de unicidade do custom_slug antes do bloco try principal
+    raw_slug = getattr(integration_update, 'custom_slug', None)
+    clean_slug = None
+    if isinstance(raw_slug, str):
+        clean_slug = raw_slug.strip().lower()
+        if clean_slug:
+            existing = db.query(models.WebhookIntegration).filter(
+                models.WebhookIntegration.custom_slug == clean_slug,
+                models.WebhookIntegration.id != uuid_obj
+            ).first()
+            if existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Este slug personalizado já está em uso por outra integração."
+                )
+
     try:
         logger.info(f"🔄 [WEBHOOKS] Atualizando integração {integration_id} (Client {x_client_id})")
         
@@ -282,13 +314,7 @@ def update_webhook_integration(
         db_integration.platform = integration_update.platform
         db_integration.status = integration_update.status
         db_integration.custom_fields_mapping = integration_update.custom_fields_mapping
-        
-        raw_slug = getattr(integration_update, 'custom_slug', None)
-        if isinstance(raw_slug, str):
-            clean_slug = raw_slug.strip().lower()
-            db_integration.custom_slug = clean_slug if clean_slug else None
-        else:
-            db_integration.custom_slug = None
+        db_integration.custom_slug = clean_slug if clean_slug else None
 
         db_integration.product_filtering = getattr(integration_update, 'product_filtering', False)
         db_integration.product_whitelist = getattr(integration_update, 'product_whitelist', [])
@@ -360,6 +386,8 @@ def update_webhook_integration(
                     manychat_tag_prefix=getattr(mapping, 'manychat_tag_prefix', None),
                     manychat_tag_rotation_time=getattr(mapping, 'manychat_tag_rotation_time', "08:00"),
                     manychat_tag_rotation_day=getattr(mapping, 'manychat_tag_rotation_day', 0),
+                    manychat_start_date=getattr(mapping, 'manychat_start_date', None),
+                    manychat_tag_alternative=getattr(mapping, 'manychat_tag_alternative', None),
                     product_name=getattr(mapping, 'product_name', None),
                     is_active=active_status,
                     followup_active=getattr(mapping, 'followup_active', False),
@@ -408,6 +436,23 @@ def delete_webhook_integration(
     if not db_integration:
         raise HTTPException(status_code=404, detail="Integration not found")
     
-    db.delete(db_integration)
-    db.commit()
-    return {"message": "Integration deleted successfully"}
+    try:
+        # Deleta explicitamente mapeamentos e histórico associados para evitar problemas com chave estrangeira no banco
+        db.query(models.WebhookEventMapping).filter(
+            models.WebhookEventMapping.integration_id == uuid_obj
+        ).delete(synchronize_session='fetch')
+        
+        db.query(models.WebhookHistory).filter(
+            models.WebhookHistory.integration_id == uuid_obj
+        ).delete(synchronize_session='fetch')
+        
+        db.delete(db_integration)
+        db.commit()
+        return {"message": "Integration deleted successfully"}
+    except Exception as delete_err:
+        db.rollback()
+        logger.error(f"ERROR deleting integration {integration_id}: {str(delete_err)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao excluir integração do banco de dados: {str(delete_err)}"
+        )

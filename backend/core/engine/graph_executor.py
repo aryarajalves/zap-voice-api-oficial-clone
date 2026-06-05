@@ -13,6 +13,7 @@ from .nodes.date import handle_date_node
 from .nodes.condition import handle_condition_node
 from .nodes.template import handle_template_node
 from .nodes.actions import handle_update_contact_node, handle_label_node, handle_randomizer_node, handle_link_funnel_node
+from .nodes.http_request import handle_http_request_node
 
 logger = setup_logger("FunnelEngine.GraphExecutor")
 
@@ -31,7 +32,7 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
         if not start_node and nodes:
             logger.warning(f"⚠️ [GRAPH] Nenhum nó de início (start) encontrado para o Funil {funnel.id}. Usando fallback para o primeiro nó disponível.")
             # Priorizar tipos de conteúdo
-            priority_nodes = [n for n in nodes.values() if n.get("type") in ["message", "messageNode", "audioNode", "mediaNode", "templateNode", "delayNode", "delay"]]
+            priority_nodes = [n for n in nodes.values() if n.get("type") in ["message", "messageNode", "audioNode", "mediaNode", "templateNode", "delayNode", "delay", "httpRequestNode", "http_request"]]
             if priority_nodes:
                 start_node = priority_nodes[0]
             else:
@@ -121,6 +122,8 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
             source_handle = handle_randomizer_node(node)
         elif node_type in ["link_funnel", "linkFunnelNode"]:
             await handle_link_funnel_node(db, trigger, node, contact_phone, conversation_id)
+        elif node_type in ["httpRequestNode", "http_request"]:
+            source_handle = await handle_http_request_node(db, trigger, node, apply_vars_func)
 
         next_node_id = get_next_node(current_node_id, edges, source_handle)
         if not next_node_id and source_handle in ["default", "approach", "past"]:

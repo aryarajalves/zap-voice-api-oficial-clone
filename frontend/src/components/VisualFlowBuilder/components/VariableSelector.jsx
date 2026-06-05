@@ -57,7 +57,7 @@ const VariableSelector = ({ onSelect }) => {
                         </div>
                     </div>
 
-                    <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700">
+                    <div className="max-h-60 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700">
                         {filteredVars.length > 0 ? (
                             filteredVars.map(v => (
                                 <button

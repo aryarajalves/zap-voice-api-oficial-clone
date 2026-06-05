@@ -87,7 +87,8 @@ from rabbitmq_client import rabbitmq
 from websocket_manager import manager
 
 # Limitador de requisições (rate limit) — protege a API contra abuso
-from core.security import limiter
+from core.security import limiter, RequestContextMiddleware
+from slowapi.middleware import SlowAPIMiddleware
 
 # Função que retorna uma sessão do banco de dados para as rotas
 from core.deps import get_db
@@ -114,17 +115,17 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 app = FastAPI(
     title="ZapVoice API Oficial",
-    version="3.9.0",
+    version="3.9.3",
     docs_url="/docs" if DEBUG else None,
     redoc_url="/redoc" if DEBUG else None,
     openapi_url="/openapi.json" if DEBUG else None,
     description="""
-## 🚀 ZapVoice API v3.9.0
+## 🚀 ZapVoice API v3.9.3
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
 ### Funcionalidades
-* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.9.0** do **ZapVoice**!
+* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.9.3** do **ZapVoice**!
 * **Agendamento Inteligente:** Otimização de filas e prevenção de bloqueios.
 
 ### Autenticação
@@ -144,6 +145,10 @@ if SENTRY_DSN:
 # Configuração do limitador de requisições
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Adiciona middlewares do rate limiter. O RequestContextMiddleware deve rodar primeiro (LIFO)
+app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(RequestContextMiddleware)
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -213,6 +218,16 @@ async def meta_webhook_verification(request: Request, db: Session = Depends(get_
 async def meta_webhook_events(request: Request, db: Session = Depends(get_db)):
     logger.info("📥 [DEBUG] POST /api/meta recebido (Evento)")
     return await meta_webhook_handler(request, db)
+
+@app.get("/api/meta/{slug}")
+async def meta_webhook_verification_slug(slug: str, request: Request, db: Session = Depends(get_db)):
+    logger.info(f"📥 [DEBUG] GET /api/meta/{slug} recebido (Verificação)")
+    return await meta_webhook_handler(request, db, slug=slug)
+
+@app.post("/api/meta/{slug}")
+async def meta_webhook_events_slug(slug: str, request: Request, db: Session = Depends(get_db)):
+    logger.info(f"📥 [DEBUG] POST /api/meta/{slug} recebido (Evento)")
+    return await meta_webhook_handler(request, db, slug=slug)
 
 # 1. Rotas de recebimento (Chatwoot, Inbound)
 app.include_router(webhooks_inbound_router, prefix="/api", tags=["Webhooks Inbound"])
@@ -588,7 +603,7 @@ async def root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "3.9.0",
+        "version": "3.9.3",
         "mode": "production"
     }
 

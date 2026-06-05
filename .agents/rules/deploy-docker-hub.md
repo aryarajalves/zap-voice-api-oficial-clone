@@ -11,7 +11,7 @@ Toda vez que uma nova funcionalidade estável for finalizada ou uma correção c
 1. Atualizar a versão em:
    - `backend/main.py` (Variável `version`)
    - `frontend/package.json` (Campo `version`)
-   - `README.md` (Changelog)
+   - `README.md` (Versão)
    - `docker/docker-compose-producao.yml` (Tags das imagens)
 
 **Protocolo de Build e Push:**

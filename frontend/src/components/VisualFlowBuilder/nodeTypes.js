@@ -9,6 +9,7 @@ import ChatwootLabelNode from './nodes/ChatwootLabelNode';
 import UpdateContactNode from './nodes/UpdateContactNode';
 import TemplateNode from './nodes/TemplateNode';
 import DateNode from './nodes/DateNode';
+import HttpRequestNode from './nodes/HttpRequestNode';
 
 const nodeTypes = {
     messageNode: MessageNode,
@@ -21,7 +22,8 @@ const nodeTypes = {
     chatwoot_label: ChatwootLabelNode,
     updateContactNode: UpdateContactNode,
     templateNode: TemplateNode,
-    dateNode: DateNode
+    dateNode: DateNode,
+    httpRequestNode: HttpRequestNode
 };
 
 export default nodeTypes;

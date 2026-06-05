@@ -1,24 +1,30 @@
-import uuid
+# Grupo 1: Bibliotecas padrão do Python
 import json
 import re
-from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+import uuid
+from datetime import datetime, timedelta, timezone
+
+# Grupo 2: Bibliotecas externas
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-import models, schemas
-from database import SessionLocal
+
+# Grupo 3: Arquivos e módulos locais do projeto
+import models
+import schemas
+from core.deps import get_db
 from core.logger import logger
+from database import SessionLocal
 from rabbitmq_client import rabbitmq
 from services.leads import upsert_webhook_lead
 from services.manychat import sync_to_manychat, sync_to_manychat_and_update_history
-from core.deps import get_db
 from services.webhooks import (
-    get_brasilia_now, 
-    compute_dynamic_manychat_tag, 
-    parse_webhook_payload,
+    compute_dynamic_manychat_tag,
     extract_nested_custom_fields,
+    get_brasilia_now,
+    parse_webhook_payload,
+    process_webhook_automation,
     replace_variables_in_string,
-    process_webhook_automation
 )
 
 router = APIRouter()

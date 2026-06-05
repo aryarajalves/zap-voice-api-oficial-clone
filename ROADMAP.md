@@ -61,4 +61,69 @@ class TrafficSpend(Base):
     source = Column(String, nullable=False) # 'facebook_ads', 'google_ads', 'utmify', 'manual'
     amount = Column(Float, nullable=False) # Gasto em BRL
     currency = Column(String, default="BRL")
+
+
+---
+
+## 📸 [NOVO] Expansão Multicanal: Automação para Instagram Direct & Comentários
+
+### 🎯 Objetivo
+Transformar o ZapVoice em uma plataforma multicanal, estendendo o motor de funis e automações existente para o **Instagram**, permitindo criar interações automatizadas via Direct, Story Mentions e respostas automáticas em comentários (estilo ManyChat).
+
+### 🛠️ Abordagens de Integração Planejadas
+
+```mermaid
+graph TD
+    A[Gatilho do Instagram] --> B{Tipo de Evento}
+    B -->|Mensagem Direct / Story Mention| C[Webhook da Meta: Messenger API]
+    B -->|Comentário em Post| D[Webhook da Meta: Instagram Graph API]
+    C --> E[Worker: Processamento de Webhooks]
+    D --> E
+    E --> F{Motor de Funis ZapVoice}
+    F -->|Processa Lógica e Delays| G[Fila de Envio RabbitMQ]
+    G --> H[API da Meta: Envio de Direct / Resposta]
+```
+
+#### 1. Integração Direta com a Messenger API (Meta Cloud)
+*   **Funcionamento:** Utilizar as mesmas credenciais da Meta Developer Cloud configuradas pelo cliente. Um webhook central no backend recebe eventos da Messenger API vinculada à página comercial do Instagram.
+*   **Benefício:** Controle completo dos payloads, flexibilidade na criação das automações e taxas zero de intermediários.
+
+#### 2. Fluxos de Gatilho Suportados
+*   **Comentário -> Direct:** O lead comenta uma palavra-chave específica em um post e recebe instantaneamente uma mensagem automática e um funil de vendas no direct.
+*   **Automação de Resposta Rápida (Direct):** Fluxos de boas-vindas e menus interativos baseados em Quick Replies (botões) do Messenger.
+*   **Story Mentions:** Gatilho automático ativado quando o lead marca o perfil da empresa nos Stories.
+
+---
+
+### 🎨 Requisitos de Interface (UI/UX Premium)
+
+1.  **Tela de Gestão de Conexões / Canais:**
+    *   Painel onde o usuário vincula suas contas comerciais (WhatsApp e Instagram) com status visual "Online/Offline" para cada canal.
+2.  **Identificação de Canal no Construtor de Funis (`VisualFlowBuilder`):**
+    *   Possibilidade de definir se um funil ou nó de envio é destinado ao **WhatsApp** ou **Instagram**.
+    *   Ajuste dos nós de mensagens para suportar formatos específicos do Instagram (como carrosséis e botões de resposta rápida).
+3.  **Logs e Histórico Multicanal:**
+    *   Filtros rápidos no Histórico de Disparos para separar envios por Canal (WhatsApp vs. Instagram).
+    *   Ícones customizados (📸 para Instagram, 💬 para WhatsApp) na listagem.
+
+---
+
+### 💾 Estrutura de Banco de Dados Sugerida
+
+```python
+# Tabela para identificar qual canal o lead e o funil pertencem
+class Channel(str, enum.Enum):
+    WHATSAPP = "whatsapp"
+    INSTAGRAM = "instagram"
+
+# Associação da conta do Instagram por cliente
+class InstagramAccount(Base):
+    __tablename__ = "instagram_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(String, index=True, nullable=False) # Multi-tenant
+    instagram_page_id = Column(String, unique=True, nullable=False)
+    page_access_token = Column(String, nullable=False) # Token de acesso à página comercial
+    instagram_username = Column(String, nullable=True)
+    status = Column(String, default="active") # active, disconnected
 ```

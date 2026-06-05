@@ -16,8 +16,11 @@ const WhatsAppTab = ({
     whatsappName, setWhatsappName, handleUpdateWhatsAppName, isUpdatingWaName,
     handleRegisterWhatsAppNumber, isRegisteringWa, handleWhatsAppLogoUpload, isUpdatingWaLogo
 }) => {
+    const isUniqueWebhook = formData.WA_USE_UNIQUE_WEBHOOK === true || formData.WA_USE_UNIQUE_WEBHOOK === 'true';
     const baseWebhookUrl = formData.WEBHOOK_BASE_URL || WEBHOOK_BASE_URL || resolveUrl('/').replace(/\/$/, '');
-    const metaWebhookUrl = `${baseWebhookUrl}/api/meta`.replace('http://', 'https://');
+    const metaWebhookUrl = isUniqueWebhook && formData.WA_WEBHOOK_SLUG
+        ? `${baseWebhookUrl}/api/meta/${formData.WA_WEBHOOK_SLUG}`.replace('http://', 'https://')
+        : `${baseWebhookUrl}/api/meta`.replace('http://', 'https://');
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -259,13 +262,25 @@ const WhatsAppTab = ({
 
                         {/* Webhook Configuration Info */}
                         <div className="space-y-4 md:col-span-2 mt-4 p-5 bg-blue-50/30 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 shadow-sm">
-                            <div className="flex items-center gap-2">
-                                <FiZap className="text-blue-500 w-5 h-5" />
-                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">Configuração de Webhook (Meta)</h4>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <FiZap className="text-blue-500 w-5 h-5" />
+                                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">Configuração de Webhook (Meta)</h4>
+                                </div>
+                                <label className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-600/20 text-blue-600 dark:text-blue-400 rounded-xl cursor-pointer text-xs font-bold transition-all">
+                                    <input 
+                                        type="checkbox"
+                                        name="WA_USE_UNIQUE_WEBHOOK"
+                                        checked={formData.WA_USE_UNIQUE_WEBHOOK === true || formData.WA_USE_UNIQUE_WEBHOOK === 'true'}
+                                        onChange={handleChange}
+                                        className="rounded border-gray-300 dark:border-white/10 text-blue-600 focus:ring-blue-500 outline-none"
+                                    />
+                                    Usar Webhook Exclusivo por Cliente
+                                </label>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-3">
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5 md:col-span-2">
                                     <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">URL do Webhook</label>
                                     <div className="flex gap-2">
                                         <input 
@@ -284,6 +299,19 @@ const WhatsAppTab = ({
                                         </button>
                                     </div>
                                 </div>
+                                
+                                {isUniqueWebhook && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">Slug Exclusivo</label>
+                                        <input 
+                                            type="text" 
+                                            readOnly 
+                                            value={formData.WA_WEBHOOK_SLUG || ""}
+                                            className="w-full bg-white/70 dark:bg-black/40 border border-gray-100 dark:border-white/5 rounded-xl px-3 py-2.5 text-xs font-mono text-gray-600 dark:text-gray-400 focus:outline-none cursor-not-allowed"
+                                            title="Gerado automaticamente e exclusivo por cliente"
+                                        />
+                                    </div>
+                                )}
                                 
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">Token de Verificação</label>

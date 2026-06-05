@@ -2,7 +2,7 @@ import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { 
     FiMessageSquare, FiMusic, FiImage, FiClock, FiGitMerge, 
-    FiZap, FiLayers, FiUser, FiCalendar 
+    FiZap, FiLayers, FiUser, FiCalendar, FiGlobe 
 } from 'react-icons/fi';
 
 const getNodeConfig = (type, data) => {
@@ -81,6 +81,14 @@ const getNodeConfig = (type, data) => {
                 bgColor: 'bg-violet-50 dark:bg-violet-950/30 border-violet-200/50 dark:border-violet-800/30',
                 title: 'Agendamento Data'
             };
+        case 'httpRequestNode':
+        case 'http_request':
+            return {
+                icon: FiGlobe,
+                color: 'text-emerald-500',
+                bgColor: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/30',
+                title: 'Requisição HTTP'
+            };
         default:
             return {
                 icon: FiZap,
@@ -155,6 +163,8 @@ const PipelineNode = ({ id, data }) => {
             displayName = 'Divisor A/B';
         } else if (type === 'labelNode' || type === 'chatwoot_label') {
             displayName = 'Adicionar Etiqueta';
+        } else if (type === 'httpRequestNode' || type === 'http_request') {
+            displayName = 'Requisição HTTP';
         } else {
             displayName = 'Passo';
         }
@@ -238,8 +248,38 @@ const PipelineNode = ({ id, data }) => {
                     </div>
                 )}
 
+                {/* Exibição específica para Requisição HTTP */}
+                {(type === 'httpRequestNode' || type === 'http_request') && (() => {
+                    const displayUrl = data.resolvedUrl || data.url;
+                    let displayPayload = data.resolvedPayload || data.payload;
+                    if (!displayPayload && data.payloadFields && Array.isArray(data.payloadFields)) {
+                        const obj = {};
+                        data.payloadFields.forEach(f => {
+                            if (f.key) obj[f.key] = f.value;
+                        });
+                        if (Object.keys(obj).length > 0) {
+                            displayPayload = JSON.stringify(obj, null, 2);
+                        }
+                    }
+
+                    return (
+                        <div className="space-y-1 text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-950/20 p-2 rounded-xl border border-gray-100/50 dark:border-gray-800/30">
+                            <p>Método: <span className="text-emerald-600 dark:text-emerald-400 font-black">{data.method || 'POST'}</span></p>
+                            <p className="truncate">URL: <span className="text-gray-700 dark:text-gray-300 font-medium" title={displayUrl}>{displayUrl || 'Não configurada'}</span></p>
+                            {displayPayload && (
+                                <div className="mt-1">
+                                    <p className="mb-0.5">{data.resolvedPayload ? 'Payload Enviado:' : 'Payload:'}</p>
+                                    <pre className="text-[9px] bg-white dark:bg-gray-900 p-1.5 rounded border border-gray-100 dark:border-gray-800 overflow-x-auto max-h-16 font-mono text-gray-600 dark:text-gray-400 leading-normal custom-scrollbar">
+                                        {displayPayload}
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
+
                 {/* Pré-visualização de Mídia no Passo */}
-                {(type === 'media' || type === 'mediaNode' || type === 'audio' || type === 'audioNode' || data.mediaUrl || data.media_url || data.url) && (
+                {type !== 'httpRequestNode' && type !== 'http_request' && (type === 'media' || type === 'mediaNode' || type === 'audio' || type === 'audioNode' || data.mediaUrl || data.media_url || data.url) && (
                     (() => {
                         const mediaUrl = data.mediaUrl || data.media_url || data.url;
                         if (!mediaUrl) return null;
@@ -360,6 +400,25 @@ const PipelineNode = ({ id, data }) => {
                         className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" 
                         style={{ bottom: -6, left: '70%' }}
                         title="Atrasado"
+                    />
+                </>
+            ) : type === 'httpRequestNode' || type === 'http_request' ? (
+                <>
+                    <Handle 
+                        type="source" 
+                        position={Position.Bottom} 
+                        id="success"
+                        className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" 
+                        style={{ bottom: -6, left: '30%' }}
+                        title="Sucesso"
+                    />
+                    <Handle 
+                        type="source" 
+                        position={Position.Bottom} 
+                        id="fail"
+                        className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" 
+                        style={{ bottom: -6, left: '70%' }}
+                        title="Falha"
                     />
                 </>
             ) : (

@@ -32,7 +32,20 @@ class BackupService:
         self.secret_key = self._clean(os.getenv("S3_SECRET_KEY"))
         self.bucket_name = self._clean(os.getenv("S3_BUCKET_NAME")) or "zapvoice-files"
         self.region = self._clean(os.getenv("S3_REGION")) or "us-east-1"
-        self.prefix = self._clean(os.getenv("S3_BACKUP_PREFIX")) or self.BACKUP_PREFIX
+
+        # Pega a variável de ambiente COMPANY_NAME
+        company = self._clean(os.getenv("COMPANY_NAME")) or "zapvoice"
+        
+        # Remover acentos e sanitizar
+        import unicodedata
+        company_normalized = unicodedata.normalize('NFKD', company).encode('ascii', 'ignore').decode('utf-8')
+        company_clean = re.sub(r"[^a-zA-Z0-9_]", "", company_normalized.replace(" ", "_").lower())
+        if not company_clean:
+            company_clean = "zapvoice"
+            
+        backup_prefix_default = f"backups_{company_clean}/"
+        
+        self.prefix = self._clean(os.getenv("S3_BACKUP_PREFIX")) or backup_prefix_default
 
         self._s3 = None
 
@@ -84,22 +97,24 @@ class BackupService:
         now = datetime.now(tz_brasilia)
         timestamp = now.strftime("%Y_%m_%d_%H_%M")
         
-        company = None
-        try:
-            from database import SessionLocal
-            from models import AppConfig
-            db = SessionLocal()
-            try:
-                cfg = db.query(AppConfig).filter(AppConfig.key == "APP_NAME").first()
-                if cfg and cfg.value:
-                    company = cfg.value
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(f"[BACKUP] Erro ao buscar APP_NAME no banco: {e}")
-            
+        # Prioridade: COMPANY_NAME do env > APP_NAME do banco > "zapvoice"
+        company = os.getenv("COMPANY_NAME")
         if not company:
-            company = os.getenv("COMPANY_NAME", "zapvoice")
+            try:
+                from database import SessionLocal
+                from models import AppConfig
+                db = SessionLocal()
+                try:
+                    cfg = db.query(AppConfig).filter(AppConfig.key == "APP_NAME").first()
+                    if cfg and cfg.value:
+                        company = cfg.value
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.error(f"[BACKUP] Erro ao buscar APP_NAME no banco: {e}")
+                
+        if not company:
+            company = "zapvoice"
             
         # Remover acentos e sanitizar
         import unicodedata
@@ -108,7 +123,7 @@ class BackupService:
         if not company_clean:
             company_clean = "zapvoice"
             
-        return f"backup_{timestamp}_{company_clean}.dump.gz"
+        return f"{company_clean}_backup_{timestamp}.dump.gz"
 
 
 

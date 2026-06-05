@@ -51,8 +51,8 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     }, []);
 
     const setStartNode = useCallback((id, type) => {
-        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode' && type !== 'delayNode' && type !== 'dateNode') {
-            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio', 'Template', 'Smart Delay' ou 'Agendamento Data' podem ser o nó inicial! 🚫");
+        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode' && type !== 'delayNode' && type !== 'dateNode' && type !== 'httpRequestNode') {
+            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio', 'Template', 'Smart Delay', 'Agendamento Data' ou 'Requisição HTTP' podem ser o nó inicial! 🚫");
             return;
         }
 
@@ -141,11 +141,18 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             defaultData.percentA = 50;
         } else if (type === 'conditionNode') {
             defaultData.conditionType = 'text';
+        } else if (type === 'httpRequestNode') {
+            defaultData.method = 'POST';
+            defaultData.url = '';
+            defaultData.headers = [{ key: '', value: '' }];
+            defaultData.payloadType = 'fields';
+            defaultData.payloadFields = [{ key: '', value: '' }];
+            defaultData.payloadRaw = '';
         }
 
         setNodes((nds) => {
             const hasStartNode = nds.some(n => n.data?.isStart);
-            const isStartingType = ['messageNode', 'mediaNode', 'audioNode', 'templateNode', 'delayNode', 'dateNode'].includes(type);
+            const isStartingType = ['messageNode', 'mediaNode', 'audioNode', 'templateNode', 'delayNode', 'dateNode', 'httpRequestNode'].includes(type);
 
             if (!hasStartNode && isStartingType) {
                 defaultData.isStart = true;

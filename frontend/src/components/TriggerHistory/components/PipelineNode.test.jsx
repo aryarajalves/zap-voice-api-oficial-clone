@@ -129,4 +129,42 @@ describe('PipelineNode Component', () => {
     expect(screen.getByText('🎥 Vídeo')).toBeInTheDocument();
     expect(screen.getByText(/Assista a demonstração/)).toBeInTheDocument();
   });
+
+  it('deve renderizar nó de requisição HTTP com payload configurado', () => {
+    const mockData = {
+      type: 'httpRequestNode',
+      label: 'Enviar Webhook',
+      method: 'POST',
+      url: 'https://api.test.com/webhook',
+      payload: '{"phone": "{{telefone}}"}'
+    };
+
+    render(<PipelineNode id="node-http-1" data={mockData} />);
+
+    expect(screen.getByText('Enviar Webhook')).toBeInTheDocument();
+    expect(screen.getByText('POST')).toBeInTheDocument();
+    expect(screen.getByText('https://api.test.com/webhook')).toBeInTheDocument();
+    expect(screen.getByText('Payload:')).toBeInTheDocument();
+    expect(screen.getByText('{"phone": "{{telefone}}"}')).toBeInTheDocument();
+  });
+
+  it('deve renderizar nó de requisição HTTP com payload resolvido e url resolvida', () => {
+    const mockData = {
+      type: 'httpRequestNode',
+      label: 'Enviar Webhook',
+      method: 'POST',
+      url: 'https://api.test.com/webhook',
+      resolvedUrl: 'https://api.test.com/webhook?phone=5511999999999',
+      resolvedPayload: '{"phone": "5511999999999"}',
+      status: 'completed'
+    };
+
+    render(<PipelineNode id="node-http-2" data={mockData} />);
+
+    expect(screen.getByText('Enviar Webhook')).toBeInTheDocument();
+    expect(screen.getByText('POST')).toBeInTheDocument();
+    expect(screen.getByText('https://api.test.com/webhook?phone=5511999999999')).toBeInTheDocument();
+    expect(screen.getByText('Payload Enviado:')).toBeInTheDocument();
+    expect(screen.getByText('{"phone": "5511999999999"}')).toBeInTheDocument();
+  });
 });

@@ -1,5 +1,4 @@
-import React from 'react';
-import { FiMessageSquare, FiImage, FiMic, FiClock, FiCpu, FiShuffle, FiLink, FiTag, FiUser, FiCalendar } from 'react-icons/fi';
+import { FiMessageSquare, FiImage, FiMic, FiClock, FiCpu, FiShuffle, FiLink, FiTag, FiUser, FiCalendar, FiGlobe } from 'react-icons/fi';
 
 const ContextMenu = ({ top, left, onClose, onAddNode }) => {
     return (
@@ -43,6 +42,9 @@ const ContextMenu = ({ top, left, onClose, onAddNode }) => {
                 </button>
                 <button onClick={() => onAddNode('updateContactNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-orange-900/30 hover:text-orange-600 rounded-md transition text-left group">
                     <div className="bg-orange-100 dark:bg-orange-900/50 p-1 rounded group-hover:bg-orange-200 transition"><FiUser className="text-orange-500" /></div> Atualizar Contato no Chatwoot
+                </button>
+                <button onClick={() => onAddNode('httpRequestNode')} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 rounded-md transition text-left group">
+                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-1 rounded group-hover:bg-emerald-200 transition"><FiGlobe className="text-emerald-500" /></div> Requisição HTTP (Webhook)
                 </button>
             </div>
         </div>

@@ -14,6 +14,7 @@ vi.mock('react-icons/fi', () => ({
   FiTag: () => <span data-testid="icon-tag" />,
   FiUser: () => <span data-testid="icon-user" />,
   FiCalendar: () => <span data-testid="icon-calendar" />,
+  FiGlobe: () => <span data-testid="icon-globe" />,
 }));
 
 const defaultProps = {
@@ -47,6 +48,10 @@ describe('ContextMenu', () => {
     const audioButton = screen.getByText('Áudio');
     fireEvent.click(audioButton);
     expect(defaultProps.onAddNode).toHaveBeenCalledWith('audioNode');
+
+    const httpButton = screen.getByText('Requisição HTTP (Webhook)');
+    fireEvent.click(httpButton);
+    expect(defaultProps.onAddNode).toHaveBeenCalledWith('httpRequestNode');
   });
 
   it('chama onClose ao sair com o mouse (onMouseLeave)', () => {

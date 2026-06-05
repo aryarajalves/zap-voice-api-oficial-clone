@@ -30,6 +30,7 @@ def get_settings(client_id: int = None):
         # Infra keys para que o health check consiga lê-las via ENV fallback
         "RABBITMQ_HOST", "RABBITMQ_PORT", "RABBITMQ_USER", "RABBITMQ_PASSWORD",
         "S3_ENDPOINT_URL", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET_NAME", "S3_REGION",
+        "WA_USE_UNIQUE_WEBHOOK", "WA_WEBHOOK_SLUG",
         "AUTO_BLOCK_KEYWORDS", "SYNC_CONTACTS_TABLE", "MANYCHAT_API_KEY",
         "AI_MEMORY_ENABLED", "AGENT_MEMORY_WEBHOOK_URL", "AGENT_MEMORY_ENVIAR_TEXTO",
         "OPENAI_API_KEY", "OPENAI_API_MODEL"

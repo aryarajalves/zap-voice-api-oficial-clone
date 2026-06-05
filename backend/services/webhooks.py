@@ -1,18 +1,19 @@
-from typing import Union, List, Optional, Any, Dict
-from datetime import datetime, timezone, timedelta
-import re
+# Grupo 1: Bibliotecas padrão do Python
 import json
+import re
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Union
+
+# Grupo 3: Arquivos e módulos locais do projeto
 from core.logger import logger
 from core.utils import robust_extract_labels
-
-# Importa as funções auxiliares extraídas para respeitar o limite de 1000 linhas por arquivo
 from services.webhooks_utils import (
-    get_brasilia_now,
     compute_dynamic_manychat_tag,
-    parse_webhook_payload,
     extract_mapped_variables,
     extract_nested_custom_fields,
-    replace_variables_in_string
+    get_brasilia_now,
+    parse_webhook_payload,
+    replace_variables_in_string,
 )
 
 

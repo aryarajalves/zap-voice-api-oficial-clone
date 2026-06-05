@@ -19,7 +19,9 @@ export const INITIAL_FORM_STATE = {
     APP_LOGO_SIZE: 'medium',
     AI_MEMORY_ENABLED: false,
     AGENT_MEMORY_WEBHOOK_URL: '',
-    MANYCHAT_API_KEY: ''
+    MANYCHAT_API_KEY: '',
+    WA_USE_UNIQUE_WEBHOOK: false,
+    WA_WEBHOOK_SLUG: ''
 };
 
 export function useGeneralSettings(activeClient, refreshClients) {

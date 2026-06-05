@@ -1,5 +1,7 @@
 import os                          # Lê variáveis de ambiente do sistema (.env)
 import hashlib                     # Gera hash SHA256 — usado como fallback para senhas antigas
+from contextvars import ContextVar  # Permite isolar o contexto da requisição por thread/task
+from fastapi import Request        # Representação da requisição HTTP
 from slowapi import Limiter        # Limitador de requisições — bloqueia abuso de endpoints
 from core.logger import setup_logger                # Logger interno do projeto
 from slowapi.util import get_remote_address         # Pega o IP de quem fez a requisição
@@ -10,14 +12,56 @@ from jose import jwt               # Geração e validação de tokens JWT
 
 logger = setup_logger("security")
 
+# Contexto global para armazenar a requisição atual de forma thread-safe
+request_var: ContextVar[Request] = ContextVar("request_var")
+
+class RequestContextMiddleware:
+    """
+    Middleware ASGI que captura a requisição atual do ciclo HTTP e a armazena
+    em uma variável de contexto isolada, permitindo acesso dinâmico posterior.
+    """
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive=receive)
+        token = request_var.set(request)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            request_var.reset(token)
+
 # ── Rate Limiter ──────────────────────────────────────────────────────────────
 # Lê do .env se o rate limit está habilitado (padrão: true)
 # Desativa automaticamente durante testes (TESTING=true) para não interferir
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true" and os.getenv("TESTING") != "true"
 
+# Valores de limite definidos diretamente no código
+RATE_LIMIT_READ = "100/minute"
+RATE_LIMIT_WRITE = "30/minute"
+
+def get_dynamic_rate_limit() -> str:
+    """
+    Retorna dinamicamente o rate limit correspondente ao método HTTP da requisição.
+    Se for GET (visualização), retorna o limite de leitura.
+    Se for POST, PUT, DELETE, PATCH, etc., retorna o limite de escrita.
+    """
+    try:
+        request = request_var.get()
+        if request.method == "GET":
+            return RATE_LIMIT_READ
+        return RATE_LIMIT_WRITE
+    except Exception:
+        # Fallback se executado fora de um contexto de requisição
+        return RATE_LIMIT_READ
+
 limiter = Limiter(
     key_func=get_remote_address,      # Identifica cada usuário pelo IP
-    default_limits=["20/minute"],     # Máximo de 20 requisições por minuto por IP
+    default_limits=[get_dynamic_rate_limit],     # Limite dinâmico baseado no método HTTP
     enabled=RATE_LIMIT_ENABLED        # Liga/desliga conforme a variável de ambiente
 )
 

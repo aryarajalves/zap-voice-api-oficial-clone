@@ -383,13 +383,15 @@ class TestBackupServiceLogic:
     def test_generate_filename_format(self):
         """Verifica que o nome de arquivo segue o padrão esperado."""
         from services.backup_service import BackupService
+        import os
         svc = BackupService()
-        filename = svc._generate_filename()
-        assert filename.startswith("backup_")
-        assert filename.endswith(".dump.gz")
-        # Exemplo: backup_2026_06_03_08_43_zapvoice.dump.gz
-        parts = filename.replace("backup_", "").replace(".dump.gz", "").split("_")
-        assert len(parts) >= 6
+        with patch.dict(os.environ, {"COMPANY_NAME": "zapvoice"}):
+            filename = svc._generate_filename()
+            assert filename.startswith("zapvoice_backup_")
+            assert filename.endswith(".dump.gz")
+            # Exemplo: zapvoice_backup_2026_06_03_08_43.dump.gz
+            parts = filename.replace("zapvoice_backup_", "").replace(".dump.gz", "").split("_")
+            assert len(parts) >= 5
 
 
     def test_calculate_next_backup_hours(self):

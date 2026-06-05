@@ -58,6 +58,21 @@ def read_settings(
         current_settings = {c.key: c.value for c in configs}
         print(f"[SETTINGS] Retrieved {len(current_settings)} settings from DB for client {x_client_id}")
         
+        # Se não tiver o slug do webhook gerado, gera um agora
+        if not current_settings.get("WA_WEBHOOK_SLUG"):
+            import secrets
+            # Gera um slug aleatório curto (12 caracteres hex)
+            random_slug = f"meta_{secrets.token_hex(6)}"
+            try:
+                new_slug_cfg = AppConfig(key="WA_WEBHOOK_SLUG", value=random_slug, client_id=x_client_id)
+                db.add(new_slug_cfg)
+                db.commit()
+                current_settings["WA_WEBHOOK_SLUG"] = random_slug
+                print(f"[SETTINGS] Generated dynamic webhook slug '{random_slug}' for client {x_client_id}")
+            except Exception as e_slug:
+                db.rollback()
+                print(f"[SETTINGS ERROR] Failed to save generated slug: {e_slug}")
+
         # Mascarar dados sensíveis para exibição
         masked_settings = {}
         for key, value in current_settings.items():
@@ -146,7 +161,9 @@ async def update_settings(
         "AUTO_BLOCK_LABEL",
         "AI_MEMORY_ENABLED",
         "AGENT_MEMORY_WEBHOOK_URL",
-        "MANYCHAT_API_KEY"
+        "MANYCHAT_API_KEY",
+        "WA_USE_UNIQUE_WEBHOOK",
+        "WA_WEBHOOK_SLUG"
     }
     
     saved_count = 0

@@ -21,7 +21,8 @@ NODE_TYPE_LABELS = {
     "end": "Fim",
     "inputNode": "Entrada",
     "actionNode": "Ação",
-    "updateContactNode": "Atualizar Contato no Chatwoot"
+    "updateContactNode": "Atualizar Contato no Chatwoot",
+    "httpRequestNode": "Requisição HTTP"
 }
 
 def normalize_text(text: str) -> str:

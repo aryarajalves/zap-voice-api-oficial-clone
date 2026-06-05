@@ -260,6 +260,12 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
             const status = nodeStatuses[nodeId] || 'pending';
             const isActive = nodeId === trigger.current_node_id;
 
+            // Encontrar o log de execução mais recente para este nó
+            const nodeLogs = rawHistory.filter(log => log.node_id === nodeId);
+            const latestLog = nodeLogs.length > 0 ? nodeLogs[nodeLogs.length - 1] : null;
+            const resolvedUrl = latestLog?.extra?.resolved_url;
+            const resolvedPayload = latestLog?.extra?.resolved_payload;
+
             return {
                 ...node,
                 type: 'pipelineNode', // Converte para o nosso tipo customizado
@@ -268,6 +274,8 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
                     type: node.type,  // Copia o tipo original do nó para renderização customizada
                     status,
                     isActive,
+                    resolvedUrl,
+                    resolvedPayload,
                     bulkStats: nodeStats[nodeId] || null,
                     onStatClick: (clickedStatus) => {
                         if (onNodeStatClick) {
@@ -277,7 +285,7 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
                 }
             };
         });
-    }, [rawNodes, nodeStatuses, nodeStats, trigger.current_node_id, trigger.is_bulk, onNodeStatClick]);
+    }, [rawNodes, nodeStatuses, nodeStats, trigger.current_node_id, trigger.is_bulk, onNodeStatClick, rawHistory]);
 
     // 4. Processar e colorir as conexões (edges) de forma estática e discreta
     const flowEdges = useMemo(() => {

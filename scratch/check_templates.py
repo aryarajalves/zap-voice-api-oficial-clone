@@ -1,20 +1,12 @@
 import os
-import sys
-
-# Add backend directory to Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
-
 from database import SessionLocal
-import models
+from models import WhatsAppTemplateCache
 
 db = SessionLocal()
 try:
-    print("Checking cached templates in whatsapp_template_cache:")
-    templates = db.query(models.WhatsAppTemplateCache).all()
-    print(f"Total cached templates: {len(templates)}")
-    for t in templates:
-        print(f"ID: {t.id} | Client ID: {t.client_id} | Name: {t.name} | Language: {t.language} | Has Body: {bool(t.body)}")
-        if "webinaro" in t.name or "convite" in t.name:
-            print(f" -> Found match: {t.name} | Body: {t.body}")
+    tpls = db.query(WhatsAppTemplateCache).all()
+    print("Total templates in cache:", len(tpls))
+    for t in tpls:
+        print(f"ID: {t.id} | Name: {t.name} | Client ID: {t.client_id} | Is Archived: {t.is_archived} | Is Pinned: {t.is_pinned}")
 finally:
     db.close()

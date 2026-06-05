@@ -1,4 +1,4 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.9.0)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.9.3)
 
 O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
 
@@ -34,7 +34,7 @@ Permite enviar mensagens e templates aprovados pela Meta para múltiplos contato
 *   **Compliance de Envio**: Permite validar canais e verificar a janela de 24h antes do envio, além de gerenciar um painel de exclusão rápida de números da lista.
 
 ### 2. Disparos Recorrentes
-Programe o reenvio automático de templates em períodos definidos (semanal ou mensal) filtrando dinamicamente pelas etiquetas aplicadas aos contatos na base de dados.
+Permite reenvio automático de templates em períodos definidos (semanal ou mensal) filtrando dinamicamente pelas etiquetas aplicadas aos contatos na base de dados.
 
 ### 3. Construtor Visual de Funis (Visual Flow Builder)
 Criação gráfica em estilo *drag-and-drop* de fluxos de conversação inteligentes:
