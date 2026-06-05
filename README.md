@@ -1,4 +1,4 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.9.4)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.9.5)
 
 O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
 
