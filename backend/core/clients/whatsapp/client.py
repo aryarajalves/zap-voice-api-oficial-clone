@@ -228,12 +228,32 @@ class WhatsAppClient:
             for t in templates:
                 if not t.get("id"):
                     continue
-                existing = db.query(WhatsAppTemplateCache).get(int(t["id"]))
+                template_id = int(t["id"])
+
+                # Busca primeiro pelo ID exato
+                existing = db.query(WhatsAppTemplateCache).filter(
+                    WhatsAppTemplateCache.id == template_id
+                ).first()
+
+                # Se não encontrou pelo ID, busca pela constraint única (client_id, name, language)
+                # Isso cobre o caso onde a Meta regenerou o ID do mesmo template
+                if not existing:
+                    existing = db.query(WhatsAppTemplateCache).filter(
+                        WhatsAppTemplateCache.client_id == self.client_id,
+                        WhatsAppTemplateCache.name == t["name"],
+                        WhatsAppTemplateCache.language == t["language"]
+                    ).first()
+
                 if existing:
-                    existing.name, existing.language, existing.body, existing.components = t["name"], t["language"], t["body_text"], t["components"]
+                    # Atualiza todos os campos, incluindo o ID caso tenha mudado na Meta
+                    existing.id = template_id
+                    existing.name = t["name"]
+                    existing.language = t["language"]
+                    existing.body = t["body_text"]
+                    existing.components = t["components"]
                 else:
                     db.add(WhatsAppTemplateCache(
-                        id=int(t["id"]),
+                        id=template_id,
                         client_id=self.client_id,
                         name=t["name"],
                         language=t["language"],
@@ -242,7 +262,8 @@ class WhatsAppClient:
                         is_archived=False,
                         is_pinned=False
                     ))
-            # Desafixar e arquivar localmente qualquer template deste cliente que não esteja mais ativo na API da Meta
+
+            # Arquivar localmente qualquer template deste cliente que não esteja mais ativo na Meta
             db.query(WhatsAppTemplateCache).filter(
                 WhatsAppTemplateCache.client_id == self.client_id,
                 WhatsAppTemplateCache.id.notin_(incoming_ids)
@@ -254,6 +275,11 @@ class WhatsAppClient:
             db.close()
         except Exception as e:
             logger.error(f"Erro ao sincronizar cache de templates: {e}")
+            try:
+                db.rollback()
+                db.close()
+            except Exception:
+                pass
 
 
     def _build_template_components(self, data):

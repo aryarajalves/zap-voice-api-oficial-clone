@@ -3,8 +3,8 @@
 Toda vez que uma nova funcionalidade estável for finalizada ou uma correção crítica for aplicada, você deve **perguntar ao usuário** se ele deseja gerar uma nova imagem oficial no Docker Hub para produção.
 
 **Protocolo de Versionamento (Regra do 10):**
-1. **Última Versão Criada:** `3.9.3`
-2. **Próxima Versão:** `3.9.4`
+1. **Última Versão Criada:** `3.9.4`
+2. **Próxima Versão:** `3.9.5`
 3. **Lógica de Incremento:** Toda vez que um número chegar a 10, ele deve ser resetado para 0 e somar +1 ao número à esquerda (ex: `3.5.9` -> `3.6.0`).
 
 **Protocolo de Sincronização (Antes do Build):**
