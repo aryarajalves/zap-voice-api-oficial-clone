@@ -304,12 +304,19 @@ const WhatsAppTab = ({
                                     <div className="space-y-1.5">
                                         <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">Slug Exclusivo</label>
                                         <input 
-                                            type="text" 
-                                            readOnly 
+                                            type="text"
+                                            name="WA_WEBHOOK_SLUG"
                                             value={formData.WA_WEBHOOK_SLUG || ""}
-                                            className="w-full bg-white/70 dark:bg-black/40 border border-gray-100 dark:border-white/5 rounded-xl px-3 py-2.5 text-xs font-mono text-gray-600 dark:text-gray-400 focus:outline-none cursor-not-allowed"
-                                            title="Gerado automaticamente e exclusivo por cliente"
+                                            onChange={(e) => {
+                                                // Permite apenas letras, números, underscores e hífens
+                                                const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                                                handleChange({ target: { name: 'WA_WEBHOOK_SLUG', value: sanitized } });
+                                            }}
+                                            className="w-full bg-white dark:bg-[#1f2937]/50 border border-gray-300 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs font-mono text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                            placeholder="Ex: minha_empresa_2024"
+                                            title="Slug usado na URL do webhook. Use apenas letras minúsculas, números, _ e -"
                                         />
+                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">Apenas letras minúsculas, números, _ e - são permitidos.</p>
                                     </div>
                                 )}
                                 

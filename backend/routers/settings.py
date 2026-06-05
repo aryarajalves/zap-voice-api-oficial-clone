@@ -175,6 +175,28 @@ async def update_settings(
             continue
         
         print(f"[SETTINGS] Updating key: {key}")
+
+        # Validação especial para WA_WEBHOOK_SLUG: deve ser único entre todos os clientes
+        if key == "WA_WEBHOOK_SLUG" and value:
+            import re
+            val_str_check = str(value).strip()
+            # Valida formato: apenas letras minúsculas, números, _ e -
+            if not re.match(r'^[a-z0-9_-]+$', val_str_check):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Slug inválido. Use apenas letras minúsculas, números, underscores (_) e hífens (-)."
+                )
+            # Verifica se outro cliente já usa esse slug
+            slug_conflict = db.query(AppConfig).filter(
+                AppConfig.key == "WA_WEBHOOK_SLUG",
+                AppConfig.value == val_str_check,
+                AppConfig.client_id != x_client_id
+            ).first()
+            if slug_conflict:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"O slug '{val_str_check}' já está sendo utilizado por outro cliente. Escolha um slug diferente."
+                )
             
         # Buscar configuração específica do cliente
         config_item = db.query(AppConfig).filter(

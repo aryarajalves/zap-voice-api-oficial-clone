@@ -93,3 +93,98 @@ def test_meta_webhook_slug_post_event(client, db_session):
         called_args = mock_publish.call_args[0]
         assert called_args[0] == "whatsapp_events"
         assert called_args[1]["client_id"] == client_obj.id
+
+
+def test_settings_update_slug_invalid_format(client, db_session):
+    """Deve rejeitar slug com caracteres inválidos (maiúsculas, espaços, etc.)"""
+    from models import Client, User
+    import bcrypt
+
+    client_obj = db_session.query(Client).filter(Client.id == 1).first()
+    if not client_obj:
+        client_obj = Client(id=1, name="DefaultClient")
+        db_session.add(client_obj)
+
+    hashed = bcrypt.hashpw(b"testpass", bcrypt.gensalt()).decode()
+    user = User(email="admin_slug_inv@test.com", hashed_password=hashed, role="super_admin", client_id=1, is_active=True)
+    db_session.add(user)
+    db_session.commit()
+
+    login_resp = client.post("/api/auth/token",
+        data={"username": "admin_slug_inv@test.com", "password": "testpass"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}", "X-Client-ID": "1"}
+
+    resp = client.post("/api/settings/", json={"settings": {"WA_WEBHOOK_SLUG": "Meu Slug Inválido!"}}, headers=headers)
+    assert resp.status_code == 400
+    assert "Slug inválido" in resp.json()["detail"]
+
+
+def test_settings_update_slug_conflict(client, db_session):
+    """Deve rejeitar slug que já está sendo usado por outro cliente"""
+    from models import Client, User, AppConfig
+    import bcrypt
+
+    c1 = db_session.query(Client).filter(Client.id == 1).first()
+    if not c1:
+        c1 = Client(id=1, name="Client1")
+        db_session.add(c1)
+
+    c2 = Client(name="Client2Conflict")
+    db_session.add(c2)
+    db_session.commit()
+    db_session.refresh(c2)
+
+    slug_cfg = AppConfig(client_id=c2.id, key="WA_WEBHOOK_SLUG", value="slug_existente_conflict")
+    db_session.add(slug_cfg)
+
+    hashed = bcrypt.hashpw(b"testpass", bcrypt.gensalt()).decode()
+    user = User(email="admin_slug_conf@test.com", hashed_password=hashed, role="super_admin", client_id=1, is_active=True)
+    db_session.add(user)
+    db_session.commit()
+
+    login_resp = client.post("/api/auth/token",
+        data={"username": "admin_slug_conf@test.com", "password": "testpass"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}", "X-Client-ID": "1"}
+
+    resp = client.post("/api/settings/", json={"settings": {"WA_WEBHOOK_SLUG": "slug_existente_conflict"}}, headers=headers)
+    assert resp.status_code == 409
+    assert "já está sendo utilizado" in resp.json()["detail"]
+
+
+def test_settings_update_slug_own_slug_allowed(client, db_session):
+    """Deve permitir que o cliente salve o mesmo slug que já possui (sem conflito consigo mesmo)"""
+    from models import Client, User, AppConfig
+    import bcrypt
+
+    c1 = db_session.query(Client).filter(Client.id == 1).first()
+    if not c1:
+        c1 = Client(id=1, name="Client1")
+        db_session.add(c1)
+    db_session.commit()
+
+    slug_cfg = AppConfig(client_id=1, key="WA_WEBHOOK_SLUG", value="meu_proprio_slug_own")
+    db_session.add(slug_cfg)
+
+    hashed = bcrypt.hashpw(b"testpass2", bcrypt.gensalt()).decode()
+    user = User(email="admin_slug_own@test.com", hashed_password=hashed, role="super_admin", client_id=1, is_active=True)
+    db_session.add(user)
+    db_session.commit()
+
+    login_resp = client.post("/api/auth/token",
+        data={"username": "admin_slug_own@test.com", "password": "testpass2"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}", "X-Client-ID": "1"}
+
+    resp = client.post("/api/settings/", json={"settings": {"WA_WEBHOOK_SLUG": "meu_proprio_slug_own"}}, headers=headers)
+    assert resp.status_code == 200
