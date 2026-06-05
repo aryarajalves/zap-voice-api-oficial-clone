@@ -89,10 +89,10 @@ async def list_templates(
             models.WhatsAppTemplateCache.client_id == target_client_id,
             models.WhatsAppTemplateCache.is_archived == True
         ).all()
-        archived_names = {t.name for t in archived_templates}
+        archived_ids = {str(t.id) for t in archived_templates}
         
         for t in templates:
-            t["is_archived"] = t.get("name") in archived_names
+            t["is_archived"] = str(t.get("id")) in archived_ids
     except Exception as arch_err:
         logger.error(f"Error mapping archived templates: {arch_err}")
         for t in templates:
@@ -178,28 +178,62 @@ async def archive_template(
     db: Session = Depends(get_db)
 ):
     target_client_id = x_client_id if x_client_id else current_user.client_id
-    db_tpl = db.query(models.WhatsAppTemplateCache).filter(
+    logger.info(f"📥 [ARCHIVE_TEMPLATE] Request to archive '{template_name}'. Header Client ID: {x_client_id}, User Client ID: {current_user.client_id}, Target Client ID: {target_client_id}")
+    
+    db_tpls = db.query(models.WhatsAppTemplateCache).filter(
         models.WhatsAppTemplateCache.name == template_name,
         models.WhatsAppTemplateCache.client_id == target_client_id
-    ).first()
-    if not db_tpl:
+    ).all()
+    if not db_tpls:
         try:
             client = ChatwootClient(client_id=target_client_id)
             meta_tpls = await client.get_whatsapp_templates()
-            db_tpl = db.query(models.WhatsAppTemplateCache).filter(
+            db_tpls = db.query(models.WhatsAppTemplateCache).filter(
                 models.WhatsAppTemplateCache.name == template_name,
                 models.WhatsAppTemplateCache.client_id == target_client_id
-            ).first()
+            ).all()
         except Exception as e:
             logger.error(f"Error fetching templates from Meta to archive: {e}")
             
-    if not db_tpl:
+    if not db_tpls:
         raise HTTPException(status_code=404, detail="Template não encontrado no cache local.")
     
-    if db_tpl.is_pinned:
-        raise HTTPException(status_code=400, detail="Não é possível arquivar um template que está fixado no topo.")
+    for db_tpl in db_tpls:
+        if db_tpl.is_pinned:
+            raise HTTPException(status_code=400, detail="Não é possível arquivar um template que está fixado no topo.")
+            
+    # Verificar se o template está sendo utilizado em alguma integração de Webhook
+    has_webhook = db.query(models.WebhookEventMapping).join(
+        models.WebhookIntegration,
+        models.WebhookEventMapping.integration_id == models.WebhookIntegration.id
+    ).filter(
+        (models.WebhookEventMapping.template_name == template_name) | 
+        (models.WebhookEventMapping.followup_template_name == template_name)
+    ).first()
     
-    db_tpl.is_archived = True
+    logger.info(f"🔍 [ARCHIVE_TEMPLATE] Webhook integration check for '{template_name}': {has_webhook.id if has_webhook else 'NOT FOUND'}")
+    
+    if has_webhook:
+        raise HTTPException(
+            status_code=400, 
+            detail="Não é possível arquivar este template pois ele está sendo utilizado em uma ou mais integrações de webhook."
+        )
+
+    # Verificar se o template está sendo utilizado em algum agendamento recorrente
+    has_recurring = db.query(models.RecurringTrigger).filter(
+        models.RecurringTrigger.template_name == template_name
+    ).first()
+    
+    logger.info(f"🔍 [ARCHIVE_TEMPLATE] Recurring trigger check for '{template_name}': {has_recurring.id if has_recurring else 'NOT FOUND'}")
+    
+    if has_recurring:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível arquivar este template pois ele está sendo utilizado em um disparo recorrente ativo."
+        )
+    
+    for db_tpl in db_tpls:
+        db_tpl.is_archived = True
     db.commit()
     return {"status": "success", "message": "Template arquivado com sucesso."}
 
@@ -211,14 +245,15 @@ async def unarchive_template(
     db: Session = Depends(get_db)
 ):
     target_client_id = x_client_id if x_client_id else current_user.client_id
-    db_tpl = db.query(models.WhatsAppTemplateCache).filter(
+    db_tpls = db.query(models.WhatsAppTemplateCache).filter(
         models.WhatsAppTemplateCache.name == template_name,
         models.WhatsAppTemplateCache.client_id == target_client_id
-    ).first()
-    if not db_tpl:
+    ).all()
+    if not db_tpls:
         raise HTTPException(status_code=404, detail="Template não encontrado no cache local.")
     
-    db_tpl.is_archived = False
+    for db_tpl in db_tpls:
+        db_tpl.is_archived = False
     db.commit()
     return {"status": "success", "message": "Template desarquivado com sucesso."}
 

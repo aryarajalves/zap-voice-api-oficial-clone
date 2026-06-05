@@ -68,6 +68,35 @@ async def test_archive_and_unarchive_template(db_session):
     assert db_tpl.is_archived is False
 
 @pytest.mark.asyncio
+async def test_archive_and_unarchive_multiple_templates(db_session):
+    db_session.query(models.WhatsAppTemplateCache).delete()
+    db_session.commit()
+
+    db_session.add(models.WhatsAppTemplateCache(
+        id=991, client_id=1, name="test_multi_template", language="pt_BR", body="Body text 1", is_archived=False
+    ))
+    db_session.add(models.WhatsAppTemplateCache(
+        id=992, client_id=1, name="test_multi_template", language="pt_BR", body="Body text 2", is_archived=False
+    ))
+    db_session.commit()
+
+    # Test archive multiple
+    res_arch = await archive_template(template_name="test_multi_template", x_client_id=1, current_user=MockUser(1), db=db_session)
+    assert res_arch["status"] == "success"
+    
+    tpls = db_session.query(models.WhatsAppTemplateCache).filter_by(name="test_multi_template", client_id=1).all()
+    assert len(tpls) == 2
+    assert all(t.is_archived is True for t in tpls)
+
+    # Test unarchive multiple
+    res_unarch = await unarchive_template(template_name="test_multi_template", x_client_id=1, current_user=MockUser(1), db=db_session)
+    assert res_unarch["status"] == "success"
+    
+    tpls = db_session.query(models.WhatsAppTemplateCache).filter_by(name="test_multi_template", client_id=1).all()
+    assert len(tpls) == 2
+    assert all(t.is_archived is False for t in tpls)
+
+@pytest.mark.asyncio
 @patch("routers.whatsapp.ChatwootClient")
 async def test_list_templates_filters_paused(mock_cw_client, db_session):
     # Setup mock templates, one approved and one paused
@@ -90,3 +119,50 @@ async def test_list_templates_filters_paused(mock_cw_client, db_session):
     assert len(res_filtered) == 1
     assert res_filtered[0]["name"] == "template_active"
 
+@pytest.mark.asyncio
+async def test_archive_template_blocked_by_active_webhook(db_session):
+    import uuid
+    db_session.query(models.WhatsAppTemplateCache).delete()
+    db_session.query(models.WebhookEventMapping).delete()
+    db_session.query(models.WebhookIntegration).delete()
+    db_session.commit()
+
+    db_session.add(models.WhatsAppTemplateCache(
+        id=995, client_id=1, name="webhook_tpl", language="pt_BR", body="Body text", is_archived=False
+    ))
+    
+    integration_id = uuid.uuid4()
+    db_session.add(models.WebhookIntegration(
+        id=integration_id, client_id=1, name="Test Integration", platform="hotmart"
+    ))
+    db_session.add(models.WebhookEventMapping(
+        id=123, integration_id=integration_id, event_type="approved", template_name="webhook_tpl", is_active=False
+    ))
+    db_session.commit()
+
+    # Archiving should fail due to webhook integration using the template (even if mapping/integration is inactive)
+    with pytest.raises(HTTPException) as exc_info:
+        await archive_template(template_name="webhook_tpl", x_client_id=1, current_user=MockUser(1), db=db_session)
+    assert exc_info.value.status_code == 400
+    assert "integrações de webhook" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_archive_template_blocked_by_active_recurring(db_session):
+    db_session.query(models.WhatsAppTemplateCache).delete()
+    db_session.query(models.RecurringTrigger).delete()
+    db_session.commit()
+
+    db_session.add(models.WhatsAppTemplateCache(
+        id=996, client_id=1, name="recurring_tpl", language="pt_BR", body="Body text", is_archived=False
+    ))
+    db_session.add(models.RecurringTrigger(
+        id=456, client_id=1, template_name="recurring_tpl", frequency="daily", is_active=False
+    ))
+    db_session.commit()
+
+    # Archiving should fail due to recurring trigger using the template (even if inactive)
+    with pytest.raises(HTTPException) as exc_info:
+        await archive_template(template_name="recurring_tpl", x_client_id=1, current_user=MockUser(1), db=db_session)
+    assert exc_info.value.status_code == 400
+    assert "disparo recorrente" in exc_info.value.detail
