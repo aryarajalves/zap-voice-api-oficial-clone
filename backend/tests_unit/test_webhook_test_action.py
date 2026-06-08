@@ -126,8 +126,9 @@ def test_webhook_test_com_mapeamento():
     _seed_integration(db, with_mapping=True)
     db.close()
 
-    # Mockamos o background task para não abrir conexão com banco de produção
-    with patch("services.webhooks.process_webhook_automation", new=AsyncMock()):
+    # Mockamos o background task e o upsert lead para não abrir conexão com banco
+    with patch("services.webhooks.process_webhook_automation", new=AsyncMock()), \
+         patch("routers.webhooks.actions.upsert_webhook_lead") as mock_upsert:
         response = client.post(
             f"/api/webhook-integrations/{INTEGRATION_ID_STR}/test",
             json=PAYLOAD,
@@ -135,6 +136,9 @@ def test_webhook_test_com_mapeamento():
         )
 
     assert response.status_code == 200, f"Status inesperado: {response.status_code} - {response.text}"
+    mock_upsert.assert_called_once()
+    assert mock_upsert.call_args[1]["tag"] == "Compra Aprovada"
+
 
     db = TestingSessionLocal()
     history = db.query(models.WebhookHistory).filter(

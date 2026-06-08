@@ -7,7 +7,9 @@ import re
 import models
 from database import SessionLocal
 from core.deps import get_current_user, get_validated_client_id
+from core.logger import logger
 from services.webhooks import parse_webhook_payload
+from services.leads import upsert_webhook_lead
 
 router = APIRouter()
 
@@ -147,6 +149,33 @@ async def test_webhook_integration(
 
     # Dispara tarefas em segundo plano (Full Flow)
     if mapping:
+        # Sincroniza Lead com o banco central de leads (com tags do mapeamento)
+        auto_tag_list = []
+        try:
+            from core.utils import robust_extract_labels
+            if mapping.chatwoot_label:
+                extracted_labels = robust_extract_labels(mapping.chatwoot_label)
+                if extracted_labels:
+                    auto_tag_list.extend([str(t).strip() for t in extracted_labels if t])
+            if getattr(mapping, "internal_tags", None):
+                auto_tag_list.extend([t.strip() for t in mapping.internal_tags.split(',') if t.strip()])
+            # Fallback: usa o event_type como etiqueta se não houver nenhuma configurada
+            if not auto_tag_list and detected_event:
+                auto_tag_list.append(detected_event.replace("_", " ").title())
+        except Exception as tag_err:
+            logger.warning(f"⚠️ [WEBHOOK TEST] Erro ao montar tags para lead: {tag_err}")
+
+        auto_tag = ", ".join(list(dict.fromkeys(auto_tag_list))) if auto_tag_list else None
+
+        background_tasks.add_task(
+            upsert_webhook_lead,
+            SessionLocal(),
+            client_id=integration.client_id,
+            platform=integration.platform,
+            parsed_data=processed_data,
+            tag=auto_tag
+        )
+
         # 1. Sincronização ManyChat
         if getattr(mapping, "manychat_active", False):
             from services.manychat import sync_to_manychat_and_update_history
@@ -156,6 +185,7 @@ async def test_webhook_integration(
             
             if mc_tag:
                 background_tasks.add_task(sync_to_manychat_and_update_history, integration.client_id, mc_name, mc_phone, mc_tag, processed_data.get("email"), history.id)
+
 
         # 2. Automação Principal
         background_tasks.add_task(
@@ -167,3 +197,4 @@ async def test_webhook_integration(
         )
     
     return {"message": "Webhook de teste gerado e processamento iniciado!", "history_id": history.id}
+
