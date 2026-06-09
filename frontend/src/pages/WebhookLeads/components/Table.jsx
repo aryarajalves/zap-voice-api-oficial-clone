@@ -322,8 +322,8 @@ export default function Table({
               }}
               className="text-xs font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              {[20, 50, 100, 500, 1000].map(n => (
-                <option key={n} value={n}>{n}</option>
+              {[20, 50, 100, 500, 1000, 999999].map(n => (
+                <option key={n} value={n}>{n === 999999 ? 'Todos' : n}</option>
               ))}
             </select>
             <span className="text-xs text-gray-400">por página</span>
