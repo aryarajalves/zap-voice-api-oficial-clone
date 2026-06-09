@@ -63,7 +63,8 @@ from routers import (
     leads,          # Gestão de leads captados externamente
     financial,      # Controle financeiro e planos
     backup,         # Backup do banco de dados (Super Admin)
-    hot_leads       # Leads quentes e roteamento interno
+    hot_leads,      # Leads quentes e roteamento interno
+    instagram       # Automação do Instagram
 )
 
 # Webhook de entrada do Chatwoot (recebe eventos em tempo real)
@@ -266,6 +267,7 @@ app.include_router(leads.router, prefix="/api", tags=["Leads"])
 app.include_router(financial.router, prefix="/api", tags=["Financial"])
 app.include_router(backup.router, prefix="/api", tags=["Backup"])
 app.include_router(hot_leads.router, prefix="/api", tags=["HotLeads"])
+app.include_router(instagram.router, prefix="/api")
 
 # --- Fim dos Webhooks ---
 

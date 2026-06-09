@@ -100,6 +100,7 @@ const ErrorReportModal = ({ errorModal, setErrorModal }) => {
                                 <option value={50}>50</option>
                                 <option value={100}>100</option>
                                 <option value={500}>500</option>
+                                <option value={totalCount}>Todos ({totalCount})</option>
                             </select>
                         </div>
                         <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase } from 'react-icons/fi';
+import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram } from 'react-icons/fi';
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
@@ -55,6 +55,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'templates', label: 'Criar Template', icon: FiPlus, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
         { id: 'funnels', label: 'Meus Funis', icon: FiLayers, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
         { id: 'integrations', label: 'Integrações Webhook', icon: FiZap, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
+        { id: 'instagram_automation', label: 'Automação Instagram', icon: FiInstagram, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
 
         // Contatos
         { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },

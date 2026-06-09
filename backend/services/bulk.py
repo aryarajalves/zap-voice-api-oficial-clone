@@ -178,7 +178,11 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             for idx, res in enumerate(results):
                 meta = batch_meta[idx]
                 if meta["blocked"]:
-                    update_trigger_stats(db_msg, trigger_id, blocked=1)
+                    try:
+                        update_trigger_stats(db_msg, trigger_id, blocked=1)
+                    except Exception as e_block_stat:
+                        db_msg.rollback()
+                        logger.error(f"❌ Erro ao atualizar estatísticas de bloqueio para {meta['phone']}: {e_block_stat}")
                     continue
                 
                 is_success = False
@@ -190,53 +194,59 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     message_id = (raw_res.get("messages", [{}])[0].get("id") or raw_res.get("id", "")).replace("wamid.", "")
                     if message_id: is_success = True
 
-                if is_success:
-                    # Prioridade 1: Renderizar o body do cache com as variáveis do contato
-                    if direct_message:
-                        content = direct_message
-                    elif template_body_cache:
-                        content = render_template_body(template_body_cache, meta["components"] or [], contact_name=meta["name"])
-                    else:
-                        # Prioridade 2: Extrair diretamente dos components preenchidos (já têm valores reais)
-                        content = extract_body_from_components(meta["components"] or [])
-                        if not content:
-                            # Fallback final
-                            content = f"[Template: {template_name}]"
-                    msg_status = models.MessageStatus(
-                        trigger_id=trigger_id, message_id=message_id, phone_number=meta["phone"],
-                        contact_name=meta.get("name") or "",
-                        status='sent', message_type=msg_type, content=content, template_name=template_name,
-                        **meta["vars"]
-                    )
-                    # A nota privada é enviada imediatamente pelo _post_send em bulk_core.py
-                    # NÃO definir pending_private_note aqui para evitar envio duplicado
-                    # (o mecanismo deferred do whatsapp.py dispararia uma 2ª nota ao receber 'delivered')
-                    
-                    db_msg.add(msg_status)
-                    update_trigger_stats(db_msg, trigger_id, sent=1)
-                    sent_count += 1
-                    sent_message_ids.append(message_id)
-                else:
-                    update_trigger_stats(db_msg, trigger_id, failed=1)
-                    failed_count += 1
-                    # CRIAR REGISTRO DE FALHA PARA O RELATÓRIO
-                    reason = "Erro na API da Meta ou dados inválidos"
-                    if isinstance(res, dict) and res.get("error"):
-                        err_val = res.get("error")
-                        if isinstance(err_val, bool):
-                            reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
+                try:
+                    if is_success:
+                        # Prioridade 1: Renderizar o body do cache com as variáveis do contato
+                        if direct_message:
+                            content = direct_message
+                        elif template_body_cache:
+                            content = render_template_body(template_body_cache, meta["components"] or [], contact_name=meta["name"])
                         else:
-                            reason = str(err_val)
-                    
-                    fail_msg = models.MessageStatus(
-                        trigger_id=trigger_id,
-                        phone_number=meta["phone"],
-                        status='failed',
-                        failure_reason=reason,
-                        content=f"[Falha no Envio] {template_name or 'Mensagem Direta'}"
-                    )
-                    db_msg.add(fail_msg)
-            db_msg.commit()
+                            # Prioridade 2: Extrair diretamente dos components preenchidos (já têm valores reais)
+                            content = extract_body_from_components(meta["components"] or [])
+                            if not content:
+                                # Fallback final
+                                content = f"[Template: {template_name}]"
+                        
+                        msg_status = models.MessageStatus(
+                            trigger_id=trigger_id, message_id=message_id, phone_number=meta["phone"],
+                            contact_name=meta.get("name") or "",
+                            status='sent', message_type=msg_type, content=content, template_name=template_name,
+                            **meta["vars"]
+                        )
+                        db_msg.add(msg_status)
+                        db_msg.commit()
+                        
+                        update_trigger_stats(db_msg, trigger_id, sent=1)
+                        sent_count += 1
+                        sent_message_ids.append(message_id)
+                    else:
+                        # CRIAR REGISTRO DE FALHA PARA O RELATÓRIO
+                        reason = "Erro na API da Meta ou dados inválidos"
+                        if isinstance(res, dict) and res.get("error"):
+                            err_val = res.get("error")
+                            if isinstance(err_val, bool):
+                                reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
+                            else:
+                                reason = str(err_val)
+                        
+                        fail_msg = models.MessageStatus(
+                            trigger_id=trigger_id,
+                            phone_number=meta["phone"],
+                            status='failed',
+                            failure_reason=reason,
+                            content=f"[Falha no Envio] {template_name or 'Mensagem Direta'}"
+                        )
+                        db_msg.add(fail_msg)
+                        db_msg.commit()
+                        
+                        update_trigger_stats(db_msg, trigger_id, failed=1)
+                        failed_count += 1
+                except Exception as e_db_single:
+                    db_msg.rollback()
+                    logger.error(f"❌ Erro de banco de dados ao persistir status para o telefone {meta['phone']}: {e_db_single}")
+                    # Caso seja um erro de chave duplicada ou similar, nós evitamos propagar a exceção
+                    # para que os outros contatos do lote possam ser salvos
             
             # Disparar simulação de ciclo de vida assíncrona se SIMULATE_MESSAGING estiver ativo
             import os

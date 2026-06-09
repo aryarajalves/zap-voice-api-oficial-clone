@@ -30,6 +30,7 @@ def main():
         "test_12_window_24h.py",
         "test_13_queue_management.py",
         "test_17_rbac_permissions.py",
+        "test_18_instagram_automation.py",
     ]
             
     success_count = 0

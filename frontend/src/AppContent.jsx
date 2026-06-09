@@ -23,6 +23,7 @@ import VisualFlowBuilder from './components/VisualFlowBuilder';
 import StressTest from './pages/StressTest';
 import BackupDatabase from './pages/BackupDatabase';
 import HotLeads from './pages/HotLeads/HotLeads';
+import InstagramAutomation from './pages/InstagramAutomation';
 
 export default function AppContent() {
   const logic = useAppLogic();
@@ -79,6 +80,7 @@ export default function AppContent() {
                     {logic.currentView === 'stress_test' && 'Teste de Escala'}
                     {logic.currentView === 'backup_db' && 'Backup Banco'}
                     {logic.currentView === 'hot_leads' && 'Leads Quentes'}
+                    {logic.currentView === 'instagram_automation' && 'Automação Instagram'}
                   </h1>
                   
                   {/* Guide Buttons */}
@@ -115,6 +117,7 @@ export default function AppContent() {
               {logic.currentView === 'stress_test' && <StressTest />}
               {logic.currentView === 'backup_db' && <BackupDatabase />}
               {logic.currentView === 'hot_leads' && <HotLeads />}
+              {logic.currentView === 'instagram_automation' && <InstagramAutomation />}
               
               {logic.currentView === 'bulk_sender' && (
                 <div className="space-y-8">

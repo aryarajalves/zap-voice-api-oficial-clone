@@ -73,6 +73,21 @@ def read_settings(
                 db.rollback()
                 print(f"[SETTINGS ERROR] Failed to save generated slug: {e_slug}")
 
+        # Se não tiver o slug do webhook do instagram gerado, gera um agora
+        if not current_settings.get("INSTAGRAM_WEBHOOK_SLUG"):
+            import secrets
+            # Gera um slug aleatório curto (12 caracteres hex)
+            random_insta_slug = f"insta_{secrets.token_hex(6)}"
+            try:
+                new_insta_slug_cfg = AppConfig(key="INSTAGRAM_WEBHOOK_SLUG", value=random_insta_slug, client_id=x_client_id)
+                db.add(new_insta_slug_cfg)
+                db.commit()
+                current_settings["INSTAGRAM_WEBHOOK_SLUG"] = random_insta_slug
+                print(f"[SETTINGS] Generated dynamic Instagram webhook slug '{random_insta_slug}' for client {x_client_id}")
+            except Exception as e_insta_slug:
+                db.rollback()
+                print(f"[SETTINGS ERROR] Failed to save generated Instagram slug: {e_insta_slug}")
+
         # Mascarar dados sensíveis para exibição
         masked_settings = {}
         for key, value in current_settings.items():
@@ -163,7 +178,10 @@ async def update_settings(
         "AGENT_MEMORY_WEBHOOK_URL",
         "MANYCHAT_API_KEY",
         "WA_USE_UNIQUE_WEBHOOK",
-        "WA_WEBHOOK_SLUG"
+        "WA_WEBHOOK_SLUG",
+        "INSTAGRAM_ACCESS_TOKEN",
+        "INSTAGRAM_ACCOUNT_ID",
+        "INSTAGRAM_WEBHOOK_SLUG"
     }
     
     saved_count = 0
@@ -196,6 +214,28 @@ async def update_settings(
                 raise HTTPException(
                     status_code=409,
                     detail=f"O slug '{val_str_check}' já está sendo utilizado por outro cliente. Escolha um slug diferente."
+                )
+
+        # Validação especial para INSTAGRAM_WEBHOOK_SLUG: deve ser único entre todos os clientes
+        if key == "INSTAGRAM_WEBHOOK_SLUG" and value:
+            import re
+            val_str_check = str(value).strip()
+            # Valida formato: apenas letras minúsculas, números, _ e -
+            if not re.match(r'^[a-z0-9_-]+$', val_str_check):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Slug do Instagram inválido. Use apenas letras minúsculas, números, underscores (_) e hífens (-)."
+                )
+            # Verifica se outro cliente já usa esse slug
+            slug_conflict = db.query(AppConfig).filter(
+                AppConfig.key == "INSTAGRAM_WEBHOOK_SLUG",
+                AppConfig.value == val_str_check,
+                AppConfig.client_id != x_client_id
+            ).first()
+            if slug_conflict:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"O slug do Instagram '{val_str_check}' já está sendo utilizado por outro cliente. Escolha um slug diferente."
                 )
             
         # Buscar configuração específica do cliente

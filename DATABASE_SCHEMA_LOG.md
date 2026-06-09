@@ -60,6 +60,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 06/06/2026 | Restrição de Nós de Funil | `users`, `user_invitations` | `blocked_nodes` (TEXT) | `backend/scripts/add_blocked_nodes_column.py` |
 | 07/06/2026 | Snapshot de Fidelidade do Funil no Disparo | `scheduled_triggers` | `funnel_snapshot` (JSONB) | `backend/scripts/add_funnel_snapshot_column.py` |
 | 08/06/2026 | Variáveis Coletadas no Disparo (IA/Entrada) | `scheduled_triggers` | `processed_data` (JSONB) | `backend/scripts/database/add_processed_data_to_trigger.py` |
+| 09/06/2026 | Automação de Comentários no Instagram | `instagram_automations` | Tabela nova completa | `backend/scripts/create_instagram_automations_table.py` |
 
 
 
