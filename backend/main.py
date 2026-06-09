@@ -368,13 +368,19 @@ async def seed_super_admin():
     for attempt in range(max_retries):
         db = SessionLocal()
         try:
-            # 1. Remover o admin antigo se ele não for o atual configurado
+            # 1. Remover outros admins legados e outros super_admins que não sejam o atual do ENV
+            old_admins = db.query(User).filter(User.role == "super_admin", User.email != email).all()
+            for old_adm in old_admins:
+                logger.info(f"🗑️ Removendo super admin legado/antigo: {old_adm.email}")
+                db.delete(old_adm)
+
             if email != "admin@admin.com":
                 old_admin = db.query(User).filter(User.email == "admin@admin.com").first()
                 if old_admin:
                     logger.info("🗑️ Removendo admin legado (admin@admin.com)")
                     db.delete(old_admin)
-                    db.commit()
+            
+            db.commit()
 
             # 2. Garantir o admin atual e forçar sincronização de senha se necessário
             user = db.query(User).filter(User.email == email).first()
