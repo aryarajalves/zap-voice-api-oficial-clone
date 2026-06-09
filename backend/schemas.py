@@ -528,6 +528,26 @@ class WebhookLeadBase(BaseModel):
     is_locked: bool = False
     variables: Optional[Dict[str, Any]] = None
 
+    @field_validator('variables', mode='before')
+    @classmethod
+    def parse_variables(cls, v):
+        if v is None:
+            return {}
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, (list, str)):
+            if not v:
+                return {}
+            if isinstance(v, str):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except:
+                    pass
+            return {}
+        return {}
+
     # Redirecionamento Chatwoot
     chatwoot_conversation_id: Optional[int] = None
     chatwoot_account_id: Optional[int] = None
