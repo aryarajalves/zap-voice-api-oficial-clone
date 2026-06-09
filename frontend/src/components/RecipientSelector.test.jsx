@@ -236,18 +236,18 @@ describe('RecipientSelector', () => {
 
     await new Promise(resolve => setTimeout(resolve, 1200));
 
-    // A tabela deve exibir o valor inteiro
-    expect(screen.getByText('João Silva Santos')).toBeInTheDocument();
+    // A tabela deve exibir o valor inteiro no input
+    expect(screen.getByDisplayValue('João Silva Santos')).toBeInTheDocument();
 
     // Encontrar o botão de Inteiro / 1º Nome no th
     const filterBtn = screen.getByText('Inteiro');
     fireEvent.click(filterBtn);
 
-    // Agora o botão deve dizer ✦ 1º Nome e a célula deve exibir apenas "João"
+    // Agora o botão deve dizer ✦ 1º Nome e o input deve exibir apenas "João"
     await waitFor(() => {
       expect(screen.getByText('✦ 1º Nome')).toBeInTheDocument();
-      expect(screen.getByText('João')).toBeInTheDocument();
-      expect(screen.queryByText('João Silva Santos')).not.toBeInTheDocument();
+      expect(screen.getByDisplayValue('João')).toBeInTheDocument();
+      expect(screen.queryByDisplayValue('João Silva Santos')).not.toBeInTheDocument();
     });
 
     // onSelect deve ter sido chamado com a informação de variableFilters em seu metadado

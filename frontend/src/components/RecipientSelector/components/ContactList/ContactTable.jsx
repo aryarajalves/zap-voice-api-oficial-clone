@@ -12,8 +12,19 @@ const ContactTable = ({
     filteredContactsCount,
     variableFilters = {},
     setVariableFilters,
-    exclusionList = []
+    exclusionList = [],
+    setContacts
 }) => {
+    const handleVarChange = (phone, varKey, value) => {
+        setContacts(prev => prev.map(c => {
+            if (c.phone === phone) {
+                const newVars = { ...c.vars, [varKey]: value };
+                return { ...c, vars: newVars };
+            }
+            return c;
+        }));
+    };
+
     const toggleVarFilter = (varKey) => {
         setVariableFilters(prev => {
             const current = prev[varKey] || 'full';
@@ -69,15 +80,18 @@ const ContactTable = ({
                                         {c.phone}
                                     </td>
                                     {activeVarColumns.map(v => {
-                                        const val = c.vars?.[v.key];
+                                        const val = c.vars?.[v.key] || '';
                                         const isFirstName = variableFilters[v.key] === 'first_name';
-                                        const formattedVal = val && isFirstName 
-                                            ? String(val).trim().split(' ')[0] 
-                                            : val;
-                                        
+                                        const displayedVal = isFirstName ? val.split(' ')[0] : val;
                                         return (
-                                            <td key={v.key} className="px-4 py-4 text-center text-xs text-emerald-300 font-medium max-w-[120px] truncate">
-                                                {formattedVal || <span className="text-slate-700">—</span>}
+                                            <td key={v.key} className="px-4 py-3 text-center text-xs text-emerald-300 font-medium max-w-[150px]">
+                                                <input
+                                                    type="text"
+                                                    value={displayedVal}
+                                                    onChange={(e) => handleVarChange(c.phone, v.key, e.target.value)}
+                                                    placeholder="Digitar..."
+                                                    className="w-full bg-black/40 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-center text-emerald-300 placeholder:text-slate-700 focus:outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all"
+                                                />
                                             </td>
                                         );
                                     })}

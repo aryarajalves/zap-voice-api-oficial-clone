@@ -47,11 +47,8 @@ const ContactList = ({
     exclusionList = []
 }) => {
     const activeVarColumns = useMemo(() => {
-        if (!templateVariables || templateVariables.length === 0) return [];
-        return templateVariables.filter(v =>
-            contacts.some(c => c.vars && c.vars[v.key] !== undefined && c.vars[v.key] !== '')
-        );
-    }, [contacts, templateVariables]);
+        return templateVariables || [];
+    }, [templateVariables]);
 
     const hasStatus = contacts.some(c => c.status !== 'pending');
 
@@ -133,7 +130,8 @@ const ContactList = ({
 
             <ContactTable 
                 displayedContacts={displayedContacts}
-                activeVarColumns={activeVarColumns}
+                activeVarColumns={templateVariables || []}
+                setContacts={setContacts}
                 showValidation={showValidation}
                 removeContact={removeContact}
                 unblockContact={unblockContact}
