@@ -193,7 +193,7 @@ const ColumnSelectorModal = ({
                                     </div>
 
                                     {isSaveTagsDropdownOpen && (
-                                        <div className="absolute left-0 right-0 bottom-full mb-2 z-[10001] bg-slate-900 border border-white/10 rounded-2xl shadow-[0_-20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="absolute left-0 right-0 top-full mt-2 z-[10002] bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                                             <div className="p-3 bg-slate-800/50 border-b border-white/5 relative">
                                                 <input
                                                     type="text"
