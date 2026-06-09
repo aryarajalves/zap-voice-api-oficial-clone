@@ -189,6 +189,11 @@ class ChatwootClient:
         if self.simulate:
             return True
         return await self._cw.is_within_24h_window(*args, **kwargs)
+
+    async def find_existing_conversation(self, *args, **kwargs):
+        if self.simulate:
+            return None
+        return await self._cw.find_existing_conversation(*args, **kwargs)
     
     async def create_agent(self, *args, **kwargs):
         if self.simulate:
