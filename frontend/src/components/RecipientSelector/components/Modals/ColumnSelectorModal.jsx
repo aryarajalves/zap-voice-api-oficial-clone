@@ -231,25 +231,23 @@ const ColumnSelectorModal = ({
                                                                         <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
                                                                     </svg>
                                                                 )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                {availableTags.filter(tag => tag.toLowerCase().includes(saveTagsSearch.toLowerCase())).length === 0 && (
-                                                    <div className="p-6 text-center">
-                                                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Nenhuma etiqueta encontrada</p>
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                toggleSaveLeadsTag(saveTagsSearch);
-                                                                setSaveTagsSearch('');
-                                                            }}
-                                                            className="mt-2 text-[10px] font-black text-emerald-500 hover:text-emerald-400 underline uppercase tracking-widest"
-                                                        >
-                                                            Criar "{saveTagsSearch}"
-                                                        </button>
-                                                    </div>
-                                                )}
                                             </div>
+                                            {saveTagsSearch.trim() !== '' && !availableTags.some(tag => tag.toLowerCase() === saveTagsSearch.trim().toLowerCase()) && (
+                                                <div className="p-4 bg-slate-800/80 border-t border-white/5 flex items-center justify-between gap-4">
+                                                    <span className="text-[10px] font-bold text-slate-400">Criar etiqueta com "{saveTagsSearch}":</span>
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleSaveLeadsTag(saveTagsSearch.trim());
+                                                            setSaveTagsSearch('');
+                                                        }}
+                                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Criar etiqueta
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                         </div>
                                     )}
                                 </div>
