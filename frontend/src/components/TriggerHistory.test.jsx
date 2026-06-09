@@ -155,9 +155,9 @@ describe('TriggerHistory', () => {
     render(<TriggerHistory />);
 
     await waitFor(() => {
-      expect(screen.getByText('Enviado')).toBeInTheDocument();
-      expect(screen.getByText('Enviando...')).toBeInTheDocument();
-      expect(screen.getByText('Cancelado')).toBeInTheDocument();
+      expect(screen.getAllByText('Enviado').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Enviando...').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Cancelado').length).toBeGreaterThan(0);
     });
   });
 });

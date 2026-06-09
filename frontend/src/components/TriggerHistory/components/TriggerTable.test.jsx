@@ -291,6 +291,29 @@ describe('TriggerTable Component', () => {
     expect(screen.getByText('Sem Funil')).toBeInTheDocument();
     expect(screen.getByText('Sem ação vinculada')).toBeInTheDocument();
   });
+
+  it('deve renderizar título e badge de Simulação quando o disparo for SCALE_TEST', () => {
+    const scaleTrigger = {
+      id: 11,
+      is_bulk: true,
+      product_name: 'SCALE_TEST',
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      total_sent: 10,
+      total_failed: 0,
+      total_interactions: 0,
+      child_count: 0,
+      funnel: { name: 'Funil Escala' }
+    };
+    
+    render(<TriggerTable {...defaultProps} triggers={[scaleTrigger]} />);
+    
+    expect(screen.getByText(/⚡ Teste de Escala:/i)).toBeInTheDocument();
+    
+    const simBadge = screen.getByText(/Simulação/i);
+    expect(simBadge).toBeInTheDocument();
+    expect(simBadge).toHaveClass('bg-purple-100');
+  });
 });
 
 

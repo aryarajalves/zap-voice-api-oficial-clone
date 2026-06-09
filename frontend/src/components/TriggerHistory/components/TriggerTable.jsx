@@ -137,8 +137,13 @@ const TriggerTableRow = ({
                 {triggerWithActions.is_bulk ? (
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="text-blue-600 dark:text-blue-400 font-bold">📤 {triggerWithActions.template_name?.split('|').pop() || triggerWithActions.funnel?.name || 'Disparo em Massa'}</span>
-                            {triggerWithActions.is_recurring ? (
+                            <span className="text-blue-600 dark:text-blue-400 font-bold">
+                                {triggerWithActions.product_name === 'SCALE_TEST' ? '⚡ Teste de Escala: ' : '📤 '}
+                                {triggerWithActions.template_name?.split('|').pop() || triggerWithActions.funnel?.name || 'Disparo em Massa'}
+                            </span>
+                            {triggerWithActions.product_name === 'SCALE_TEST' ? (
+                                <span className="text-xs bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded-full font-bold">⚡ Simulação</span>
+                            ) : triggerWithActions.is_recurring ? (
                                 <span className="text-xs bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">🔄 Recorrente</span>
                             ) : (
                                 <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">Bulk</span>

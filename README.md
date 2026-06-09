@@ -1,5 +1,7 @@
 # ⚡ ZapVoice - Automação WhatsApp API Oficial (v3.9.5)
 
+Este repositório contém as novas regras de validação rígida de parâmetros de templates no Disparo em Massa (Bulk Sender) para evitar envios em branco, bem como o suporte e destaque de Testes de Escala (`SCALE_TEST`) com rotulação especial e badge de Simulação na aba de histórico de disparos.
+
 O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
 
 ---
