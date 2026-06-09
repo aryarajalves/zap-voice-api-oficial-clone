@@ -265,6 +265,45 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         const selectedTemplateObj = templates.find(t => t.name === selectedTemplate);
         if (!selectedTemplateObj) return toast.error("Selecione um template");
 
+        // Validação de variáveis obrigatórias do template
+        const reqVars = extractTemplateVariables(selectedTemplateObj);
+        
+        // Adiciona variáveis de botões com URL dinâmica
+        const buttonsComp = selectedTemplateObj.components?.find(c => c.type === 'BUTTONS');
+        if (buttonsComp?.buttons) {
+            buttonsComp.buttons.forEach((btn, idx) => {
+                if (btn.type === 'URL' && btn.url?.includes('{{1}}')) {
+                    reqVars.push({
+                        key: `BUTTONS_${idx}`,
+                        label: `Variável do Botão ${idx + 1} (${btn.text || ''})`
+                    });
+                }
+            });
+        }
+
+        const missingVars = [];
+        for (const v of reqVars) {
+            const hasGlobal = templateParams[v.key] !== undefined && templateParams[v.key] !== null && String(templateParams[v.key]).trim() !== '';
+            if (hasGlobal) continue;
+
+            const missingInContacts = finalContacts.some(c => {
+                const val = c.vars ? c.vars[v.key] : undefined;
+                return val === undefined || val === null || String(val).trim() === '';
+            });
+
+            if (missingInContacts) {
+                missingVars.push(v.label);
+            }
+        }
+
+        if (missingVars.length > 0) {
+            return toast.error(`Defina o valor para as variáveis: ${missingVars.join(', ')}`, {
+                duration: 5000,
+                icon: '⚠️',
+                style: { borderRadius: '15px', background: '#1e293b', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }
+            });
+        }
+
         setIsSending(true);
         try {
             const vFilters = selectionMetadata?.variableFilters || {};

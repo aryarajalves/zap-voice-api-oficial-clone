@@ -38,7 +38,7 @@ export const useTagManagement = ({
         if (!activeClient) return;
         setIsLoadingTags(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
+            const res = await fetchWithAuth(`${API_URL}/leads/filters?only_leads=true`, {}, activeClient.id);
             if (res && res.ok) {
                 const data = await res.json();
                 setAvailableTags(data.tags || []);

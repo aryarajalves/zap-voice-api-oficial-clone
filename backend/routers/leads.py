@@ -406,6 +406,7 @@ def list_leads(
 
 @router.get("/leads/filters", summary="Obter valores únicos para filtros")
 def get_lead_filters(
+    only_leads: bool = False,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
@@ -435,19 +436,20 @@ def get_lead_filters(
             for p in parts:
                 unique_tags.add(p)
 
-    # Buscar também etiquetas internas mapeadas nas configurações de integração do cliente
-    try:
-        mapping_tags_raw = db.query(models.WebhookEventMapping.internal_tags)\
-            .join(models.WebhookIntegration, models.WebhookEventMapping.integration_id == models.WebhookIntegration.id)\
-            .filter(models.WebhookIntegration.client_id == client_id, models.WebhookEventMapping.internal_tags != None)\
-            .distinct().all()
-        for row in mapping_tags_raw:
-            if row[0]:
-                parts = [t.strip() for t in row[0].split(',') if t.strip()]
-                for p in parts:
-                    unique_tags.add(p)
-    except Exception as e:
-        logger.error(f"Erro ao buscar tags mapeadas em get_lead_filters: {e}")
+    # Buscar também etiquetas internas mapeadas nas configurações de integração do cliente (a menos que only_leads seja True)
+    if not only_leads:
+        try:
+            mapping_tags_raw = db.query(models.WebhookEventMapping.internal_tags)\
+                .join(models.WebhookIntegration, models.WebhookEventMapping.integration_id == models.WebhookIntegration.id)\
+                .filter(models.WebhookIntegration.client_id == client_id, models.WebhookEventMapping.internal_tags != None)\
+                .distinct().all()
+            for row in mapping_tags_raw:
+                if row[0]:
+                    parts = [t.strip() for t in row[0].split(',') if t.strip()]
+                    for p in parts:
+                        unique_tags.add(p)
+        except Exception as e:
+            logger.error(f"Erro ao buscar tags mapeadas em get_lead_filters: {e}")
 
     return {
         "event_types": [e[0] for e in event_types if e[0]],

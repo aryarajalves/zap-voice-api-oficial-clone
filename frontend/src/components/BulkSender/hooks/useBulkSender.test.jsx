@@ -3,9 +3,10 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useBulkSender } from './useBulkSender';
 
 // Mock dependencies
+const mockClient = { id: 1, name: 'Client Test' };
 vi.mock('../../../contexts/ClientContext', () => ({
     useClient: () => ({
-        activeClient: { id: 1, name: 'Client Test' }
+        activeClient: mockClient
     })
 }));
 
@@ -89,3 +90,129 @@ describe('useBulkSender Hook - extractTemplateVariables', () => {
         ]);
     });
 });
+
+describe('useBulkSender Hook - handleSend validations', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        const { fetchWithAuth } = await import('../../../AuthContext');
+        vi.mocked(fetchWithAuth).mockImplementation((url) => {
+            let data = [];
+            if (url.includes('/leads/filters')) {
+                data = { tags: [] };
+            }
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(data)
+            });
+        });
+    });
+
+    it('deve rejeitar disparo se houver variáveis pendentes no template', async () => {
+        const { toast } = await import('react-hot-toast');
+        const { fetchWithAuth } = await import('../../../AuthContext');
+        const { act } = await import('@testing-library/react');
+
+        const mockTemplates = [
+            {
+                name: 'convite_live',
+                language: 'pt_BR',
+                components: [
+                    {
+                        type: 'BODY',
+                        text: 'Olá {{1}}, seu código é {{2}}.'
+                    }
+                ]
+            }
+        ];
+
+        vi.mocked(fetchWithAuth).mockImplementation((url) => {
+            if (url.includes('/whatsapp/templates')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve(mockTemplates)
+                });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        });
+
+        const { result } = renderHook(() => useBulkSender(vi.fn(), vi.fn()));
+
+        // Aguarda a renderização inicial e o useEffect rodar
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        // Configura estado mínimo para envio
+        await act(async () => {
+            result.current.handleRecipientSelect([{ phone: '5511999999999', vars: {} }], { isValidated: true });
+            result.current.setSelectedTemplate('convite_live');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        expect(toast.error).toHaveBeenCalledWith(
+            expect.stringContaining('Defina o valor para as variáveis: {{1}}, {{2}}'),
+            expect.any(Object)
+        );
+    });
+
+    it('deve aceitar disparo se todas as variáveis estiverem preenchidas via templateParams ou contact vars', async () => {
+        const { toast } = await import('react-hot-toast');
+        const { fetchWithAuth } = await import('../../../AuthContext');
+        const { act } = await import('@testing-library/react');
+
+        const mockTemplates = [
+            {
+                name: 'convite_live',
+                language: 'pt_BR',
+                components: [
+                    {
+                        type: 'BODY',
+                        text: 'Olá {{1}}, seu código é {{2}}.'
+                    }
+                ]
+            }
+        ];
+
+        vi.mocked(fetchWithAuth).mockImplementation((url) => {
+            if (url.includes('/whatsapp/templates')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve(mockTemplates)
+                });
+            }
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ success: true })
+            });
+        });
+
+        const { result } = renderHook(() => useBulkSender(vi.fn(), vi.fn()));
+
+        // Aguarda a renderização inicial e o useEffect rodar
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        // Preenche BODY_0 no templateParams (global) e BODY_1 no contato (específico)
+        await act(async () => {
+            result.current.setTemplateParams({ BODY_0: 'Arya' });
+            result.current.handleRecipientSelect([{ phone: '5511999999999', vars: { BODY_1: '123456' } }], { isValidated: true });
+            result.current.setSelectedTemplate('convite_live');
+        });
+
+        await act(async () => {
+            await result.current.handleSend();
+        });
+
+        expect(toast.error).not.toHaveBeenCalledWith(
+            expect.stringContaining('Defina o valor para as variáveis:'),
+            expect.any(Object)
+        );
+        expect(toast.success).toHaveBeenCalledWith("Disparo processado com sucesso!");
+    });
+});
+
+
