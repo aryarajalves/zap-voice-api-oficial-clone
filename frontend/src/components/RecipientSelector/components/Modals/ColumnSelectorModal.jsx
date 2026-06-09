@@ -57,7 +57,7 @@ const ColumnSelectorModal = ({
 
     return createPortal(
         <div className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300">
-            <div className="bg-[#0d1117] w-full max-w-2xl rounded-[2rem] border border-white/8 shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-[#0d1117] w-full max-w-2xl rounded-[2rem] border border-white/8 shadow-2xl flex flex-col relative">
                 {/* Header */}
                 <div className="flex justify-between items-center px-8 pt-8 pb-6 border-b border-white/5 bg-[#0d1117]">
                     <div>
@@ -164,7 +164,7 @@ const ColumnSelectorModal = ({
                 {/* Step 2: Informações de Salvamento (Leads) */}
                 {step === 2 && (
                     <>
-                        <div className="px-8 py-6 space-y-6 max-h-[50vh] overflow-y-auto premium-scrollbar bg-[#0d1117]">
+                        <div className="px-8 py-6 space-y-6 bg-[#0d1117]">
                             <div className="bg-emerald-500/5 border border-emerald-500/10 p-5 rounded-2xl">
                                 <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest">Atualizar contatos no banco de dados?</h4>
                                 <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
