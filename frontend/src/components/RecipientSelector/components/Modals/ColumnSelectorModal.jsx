@@ -165,7 +165,7 @@ const ColumnSelectorModal = ({
                 {/* Step 2: Informações de Salvamento (Leads) */}
                 {step === 2 && (
                     <>
-                        <div className="px-8 py-6 space-y-6 bg-[#0d1117]">
+                        <div className="px-8 py-6 space-y-6 max-h-[45vh] overflow-y-auto premium-scrollbar bg-[#0d1117] pb-48">
                             <div className="bg-emerald-500/5 border border-emerald-500/10 p-5 rounded-2xl">
                                 <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest">Atualizar contatos no banco de dados?</h4>
                                 <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
