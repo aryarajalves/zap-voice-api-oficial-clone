@@ -127,7 +127,7 @@ export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing,
                 const leadsPayload = incoming.map(c => {
                     const finalTagsList = [];
                     if (saveLeadsTags) {
-                        finalTagsList.push(saveLeadsTags);
+                        finalTagsList.push(...saveLeadsTags.split(',').map(t => t.trim()));
                     }
                     if (c.rowTags) {
                         finalTagsList.push(...c.rowTags.split(',').map(t => t.trim()));

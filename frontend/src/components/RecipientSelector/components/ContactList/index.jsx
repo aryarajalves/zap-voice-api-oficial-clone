@@ -26,6 +26,7 @@ const ContactList = ({
     setIsSaveTagsDropdownOpen,
     saveTagsSearch,
     setSaveTagsSearch,
+    toggleSaveLeadsTag,
     availableTags,
     handleSaveToLeads,
     isSavingLeads,
