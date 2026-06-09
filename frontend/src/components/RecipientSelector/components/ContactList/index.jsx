@@ -123,6 +123,7 @@ const ContactList = ({
                 setIsSaveTagsDropdownOpen={setIsSaveTagsDropdownOpen}
                 saveTagsSearch={saveTagsSearch}
                 setSaveTagsSearch={setSaveTagsSearch}
+                toggleSaveLeadsTag={toggleSaveLeadsTag}
                 availableTags={availableTags}
                 handleSaveToLeads={handleSaveToLeads}
                 isSavingLeads={isSavingLeads}

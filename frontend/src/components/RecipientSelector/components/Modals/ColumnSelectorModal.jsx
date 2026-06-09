@@ -17,6 +17,7 @@ const ColumnSelectorModal = ({
     setIsSaveTagsDropdownOpen,
     saveTagsSearch = '',
     setSaveTagsSearch,
+    toggleSaveLeadsTag,
     nameColumn = '',
     setNameColumn,
     emailColumn = '',
@@ -209,36 +210,37 @@ const ColumnSelectorModal = ({
                                             <div className="max-h-40 overflow-y-auto premium-scrollbar">
                                                 {availableTags
                                                     .filter(tag => tag.toLowerCase().includes(saveTagsSearch.toLowerCase()))
-                                                    .map(tag => (
-                                                        <div 
-                                                            key={tag}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSaveLeadsTags(tag);
-                                                                setIsSaveTagsDropdownOpen(false);
-                                                                setSaveTagsSearch('');
-                                                            }}
-                                                            className={`px-5 py-2.5 hover:bg-emerald-500/10 cursor-pointer transition-colors flex items-center justify-between group/item ${saveLeadsTags === tag ? 'bg-emerald-500/5' : ''}`}
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 opacity-40 group-hover/item:opacity-100 transition-opacity"></div>
-                                                                <span className="text-[10px] font-bold text-slate-200 uppercase tracking-wider">{tag}</span>
+                                                    .map(tag => {
+                                                        const currentTags = saveLeadsTags ? saveLeadsTags.split(',').map(t => t.trim()) : [];
+                                                        const isSelected = currentTags.includes(tag);
+                                                        return (
+                                                            <div 
+                                                                key={tag}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleSaveLeadsTag(tag);
+                                                                }}
+                                                                className={`px-5 py-2.5 hover:bg-emerald-500/10 cursor-pointer transition-colors flex items-center justify-between group/item ${isSelected ? 'bg-emerald-500/5' : ''}`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 opacity-40 group-hover/item:opacity-100 transition-opacity"></div>
+                                                                    <span className="text-[10px] font-bold text-slate-200 uppercase tracking-wider">{tag}</span>
+                                                                </div>
+                                                                {isSelected && (
+                                                                    <svg className="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="4">
+                                                                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                                                                    </svg>
+                                                                )}
                                                             </div>
-                                                            {saveLeadsTags === tag && (
-                                                                <svg className="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="4">
-                                                                    <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                                                                </svg>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 {availableTags.filter(tag => tag.toLowerCase().includes(saveTagsSearch.toLowerCase())).length === 0 && (
                                                     <div className="p-6 text-center">
                                                         <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Nenhuma etiqueta encontrada</p>
                                                         <button 
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setSaveLeadsTags(saveTagsSearch);
-                                                                setIsSaveTagsDropdownOpen(false);
+                                                                toggleSaveLeadsTag(saveTagsSearch);
                                                                 setSaveTagsSearch('');
                                                             }}
                                                             className="mt-2 text-[10px] font-black text-emerald-500 hover:text-emerald-400 underline uppercase tracking-widest"

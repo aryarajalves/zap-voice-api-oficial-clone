@@ -23,6 +23,17 @@ export const useTagManagement = ({
     const [isSaveTagsDropdownOpen, setIsSaveTagsDropdownOpen] = useState(false);
     const [saveTagsSearch, setSaveTagsSearch] = useState('');
 
+    const toggleSaveLeadsTag = (tag) => {
+        setSaveLeadsTags(prev => {
+            const current = prev ? prev.split(',').map(t => t.trim()).filter(Boolean) : [];
+            if (current.includes(tag)) {
+                return current.filter(t => t !== tag).join(', ');
+            } else {
+                return [...current, tag].join(', ');
+            }
+        });
+    };
+
     const loadFilters = useCallback(async () => {
         if (!activeClient) return;
         setIsLoadingTags(true);
@@ -176,6 +187,7 @@ export const useTagManagement = ({
         saveLeadsTags, setSaveLeadsTags,
         isSaveTagsDropdownOpen, setIsSaveTagsDropdownOpen,
         saveTagsSearch, setSaveTagsSearch,
+        toggleSaveLeadsTag,
         loadFilters,
         loadContactsByTag,
         handleSaveToLeads
