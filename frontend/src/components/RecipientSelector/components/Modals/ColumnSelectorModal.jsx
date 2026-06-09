@@ -231,6 +231,9 @@ const ColumnSelectorModal = ({
                                                                         <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
                                                                     </svg>
                                                                 )}
+                                                            </div>
+                                                        );
+                                                    })}
                                             </div>
                                             {saveTagsSearch.trim() !== '' && !availableTags.some(tag => tag.toLowerCase() === saveTagsSearch.trim().toLowerCase()) && (
                                                 <div className="p-4 bg-slate-800/80 border-t border-white/5 flex items-center justify-between gap-4">
@@ -247,7 +250,6 @@ const ColumnSelectorModal = ({
                                                     </button>
                                                 </div>
                                             )}
-                                        </div>
                                         </div>
                                     )}
                                 </div>
