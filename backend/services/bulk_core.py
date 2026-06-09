@@ -11,44 +11,60 @@ BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
 async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, note_content: str, chatwoot_label, trigger_id: int = None):
     """Após envio bem-sucedido: garante conversa, envia nota privada e aplica etiquetas."""
     try:
+        # 1. Verificar se é disparo em massa (bulk) antes de resolver ou criar conversa
+        is_bulk = False
+        if trigger_id:
+            from database import SessionLocal
+            import models
+            db_trig = SessionLocal()
+            try:
+                trigger = db_trig.query(models.ScheduledTrigger).get(trigger_id)
+                if trigger:
+                    if trigger.is_bulk:
+                        is_bulk = True
+                    elif trigger.parent_id:
+                        parent_trigger = db_trig.query(models.ScheduledTrigger).get(trigger.parent_id)
+                        if parent_trigger and parent_trigger.is_bulk:
+                            is_bulk = True
+            except Exception as e_trig:
+                logger.error(f"❌ [BULK] Erro ao verificar se trigger #{trigger_id} é bulk: {e_trig}")
+            finally:
+                db_trig.close()
+
         resolved_conv_id = conversation_id
         if not resolved_conv_id:
-            try:
-                inbox_id = None
-                cfg_inbox_id = chatwoot.settings.get("CHATWOOT_SELECTED_INBOX_ID")
-                if cfg_inbox_id and str(cfg_inbox_id).isdigit():
-                    inbox_id = int(cfg_inbox_id)
-                conv = await chatwoot.ensure_conversation(phone, contact_name or "", inbox_id=inbox_id)
-                if conv:
-                    resolved_conv_id = conv.get("conversation_id")
-            except Exception as e_conv:
-                logger.warning(f"⚠️ [BULK] Não foi possível resolver conversa para {phone}: {e_conv}")
+            # Se for bulk, NÃO criamos a conversa de forma proativa. 
+            # Tentamos apenas localizar uma conversa existente.
+            if is_bulk:
+                logger.info(f"⏭️ [BULK] Pós-envio detectou disparo em massa para Trigger #{trigger_id}. Buscando apenas conversa existente para {phone}...")
+                try:
+                    existing_conv = await chatwoot.find_existing_conversation(phone)
+                    if existing_conv:
+                        resolved_conv_id = existing_conv.get("conversation_id")
+                        logger.info(f"✅ [BULK] Encontrou conversa existente {resolved_conv_id} para {phone}.")
+                except Exception as e_find:
+                    logger.warning(f"⚠️ [BULK] Erro ao buscar conversa existente para {phone}: {e_find}")
+            else:
+                try:
+                    inbox_id = None
+                    cfg_inbox_id = chatwoot.settings.get("CHATWOOT_SELECTED_INBOX_ID")
+                    if cfg_inbox_id and str(cfg_inbox_id).isdigit():
+                        inbox_id = int(cfg_inbox_id)
+                    conv = await chatwoot.ensure_conversation(phone, contact_name or "", inbox_id=inbox_id)
+                    if conv:
+                        resolved_conv_id = conv.get("conversation_id")
+                except Exception as e_conv:
+                    logger.warning(f"⚠️ [BULK] Não foi possível resolver conversa para {phone}: {e_conv}")
 
         if not resolved_conv_id:
-            logger.warning(f"⚠️ [BULK] Conversa não encontrada para {phone}, pulando nota e etiquetas")
+            if is_bulk:
+                logger.info(f"⏭️ [BULK] Conversa não existente para {phone} no disparo em massa #{trigger_id}. Pulando nota e etiquetas (conforme regra de negócio).")
+            else:
+                logger.warning(f"⚠️ [BULK] Conversa não encontrada para {phone}, pulando nota e etiquetas")
             return
 
         # Nota privada com o conteúdo da mensagem enviada
         if note_content:
-            is_bulk = False
-            if trigger_id:
-                from database import SessionLocal
-                import models
-                db_trig = SessionLocal()
-                try:
-                    trigger = db_trig.query(models.ScheduledTrigger).get(trigger_id)
-                    if trigger:
-                        if trigger.is_bulk:
-                            is_bulk = True
-                        elif trigger.parent_id:
-                            parent_trigger = db_trig.query(models.ScheduledTrigger).get(trigger.parent_id)
-                            if parent_trigger and parent_trigger.is_bulk:
-                                is_bulk = True
-                except Exception as e_trig:
-                    logger.error(f"❌ [BULK] Erro ao verificar se trigger #{trigger_id} é bulk: {e_trig}")
-                finally:
-                    db_trig.close()
-
             if is_bulk:
                 logger.info(f"⏭️ [BULK] Disparo em massa detectado para Trigger #{trigger_id}. Ignorando envio de nota privada.")
                 if trigger_id:

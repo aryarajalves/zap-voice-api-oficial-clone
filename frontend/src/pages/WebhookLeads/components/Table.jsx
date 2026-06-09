@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar, FiLock, FiUnlock } from 'react-icons/fi';
+import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar, FiLock, FiUnlock, FiDatabase } from 'react-icons/fi';
 import { SiChatwoot } from 'react-icons/si';
 import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
 import { useClient } from '../../../contexts/ClientContext';
 import { toast } from 'react-hot-toast';
+import CustomFieldsModal from './CustomFieldsModal';
 
 export default function Table({
   loading,
@@ -25,6 +26,21 @@ export default function Table({
 }) {
   const { activeClient } = useClient();
   const [togglingLock, setTogglingLock] = useState(null); // id do lead sendo processado
+
+  // Custom Variables States
+  const [showCustomColumns, setShowCustomColumns] = useState(false);
+  const [isVariablesModalOpen, setIsVariablesModalOpen] = useState(false);
+  const [leadForVariables, setLeadForVariables] = useState(null);
+
+  const customColumnsKeys = React.useMemo(() => {
+    const keysSet = new Set();
+    leads.forEach(l => {
+      if (l.variables && typeof l.variables === 'object') {
+        Object.keys(l.variables).forEach(k => keysSet.add(k));
+      }
+    });
+    return Array.from(keysSet);
+  }, [leads]);
 
   const handleToggleLock = async (lead) => {
     setTogglingLock(lead.id);
@@ -62,6 +78,25 @@ export default function Table({
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+      <div className="px-6 py-4 bg-gray-50/55 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center flex-wrap gap-2">
+        <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Base de Leads</h4>
+        {customColumnsKeys.length > 0 && (
+          <button
+            onClick={() => setShowCustomColumns(!showCustomColumns)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
+              showCustomColumns 
+                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' 
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <FiDatabase size={13} />
+            {showCustomColumns ? 'Ocultar Colunas IA' : 'Mostrar Colunas IA'}
+            <span className="bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-[9px] px-1.5 py-0.5 rounded-full font-black">
+              {customColumnsKeys.length}
+            </span>
+          </button>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -81,6 +116,9 @@ export default function Table({
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Lead</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Etiquetas</th>
+              {showCustomColumns && customColumnsKeys.map(key => (
+                <th key={key} className="px-6 py-4 text-xs font-bold text-rose-500 uppercase tracking-wider font-mono">{key}</th>
+              ))}
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Chegada</th>
               <th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                 Ações
@@ -182,6 +220,11 @@ export default function Table({
                       )}
                     </div>
                   </td>
+                  {showCustomColumns && customColumnsKeys.map(key => (
+                    <td key={key} className="px-6 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono">
+                      {(lead.variables && lead.variables[key]) || '---'}
+                    </td>
+                  ))}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
                       <FiCalendar size={12} className="flex-shrink-0 text-gray-400" />
@@ -201,6 +244,13 @@ export default function Table({
                           <FiMessageSquare size={18} />
                         </a>
                       )}
+                      <button
+                        onClick={() => { setLeadForVariables(lead); setIsVariablesModalOpen(true); }}
+                        className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
+                        title="Ver Variáveis Extraídas"
+                      >
+                        <FiDatabase size={18} />
+                      </button>
                       <button
                         onClick={() => { setLeadToEdit(lead); setIsEditModalOpen(true); }}
                         className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
@@ -290,6 +340,15 @@ export default function Table({
           Próxima
         </button>
       </div>
+
+      <CustomFieldsModal
+        isOpen={isVariablesModalOpen}
+        onClose={() => {
+          setIsVariablesModalOpen(false);
+          setLeadForVariables(null);
+        }}
+        lead={leadForVariables}
+      />
     </div>
   );
 }

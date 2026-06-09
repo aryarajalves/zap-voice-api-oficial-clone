@@ -59,3 +59,13 @@ class ChatwootAgentsMixin:
             except Exception as e:
                 logger.error(f"Error fetching accounts: {e}")
                 raise e
+
+    async def assign_agent_to_conversation(self, conversation_id: int, agent_id: int):
+        """
+        Atribui um responsável (agente) a uma conversa específica no Chatwoot.
+        """
+        if not self.api_token: 
+            return {"success": True}
+        payload = {"assignee_id": agent_id}
+        return await self._request("POST", f"conversations/{conversation_id}/assignments", json=payload)
+

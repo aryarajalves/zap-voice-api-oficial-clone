@@ -21,34 +21,36 @@ const HistoryControls = ({
   if (webhookHistoryLength === 0) return null;
 
   return (
-    <div className="px-8 py-3 bg-gray-50/80 dark:bg-[#0f172a]/80 border-b border-gray-100 dark:border-white/5 flex items-center justify-between backdrop-blur-sm">
-      <div className="flex items-center gap-4 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-2xl border border-white/5 transition-all cursor-pointer group" onClick={() => handleSelectAll({ target: { checked: selectedHistoryIdsLength !== webhookHistoryLength } })}>
-        <input
-          type="checkbox"
-          className="w-5 h-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition-all active:scale-90"
-          checked={selectedHistoryIdsLength === webhookHistoryLength && webhookHistoryLength > 0}
-          onChange={handleSelectAll}
-          onClick={(e) => e.stopPropagation()}
-        />
-        <span className="text-xs font-black text-gray-400 group-hover:text-white uppercase tracking-widest whitespace-nowrap transition-colors">Selecionar Todos os Registros</span>
+    <div className="px-8 py-4 bg-gray-50/80 dark:bg-[#0f172a]/80 border-b border-gray-100 dark:border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 backdrop-blur-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+        <div className="flex items-center gap-4 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-2xl border border-white/5 transition-all cursor-pointer group" onClick={() => handleSelectAll({ target: { checked: selectedHistoryIdsLength !== webhookHistoryLength } })}>
+          <input
+            type="checkbox"
+            className="w-5 h-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition-all active:scale-90"
+            checked={selectedHistoryIdsLength === webhookHistoryLength && webhookHistoryLength > 0}
+            onChange={handleSelectAll}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <span className="text-xs font-black text-gray-400 group-hover:text-white uppercase tracking-widest whitespace-nowrap transition-colors">Selecionar Todos os Registros</span>
+        </div>
+
+        <div className="flex-1 max-w-md relative group">
+          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={14} />
+          <input
+            type="text"
+            placeholder="Buscar por nome ou telefone..."
+            value={webhookHistorySearch}
+            onChange={(e) => {
+              setWebhookHistorySearch(e.target.value);
+              setHistoryCurrentPage(1);
+              fetchHistory(integrationId, webhookHistoryStatusFilter, e.target.value);
+            }}
+            className="w-full bg-[#0b1120] border border-white/5 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-gray-200 focus:ring-2 focus:ring-blue-500/30 transition-all outline-none hover:border-white/10 shadow-inner"
+          />
+        </div>
       </div>
 
-      <div className="flex-1 max-w-md relative group ml-4">
-        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={14} />
-        <input
-          type="text"
-          placeholder="Buscar por nome ou telefone..."
-          value={webhookHistorySearch}
-          onChange={(e) => {
-            setWebhookHistorySearch(e.target.value);
-            setHistoryCurrentPage(1);
-            fetchHistory(integrationId, webhookHistoryStatusFilter, e.target.value);
-          }}
-          className="w-full bg-[#0b1120] border border-white/5 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-gray-200 focus:ring-2 focus:ring-blue-500/30 transition-all outline-none hover:border-white/10 shadow-inner"
-        />
-      </div>
-
-      <div className="flex items-center gap-6">
+      <div className="flex flex-wrap items-center gap-4 xl:justify-end">
         <button
           onClick={() => fetchHistory(integrationId, webhookHistoryStatusFilter, webhookHistorySearch)}
           className="flex items-center gap-2 text-[11px] font-bold bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl border border-gray-200 dark:border-white/5 transition-all active:scale-95 group"
@@ -68,7 +70,7 @@ const HistoryControls = ({
         </button>
 
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black text-gray-500 tracking-widest uppercase">Mapeamento:</span>
+          <span className="text-[10px] font-black text-gray-500 tracking-widest uppercase whitespace-nowrap">Mapeamento:</span>
           <select
             value={webhookHistoryMappingFilter}
             onChange={(e) => { setWebhookHistoryMappingFilter(e.target.value); setHistoryCurrentPage(1); }}
@@ -81,7 +83,7 @@ const HistoryControls = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black text-gray-500 tracking-widest uppercase">Filtrar por Status:</span>
+          <span className="text-[10px] font-black text-gray-500 tracking-widest uppercase whitespace-nowrap">Status:</span>
           <select
             value={webhookHistoryStatusFilter}
             onChange={(e) => { setWebhookHistoryStatusFilter(e.target.value); setHistoryCurrentPage(1); }}

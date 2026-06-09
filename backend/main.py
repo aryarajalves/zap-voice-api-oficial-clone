@@ -62,7 +62,8 @@ from routers import (
     webhooks_public, # Webhooks públicos (WordPress, Hotmart, etc.)
     leads,          # Gestão de leads captados externamente
     financial,      # Controle financeiro e planos
-    backup          # Backup do banco de dados (Super Admin)
+    backup,         # Backup do banco de dados (Super Admin)
+    hot_leads       # Leads quentes e roteamento interno
 )
 
 # Webhook de entrada do Chatwoot (recebe eventos em tempo real)
@@ -210,27 +211,36 @@ async def add_security_headers(request: Request, call_next):
 # --- Webhooks & Integrations Routers (PRIORIDADE MÁXIMA PARA RECEBIMENTO) ---
 # Registro direto no app para evitar erro 405 de roteadores aninhados
 @app.get("/api/meta")
+@limiter.exempt
 async def meta_webhook_verification(request: Request, db: Session = Depends(get_db)):
     logger.info("📥 [DEBUG] GET /api/meta recebido (Verificação)")
     return await meta_webhook_handler(request, db)
 
 @app.post("/api/meta")
+@limiter.exempt
 async def meta_webhook_events(request: Request, db: Session = Depends(get_db)):
     logger.info("📥 [DEBUG] POST /api/meta recebido (Evento)")
     return await meta_webhook_handler(request, db)
 
 @app.get("/api/meta/{slug}")
+@limiter.exempt
 async def meta_webhook_verification_slug(slug: str, request: Request, db: Session = Depends(get_db)):
     logger.info(f"📥 [DEBUG] GET /api/meta/{slug} recebido (Verificação)")
     return await meta_webhook_handler(request, db, slug=slug)
 
 @app.post("/api/meta/{slug}")
+@limiter.exempt
 async def meta_webhook_events_slug(slug: str, request: Request, db: Session = Depends(get_db)):
     logger.info(f"📥 [DEBUG] POST /api/meta/{slug} recebido (Evento)")
     return await meta_webhook_handler(request, db, slug=slug)
 
+
 # 1. Rotas de recebimento (Chatwoot, Inbound)
 app.include_router(webhooks_inbound_router, prefix="/api", tags=["Webhooks Inbound"])
+
+# Registrar também o roteador do Meta para endpoints adicionais como status
+from routers.webhooks_inbound.meta import router as meta_router
+app.include_router(meta_router, prefix="/api", tags=["Meta Webhooks"])
 
 # 2. Endpoints Públicos de Recebimento (WordPress, Elementor, Hotmart, etc.)
 app.include_router(webhooks_public.router, prefix="/api", tags=["Webhooks Public"])
@@ -255,6 +265,7 @@ app.include_router(global_vars.router, prefix="/api")
 app.include_router(leads.router, prefix="/api", tags=["Leads"])
 app.include_router(financial.router, prefix="/api", tags=["Financial"])
 app.include_router(backup.router, prefix="/api", tags=["Backup"])
+app.include_router(hot_leads.router, prefix="/api", tags=["HotLeads"])
 
 # --- Fim dos Webhooks ---
 

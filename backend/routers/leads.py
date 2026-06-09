@@ -11,7 +11,7 @@ import json
 import pandas as pd
 import io
 from core.deps import get_current_user, get_db
-from core.permissions import require_premium, require_user
+from core.permissions import require_premium, require_user, require_feature
 from services.leads import upsert_webhook_lead
 
 class BulkDeleteRequest(BaseModel):
@@ -21,12 +21,14 @@ class LeadBatchItem(BaseModel):
     phone: str
     name: Optional[str] = None
     email: Optional[str] = None
+    tags: Optional[str] = None
 
 class BulkCreateLeadsRequest(BaseModel):
     leads: List[LeadBatchItem]
     tags: Optional[str] = None
 
 router = APIRouter()
+
 
 @router.post("/leads/bulk", summary="Salvar múltiplos leads em massa")
 def bulk_create_leads(
@@ -55,12 +57,21 @@ def bulk_create_leads(
             "event_type": "bulk_manual_import"
         }
         
+        # Mesclar tags globais do request com as tags especificas do contato se existirem
+        merged_tags = []
+        if request.tags:
+            merged_tags.extend([t.strip() for t in request.tags.split(",") if t.strip()])
+        if item.tags:
+            merged_tags.extend([t.strip() for t in item.tags.split(",") if t.strip()])
+            
+        final_tags = ", ".join(list(set(merged_tags))) if merged_tags else None
+        
         upsert_webhook_lead(
             db=db,
             client_id=client_id,
             platform="manual_bulk",
             parsed_data=lead_data,
-            tag=request.tags
+            tag=final_tags
         )
         success_count += 1
         
@@ -111,7 +122,7 @@ async def preview_import(
             unique_contacts = df[p_col].apply(get_last_8).nunique()
 
         return {
-            "headers": headers,
+            "headers": df.columns.tolist(),
             "preview_rows": preview_rows,
             "filename": file.filename,
             "total_rows": total_rows,
@@ -319,7 +330,7 @@ def list_leads(
     date_to: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_user)
+    current_user: models.User = Depends(require_feature("leads"))
 ):
     """
     Retorna a lista de leads capturados via webhook, com filtros e busca.
@@ -424,11 +435,58 @@ def get_lead_filters(
             for p in parts:
                 unique_tags.add(p)
 
+    # Buscar também etiquetas internas mapeadas nas configurações de integração do cliente
+    try:
+        mapping_tags_raw = db.query(models.WebhookEventMapping.internal_tags)\
+            .join(models.WebhookIntegration, models.WebhookEventMapping.integration_id == models.WebhookIntegration.id)\
+            .filter(models.WebhookIntegration.client_id == client_id, models.WebhookEventMapping.internal_tags != None)\
+            .distinct().all()
+        for row in mapping_tags_raw:
+            if row[0]:
+                parts = [t.strip() for t in row[0].split(',') if t.strip()]
+                for p in parts:
+                    unique_tags.add(p)
+    except Exception as e:
+        logger.error(f"Erro ao buscar tags mapeadas em get_lead_filters: {e}")
+
     return {
         "event_types": [e[0] for e in event_types if e[0]],
         "product_names": [p[0] for p in product_names if p[0]],
         "tags": sorted(list(unique_tags))
     }
+
+@router.get("/leads/custom-variables", summary="Obter chaves de variáveis customizadas dos contatos")
+def get_lead_custom_variables(
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_user)
+):
+    """
+    Retorna a lista de chaves únicas de variáveis customizadas armazenadas na coluna
+    'variables' de 'webhook_leads' para o client_id do usuário.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    logger.info(f"🔍 Buscando chaves de variáveis customizadas para o cliente {client_id}")
+    
+    try:
+        leads = db.query(models.WebhookLead.variables).filter(
+            models.WebhookLead.client_id == client_id,
+            models.WebhookLead.variables.isnot(None)
+        ).all()
+        
+        unique_keys = set()
+        for row in leads:
+            vars_dict = row[0]
+            if isinstance(vars_dict, dict):
+                for k in vars_dict.keys():
+                    unique_keys.add(k)
+                    
+        result = sorted(list(unique_keys))
+        logger.info(f"✅ Encontradas {len(result)} chaves de variáveis customizadas para o cliente {client_id}: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar chaves de variáveis customizadas: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao buscar variáveis customizadas.")
 
 @router.get("/leads/export", summary="Exportar Leads para CSV")
 def export_leads_csv(

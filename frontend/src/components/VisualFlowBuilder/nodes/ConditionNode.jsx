@@ -16,6 +16,7 @@ const ConditionNode = ({ id, data }) => {
                 icon={FiCpu}
                 colorClass="bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
             />
 

@@ -33,8 +33,12 @@ const Users = () => {
         full_name: '',
         role: 'admin',
         is_active: true,
-        client_ids: []
+        client_ids: [],
+        blocked_features: [],
+        blocked_nodes: []
     });
+
+
 
     useEffect(() => {
         fetchData();
@@ -152,8 +156,9 @@ const Users = () => {
 
     const handleOpenCreateModal = () => {
         setEditingUser(null);
-        setUserData({ email: '', password: '', full_name: '', role: 'admin', is_active: true, client_ids: [] });
+        setUserData({ email: '', password: '', full_name: '', role: 'admin', seller_weight: 1, is_active: true, client_ids: [], blocked_features: [], blocked_nodes: [] });
         setShowPassword(false);
+
         setIsModalOpen(true);
     };
 
@@ -164,12 +169,17 @@ const Users = () => {
             password: '', // Senha fica vazia no edit por segurança
             full_name: user.full_name || '',
             role: user.role,
+            seller_weight: user.seller_weight || 1,
             is_active: user.is_active,
-            client_ids: user.client_ids || []
+            client_ids: user.client_ids || [],
+            blocked_features: user.blocked_features || [],
+            blocked_nodes: user.blocked_nodes || []
         });
         setShowPassword(false);
+
         setIsModalOpen(true);
     };
+
 
     const toggleClientAccess = (clientId) => {
         setUserData(prev => {

@@ -122,7 +122,11 @@ export function useAppLogic() {
     }, [currentView]);
 
     useEffect(() => {
-        if (user && user.role === 'user') {
+        if (user && user.role === 'vendedor') {
+            if (currentView !== 'hot_leads') {
+                setCurrentView('hot_leads');
+            }
+        } else if (user && user.role === 'user') {
             const allowedViews = ['history', 'schedules'];
             if (!allowedViews.includes(currentView)) {
                 setCurrentView('history');

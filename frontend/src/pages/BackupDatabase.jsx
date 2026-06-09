@@ -3,11 +3,11 @@ import {
   FiDatabase, FiDownloadCloud, FiTrash2, FiSettings,
   FiClock, FiRefreshCw, FiCalendar, FiTag, FiEdit2, FiDownload
 } from 'react-icons/fi';
-import ConfirmModal from '../components/ConfirmModal';
 import { useBackup } from './BackupDatabase/hooks/useBackup';
 import { StatusCard } from './BackupDatabase/components/StatusCard';
+import { BackupModals } from './BackupDatabase/components/BackupModals';
 
-// ─── Componente SVG para Pino ──────────────────────────────────────────────────
+// ── Componente SVG para Pino ──────────────────────────────────────────────────
 const PinIcon = ({ className, filled }) => (
   <svg
     stroke="currentColor"
@@ -46,7 +46,7 @@ function formatDate(iso) {
 
 export default function BackupDatabase() {
   const {
-    config, backups, isLoadingConfig, isLoadingBackups, isRunning, isSaving, isRestoring, isUploading,
+    config, backups, isLoadingConfig, isLoadingBackups, isRunning, isSaving, isRestoring, isUploading, isManualBackupUpdating,
     enabled, setEnabled, intervalType, setIntervalType, intervalValue, setIntervalValue, retentionCount, setRetentionCount,
     confirmDelete, setConfirmDelete, confirmRestore, setConfirmRestore, editTagModal, setEditTagModal,
     handleTogglePin, handleSaveTag, fetchBackups, handleRunNow, handleSaveConfig,
@@ -458,81 +458,26 @@ export default function BackupDatabase() {
         )}
       </div>
 
-      {/* ── Modal de Confirmação de Deleção ── */}
-      <ConfirmModal
-        isOpen={confirmDelete.open}
-        title="Excluir Backup"
-        message={`Tem certeza que deseja excluir o backup "${confirmDelete.filename}"? Esta ação não pode ser desfeita.`}
-        confirmText="Sim, Excluir"
-        isDangerous={true}
-        onClose={() => setConfirmDelete({ open: false, filename: null })}
-        onConfirm={() => handleDeleteBackup(confirmDelete.filename)}
+      {/* ── Modais de Confirmação e Carregamento ── */}
+      <BackupModals
+        isManualBackupUpdating={isManualBackupUpdating}
+        isLoadingInfo={isLoadingConfig || isLoadingBackups}
+        confirmDelete={confirmDelete}
+        setConfirmDelete={setConfirmDelete}
+        handleDeleteBackup={handleDeleteBackup}
+        confirmBulkDelete={confirmBulkDelete}
+        setConfirmBulkDelete={setConfirmBulkDelete}
+        isBulkDeleting={isBulkDeleting}
+        handleBulkDeleteBackups={handleBulkDeleteBackups}
+        selectedBackupCount={selectedBackupFilenames.length}
+        confirmRestore={confirmRestore}
+        setConfirmRestore={setConfirmRestore}
+        isRestoring={isRestoring}
+        handleRestoreBackup={handleRestoreBackup}
+        editTagModal={editTagModal}
+        setEditTagModal={setEditTagModal}
+        handleSaveTag={handleSaveTag}
       />
-
-      {/* ── Modal de Confirmação de Deleção em Lote ── */}
-      <ConfirmModal
-        isOpen={confirmBulkDelete.open}
-        title="Excluir Vários Backups"
-        message={`Tem certeza que deseja excluir os ${selectedBackupFilenames.length} backups selecionados? Esta ação não pode ser desfeita e os arquivos serão removidos do S3.`}
-        confirmText={isBulkDeleting ? "Excluindo..." : "Sim, Excluir Todos"}
-        isDangerous={true}
-        onClose={() => setConfirmBulkDelete({ open: false })}
-        onConfirm={handleBulkDeleteBackups}
-      />
-
-      {/* ── Modal de Confirmação de Restauração ── */}
-      <ConfirmModal
-        isOpen={confirmRestore.open}
-        title="Restaurar Banco de Dados"
-        message={`Tem certeza que deseja restaurar o banco de dados a partir do backup "${confirmRestore.filename}"? Isso irá sobrescrever e apagar todos os dados atuais.`}
-        confirmText={isRestoring ? "Restaurando..." : "Sim, Restaurar"}
-        isDangerous={true}
-        onClose={() => setConfirmRestore({ open: false, filename: null })}
-        onConfirm={() => handleRestoreBackup(confirmRestore.filename)}
-      />
-
-      {/* ── Modal de Edição de Etiqueta ── */}
-      {editTagModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl p-6 shadow-2xl border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">🏷️ Etiqueta do Backup</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 truncate font-mono">
-              {editTagModal.filename}
-            </p>
-            <form onSubmit={handleSaveTag}>
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Nome da Etiqueta
-                </label>
-                <input
-                  type="text"
-                  maxLength={100}
-                  placeholder="Ex: Backup Estável, Antes da Atualização"
-                  value={editTagModal.tag}
-                  onChange={e => setEditTagModal(prev => ({ ...prev, tag: e.target.value }))}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm font-medium focus:ring-2 focus:ring-violet-500 outline-none"
-                  autoFocus
-                />
-              </div>
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setEditTagModal({ open: false, filename: null, tag: '' })}
-                  className="px-4 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-lg transition-all active:scale-95"
-                >
-                  Salvar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

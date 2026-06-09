@@ -36,7 +36,8 @@ const UserModal = ({
                 body: JSON.stringify({
                     validity_hours: Number(validityHours),
                     role: userData.role,
-                    client_ids: userData.client_ids
+                    client_ids: userData.client_ids,
+                    blocked_features: userData.blocked_features || []
                 })
             });
 
@@ -214,7 +215,23 @@ const UserModal = ({
                             <select
                                 disabled={editingUser?.role === 'super_admin'}
                                 value={userData.role}
-                                onChange={(e) => setUserData({ ...userData, role: e.target.value })}
+                                onChange={(e) => {
+                                    const nextRole = e.target.value;
+                                    // Comportamento dinâmico recomendado:
+                                    // admin e super_admin por padrão não bloqueiam nada.
+                                    // premium por padrão bloqueia configurações.
+                                    // user por padrão bloqueia configurações, agendamentos, leads e funis.
+                                    // vendedor por padrão bloqueia configurações, agendamentos e funis.
+                                    let defaultBlocked = [];
+                                    if (nextRole === 'premium') {
+                                        defaultBlocked = ['settings'];
+                                    } else if (nextRole === 'user') {
+                                        defaultBlocked = ['settings', 'schedules', 'funnels', 'leads'];
+                                    } else if (nextRole === 'vendedor') {
+                                        defaultBlocked = ['settings', 'schedules', 'funnels'];
+                                    }
+                                    setUserData({ ...userData, role: nextRole, blocked_features: defaultBlocked });
+                                }}
                                 className={`w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white outline-none font-medium ${editingUser?.role === 'super_admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {editingUser?.role === 'super_admin' && (
@@ -223,8 +240,125 @@ const UserModal = ({
                                 <option value="admin">Administrador (Configurações Totais)</option>
                                 <option value="premium">Usuário Premium (Sem Configurações Avançadas)</option>
                                 <option value="user">Usuário (Histórico Apenas)</option>
+                                <option value="vendedor">Vendedor (Leads Quentes)</option>
                             </select>
                         </div>
+
+                        {/* Configuração de Restrições/Permissões de Painéis */}
+                        {userData.role !== 'super_admin' && (
+                            <div>
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Restringir Acesso aos Painéis</label>
+                                <div className="space-y-2.5 p-3.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-900/30">
+                                    {[
+                                        { id: 'funnels', name: 'Funis de Vendas' },
+                                        { id: 'schedules', name: 'Agendamentos e Campanhas' },
+                                        { id: 'whatsapp', name: 'Templates do WhatsApp / Disparos' },
+                                        { id: 'settings', name: 'Configurações Globais / Integrações' },
+                                        { id: 'leads', name: 'Leads e Importações' },
+                                    ].map(feature => {
+                                        const isBlocked = (userData.blocked_features || []).includes(feature.id);
+                                        return (
+                                            <div key={feature.id} className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{feature.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const currentBlocked = userData.blocked_features || [];
+                                                        const isNowBlocked = currentBlocked.includes(feature.id);
+                                                        const newBlocked = isNowBlocked
+                                                            ? currentBlocked.filter(x => x !== feature.id)
+                                                            : [...currentBlocked, feature.id];
+                                                        setUserData({ ...userData, blocked_features: newBlocked });
+                                                    }}
+                                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isBlocked ? 'bg-red-500/80' : 'bg-green-500'}`}
+                                                >
+                                                    <span
+                                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isBlocked ? 'translate-x-5' : 'translate-x-0'}`}
+                                                    />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="mt-1.5 text-[10px] text-gray-400 italic">Os painéis com o interruptor vermelho estarão bloqueados para este usuário.</p>
+                            </div>
+                        )}
+
+                        {/* Configuração de Restrições de Nós do Funil */}
+                        {userData.role !== 'super_admin' && !(userData.blocked_features || []).includes('funnels') && (
+                            <div>
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Restringir Nós do Funil</label>
+                                <div className="space-y-2.5 p-3.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-900/30 max-h-48 overflow-y-auto custom-scrollbar">
+                                    {[
+                                        { id: 'messageNode', name: 'Mensagem (Texto)' },
+                                        { id: 'mediaNode', name: 'Mídia (Imagem/Vídeo)' },
+                                        { id: 'audioNode', name: 'Áudio (Gravação de Voz)' },
+                                        { id: 'sendTemplateNode', name: 'Template Meta (Ativo)' },
+                                        { id: 'checkWindowNode', name: 'Verificar Janela 24h' },
+                                        { id: 'delayNode', name: 'Delay (Tempo/Aguardar)' },
+                                        { id: 'waitEventNode', name: 'Aguardar Ação (Conversão)' },
+                                        { id: 'inputDataNode', name: 'Entrada de Dados (Aguardar Resposta)' },
+                                        { id: 'dateNode', name: 'Agendar Data (Calendário)' },
+                                        { id: 'businessHoursNode', name: 'Horário Comercial' },
+                                        { id: 'conditionNode', name: 'Condição (Lógica If/Else)' },
+                                        { id: 'randomizerNode', name: 'Teste A/B (Randomizer)' },
+                                        { id: 'linkFunnelNode', name: 'Conectar Outro Funil' },
+                                        { id: 'httpRequestNode', name: 'Requisição HTTP (Webhook)' },
+                                        { id: 'localSegmentNode', name: 'Segmentação Local (Tag)' },
+                                        { id: 'pixelNode', name: 'Pixel de Conversão (CAPI)' },
+                                        { id: 'crmActionsNode', name: 'Ações de CRM' },
+                                        { id: 'hotLeadsNode', name: 'Leads Quentes' },
+                                        { id: 'rouletteNode', name: 'Roleta / Sorteio' },
+                                    ].map(node => {
+                                        const isBlocked = (userData.blocked_nodes || []).includes(node.id);
+                                        return (
+                                            <div key={node.id} className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{node.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const currentBlocked = userData.blocked_nodes || [];
+                                                        const isNowBlocked = currentBlocked.includes(node.id);
+                                                        const newBlocked = isNowBlocked
+                                                            ? currentBlocked.filter(x => x !== node.id)
+                                                            : [...currentBlocked, node.id];
+                                                        setUserData({ ...userData, blocked_nodes: newBlocked });
+                                                    }}
+                                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isBlocked ? 'bg-red-500/80' : 'bg-green-500'}`}
+                                                >
+                                                    <span
+                                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isBlocked ? 'translate-x-5' : 'translate-x-0'}`}
+                                                    />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="mt-1.5 text-[10px] text-gray-400 italic">Os nós com o interruptor vermelho estarão bloqueados/ocultos para este usuário.</p>
+                            </div>
+                        )}
+
+
+
+                        {userData.role === 'vendedor' && (
+                            <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1">
+                                    Pontuação do Vendedor (Peso de Distribuição)
+                                </label>
+                                <select
+                                    value={userData.seller_weight || 1}
+                                    onChange={(e) => setUserData({ ...userData, seller_weight: Number(e.target.value) })}
+                                    className="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white outline-none font-medium"
+                                >
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => (
+                                        <option key={val} value={val}>{val} {val === 1 ? '(Normal)' : val === 10 ? '(Máximo)' : ''}</option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-[10px] text-gray-400 italic">
+                                    Pesos maiores garantem proporcionalmente mais leads na distribuição (Rodízio/Aleatório).
+                                </p>
+                            </div>
+                        )}
 
                         {/* Seleção de Clientes */}
                         <div>

@@ -6,7 +6,7 @@ from config_loader import get_settings
 from pydantic import BaseModel
 from typing import Dict, Optional, Any
 from core.deps import get_current_user, get_validated_client_id
-from core.permissions import require_admin
+from core.permissions import require_admin, require_feature
 from websocket_manager import manager
 import httpx
 import datetime
@@ -43,7 +43,7 @@ def get_branding(db: Session = Depends(get_db)):
 @router.get("/", response_model=Dict[str, str])
 def read_settings(
     x_client_id: int = Depends(get_validated_client_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_feature("settings")),
     db: Session = Depends(get_db)
 ):
     """

@@ -211,7 +211,7 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
             statuses[nodeId] = log.status;
 
             if (!stats[nodeId]) {
-                stats[nodeId] = { sent: 0, waiting: 0, failed: 0, cancelled: 0 };
+                stats[nodeId] = { sent: 0, waiting: 0, suspended: 0, failed: 0, cancelled: 0 };
             }
 
             // Identificar o contato pelo telefone (sempre disponível após enriquecimento do backend)
@@ -232,16 +232,19 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
 
             contactLogs.forEach(log => {
                 const nodeId = log.node_id;
-                if (!stats[nodeId]) stats[nodeId] = { sent: 0, waiting: 0, failed: 0, cancelled: 0 };
+                if (!stats[nodeId]) stats[nodeId] = { sent: 0, waiting: 0, suspended: 0, failed: 0, cancelled: 0 };
 
                 const isWaiting = log.status === 'waiting' || log.status === 'processing';
+                const isSuspended = log.status === 'suspended';
                 // Se o contato tem um log em nó posterior = já passou por este nó
-                const alreadyMoved = isWaiting && log.nodeOrder < maxNodeOrder;
+                const alreadyMoved = (isWaiting || isSuspended) && log.nodeOrder < maxNodeOrder;
 
                 if (log.status === 'completed' || alreadyMoved) {
                     stats[nodeId].sent++;
                 } else if (isWaiting) {
                     stats[nodeId].waiting++;
+                } else if (isSuspended) {
+                    stats[nodeId].suspended++;
                 } else if (log.status === 'failed') {
                     stats[nodeId].failed++;
                 } else if (log.status === 'cancelled') {
@@ -276,6 +279,7 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
                     isActive,
                     resolvedUrl,
                     resolvedPayload,
+                    latestLogMessage: latestLog?.details,
                     bulkStats: nodeStats[nodeId] || null,
                     onStatClick: (clickedStatus) => {
                         if (onNodeStatClick) {

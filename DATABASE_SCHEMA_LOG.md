@@ -51,6 +51,18 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 30/05/2026 | Metadados de Backups (Pinar e Etiquetas) | `backup_metadata` | Tabela nova: `filename`, `is_pinned`, `tag` | `backend/migrations/add_backup_metadata_table.py` |
 | 30/05/2026 | Data de Início e Etiqueta Alternativa ManyChat | `webhook_event_mappings` | `manychat_start_date`, `manychat_tag_alternative` | `backend/scripts/database/add_manychat_alternative_tag_columns.py` |
 | 03/06/2026 | Persistência de Ações de Botões em Recorrências | `recurring_triggers` | `button_actions` | `backend/scripts/database/add_button_actions_to_recurring.py` |
+| 06/06/2026 | Nó de Roleta e Sorteios (Limites) | `roulette_logs` | Tabela inteira de logs da roleta | `backend/scripts/database/create_roulette_table.py` |
+| 06/06/2026 | Roteamento Dinâmico / Round Robin | `round_robin_states` | Tabela inteira de estados de round robin | `backend/scripts/database/create_round_robin_table.py` |
+| 06/06/2026 | Nó de Leads Quentes e Roteamento Interno | `hot_leads` | Tabela inteira de leads quentes e atribuição | `backend/migrations/create_hot_leads_table.py` |
+| 06/06/2026 | Pontuação do Vendedor (Peso) | `users` | `seller_weight` | `backend/scripts/database/add_seller_weight_column.py` |
+| 06/06/2026 | Variáveis Coletadas no Contato | `webhook_leads` | `variables` (JSONB) | `backend/scripts/database/add_webhook_leads_variables_column.py` |
+| 06/06/2026 | Restrição de Módulos (Painéis) | `users`, `user_invitations` | `blocked_features` (TEXT) | `backend/scripts/add_blocked_features_column.py` |
+| 06/06/2026 | Restrição de Nós de Funil | `users`, `user_invitations` | `blocked_nodes` (TEXT) | `backend/scripts/add_blocked_nodes_column.py` |
+| 07/06/2026 | Snapshot de Fidelidade do Funil no Disparo | `scheduled_triggers` | `funnel_snapshot` (JSONB) | `backend/scripts/add_funnel_snapshot_column.py` |
+| 08/06/2026 | Variáveis Coletadas no Disparo (IA/Entrada) | `scheduled_triggers` | `processed_data` (JSONB) | `backend/scripts/database/add_processed_data_to_trigger.py` |
+
+
+
 
 
 

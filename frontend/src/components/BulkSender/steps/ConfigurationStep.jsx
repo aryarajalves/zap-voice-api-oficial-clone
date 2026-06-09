@@ -1,4 +1,5 @@
 import React from 'react';
+import { toast } from 'react-hot-toast';
 import TemplateSelectionSection from './TemplateSelectionSection';
 
 const ConfigurationStep = ({
@@ -19,6 +20,38 @@ const ConfigurationStep = ({
     setSelectedChatwootLabels,
     setStep
 }) => {
+    const handleAdvance = () => {
+        // Verifica se o template tem cabeçalho de mídia obrigatório
+        const headerComp = selectedTemplateObj?.components?.find(c => c.type === 'HEADER');
+        const needsMedia = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format);
+
+        if (needsMedia && !templateParams['HEADER_0']) {
+            const mediaLabel = headerComp.format === 'IMAGE' ? 'Imagem' : headerComp.format === 'VIDEO' ? 'Vídeo' : 'Documento';
+            const mediaIcon = headerComp.format === 'IMAGE' ? '🖼️' : headerComp.format === 'VIDEO' ? '🎬' : '📄';
+
+            toast.custom((t) => (
+                <div className={`${t.visible ? 'animate-in fade-in slide-in-from-bottom-4' : 'animate-out fade-out'} max-w-sm w-full bg-slate-900 border border-amber-500/30 rounded-2xl shadow-2xl shadow-black/40 p-5 flex gap-4`}>
+                    <div className="flex-shrink-0 w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center text-2xl">
+                        {mediaIcon}
+                    </div>
+                    <div className="flex-1 space-y-1">
+                        <p className="text-sm font-black text-white">Mídia do Cabeçalho Pendente</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Este template exige uma <span className="text-amber-400 font-bold">{mediaLabel}</span> no cabeçalho.
+                            Faça o upload ou cole o link antes de avançar.
+                        </p>
+                    </div>
+                </div>
+            ), {
+                duration: 5000,
+                position: 'top-right'
+            });
+            return;
+        }
+
+        setStep(2);
+    };
+
     return (
         <div className="max-w-4xl mx-auto space-y-10">
             {/* Template Selection Column */}
@@ -48,7 +81,8 @@ const ConfigurationStep = ({
             </section>
 
             <button 
-                onClick={() => setStep(2)}
+                id="bulk-advance-btn"
+                onClick={handleAdvance}
                 disabled={!selectedTemplate}
                 className="w-full py-8 bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-500 hover:to-emerald-400 text-white rounded-[2.5rem] font-black text-lg uppercase tracking-[0.4em] shadow-2xl shadow-green-900/40 transition-all active:scale-95 flex items-center justify-center gap-6 group disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -60,3 +94,4 @@ const ConfigurationStep = ({
 };
 
 export default ConfigurationStep;
+

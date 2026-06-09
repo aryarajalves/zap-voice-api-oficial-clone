@@ -25,10 +25,11 @@ const UserTable = ({ users, handleOpenEditModal, confirmDeleteUser }) => {
                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${user.role === 'super_admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border border-purple-200 dark:border-purple-800' :
                                         user.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800' :
                                             user.role === 'premium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800' :
-                                                'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400 border border-gray-200 dark:border-gray-800'
+                                                user.role === 'vendedor' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border border-orange-200 dark:border-orange-800' :
+                                                    'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400 border border-gray-200 dark:border-gray-800'
                                         }`}>
                                         {user.role === 'super_admin' ? <FiShield size={12} /> : user.role === 'premium' ? <FiUserPlus size={12} /> : <FiUser size={12} />}
-                                        {user.role}
+                                        {user.role} {user.role === 'vendedor' ? `(Peso: ${user.seller_weight || 1})` : ''}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4">

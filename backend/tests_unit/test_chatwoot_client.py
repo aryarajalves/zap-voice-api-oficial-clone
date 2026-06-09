@@ -288,3 +288,57 @@ async def test_send_template_components_keyword_resolution(mock_settings):
         [{"type": "body", "parameters": [{"type": "text", "text": "Arya"}]}]
     )
 
+@pytest.mark.asyncio
+async def test_send_template_with_media_upload_resolution(mock_settings):
+    # Mock specific Meta settings
+    mock_settings.return_value["WA_PHONE_NUMBER_ID"] = "phone_id_123"
+    mock_settings.return_value["WA_ACCESS_TOKEN"] = "meta_token_abc"
+    
+    from core.clients.whatsapp.client import WhatsAppClient
+    client = WhatsAppClient(client_id=1)
+    
+    # Components with a video link that should trigger upload (localhost or Backblaze URL)
+    media_url = "https://zap-voice.s3.us-west-004.backblazebb2.com/test_video.mp4"
+    components = [
+        {
+            "type": "header",
+            "parameters": [
+                {
+                    "type": "video",
+                    "video": {"link": media_url}
+                }
+            ]
+        }
+    ]
+    
+    # Mock _download_file_with_ext, upload_media_to_meta, and httpx client call
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"messaging_product": "whatsapp", "messages": [{"id": "wa_msg_id"}]}
+    
+    with patch.object(client, "_download_file_with_ext", return_value=("/tmp/test_video.mp4", "/tmp/test_video.mp4")) as mock_dl, \
+         patch.object(client, "upload_media_to_meta", return_value="meta_media_id_999") as mock_upload, \
+         patch("os.path.exists", return_value=True), \
+         patch("httpx.AsyncClient.post", return_value=mock_resp) as mock_post:
+         
+        result = await client.send_template(
+            phone_number="5585999999999",
+            template_name="hello_world_media",
+            components=components
+        )
+        
+        assert result.get("success") is True
+        # Verify that _download_file_with_ext was called with the Backblaze URL
+        mock_dl.assert_called_once_with(media_url)
+        # Verify that upload_media_to_meta was called
+        mock_upload.assert_called_once_with("/tmp/test_video.mp4", "video/mp4")
+        
+        # Verify final payload components sent to Meta had the link converted to id
+        args, kwargs = mock_post.call_args
+        sent_components = kwargs["json"]["template"]["components"]
+        assert sent_components[0]["type"] == "header"
+        assert sent_components[0]["parameters"][0]["type"] == "video"
+        assert sent_components[0]["parameters"][0]["video"]["id"] == "meta_media_id_999"
+        assert "link" not in sent_components[0]["parameters"][0]["video"]
+
+

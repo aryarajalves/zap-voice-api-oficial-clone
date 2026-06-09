@@ -1,13 +1,16 @@
+import sys
 import os
 import requests
 from dotenv import load_dotenv
 
-# Carrega variáveis de ambiente
+sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "backend", ".env"))
 
-BASE_URL = os.getenv("VITE_API_URL", "http://localhost:8000/api")
+
+BASE_URL = "http://localhost:8000/api"
 ADMIN_EMAIL = os.getenv("SUPER_ADMIN_EMAIL")
 ADMIN_PASSWORD = os.getenv("SUPER_ADMIN_PASSWORD")
+
 
 def get_super_admin_token():
     url = f"{BASE_URL}/auth/token"
@@ -74,7 +77,8 @@ def run_rbac_tests():
             "password": u["password"],
             "full_name": u["full_name"],
             "role": u["role"],
-            "client_ids": [client_id]
+            "client_ids": [client_id],
+            "blocked_features": []
         }
         res_create = requests.post(f"{BASE_URL}/auth/register", headers=sa_headers, json=payload, timeout=10)
         if res_create.status_code == 200:
@@ -83,6 +87,7 @@ def run_rbac_tests():
         else:
             print(f"❌ Falha: Erro ao criar usuario {u['email']}: {res_create.status_code} - {res_create.text}")
             exit(1)
+
 
     # 4. Obter tokens de cada usuario
     tokens = {}
@@ -237,6 +242,135 @@ def run_rbac_tests():
         print(f"❌ admin: Salvar configuracao falhou: {res.status_code} - {res.text}")
         test_failed = True
 
+    # 7.3 Testar Restrições de Módulos (blocked_features)
+    print("\n--- Testando Restrições Específicas de Módulos (blocked_features) ---")
+    
+    # Criar um usuário temporário de teste com a feature 'funnels' e 'schedules' bloqueadas
+    bf_email = "rbac_blocked_feat@example.com"
+    res_list = requests.get(f"{BASE_URL}/auth/users", headers=sa_headers, timeout=10)
+    if res_list.status_code == 200:
+        existing = [x for x in res_list.json() if x['email'] == bf_email]
+        if existing:
+            requests.delete(f"{BASE_URL}/auth/users/{existing[0]['id']}", headers=sa_headers, timeout=10)
+
+    payload_bf = {
+        "email": bf_email,
+        "password": "password123",
+        "full_name": "Test Blocked Feature User",
+        "role": "premium",
+        "client_ids": [client_id],
+        "blocked_features": ["funnels", "schedules"]
+    }
+    
+    res_create_bf = requests.post(f"{BASE_URL}/auth/register", headers=sa_headers, json=payload_bf, timeout=10)
+    if res_create_bf.status_code == 200:
+        bf_user_id = res_create_bf.json()["user_id"]
+        bf_token = login_user(bf_email, "password123")
+        bf_headers = {
+            "Authorization": f"Bearer {bf_token}",
+            "X-Client-ID": str(client_id),
+            "Content-Type": "application/json"
+        }
+        
+        # A. Tentar acessar funis (Esperado: 403)
+        res_fun = requests.get(f"{BASE_URL}/funnels", headers=bf_headers, timeout=10)
+        if res_fun.status_code == 403:
+            print("✅ blocked_features: Acesso a funis bloqueado com sucesso (403)")
+        else:
+            print(f"❌ blocked_features: Acesso a funis deveria retornar 403, retornou: {res_fun.status_code}")
+            test_failed = True
+            
+        # B. Tentar acessar agendamentos (Esperado: 403)
+        res_sch = requests.get(f"{BASE_URL}/schedules/?start=2026-05-22T00:00:00Z&end=2026-05-22T23:59:59Z", headers=bf_headers, timeout=10)
+        if res_sch.status_code == 403:
+            print("✅ blocked_features: Acesso a agendamentos bloqueado com sucesso (403)")
+        else:
+            print(f"❌ blocked_features: Acesso a agendamentos deveria retornar 403, retornou: {res_sch.status_code}")
+            test_failed = True
+            
+        # Limpar usuário bf
+        requests.delete(f"{BASE_URL}/auth/users/{bf_user_id}", headers=sa_headers, timeout=10)
+        print("Usuario temporario de blocked_features removido.")
+    else:
+        print(f"❌ Falha: Erro ao criar usuario temporario de blocked_features: {res_create_bf.status_code}")
+        test_failed = True
+
+    # 7.4 Testar Restrições de Nós de Funil (blocked_nodes)
+    print("\n--- Testando Restrições Específicas de Nós (blocked_nodes) ---")
+    
+    bn_email = "rbac_blocked_nodes@example.com"
+    res_list = requests.get(f"{BASE_URL}/auth/users", headers=sa_headers, timeout=10)
+    if res_list.status_code == 200:
+        existing = [x for x in res_list.json() if x['email'] == bn_email]
+        if existing:
+            requests.delete(f"{BASE_URL}/auth/users/{existing[0]['id']}", headers=sa_headers, timeout=10)
+
+    payload_bn = {
+        "email": bn_email,
+        "password": "password123",
+        "full_name": "Test Blocked Nodes User",
+        "role": "premium",
+        "client_ids": [client_id],
+        "blocked_features": [],
+        "blocked_nodes": ["rouletteNode", "httpRequestNode"]
+    }
+    
+    res_create_bn = requests.post(f"{BASE_URL}/auth/register", headers=sa_headers, json=payload_bn, timeout=10)
+    if res_create_bn.status_code == 200:
+        bn_user_id = res_create_bn.json()["user_id"]
+        bn_token = login_user(bn_email, "password123")
+        bn_headers = {
+            "Authorization": f"Bearer {bn_token}",
+            "X-Client-ID": str(client_id),
+            "Content-Type": "application/json"
+        }
+        
+        # A. Tentar criar funil com nó permitido (messageNode) (Esperado: 200 ou 201)
+        funnel_ok_payload = {
+            "name": "Funil OK Test Node",
+            "steps": {
+                "nodes": [
+                    { "id": "n1", "type": "messageNode", "data": { "content": "Olá" } }
+                ],
+                "edges": []
+            }
+        }
+        res_fun_ok = requests.post(f"{BASE_URL}/funnels", headers=bn_headers, json=funnel_ok_payload, timeout=10)
+        if res_fun_ok.status_code in [200, 201]:
+            print("✅ blocked_nodes: Permissão concedida para nó permitido (messageNode)")
+            # Deletar funil criado
+            funnel_id = res_fun_ok.json()["id"]
+            requests.delete(f"{BASE_URL}/funnels/{funnel_id}", headers=bn_headers, timeout=10)
+        else:
+            print(f"❌ blocked_nodes: Criação de funil com nó permitido deveria funcionar, retornou: {res_fun_ok.status_code} - {res_fun_ok.text}")
+            test_failed = True
+
+        # B. Tentar criar funil contendo nó bloqueado (rouletteNode) (Esperado: 403)
+        funnel_blocked_payload = {
+            "name": "Funil Blocked Test Node",
+            "steps": {
+                "nodes": [
+                    { "id": "n1", "type": "messageNode", "data": { "content": "Olá" } },
+                    { "id": "n2", "type": "rouletteNode", "data": {} }
+                ],
+                "edges": []
+            }
+        }
+        res_fun_blocked = requests.post(f"{BASE_URL}/funnels", headers=bn_headers, json=funnel_blocked_payload, timeout=10)
+        if res_fun_blocked.status_code == 403:
+            print("✅ blocked_nodes: Acesso ao nó rouletteNode bloqueado com sucesso no backend (403)")
+        else:
+            print(f"❌ blocked_nodes: Acesso ao nó rouletteNode deveria retornar 403, retornou: {res_fun_blocked.status_code} - {res_fun_blocked.text}")
+            test_failed = True
+
+        # Limpar usuário bn
+        requests.delete(f"{BASE_URL}/auth/users/{bn_user_id}", headers=sa_headers, timeout=10)
+        print("Usuario temporario de blocked_nodes removido.")
+    else:
+        print(f"❌ Falha: Erro ao criar usuario temporario de blocked_nodes: {res_create_bn.status_code}")
+        test_failed = True
+
+
     # 8. Limpeza de Usuarios de Teste
     print("\n--- Limpando Usuarios de Teste ---")
     for u in created_users:
@@ -254,3 +388,4 @@ def run_rbac_tests():
 
 if __name__ == "__main__":
     run_rbac_tests()
+

@@ -14,6 +14,7 @@ const DelayNode = ({ id, data }) => {
                 icon={FiClock}
                 colorClass="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
                 onSetStart={() => data.onSetStart(id, 'delayNode')}
             />

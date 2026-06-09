@@ -30,7 +30,7 @@ export default function ClientModal({ isOpen, onClose }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity">
             <div className="bg-white dark:bg-[#1e293b] rounded-[2rem] shadow-2xl max-w-md w-full transition-colors duration-200 border border-gray-100 dark:border-white/5 overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-8 border-b border-gray-200 dark:border-white/5 bg-gray-50/50 dark:bg-white/5">

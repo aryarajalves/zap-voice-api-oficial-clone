@@ -74,6 +74,36 @@ describe('useFlowLogic', () => {
         expect(result.current.nodes[1].data.isStart).toBeFalsy();
     });
 
+    it('deve duplicar um nó corretamente e emitir apenas um toast de sucesso', async () => {
+        const { toast } = await import('react-hot-toast');
+        const { result } = renderHook(() => useFlowLogic(null, vi.fn()));
+
+        // Criar um nó primeiro
+        act(() => {
+            result.current.setMenu({ top: 100, left: 100 });
+        });
+        act(() => {
+            result.current.handleAddNode('messageNode');
+        });
+
+        const originalNode = result.current.nodes[0];
+        const originalId = originalNode.id;
+
+        // Limpar mock do toast
+        toast.success.mockClear();
+
+        // Duplicar o nó
+        act(() => {
+            result.current.nodes[0].data.onDuplicate(originalId);
+        });
+
+        expect(result.current.nodes).toHaveLength(2);
+        expect(result.current.nodes[1].type).toBe(originalNode.type);
+        expect(result.current.nodes[1].position.x).toBe(originalNode.position.x + 35);
+        expect(toast.success).toHaveBeenCalledTimes(1);
+        expect(toast.success).toHaveBeenCalledWith("Nó duplicado com sucesso! 👥");
+    });
+
     it.skip('deve usar toast.promise ao salvar', async () => {
         const { toast } = await import('react-hot-toast');
         const { result } = renderHook(() => useFlowLogic(1, vi.fn()));

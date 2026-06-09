@@ -5,7 +5,7 @@ import models
 import schemas
 from fastapi import Depends
 from core.deps import get_current_user, get_db
-from core.permissions import require_premium, require_user
+from core.permissions import require_premium, require_user, require_feature
 from core.logger import setup_logger
 from config_loader import get_setting
 import httpx
@@ -47,7 +47,7 @@ async def list_templates(
     include_archived: bool = Query(False),
     include_paused: bool = Query(True),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(require_user),
+    current_user: models.User = Depends(require_feature("whatsapp")),
     db: Session = Depends(get_db)
 ):
     target_client_id = x_client_id if x_client_id else current_user.client_id
@@ -61,27 +61,34 @@ async def list_templates(
     except Exception as e:
         logger.error(f"Error listing templates from Meta (falling back to cache): {e}")
 
-    # Se a chamada à Meta falhar ou retornar vazia, buscar do banco local
-    if not meta_success or not templates:
-        logger.info("Using cached templates from database.")
-        try:
-            cached_templates = db.query(models.WhatsAppTemplateCache).filter(
-                models.WhatsAppTemplateCache.client_id == target_client_id
-            ).all()
-            templates = []
-            for ct in cached_templates:
-                templates.append({
-                    "id": str(ct.id),
-                    "name": ct.name,
-                    "language": ct.language,
-                    "category": "MARKETING",
-                    "status": "APPROVED",
-                    "body_text": ct.body,
-                    "components": ct.components or [],
-                    "is_archived": ct.is_archived
-                })
-        except Exception as db_err:
-            logger.error(f"Error querying local template cache: {db_err}")
+    # Sempre buscar do banco local e mesclar para garantir que templates locais/sincronizados apareçam
+    cached_list = []
+    try:
+        cached_templates = db.query(models.WhatsAppTemplateCache).filter(
+            models.WhatsAppTemplateCache.client_id == target_client_id
+        ).all()
+        for ct in cached_templates:
+            cached_list.append({
+                "id": str(ct.id),
+                "name": ct.name,
+                "language": ct.language,
+                "category": "MARKETING",
+                "status": "APPROVED",
+                "body_text": ct.body,
+                "components": ct.components or [],
+                "is_archived": ct.is_archived
+            })
+    except Exception as db_err:
+        logger.error(f"Error querying local template cache: {db_err}")
+
+    if meta_success and templates:
+        # Mesclar mantendo os da Meta como prioridade
+        meta_names = {t["name"] for t in templates}
+        for ct in cached_list:
+            if ct["name"] not in meta_names:
+                templates.append(ct)
+    else:
+        templates = cached_list
 
     # Mapear status is_archived do banco local para os templates vindos da Meta
     try:

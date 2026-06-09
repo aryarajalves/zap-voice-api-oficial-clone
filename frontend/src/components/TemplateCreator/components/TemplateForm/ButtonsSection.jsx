@@ -22,7 +22,7 @@ const ButtonsSection = ({ logic }) => {
 
             <div className="space-y-4">
                 {formData.buttons.map((btn, idx) => (
-                    <div key={idx} className="flex flex-wrap md:flex-nowrap items-start gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm animate-in fade-in slide-in-from-top-3">
+                    <div key={idx} className="flex flex-wrap md:flex-nowrap items-end gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm animate-in fade-in slide-in-from-top-3">
                         <div className="flex-1 min-w-[150px]">
                             <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1.5 block tracking-wider">Tipo de Ação</label>
                             <select
@@ -78,7 +78,7 @@ const ButtonsSection = ({ logic }) => {
                         <button
                             type="button"
                             onClick={() => removeButton(idx)}
-                            className="mt-6 p-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
+                            className="flex-shrink-0 p-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
                             title="Remover Botão"
                         >
                             <FiTrash2 size={18} />

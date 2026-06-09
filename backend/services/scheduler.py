@@ -273,7 +273,10 @@ async def scheduler_task():
 
             # --- 2. PROCESS PENDING ONE-OFF TRIGGERS ---
             pending_triggers = db.query(models.ScheduledTrigger).filter(
-                models.ScheduledTrigger.status == 'queued',
+                or_(
+                    models.ScheduledTrigger.status == 'queued',
+                    models.ScheduledTrigger.status == 'suspended'
+                ),
                 models.ScheduledTrigger.scheduled_time <= now_utc
             ).with_for_update(skip_locked=True).all()
             

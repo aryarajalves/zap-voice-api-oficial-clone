@@ -17,7 +17,14 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
     const bulk = useBulkSender(onViewChange, onSuccess);
 
     const selectedTemplateObj = bulk.templates.find(t => t.name === bulk.selectedTemplate);
-    const templateVariables = bulk.extractTemplateVariables(selectedTemplateObj);
+    let templateVariables = bulk.extractTemplateVariables(selectedTemplateObj);
+    
+    // Se o cabeçalho de mídia já foi configurado estaticamente no Step 1,
+    // não precisamos exibi-lo como variável que necessita de mapeamento dinâmico no Step 2.
+    if (bulk.templateParams['HEADER_0']) {
+        templateVariables = templateVariables.filter(v => v.key !== 'HEADER_0');
+    }
+
     const templateButtons = bulk.extractTemplateButtons(selectedTemplateObj);
 
     // Helpers

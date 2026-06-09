@@ -346,14 +346,38 @@ export const useBulkSender = (onViewChange, onSuccess) => {
 
     const extractTemplateVariables = (templateObj) => {
         if (!templateObj) return [];
+        const vars = [];
+        
+        // 1. Mídia no cabeçalho (IMAGE, VIDEO, DOCUMENT)
+        const headerComp = templateObj.components?.find(c => c.type === 'HEADER');
+        if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+            let mediaTypeLabel = 'Arquivo';
+            if (headerComp.format === 'IMAGE') mediaTypeLabel = 'Imagem';
+            else if (headerComp.format === 'VIDEO') mediaTypeLabel = 'Vídeo';
+            else if (headerComp.format === 'DOCUMENT') mediaTypeLabel = 'Documento';
+
+            vars.push({
+                key: 'HEADER_0',
+                label: `Link do Cabeçalho (${mediaTypeLabel})`
+            });
+        }
+        
+        // 2. Variáveis do Corpo
         const bodyComp = templateObj.components?.find(c => c.type === 'BODY');
-        if (!bodyComp || !bodyComp.text) return [];
-        const matches = bodyComp.text.match(/\{\{\d+\}\}/g);
-        if (!matches) return [];
-        return [...new Set(matches)].map(match => ({
-            key: `BODY_${parseInt(match.replace(/[{}]/g, '')) - 1}`,
-            label: match
-        }));
+        if (bodyComp && bodyComp.text) {
+            const matches = bodyComp.text.match(/\{\{\d+\}\}/g);
+            if (matches) {
+                const uniqueMatches = [...new Set(matches)];
+                uniqueMatches.forEach(match => {
+                    vars.push({
+                        key: `BODY_${parseInt(match.replace(/[{}]/g, '')) - 1}`,
+                        label: match
+                    });
+                });
+            }
+        }
+        
+        return vars;
     };
 
     return {

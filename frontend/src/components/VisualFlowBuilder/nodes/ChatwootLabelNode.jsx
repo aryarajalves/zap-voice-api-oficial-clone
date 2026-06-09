@@ -95,6 +95,7 @@ const ChatwootLabelNode = ({ id, data }) => {
                 icon={FiTag}
                 colorClass="bg-slate-100 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
             />
 

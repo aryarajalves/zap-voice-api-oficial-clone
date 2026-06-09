@@ -15,6 +15,7 @@ const DateNode = ({ id, data }) => {
                 icon={FiCalendar}
                 colorClass="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
                 onSetStart={() => data.onSetStart(id, 'dateNode')}
             />

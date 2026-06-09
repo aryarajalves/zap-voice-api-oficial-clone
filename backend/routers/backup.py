@@ -185,6 +185,11 @@ async def run_manual_backup(
 
     logger.info(f"🗄️ [BACKUP] Backup manual solicitado por {current_user.email}")
 
+    # Define o status temporariamente como "running" para que o polling do frontend acompanhe
+    config.last_backup_status = "running"
+    config.last_backup_error = None
+    db.commit()
+
     loop = asyncio.get_event_loop()
     background_tasks.add_task(
         lambda: loop.run_in_executor(None, _run_backup_job, "", config_id)

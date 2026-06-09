@@ -33,6 +33,22 @@ def get_trigger(
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo não encontrado ou sem permissão.")
 
+    # Sobrescrever ou instanciar o funil a partir do snapshot para manter fidelidade histórica
+    if trigger.funnel_snapshot:
+        if trigger.funnel:
+            trigger.funnel.steps = trigger.funnel_snapshot
+        else:
+            # Criar funil temporário na memória se tiver sido excluído
+            trigger.funnel = models.Funnel(
+                id=trigger.funnel_id or 0,
+                client_id=client_id,
+                name="Funil (Histórico / Excluído)",
+                steps=trigger.funnel_snapshot,
+                is_active=False,
+                is_archived=False,
+                is_pinned=False
+            )
+
     # Resolver chatwoot_account_id se nulo
     from config_loader import get_setting
     account_id = trigger.chatwoot_account_id

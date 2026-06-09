@@ -78,6 +78,7 @@ const AudioNode = ({ id, data }) => {
                 icon={FiMic}
                 colorClass="bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
                 onSetStart={() => data.onSetStart(id, 'audioNode')}
             />

@@ -1,8 +1,10 @@
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 import { 
-    FiMessageSquare, FiMusic, FiImage, FiClock, FiGitMerge, 
-    FiZap, FiLayers, FiUser, FiCalendar, FiGlobe 
+    FiMessageSquare, FiMic, FiImage, FiClock, FiCpu, 
+    FiShuffle, FiTag, FiCalendar, FiGlobe, FiUser,
+    FiFileText, FiLink, FiGift, FiTarget, FiSliders,
+    FiZap, FiActivity, FiDatabase, FiLayers
 } from 'react-icons/fi';
 
 const getNodeConfig = (type, data) => {
@@ -18,10 +20,10 @@ const getNodeConfig = (type, data) => {
         case 'audioNode':
         case 'audio':
             return {
-                icon: FiMusic,
+                icon: FiMic,
                 color: 'text-purple-500',
                 bgColor: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200/50 dark:border-purple-800/30',
-                title: 'Áudio'
+                title: 'Áudio / Voz'
             };
         case 'mediaNode':
         case 'media':
@@ -52,26 +54,26 @@ const getNodeConfig = (type, data) => {
         case 'conditionNode':
         case 'condition':
             return {
-                icon: FiGitMerge,
+                icon: FiCpu,
                 color: 'text-rose-500',
                 bgColor: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200/50 dark:border-rose-800/30',
-                title: 'Condição'
+                title: 'Condição Inteligente'
             };
         case 'randomizerNode':
         case 'randomizer':
             return {
-                icon: FiZap,
+                icon: FiShuffle,
                 color: 'text-amber-500',
                 bgColor: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200/50 dark:border-amber-800/30',
-                title: 'Divisor A/B'
+                title: 'Roteamento Dinâmico'
             };
         case 'chatwoot_label':
         case 'labelNode':
             return {
-                icon: FiLayers,
+                icon: FiTag,
                 color: 'text-emerald-500',
                 bgColor: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/30',
-                title: 'Adicionar Etiqueta'
+                title: 'Etiquetar Chatwoot'
             };
         case 'dateNode':
         case 'date':
@@ -81,6 +83,14 @@ const getNodeConfig = (type, data) => {
                 bgColor: 'bg-violet-50 dark:bg-violet-950/30 border-violet-200/50 dark:border-violet-800/30',
                 title: 'Agendamento Data'
             };
+        case 'businessHoursNode':
+        case 'business_hours':
+            return {
+                icon: FiClock,
+                color: 'text-indigo-500',
+                bgColor: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200/50 dark:border-indigo-800/30',
+                title: 'Horário Comercial'
+            };
         case 'httpRequestNode':
         case 'http_request':
             return {
@@ -88,6 +98,103 @@ const getNodeConfig = (type, data) => {
                 color: 'text-emerald-500',
                 bgColor: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/30',
                 title: 'Requisição HTTP'
+            };
+        case 'updateContactNode':
+        case 'update_contact':
+            return {
+                icon: FiUser,
+                color: 'text-orange-500',
+                bgColor: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200/50 dark:border-orange-800/30',
+                title: 'Atualizar Contato'
+            };
+        case 'templateNode':
+        case 'template':
+            return {
+                icon: FiFileText,
+                color: 'text-cyan-500',
+                bgColor: 'bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200/50 dark:border-cyan-800/30',
+                title: 'Template WhatsApp'
+            };
+        case 'sendTemplateNode':
+        case 'send_template':
+            return {
+                icon: FiFileText,
+                color: 'text-cyan-600',
+                bgColor: 'bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200/50 dark:border-cyan-800/30',
+                title: 'Disparo de Template'
+            };
+        case 'linkFunnelNode':
+        case 'link_funnel':
+            return {
+                icon: FiLink,
+                color: 'text-teal-500',
+                bgColor: 'bg-teal-50 dark:bg-teal-950/30 border-teal-200/50 dark:border-teal-800/30',
+                title: 'Conectar Funil'
+            };
+        case 'rouletteNode':
+        case 'roulette':
+            return {
+                icon: FiGift,
+                color: 'text-pink-500',
+                bgColor: 'bg-pink-50 dark:bg-pink-950/30 border-pink-200/50 dark:border-pink-800/30',
+                title: 'Roleta / Sorteio'
+            };
+        case 'localSegmentNode':
+        case 'local_segment':
+            return {
+                icon: FiTag,
+                color: 'text-rose-600',
+                bgColor: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200/50 dark:border-rose-800/30',
+                title: 'Segmentação Local'
+            };
+        case 'pixelNode':
+        case 'pixel':
+            return {
+                icon: FiTarget,
+                color: 'text-red-500',
+                bgColor: 'bg-red-50 dark:bg-red-950/30 border-red-200/50 dark:border-red-800/30',
+                title: 'Disparar Pixel'
+            };
+        case 'crmActionsNode':
+        case 'crm_actions':
+            return {
+                icon: FiSliders,
+                color: 'text-sky-500',
+                bgColor: 'bg-sky-50 dark:bg-sky-950/30 border-sky-200/50 dark:border-sky-800/30',
+                title: 'Ações de CRM'
+            };
+        case 'hotLeadsNode':
+        case 'hot_leads':
+            return {
+                icon: FiZap,
+                color: 'text-yellow-500',
+                bgColor: 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200/50 dark:border-yellow-800/30',
+                title: 'Leads Quentes'
+            };
+        case 'checkWindowNode':
+        case 'check_window':
+            return {
+                icon: FiClock,
+                color: 'text-indigo-600',
+                bgColor: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200/50 dark:border-indigo-800/30',
+                title: 'Verificar Janela 24h'
+            };
+        case 'waitEventNode':
+        case 'wait_event':
+            return {
+                icon: FiActivity,
+                color: 'text-amber-600',
+                bgColor: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200/50 dark:border-amber-800/30',
+                title: 'Aguardar Ação'
+            };
+        case 'inputDataNode':
+        case 'input_data':
+        case 'await_response':
+            return {
+                icon: FiDatabase,
+                color: 'text-rose-500',
+                bgColor: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200/50 dark:border-rose-800/30',
+                title: 'Entrada de Dados'
             };
         default:
             return {
@@ -165,6 +272,32 @@ const PipelineNode = ({ id, data }) => {
             displayName = 'Adicionar Etiqueta';
         } else if (type === 'httpRequestNode' || type === 'http_request') {
             displayName = 'Requisição HTTP';
+        } else if (type === 'businessHoursNode' || type === 'business_hours') {
+            displayName = 'Horário Comercial';
+        } else if (type === 'updateContactNode' || type === 'update_contact') {
+            displayName = 'Atualizar Contato';
+        } else if (type === 'templateNode' || type === 'template') {
+            displayName = 'Template WhatsApp';
+        } else if (type === 'sendTemplateNode' || type === 'send_template') {
+            displayName = 'Disparo de Template';
+        } else if (type === 'linkFunnelNode' || type === 'link_funnel') {
+            displayName = 'Conectar Funil';
+        } else if (type === 'rouletteNode' || type === 'roulette') {
+            displayName = 'Roleta / Sorteio';
+        } else if (type === 'localSegmentNode' || type === 'local_segment') {
+            displayName = 'Segmentação Local';
+        } else if (type === 'pixelNode' || type === 'pixel') {
+            displayName = 'Disparar Pixel';
+        } else if (type === 'crmActionsNode' || type === 'crm_actions') {
+            displayName = 'Ações de CRM';
+        } else if (type === 'hotLeadsNode' || type === 'hot_leads') {
+            displayName = 'Leads Quentes';
+        } else if (type === 'checkWindowNode' || type === 'check_window') {
+            displayName = 'Verificar Janela 24h';
+        } else if (type === 'waitEventNode' || type === 'wait_event') {
+            displayName = 'Aguardar Ação';
+        } else if (type === 'inputDataNode' || type === 'input_data' || type === 'await_response') {
+            displayName = 'Entrada de Dados';
         } else {
             displayName = 'Passo';
         }
@@ -187,8 +320,13 @@ const PipelineNode = ({ id, data }) => {
                     <IconComponent className={config.color} size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-0.5">
+                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest leading-none mb-0.5 flex items-center gap-1.5">
                         {config.title}
+                        {(data.isStart || type === 'start') && (
+                            <span className="px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 text-[8px] font-black tracking-wider border border-green-200 dark:border-green-800/40">
+                                🏁 INÍCIO
+                            </span>
+                        )}
                     </p>
                     <p className="text-xs font-black text-gray-800 dark:text-white truncate">
                         {displayName}
@@ -240,6 +378,21 @@ const PipelineNode = ({ id, data }) => {
                     </div>
                 )}
 
+                {/* Exibição específica para Horário Comercial */}
+                {(type === 'businessHoursNode' || type === 'business_hours') && (
+                    <div className="space-y-1.5 w-full">
+                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 bg-indigo-50/50 dark:bg-indigo-950/10 p-2 rounded-xl border border-indigo-100/30 dark:border-indigo-800/20 w-full justify-center">
+                            ⏰ Validação de Horário Comercial
+                        </p>
+                        {data.waitUntilOpen && (
+                            <div className="flex justify-between items-center px-2.5 py-1 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-950/20 rounded-xl border border-gray-100/50 dark:border-gray-800/30">
+                                <span>Ação se Fechado:</span>
+                                <span className="text-indigo-550 dark:text-indigo-400 font-black">Aguardar Aberto</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Exibição específica para Condições */}
                 {type === 'conditionNode' && (
                     <div className="text-[10px] font-bold text-gray-400 space-y-1">
@@ -277,6 +430,21 @@ const PipelineNode = ({ id, data }) => {
                         </div>
                     );
                 })()}
+
+                {/* Exibição específica para Entrada de Dados */}
+                {(type === 'inputDataNode' || type === 'input_data' || type === 'await_response') && (
+                    <div className="space-y-1 text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-950/20 p-2 rounded-xl border border-gray-100/50 dark:border-gray-800/30">
+                        <p>Variável: <span className="text-rose-600 dark:text-rose-400 font-mono font-black">{data.varName || 'Não definida'}</span></p>
+                        <p>Método: <span className="text-gray-700 dark:text-gray-300 font-black">{data.collectionType === 'ai' ? '🧠 Inteligente (IA)' : '📋 Tradicional (Regex)'}</span></p>
+                    </div>
+                )}
+
+                {/* Último Status da Execução (Log) */}
+                {data.latestLogMessage && (
+                    <div className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 p-2 rounded-xl border border-blue-500/20 leading-relaxed font-semibold">
+                        ℹ️ {data.latestLogMessage}
+                    </div>
+                )}
 
                 {/* Pré-visualização de Mídia no Passo */}
                 {type !== 'httpRequestNode' && type !== 'http_request' && (type === 'media' || type === 'mediaNode' || type === 'audio' || type === 'audioNode' || data.mediaUrl || data.media_url || data.url) && (
@@ -322,49 +490,59 @@ const PipelineNode = ({ id, data }) => {
                 {/* Estatísticas Agregadas para Envio em Massa */}
                 {showCounters && (
                     <div 
-                        className="nodrag nopan mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-wider"
+                        className="nodrag nopan mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 grid grid-cols-3 gap-1.5 text-[9px] font-black text-gray-400 uppercase tracking-wider text-center"
                         onMouseDown={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
                     >
                         <div 
-                            className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 py-1.5 rounded-l-xl transition-all group/sent" 
+                            className="flex flex-col items-center cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 py-1 rounded-xl transition-all border border-gray-100 dark:border-gray-800 group/sent" 
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('completed'); }}
                             onMouseDown={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             title="Ver contatos enviados"
                         >
-                            <span className="text-green-500 text-sm font-black group-hover/sent:scale-110 transition-transform">{stats.sent || 0}</span>
-                            <span className="text-green-600/70 dark:text-green-500/70">Aprovados</span>
+                            <span className="text-green-500 text-xs font-black group-hover/sent:scale-110 transition-transform">{stats.sent || 0}</span>
+                            <span className="text-[8px] text-green-600/70 dark:text-green-500/70">Aprovados</span>
                         </div>
                         <div 
-                            className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 py-1.5 transition-all group/queue" 
+                            className="flex flex-col items-center cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-900/20 py-1 transition-all border border-gray-100 dark:border-gray-800 group/queue" 
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('waiting'); }}
                             onMouseDown={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             title="Ver contatos na fila"
                         >
-                            <span className="text-orange-500 text-sm font-black group-hover/queue:scale-110 transition-transform">{stats.waiting || 0}</span>
-                            <span className="text-orange-600/70 dark:text-orange-500/70">Fila</span>
+                            <span className="text-orange-500 text-xs font-black group-hover/queue:scale-110 transition-transform">{stats.waiting || 0}</span>
+                            <span className="text-[8px] text-orange-600/70 dark:text-orange-500/70">Fila</span>
                         </div>
                         <div 
-                            className="flex flex-col items-center flex-1 border-r border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-1.5 transition-all group/fail" 
+                            className="flex flex-col items-center cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/20 py-1 transition-all border border-gray-100 dark:border-gray-800 group/suspended" 
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('suspended'); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            title="Ver contatos aguardando"
+                        >
+                            <span className="text-amber-500 text-xs font-black group-hover/suspended:scale-110 transition-transform">{stats.suspended || 0}</span>
+                            <span className="text-[8px] text-amber-600/70 dark:text-amber-500/70">Aguardando</span>
+                        </div>
+                        <div 
+                            className="flex flex-col items-center cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 py-1 transition-all border border-gray-100 dark:border-gray-800 group/fail col-span-1" 
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('failed'); }}
                             onMouseDown={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             title="Ver contatos com falhas"
                         >
-                            <span className="text-red-500 text-sm font-black group-hover/fail:scale-110 transition-transform">{stats.failed || 0}</span>
-                            <span className="text-red-600/70 dark:text-red-500/70">Falhas</span>
+                            <span className="text-red-500 text-xs font-black group-hover/fail:scale-110 transition-transform">{stats.failed || 0}</span>
+                            <span className="text-[8px] text-red-600/70 dark:text-red-500/70">Falhas</span>
                         </div>
                         <div 
-                            className="flex flex-col items-center flex-1 cursor-pointer hover:bg-gray-55 dark:hover:bg-gray-800 py-1.5 rounded-r-xl transition-all group/cancel" 
+                            className="flex flex-col items-center cursor-pointer hover:bg-gray-55 dark:hover:bg-gray-800 py-1 transition-all border border-gray-100 dark:border-gray-800 group/cancel col-span-2" 
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); data.onStatClick && data.onStatClick('cancelled'); }}
                             onMouseDown={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             title="Ver contatos parados"
                         >
-                            <span className="text-gray-450 dark:text-gray-400 text-sm font-black group-hover/cancel:scale-110 transition-transform">{stats.cancelled || 0}</span>
-                            <span className="text-gray-500/75 dark:text-gray-400/75">Parados</span>
+                            <span className="text-gray-450 dark:text-gray-400 text-xs font-black group-hover/cancel:scale-110 transition-transform">{stats.cancelled || 0}</span>
+                            <span className="text-[8px] text-gray-500/75 dark:text-gray-400/75">Parados</span>
                         </div>
                     </div>
                 )}
@@ -400,6 +578,25 @@ const PipelineNode = ({ id, data }) => {
                         className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" 
                         style={{ bottom: -6, left: '70%' }}
                         title="Atrasado"
+                    />
+                </>
+            ) : type === 'businessHoursNode' || type === 'business_hours' ? (
+                <>
+                    <Handle 
+                        type="source" 
+                        position={Position.Bottom} 
+                        id="aberto"
+                        className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" 
+                        style={{ bottom: -6, left: '30%' }}
+                        title="Aberto"
+                    />
+                    <Handle 
+                        type="source" 
+                        position={Position.Bottom} 
+                        id="fechado"
+                        className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" 
+                        style={{ bottom: -6, left: '70%' }}
+                        title="Fechado"
                     />
                 </>
             ) : type === 'httpRequestNode' || type === 'http_request' ? (

@@ -46,6 +46,7 @@ const MessageNode = ({ id, data }) => {
                 icon={FiMessageSquare}
                 colorClass="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
                 onSetStart={() => data.onSetStart(id, 'messageNode')}
             />
@@ -72,6 +73,9 @@ const MessageNode = ({ id, data }) => {
                         value={data.content || ''}
                         onChange={(evt) => data.onChange(id, { content: evt.target.value })}
                     />
+                    <div className="text-[9px] text-gray-400 dark:text-gray-500 mt-1 select-none font-medium">
+                        💡 Suporta Spintax: <code className="bg-gray-100 dark:bg-gray-900 px-1 py-0.5 rounded text-indigo-500 dark:text-indigo-400">{`{Oi|Olá|Bom dia}`}</code> para envio aleatório.
+                    </div>
                 </div>
 
                 {variations.map((v, idx) => (

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from core.deps import get_current_user
-from core.permissions import require_premium, require_user
+from core.permissions import require_premium, require_user, require_feature
 from models import User, RecurringTrigger, WebhookLead
 from core.recurrent_logic import calculate_next_run
 from chatwoot_client import ChatwootClient
@@ -75,7 +75,7 @@ def get_schedules(
     end: datetime,
     x_client_id: Optional[str] = Header(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_user)
+    current_user: User = Depends(require_feature("schedules"))
 ):
     # Local imports to avoid circular deps
     from models import ScheduledTrigger, Funnel

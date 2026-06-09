@@ -35,7 +35,7 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
 
 ---
 
-## 1. Nó de Ações de CRM (ManyChat & Chatwoot)
+## 1. Nó de Ações de CRM (ManyChat & Chatwoot) (Implementando)
 *Permite executar tarefas de organização e gerenciamento direto do fluxo, sem mensagens.*
 
 * **Caso de Uso:** Ao passar por um determinado caminho da régua, marcar o lead com a etiqueta `lead-quente` ou criar uma Nota Privada na conversa do Chatwoot para o suporte ler.
@@ -50,85 +50,53 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
 
 ---
 
-## 2. Nó de Requisição HTTP (Webhook Out)
-*Integração livre para enviar dados do lead para qualquer sistema web externo.*
+## 4. Nó de Leads Quentes e Roteamento Interno (Alerta de Vendas) (Implementado)
+*Identifica leads quentes e os envia diretamente para uma aba dedicada dentro do painel do ZapVoice, com distribuição inteligente entre os vendedores.*
 
-* **Caso de Uso:** Notificar um CRM externo (ex: Pipedrive, ActiveCampaign, HubSpot) ou uma planilha do Google Sheets (via Make/Zapier) que o lead atendeu a um passo importante.
-* **Opções de Configuração:**
-  - **Método:** Dropdown (POST, GET, PUT)
-  - **URL de Destino:** Campo de texto para URL do webhook.
-  - **Headers:** Chave/Valor para autenticação (Bearer Token, API-Key, etc.).
-  - **Payload (JSON):** Editor simples para mapear o que enviar (ex: `{"telefone": "{{telefone}}", "etapa": "oferta-1"}`).
-* **Portas:**
-  - Entrada: Única.
-  - Saída: 
-    - `success` (se a API externa respondeu 2xx).
-    - `fail` (se a API falhou ou deu timeout).
-
----
-
-## 3. Nó de Consulta Externa (API In / Enriquecimento)
-*Busca informações de um sistema externo para usar em tempo real nas próximas mensagens.*
-
-* **Caso de Uso:** Perguntar o CEP ao cliente, consultar o frete na API dos Correios e enviar: *"O valor do frete para o seu CEP é de {{frete_valor}} e chega em {{frete_prazo}} dias."*
-* **Opções de Configuração:**
-  - **URL da API:** Ex: `https://viacep.com.br/ws/{{cep}}/json/`
-  - **Mapeamento de Retorno:** Chave da resposta JSON da API e qual variável interna do ZapVoice irá salvar (ex: mapear `logradouro` para a variável `{{rua}}`).
-* **Portas:**
-  - Entrada: Única.
-  - Saída:
-    - `success` (dados obtidos com sucesso).
-    - `fail` (erro de rede ou CEP não encontrado).
-
----
-
-## 4. Nó de Notificação Interna (Alerta de Vendas)
-*Envia uma mensagem de aviso para a equipe, não para o cliente.*
-
-* **Caso de Uso:** Notificar o canal do Telegram do time comercial ou o WhatsApp do gerente de vendas quando um cliente de alto ticket clica no botão "Falar com Atendente".
-* **Opções de Configuração:**
-  - **Canal:** Dropdown (WhatsApp do Staff, Grupo de Telegram, E-mail).
-  - **Destinatário:** Número de WhatsApp da equipe ou ID do canal do Telegram.
-  - **Mensagem:** Texto dinâmico (ex: *"🔥 Lead Quente! {{nome}} ({{telefone}}) pediu atendimento no fluxo X."*).
+* **Caso de Uso:** Quando o lead executa uma ação chave no funil (ex: clicou no botão "Falar com Especialista" ou atingiu uma pontuação de engajamento), ele é marcado como "Lead Quente". Em vez de enviar notificações para canais externos (como Telegram ou E-mail), o lead é listado em tempo real em uma **Aba de Leads Quentes** exclusiva no próprio ZapVoice.
+* **Mecânica de Rotação (Round Robin / Distribuição de Leads):**
+  - O sistema distribui esses leads sequencialmente (ou de forma aleatória configurável) entre os vendedores cadastrados.
+  - Cada lead quente que entra é associado a um vendedor na fila de atendimento.
+* **Perfil e Interface de Vendedor:**
+  - **Acesso Restrito:** Criação de um novo nível de usuário no sistema: `Vendedor` (ou `Agent`).
+  - Ao fazer login, o usuário do tipo `Vendedor` é direcionado para uma interface simplificada e focada, contendo apenas a **Aba de Leads Quentes** com os contatos atribuídos a ele.
+  - O vendedor não visualiza configurações do sistema, faturamento, conexões ou funis de outros clientes; ele apenas interage com os leads quentes atribuídos ao seu perfil.
+* **Opções de Configuração no Nó:**
+  - **Identificação do Lead:** Nome do alerta / Categoria do Lead Quente (ex: "Interesse Mentoria").
+  - **Fila de Vendedores:** Seleção dos usuários do tipo vendedor que farão parte do rodízio para este fluxo (ex: Todos, Grupo Comercial, ou vendedores selecionados individualmente).
+  - **Prioridade:** Dropdown (Alta, Média, Baixa) para destacar visualmente os leads na aba.
+  - **Mensagem de Contexto:** Notas sobre o que o lead fez para ficar quente (ex: *"Avançou até a oferta de Black Friday e clicou no checkout"*), exibida no card do lead para o vendedor.
 * **Portas:**
   - Entrada: Única.
   - Saída: `default` (segue o fluxo imediatamente).
 
 ---
 
-## 5. Nó de Inteligência Artificial (LLM - ChatGPT/Claude)
-*Conversação aberta e respostas inteligentes guiadas por IA.*
+## 6. Nó de Entrada de Dados / Coleta Inteligente (Aguardar Resposta)
+*Pausa a automação e aguarda uma interação textual do contato, utilizando validações tradicionais ou inteligência artificial para extrair informações.*
 
-* **Caso de Uso:** O cliente faz uma pergunta sobre o frete, a IA lê a base de conhecimento configurada e responde exatamente a resposta correta de forma humanizada.
+* **Caso de Uso:** Perguntar *"Qual é o seu melhor e-mail?"* ou *"Me conta brevemente qual é a sua principal dificuldade hoje e qual seu faturamento"*. O funil trava até que o contato digite a resposta, utilizando IA ou regex para extrair e validar os dados de forma flexível e natural.
+* **Validação e Extração Inteligente por IA (LLM):**
+  - O usuário pode ativar o modo **"Extração por IA"** para coletas complexas que não seguem um padrão rígido (ex: extrair o nome de uma empresa, o cargo ou o nível de faturamento de dentro de um parágrafo digitado pelo lead).
+  - A IA analisa a resposta do cliente, extrai as variáveis e as salva nos campos customizados correspondentes.
+  - Se a informação solicitada estiver incompleta ou não for detectada na resposta, a IA pode tentar re-perguntar de forma humanizada ou desviar para a porta de falha.
 * **Opções de Configuração:**
-  - **Modelo:** GPT-4o, GPT-3.5-Turbo, Claude 3 Haiku.
-  - **Prompt de Sistema:** Instruções de comportamento (ex: *"Você é o atendente de suporte da ZapVoice. Seja amigável e limite-se a 2 parágrafos."*).
-  - **Histórico:** Quantidade de mensagens anteriores a serem incluídas no contexto (ex: últimas 5 mensagens).
-  - **Temperatura:** Ajuste de criatividade da IA (0.0 a 1.0).
-* **Portas:**
-  - Entrada: Única.
-  - Saída: `default` (envia o texto gerado e prossegue no funil).
-
----
-
-## 6. Nó de Entrada de Dados (Aguardar Resposta)
-*Pausa a automação e aguarda uma interação textual do contato.*
-
-* **Caso de Uso:** Perguntar *"Qual é o seu melhor e-mail?"* e travar o funil até que o contato digite a resposta, validando se é um formato de e-mail válido antes de continuar.
-* **Opções de Configuração:**
-  - **Salvar Resposta Em:** Campo para selecionar ou criar uma variável personalizada (ex: `{{email_cliente}}`).
-  - **Validação:** Dropdown (Nenhuma, E-mail, Telefone, CPF, Apenas Números).
+  - **Tipo de Coleta:** Dropdown (Tradicional por Expressão/Regex / Inteligente por IA).
+  - **Salvar Resposta Em:** Variável personalizada (ex: `{{email_cliente}}` ou mapeamento de múltiplas chaves via IA).
+  - **Regra de Validação (Modo Tradicional):** Dropdown (Nenhuma, E-mail, Telefone, CPF, Apenas Números).
+  - **Instruções de Extração (Modo IA):** Campo de prompt para descrever o que a IA deve buscar (ex: *"Extraia o faturamento mensal do cliente e converta para número"*).
   - **Timeout:** Tempo limite de espera (ex: 2 horas).
-  - **Mensagem de Erro de Validação:** Texto enviado caso o cliente digite algo inválido (ex: *"Ops, digite um e-mail válido por favor!"*).
+  - **Mensagem de Erro / Re-pergunta:** Texto ou prompt de erro caso o dado seja inválido ou não detectado.
 * **Portas:**
   - Entrada: Única.
   - Saída:
-    - `success` (resposta recebida e validada).
+    - `success` (resposta recebida, validada e dados extraídos com sucesso).
+    - `fail` (resposta inválida/incompatível após tentativas).
     - `timeout` (tempo limite de espera estourado).
 
 ---
 
-## 7. Nó de "Aguardar Ação" (Monitor de Conversão/Checkout)
+## 7. Nó de "Aguardar Ação" (Monitor de Conversão/Checkout) (Implementado)
 *Pausa o fluxo e monitora eventos externos de conversão antes de enviar o próximo lembrete.*
 
 * **Caso de Uso:** Lead gerou um Boleto. O funil envia o boleto e aguarda 1 hora. Se a compra for aprovada na plataforma de vendas (Hotmart/Kiwify) nesse intervalo, o fluxo encerra ou vai para parabéns. Se der 1 hora e o boleto continuar pendente, envia cobrança.
@@ -143,35 +111,7 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
 
 ---
 
-## 8. Nó de Loop / Repetição Controlada
-*Cria fluxos de reengajamento cíclicos sem poluir a tela com dezenas de nós repetidos.*
-
-* **Caso de Uso:** Enviar uma mensagem de lembrete de carrinho abandonado uma vez por dia durante 3 dias, a menos que ele compre.
-* **Opções de Configuração:**
-  - **Número Máximo de Loops:** Quantidade máxima de repetições (ex: 3 vezes).
-  - **Variável de Controle:** Selecionar qual variável incrementará ou qual condição quebrará o loop.
-* **Portas:**
-  - Entrada: Única.
-  - Saída:
-    - `loop` (caminho que executa a mensagem e o delay, retornando à entrada deste nó).
-    - `completed` (caminho tomado após finalizar todas as iterações do loop).
-
----
-
-## 9. Nó de Pausa Inteligente (Modo Não Perturbe)
-*Protege o sono do cliente e garante que mensagens automáticas cheguem em horários comerciais.*
-
-* **Caso de Uso:** Se o lead gerou boleto às 02:30 da manhã, o funil deve pausar o envio do lembrete e aguardar até as 08:00 do dia seguinte para de fato enviar, evitando incomodar.
-* **Opções de Configuração:**
-  - **Janela Permitida:** Definir hora de início (ex: 08:00) e fim (ex: 22:00).
-  - **Ação fora do horário:** Dropdown (Pausar e aguardar o início da janela / Desviar o fluxo imediatamente).
-* **Portas:**
-  - Entrada: Única.
-  - Saída: `default` (segue o fluxo após a validação ou fim do repouso).
-
----
-
-## 10. Nó de Verificação de Horário Comercial
+## 10. Nó de Verificação de Horário Comercial (Ta sendo implementado)
 *Desvia o fluxo do funil com base na hora e dia da semana do servidor.*
 
 * **Caso de Uso:** Se o cliente mandar mensagem no fim de semana, avisa que o suporte comercial está fechado e agenda para segunda.
@@ -185,20 +125,23 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
 
 ---
 
-## 11. Nó de Roteamento Dinâmico (Divisão de Tráfego / Round Robin)
-*Distribui os leads para diferentes caminhos ou contatos em taxas percentuais controladas.*
+## 11. Nó de Roteamento Dinâmico Avançado (Evolução do Teste A/B / Round Robin) (Ta sendo construido)
+*Evolução do atual nó "Teste A/B (Random)", permitindo distribuição sequencial/alternada e suporte a mais de 2 saídas.*
 
-* **Caso de Uso:** Fazer rodízio de vendas (Round Robin). 50% dos leads vão para o Link de WhatsApp do vendedor A, e 50% para o vendedor B.
+* **Caso de Uso:** Fazer rodízio de vendas (Round Robin) preciso e equilibrado. Em vez de apenas usar porcentagem aleatória entre 2 caminhos (como o Teste A/B atual faz), o fluxo pode distribuir leads de forma sequencial alternada (Lead 1 vai para Vendedor A, Lead 2 para Vendedor B, Lead 3 para Vendedor C), garantindo divisão exata do tráfego.
+* **Melhorias em relação ao Randomizer atual:**
+  - **Múltiplos Caminhos (N Saídas):** Permite adicionar mais de 2 portas de saída (Caminho A, B, C, D, etc.).
+  - **Modo Sequencial Alternado:** Garante uma distribuição exata de 1 para 1 na fila (Round Robin), ideal para distribuição de leads comerciais, evitando que a aleatoriedade deixe um vendedor com mais leads que outro.
 * **Opções de Configuração:**
-  - **Modo:** Dropdown (Aleatório por Porcentagem / Sequencial Alternado).
-  - **Configuração de Saídas:** Adicionar quantas portas quiser e definir a porcentagem para cada uma (ex: Caminho A: 33%, Caminho B: 33%, Caminho C: 34%).
+  - **Modo de Distribuição:** Dropdown (Aleatório por Porcentagem / Sequencial Alternado).
+  - **Configuração de Saídas:** Adicionar quantas portas desejar e definir pesos ou ordem de distribuição.
 * **Portas:**
   - Entrada: Única.
-  - Saídas: Múltiplas customizáveis (Caminho A, Caminho B, etc.).
+  - Saídas: Múltiplas customizáveis (Caminho A, Caminho B, Caminho C, etc.).
 
 ---
 
-## 12. Nó de Tag/Blacklist Local (Segmentação Interna)
+## 12. Nó de Tag/Blacklist Local (Segmentação Interna) (Precisa só testar)
 *Adiciona ou remove o contato de listas de controle internas no banco do ZapVoice.*
 
 * **Caso de Uso:** Colocar o contato em uma lista interna chamada "blackfriday-interessados" para disparos em massa futuros, ou inseri-lo em uma lista de "supressão temporária" de 15 dias.
@@ -211,19 +154,19 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
 
 ---
 
-## 13. Nó Anti-Bloqueio (Spintax / Variação de Texto)
-*Muda o conteúdo da mensagem aleatoriamente para evitar que o algoritmo do WhatsApp detecte spam.*
+## 13. Suporte Nativo a Spintax (Melhoria nos Nós de Texto/Mensagem Existentes) (Implementando)
+*Integração de variação de palavras diretamente nos campos de texto existentes, ampliando o recurso de Versão A/B.*
 
-* **Caso de Uso:** Em disparos em massa, em vez de enviar a frase exata "Olá, segue seu código", enviar variações como "Oi, aqui está seu código" ou "Tudo bem? Seu código chegou".
+* **Caso de Uso:** Em vez de ser um nó isolado, o suporte a Spintax seria adicionado diretamente ao parser de mensagens do ZapVoice. O usuário poderá escrever variações rápidas diretamente dentro de qualquer balão de mensagem ou legenda de mídia usando chaves.
+* **Como funciona:**
+  - Ao digitar `{Oi|Olá|Bom dia}, tudo bem?` em uma mensagem, o sistema processa essa linha em tempo real durante o envio e escolhe uma das opções aleatoriamente.
+  - Multiplica de forma exponencial as variações anti-bloqueio quando combinado com o recurso de "Versão A/B" já existente no nó de mensagem (ex: uma Versão 1 com Spintax gera dezenas de mensagens finais diferentes sem precisar clonar o nó).
 * **Opções de Configuração:**
-  - **Texto Spintax:** Campo de texto com chaves de variação (ex: `{Oi|Olá|Bom dia}, tudo bem? {Veja|Confira} o seu boleto: {{link}}`).
-* **Portas:**
-  - Entrada: Única.
-  - Saída: `default` (envia uma das combinações geradas aleatoriamente e segue).
+  - Funciona nativamente em qualquer campo de texto (Mensagem, Legenda de Mídia, etc.), bastando usar o padrão `{opção1|opção2|opção3}`.
 
 ---
 
-## 14. Nó de Roleta / Distribuição de Prêmios (Gamificação)
+## 14. Nó de Roleta / Distribuição de Prêmios (Gamificação) (Precisa só testar)
 *Cria mecânicas de engajamento baseadas em probabilidade.*
 
 * **Caso de Uso:** Enviar uma mensagem dizendo *"Clique no botão abaixo para tentar ganhar um prêmio!"*. Conforme a probabilidade configurada, o contato cai em uma resposta de "Ganhou" ou "Não foi dessa vez".
@@ -238,7 +181,7 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
 
 ---
 
-## 15. Nó de Pixel de Conversão (Facebook/Google Ads)
+## 15. Nó de Pixel de Conversão (Facebook/Google Ads) (Implementado)
 *Registra a atividade da conversa diretamente nas plataformas de anúncios.*
 
 * **Caso de Uso:** O lead avançou até a oferta final no WhatsApp. O funil avisa o Pixel do Facebook que o contato atingiu a etapa de "Iniciou Compra" para otimizar os públicos de anúncio.
@@ -252,7 +195,7 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
 
 ---
 
-## 16. Nó de Disparo de Template (Mensagem Ativa da Meta)
+## 16. Nó de Disparo de Template (Mensagem Ativa da Meta) (Implementado)
 *Permite disparar mensagens ativas aprovadas pela Meta de dentro da automação.*
 
 * **Caso de Uso:** Iniciar ou reabrir a janela de 24h de forma oficial de dentro do fluxo. Ideal para réguas pós-venda que rodam dias depois da última interação do cliente.
@@ -266,20 +209,6 @@ Este documento reúne **15 conceitos de novos nós** para enriquecer o editor de
     - `success` (template enviado e entregue com sucesso pela API da Meta).
     - `fail` (falha no envio do template por erro na API da Meta ou dados inválidos).
 
----
-
-## 17. Nó Condicional de Compra (Filtro por Produto / Status)
-*Direciona o fluxo dinamicamente dependendo de qual produto o cliente adquiriu ou de seu status atual.*
-
-* **Caso de Uso:** Se o cliente comprou o produto "Curso VIP", direcionar para um fluxo de entrega com mensagens exclusivas e PDFs. Se ele comprou "Curso Básico" ou apenas gerou boleto de outro produto, segue por caminhos diferentes.
-* **Opções de Configuração:**
-  - **Tipo de Verificação:** Dropdown (Produto Específico, Status da Venda, Ambos).
-  - **Produto:** Campo para digitar ou selecionar o ID do produto ou o nome (ex: `curso-vip`).
-  - **Status da Compra:** Dropdown para validar o status correspondente (ex: `approved`, `pending`, `refunded`, `chargeback`).
-* **Portas:**
-  - Entrada: Única.
-  - Saídas:
-    - `true` (atende aos critérios de compra e produto selecionados).
-    - `false` (não atende aos critérios configurados).
+    ---
 
 

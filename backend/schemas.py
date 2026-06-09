@@ -124,6 +124,7 @@ class ScheduledTrigger(ScheduledTriggerBase):
     recurring_trigger_id: Optional[int] = Field(None, description="ID da recorrência de origem")
     chatwoot_label: Optional[List[str]] = Field(default_factory=list)
     button_actions: Optional[Dict[str, Any]] = None
+    funnel_snapshot: Optional[Union[dict, list]] = None
 
     @field_validator('button_actions', mode='before')
     @classmethod
@@ -525,6 +526,7 @@ class WebhookLeadBase(BaseModel):
     tags: Optional[str] = None
     total_events: int = 1
     is_locked: bool = False
+    variables: Optional[Dict[str, Any]] = None
 
     # Redirecionamento Chatwoot
     chatwoot_conversation_id: Optional[int] = None
@@ -557,4 +559,31 @@ class WebhookLeadUpdate(BaseModel):
 
 class WebhookLeadListResponse(BaseModel):
     items: List[WebhookLead]
+    total: int
+
+
+class HotLead(BaseModel):
+    id: int
+    client_id: int
+    contact_name: Optional[str] = None
+    contact_phone: str
+    alert_name: str
+    priority: str
+    context_message: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+    assigned_user_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class HotLeadUpdate(BaseModel):
+    priority: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+
+
+class HotLeadListResponse(BaseModel):
+    items: List[HotLead]
     total: int

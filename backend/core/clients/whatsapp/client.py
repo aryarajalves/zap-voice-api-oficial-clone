@@ -26,6 +26,18 @@ class WhatsAppClient:
         # Self-healing logic for parameters
         components = await self._validate_template_params(template_name, components)
         
+        # Resolve any local/S3/B2 media links in components to Meta media IDs
+        if components:
+            for comp in components:
+                params = comp.get("parameters", [])
+                for param in params:
+                    p_type = param.get("type", "").lower()
+                    if p_type in ["image", "video", "document"]:
+                        media_data = param.get(p_type) or param.get(p_type.upper())
+                        if isinstance(media_data, dict):
+                            actual_key = p_type if p_type in param else p_type.upper()
+                            await self._resolve_and_upload_media_param(p_type, param[actual_key])
+
         # Transform and check components (Media, etc)
         send_components = []
         if components:
@@ -421,6 +433,87 @@ class WhatsAppClient:
 
     async def send_text_direct(self, phone_number: str, content: str):
         return await self.send_text_official(phone_number, content)
+
+    async def _resolve_and_upload_media_param(self, media_type: str, media_data: dict):
+        url = media_data.get("link")
+        if not url:
+            return
+
+        if media_data.get("id"):
+            return
+
+        # Upload ANY S3, Backblaze B2, localhost, 127.0.0.1 or non-http URLs to Meta to avoid CORS/crawler errors
+        is_external_hosting = any(domain in url for domain in ["backblazeb2.com", "backblazebb2.com", "amazonaws.com", "localhost", "127.0.0.1"])
+        is_local_or_relative = not url.startswith("http")
+        
+        if is_external_hosting or is_local_or_relative:
+            import mimetypes
+            from urllib.parse import unquote
+            file_path = None
+            temp_download_path = None
+            
+            # Resolve Local Path
+            if "static/uploads" in url:
+                try:
+                    file_name_part = unquote(url.split("/static/")[1])
+                    base_path = os.path.dirname(os.path.abspath(__file__))
+                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(base_path)))
+                    file_path = os.path.join(project_root, "static", *file_name_part.split('/'))
+                except Exception as e:
+                    logger.error(f"Error resolving local path for media: {e}")
+
+            if not file_path or not os.path.exists(file_path):
+                file_path, temp_download_path = await self._download_file_with_ext(url)
+
+            if file_path and os.path.exists(file_path):
+                try:
+                    mime_type, _ = mimetypes.guess_type(file_path)
+                    if not mime_type:
+                        if media_type == "video": mime_type = "video/mp4"
+                        elif media_type == "image": mime_type = "image/png"
+                        elif media_type == "document": mime_type = "application/pdf"
+                        else: mime_type = "application/octet-stream"
+                    
+                    media_id = await self.upload_media_to_meta(file_path, mime_type)
+                    if media_id:
+                        logger.info(f"✅ Mídia de template ({media_type}) carregada com sucesso na Meta. ID: {media_id}")
+                        media_data["id"] = media_id
+                        if "link" in media_data:
+                            del media_data["link"]
+                except Exception as e:
+                    logger.error(f"Erro ao carregar mídia do template para a Meta: {e}")
+                finally:
+                    if temp_download_path and os.path.exists(temp_download_path):
+                        try: os.remove(temp_download_path)
+                        except: pass
+
+    async def _download_file_with_ext(self, url):
+        import tempfile
+        from urllib.parse import urlparse
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as dl:
+                r = await dl.get(url)
+                if r.status_code == 200:
+                    t_dir = tempfile.gettempdir()
+                    fname = f"wa_temp_media_{int(datetime.now(timezone.utc).timestamp())}"
+                    
+                    # Tenta obter a extensão a partir do path ou content-type
+                    ext = ""
+                    path_parsed = urlparse(url)
+                    ext = os.path.splitext(path_parsed.path)[1]
+                    if not ext:
+                        ct = r.headers.get("content-type", "")
+                        import mimetypes
+                        guessed_ext = mimetypes.guess_extension(ct)
+                        if guessed_ext:
+                            ext = guessed_ext
+                    fname += ext
+                    path = os.path.join(t_dir, fname)
+                    with open(path, "wb") as f: f.write(r.content)
+                    return path, path
+        except Exception as e:
+            logger.error(f"Erro ao baixar arquivo externo {url}: {e}")
+        return None, None
 
     async def _download_file(self, url):
         import tempfile

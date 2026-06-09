@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Float, Text, BigInteger
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Float, Text, BigInteger, event
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import relationship, backref, Session
 from sqlalchemy.sql import func
 from database import Base
 import uuid
@@ -49,6 +49,7 @@ class ScheduledTrigger(Base):
     total_memory_sent = Column(Integer, default=0)
     total_private_notes = Column(Integer, default=0)
     execution_history = Column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    processed_data = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=dict)
     
     processed_contacts = Column(JSON().with_variant(JSONB, "postgresql"), default=list)
     pending_contacts = Column(JSON().with_variant(JSONB, "postgresql"), default=list)
@@ -75,6 +76,8 @@ class ScheduledTrigger(Base):
     is_followup = Column(Boolean, default=False)
     is_recurring = Column(Boolean, default=False)
     recurring_trigger_id = Column(Integer, ForeignKey("recurring_triggers.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    funnel_snapshot = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -273,6 +276,7 @@ class WebhookLead(Base):
     chatwoot_inbox_id = Column(Integer, nullable=True)
     
     is_locked = Column(Boolean, default=False, nullable=False, server_default="false")
+    variables = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=dict)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
@@ -346,3 +350,76 @@ class ProductStatus(Base):
     last_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class RouletteLog(Base):
+    __tablename__ = "roulette_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
+    phone = Column(String, nullable=False, index=True)
+    funnel_id = Column(Integer, nullable=False)
+    node_id = Column(String, nullable=False)
+    win_date = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class RoundRobinState(Base):
+    __tablename__ = "round_robin_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
+    funnel_id = Column(Integer, nullable=False, index=True)
+    node_id = Column(String, nullable=False, index=True)
+    last_path_id = Column(String, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class HotLead(Base):
+    __tablename__ = "hot_leads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    
+    contact_name = Column(String, index=True, nullable=True)
+    contact_phone = Column(String, index=True, nullable=False)
+    
+    alert_name = Column(String, index=True, nullable=False) 
+    priority = Column(String, default="Média", nullable=False) 
+    context_message = Column(Text, nullable=True) 
+    
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    client = relationship("Client")
+    assigned_user = relationship("User", backref="assigned_hot_leads")
+
+
+@event.listens_for(ScheduledTrigger, 'before_insert')
+def before_insert_trigger(mapper, connection, target):
+    if target.funnel_id and not target.funnel_snapshot:
+        try:
+            from models.funnel import Funnel
+            session = Session.object_session(target)
+            if session:
+                funnel = session.query(Funnel).filter(Funnel.id == target.funnel_id).first()
+                if funnel:
+                    target.funnel_snapshot = funnel.steps
+            else:
+                from sqlalchemy import text
+                import json
+                result = connection.execute(
+                    text("SELECT steps FROM funnels WHERE id = :id"),
+                    {"id": target.funnel_id}
+                ).fetchone()
+                if result and result[0]:
+                    if isinstance(result[0], str):
+                        target.funnel_snapshot = json.loads(result[0])
+                    else:
+                        target.funnel_snapshot = result[0]
+        except Exception:
+            pass
+
+
+
+

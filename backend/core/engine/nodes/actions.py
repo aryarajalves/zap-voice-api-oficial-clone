@@ -56,9 +56,115 @@ async def handle_label_node(db, trigger, node, chatwoot, contact_phone, conversa
         raise e
     return "continue"
 
-def handle_randomizer_node(node):
-    percent_a = int(node.get("data", {}).get("percentA", 50))
-    return "a" if random.randint(1, 100) <= percent_a else "b"
+async def handle_randomizer_node(db, trigger, node):
+    current_node_id = node.get("id")
+    data = node.get("data", {})
+    mode = data.get("mode", "random")  # "random" ou "round_robin"
+    
+    # caminhos configurados
+    paths = data.get("paths", [])
+    if not paths:
+        percent_a = int(data.get("percentA", 50))
+        paths = [
+            {"id": "a", "percent": percent_a},
+            {"id": "b", "percent": 100 - percent_a}
+        ]
+
+    log_node_execution(
+        db, trigger, current_node_id, "processing",
+        f"🔀 Processando roteamento dinâmico (Modo: {mode}, Caminhos: {len(paths)})..."
+    )
+
+    if not paths:
+        log_node_execution(db, trigger, current_node_id, "failed", "Nenhum caminho configurado no nó.")
+        return None
+
+    if mode == "round_robin":
+        try:
+            # 1. Buscar estado anterior do Round Robin
+            state = db.query(models.RoundRobinState).filter(
+                models.RoundRobinState.client_id == trigger.client_id,
+                models.RoundRobinState.funnel_id == trigger.funnel_id,
+                models.RoundRobinState.node_id == current_node_id
+            ).first()
+
+            path_ids = [p["id"] for p in paths if "id" in p]
+            if not path_ids:
+                raise ValueError("Nenhum ID de caminho válido encontrado.")
+
+            selected_path = path_ids[0]
+            if state:
+                try:
+                    last_index = path_ids.index(state.last_path_id)
+                    next_index = (last_index + 1) % len(path_ids)
+                    selected_path = path_ids[next_index]
+                except ValueError:
+                    selected_path = path_ids[0]
+
+                state.last_path_id = selected_path
+            else:
+                new_state = models.RoundRobinState(
+                    client_id=trigger.client_id,
+                    funnel_id=trigger.funnel_id,
+                    node_id=current_node_id,
+                    last_path_id=selected_path
+                )
+                db.add(new_state)
+
+            db.commit()
+            log_node_execution(
+                db, trigger, current_node_id, "completed",
+                f"Roteamento Sequencial: Selecionado o caminho '{selected_path}'."
+            )
+            return selected_path
+        except Exception as e:
+            logger.error(f"Erro ao processar Round Robin no nó {current_node_id}: {e}")
+            db.rollback()
+            selected_path = paths[0]["id"]
+            log_node_execution(
+                db, trigger, current_node_id, "completed",
+                f"Erro no Round Robin. Usando fallback no primeiro caminho: '{selected_path}'."
+            )
+            return selected_path
+    else:
+        # Weighted Random (Aleatório por Peso)
+        try:
+            weights = []
+            for p in paths:
+                try:
+                    weights.append(max(0, int(p.get("percent", 0))))
+                except Exception:
+                    weights.append(0)
+
+            total_weight = sum(weights)
+            if total_weight <= 0:
+                weights = [1] * len(paths)
+                total_weight = len(paths)
+
+            roll = random.randint(1, total_weight)
+            current_sum = 0
+            selected_path = paths[0]["id"]
+
+            for p, w in zip(paths, weights):
+                current_sum += w
+                if roll <= current_sum:
+                    selected_path = p["id"]
+                    break
+
+            log_node_execution(
+                db, trigger, current_node_id, "completed",
+                f"Roteamento Aleatório: Selecionado o caminho '{selected_path}' (Rolagem: {roll}/{total_weight})."
+            )
+            return selected_path
+        except Exception as e:
+            logger.error(f"Erro ao processar Roteamento Aleatório no nó {current_node_id}: {e}")
+            selected_path = paths[0]["id"] if paths else "a"
+            log_node_execution(
+                db, trigger, current_node_id, "completed",
+                f"Erro no Roteamento Aleatório. Usando fallback no primeiro caminho: '{selected_path}'."
+            )
+            return selected_path
+
 
 async def handle_link_funnel_node(db, trigger, node, contact_phone, conversation_id):
     current_node_id = node.get("id")

@@ -3,7 +3,7 @@ import React from 'react';
 const TriggerFilters = ({
     filterName, setFilterName, dateRange, setDateRange, filterStatus, setFilterStatus,
     triggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
-    itemsPerPage, setItemsPerPage, fetchHistory, onNavigateToBulk, setPage
+    itemsPerPage, setItemsPerPage, fetchHistory, onNavigateToBulk, onNavigateToFunnels, setPage
 }) => {
     return (
         <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col gap-4">
@@ -65,6 +65,22 @@ const TriggerFilters = ({
                         Disparo em Massa
                     </button>
                 )}
+
+                {onNavigateToFunnels && (
+                    <button
+                        onClick={onNavigateToFunnels}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-200"
+                        style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', border: '2px solid transparent' }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.borderColor = '#60a5fa'; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = 'transparent'; }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4L3 8l9 4 9-4-9-4zM3 12l9 4 9-4M3 16l9 4 9-4" />
+                        </svg>
+                        Funis
+                    </button>
+                )}
+
                 {dateRange === 'custom' && (
                     <div className="flex gap-2 items-center">
                         <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setPage(1); }} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />

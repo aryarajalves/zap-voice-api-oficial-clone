@@ -68,7 +68,7 @@ const ExecutionStep = ({
     return (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-10">
             {/* Contacts Column */}
-            <section className="xl:col-span-3 bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-10 shadow-2xl border border-white/5 h-fit relative overflow-hidden group/contacts">
+            <section className="xl:col-span-3 bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-10 shadow-2xl border border-white/5 h-fit relative group/contacts">
                 <div className="absolute -top-12 -left-12 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full"></div>
                 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-4 relative z-10">
@@ -91,12 +91,13 @@ const ExecutionStep = ({
                     </div>
                 </div>
 
-                <div className="relative z-10">
+                <div className="relative z-20">
                     <RecipientSelector 
                         activeClient={activeClient}
                         selectedInbox={selectionMetadata?.inbox_id}
                         onSelect={setFinalContacts}
                         templateVariables={templateVariables}
+                        exclusionList={exclusionList}
                     />
                 </div>
 

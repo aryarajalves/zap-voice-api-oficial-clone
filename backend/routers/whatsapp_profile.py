@@ -441,3 +441,79 @@ async def assistant_chat(
             status_code=500,
             detail=f"Erro inesperado no assistente: {str(exc)}"
         )
+
+
+@router.post("/assistant/optimize-text")
+async def assistant_optimize_text(
+    payload: dict,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_user),
+    db: Session = Depends(get_db)
+):
+    import os
+    text_to_optimize = payload.get("text", "")
+    if not text_to_optimize:
+        raise HTTPException(status_code=400, detail="O texto a ser otimizado é obrigatório.")
+        
+    system_prompt = (
+        "Você é um redator publicitário de alto nível especializado em copywriting para conversão no WhatsApp.\n"
+        "Sua tarefa é receber uma pergunta ou mensagem inicial usada em fluxos de Entrada de Dados e reescrevê-la de forma que seja extremamente clara, persuasiva, amigável e incentive o lead a responder imediatamente.\n"
+        "Retorne estritamente o texto otimizado, sem introduções, aspas ou explicações."
+    )
+    
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        logger.error("OPENAI_API_KEY não configurada no backend.")
+        raise HTTPException(
+            status_code=400,
+            detail="OPENAI_API_KEY não configurada no backend. Por favor, adicione-a ao arquivo .env."
+        )
+
+    openai_model = os.getenv("OPENAI_API_MODEL", "gpt-4o-mini")
+    
+    api_messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": text_to_optimize}
+    ]
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as http_client:
+            openai_res = await http_client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": openai_model,
+                    "messages": api_messages
+                }
+            )
+            
+            if openai_res.status_code != 200:
+                err_body = openai_res.text
+                logger.error(f"Erro na API da OpenAI ({openai_res.status_code}): {err_body}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Erro ao chamar OpenAI ({openai_res.status_code}): {err_body}"
+                )
+                
+            res_json = openai_res.json()
+            assistant_message = res_json["choices"][0]["message"]["content"].strip()
+            
+            return {
+                "optimized_text": assistant_message
+            }
+    except httpx.HTTPError as he:
+        logger.error(f"Erro de conexão HTTP ao chamar OpenAI: {he}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro de conexão com o servidor da OpenAI: {str(he)}"
+        )
+    except Exception as exc:
+        logger.error(f"Erro inesperado na otimização de texto: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro inesperado na otimização: {str(exc)}"
+        )
+

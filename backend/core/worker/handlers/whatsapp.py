@@ -496,13 +496,38 @@ async def handle_whatsapp_event(data: dict):
                         # --- NOVO: Sincronização em tempo real do ContactWindow via Meta ---
                         cw = ChatwootClient(client_id=target_cid)
                         resolved_convo_id = None
+                        
+                        # Verificar se este telefone está associado a um disparo em massa ativo/recente para não criar conversa fantasma
+                        is_bulk_contact = False
                         try:
-                            # Sincroniza conversa para garantir que ela exista no Chatwoot
-                            conv_res = await cw.ensure_conversation(from_phone, contacts_map.get(raw_from, "Contato"))
-                            if isinstance(conv_res, dict):
-                                resolved_convo_id = conv_res.get("conversation_id")
-                            elif isinstance(conv_res, int) or (isinstance(conv_res, str) and conv_res.isdigit()):
-                                resolved_convo_id = int(conv_res)
+                            # Busca a última mensagem enviada nas últimas 2 horas para ver se veio de um bulk trigger
+                            two_hours_ago = datetime.now(timezone.utc) - timedelta(hours=2)
+                            last_msg = db.query(models.MessageStatus).filter(
+                                models.MessageStatus.phone_number == from_phone,
+                                models.MessageStatus.timestamp >= two_hours_ago
+                            ).order_by(models.MessageStatus.timestamp.desc()).first()
+                            if last_msg:
+                                trigger_check = db.query(models.ScheduledTrigger).get(last_msg.trigger_id)
+                                if trigger_check:
+                                    if trigger_check.is_bulk:
+                                        is_bulk_contact = True
+                                    elif trigger_check.parent_id:
+                                        parent_trigger = db.query(models.ScheduledTrigger).get(trigger_check.parent_id)
+                                        if parent_trigger and parent_trigger.is_bulk:
+                                            is_bulk_contact = True
+                        except Exception as e_check:
+                            logger.error(f"⚠️ Erro ao verificar bulk para contato {from_phone}: {e_check}")
+
+                        try:
+                            # Sincroniza conversa para garantir que ela exista no Chatwoot apenas se NÃO for contato de bulk (evitando criar conversa fantasma)
+                            if not is_bulk_contact:
+                                conv_res = await cw.ensure_conversation(from_phone, contacts_map.get(raw_from, "Contato"))
+                                if isinstance(conv_res, dict):
+                                    resolved_convo_id = conv_res.get("conversation_id")
+                                elif isinstance(conv_res, int) or (isinstance(conv_res, str) and conv_res.isdigit()):
+                                    resolved_convo_id = int(conv_res)
+                            else:
+                                logger.info(f"⏭️ [WINDOW-META] Contato {from_phone} é de disparo em massa (bulk). Pulando ensure_conversation para evitar conversa fantasma.")
                         except Exception as e_conv:
                             logger.error(f"⚠️ [WINDOW-META] Erro ao sincronizar conversa com Chatwoot: {e_conv}")
 
@@ -752,35 +777,104 @@ async def handle_whatsapp_event(data: dict):
                                     current_node = nodes.get(suspended_trigger.current_node_id)
                                     if not current_node:
                                         logger.warning(f"⚠️ [WA-RESUME] Nó {suspended_trigger.current_node_id} não encontrado no grafo. Nós disponíveis: {list(nodes.keys())}")
-                                    if current_node and current_node.get("type") not in ["message", "messageNode"]:
-                                        logger.warning(f"⚠️ [WA-RESUME] Nó {suspended_trigger.current_node_id} tem tipo '{current_node.get('type')}' — não é message/messageNode.")
-                                    if current_node and current_node.get("type") in ["message", "messageNode"]:
-                                        buttons = [b.strip() for b in current_node.get("data", {}).get("buttons", []) if b.strip()]
-                                        logger.info(f"🔘 [WA-RESUME] Botões do nó: {buttons} | Input do usuário: '{user_input}'")
-                                        
+                                    
+                                    node_type = current_node.get("type") if current_node else None
+                                    if current_node and node_type in ["message", "messageNode", "inputDataNode", "input_data"]:
                                         target_node_id = None
-                                        source_handle = None
                                         
-                                        input_clean = user_input.strip().lower()
-                                        matched_btn_idx = -1
-                                        for idx, btn_text in enumerate(buttons):
-                                            if btn_text.strip().lower() == input_clean:
-                                                matched_btn_idx = idx
-                                                break
+                                        if node_type in ["inputDataNode", "input_data"]:
+                                            # Processar validação e extração de dados
+                                            node_data = current_node.get("data", {})
+                                            var_name = node_data.get("varName")
+                                            error_message = node_data.get("errorMessage")
+                                            if not error_message or not error_message.strip():
+                                                error_message = "Entrada inválida. Digite novamente."
+                                            
+                                            import re
+                                            from services.input_data_parser import parse_and_extract_input_data, generate_ai_error_message
+                                            is_valid, extracted_val = await parse_and_extract_input_data(
+                                                db=db,
+                                                user_input=user_input,
+                                                node_data=node_data,
+                                                client_id=target_cid,
+                                                trigger=suspended_trigger
+                                            )
+                                                    
+                                            if is_valid:
+                                                # Salvar variável na trigger (se existir a coluna)
+                                                if not hasattr(suspended_trigger, 'processed_data') or suspended_trigger.processed_data is None:
+                                                    suspended_trigger.processed_data = {}
+                                                suspended_trigger.processed_data[var_name] = extracted_val
+                                                from sqlalchemy.orm.attributes import flag_modified
+                                                flag_modified(suspended_trigger, "processed_data")
                                                 
-                                        if matched_btn_idx != -1:
-                                            # Seguir a conexão do botão específico
-                                            source_handle = f"button_{matched_btn_idx}"
-                                            edge = next((e for e in edges if e.get("source") == suspended_trigger.current_node_id and e.get("sourceHandle") == source_handle), None)
-                                            if edge:
-                                                target_node_id = edge.get("target")
-                                                logger.info(f"👆 [WA-RESUME] Clique em botão '{user_input}' (índice {matched_btn_idx}) mapeado para o Nó {target_node_id}")
+                                                # Extrair e salvar a variável também no WebhookLead do contato correspondente
+                                                phone_suffix = from_phone[-8:] if len(from_phone) >= 8 else from_phone
+                                                lead = db.query(models.WebhookLead).filter(
+                                                    models.WebhookLead.client_id == target_cid,
+                                                    or_(
+                                                        models.WebhookLead.phone == from_phone,
+                                                        models.WebhookLead.phone.like(f"%{phone_suffix}")
+                                                    )
+                                                ).first()
+                                                
+                                                if lead:
+                                                    if lead.variables is None:
+                                                        lead.variables = {}
+                                                    lead.variables[var_name] = extracted_val
+                                                    flag_modified(lead, "variables")
+                                                    logger.info(f"💾 [WA-RESUME-INPUT] Variável '{var_name}' salva com valor '{extracted_val}' no WebhookLead ID {lead.id}")
+                                                else:
+                                                    logger.warning(f"⚠️ [WA-RESUME-INPUT] WebhookLead não encontrado para o telefone {from_phone} para salvar a variável '{var_name}'")
+                                                
+                                                # Seguir pela porta default/sucesso
+                                                edge = next((e for e in edges if e.get("source") == suspended_trigger.current_node_id and (not e.get("sourceHandle") or e.get("sourceHandle") == "default" or e.get("sourceHandle") == "success")), None)
+                                                if edge:
+                                                    target_node_id = edge.get("target")
+                                                    logger.info(f"✅ [WA-RESUME-INPUT] Entrada válida. Avançando para o Nó {target_node_id}")
+                                            else:
+                                                if node_data.get("errorByAi"):
+                                                    logger.info(f"🧠 [WA-RESUME-INPUT] Erro por IA ativado. Solicitando geração de erro...")
+                                                    error_message = await generate_ai_error_message(user_input, node_data, target_cid)
+                                                elif node_data.get("validationRule") == "cpf":
+                                                    nums = re.sub(r"\D", "", user_input)
+                                                    if len(nums) != 11:
+                                                        error_message = f"O CPF enviado está inválido pois possui {len(nums)} dígitos, mas um CPF deve ter exatamente 11 dígitos. Por favor, envie os 11 dígitos do seu CPF. 😊"
+
+                                                logger.info(f"❌ [WA-RESUME-INPUT] Entrada inválida. Enviando mensagem de erro: {error_message}")
+                                                # Enviar mensagem de erro
+                                                if resolved_convo_id and int(resolved_convo_id) > 0:
+                                                    await cw.send_message(resolved_convo_id, error_message)
+                                                else:
+                                                    await cw.send_text_official(from_phone, error_message)
+                                                # Continuar no mesmo nó (manter suspenso)
+                                                continue
                                         else:
-                                            # Tenta seguir o caminho padrão (sem sourceHandle ou default)
-                                            edge = next((e for e in edges if e.get("source") == suspended_trigger.current_node_id and (not e.get("sourceHandle") or e.get("sourceHandle") == "default" or not str(e.get("sourceHandle", "")).startswith("button_"))), None)
-                                            if edge:
-                                                target_node_id = edge.get("target")
-                                                logger.info(f"💬 [WA-RESUME] Resposta de texto/desconhecida '{user_input}' mapeada para o caminho padrão (Nó {target_node_id})")
+                                            # Nó de Mensagem comum
+                                            buttons = [b.strip() for b in current_node.get("data", {}).get("buttons", []) if b.strip()]
+                                            logger.info(f"🔘 [WA-RESUME] Botões do nó: {buttons} | Input do usuário: '{user_input}'")
+                                            
+                                            source_handle = None
+                                            input_clean = user_input.strip().lower()
+                                            matched_btn_idx = -1
+                                            for idx, btn_text in enumerate(buttons):
+                                                if btn_text.strip().lower() == input_clean:
+                                                    matched_btn_idx = idx
+                                                    break
+                                                    
+                                            if matched_btn_idx != -1:
+                                                # Seguir a conexão do botão específico
+                                                source_handle = f"button_{matched_btn_idx}"
+                                                edge = next((e for e in edges if e.get("source") == suspended_trigger.current_node_id and e.get("sourceHandle") == source_handle), None)
+                                                if edge:
+                                                    target_node_id = edge.get("target")
+                                                    logger.info(f"👆 [WA-RESUME] Clique em botão '{user_input}' (índice {matched_btn_idx}) mapeado para o Nó {target_node_id}")
+                                            else:
+                                                # Tenta seguir o caminho padrão (sem sourceHandle ou default)
+                                                edge = next((e for e in edges if e.get("source") == suspended_trigger.current_node_id and (not e.get("sourceHandle") or e.get("sourceHandle") == "default" or not str(e.get("sourceHandle", "")).startswith("button_"))), None)
+                                                if edge:
+                                                    target_node_id = edge.get("target")
+                                                    logger.info(f"💬 [WA-RESUME] Resposta de texto/desconhecida '{user_input}' mapeada para o caminho padrão (Nó {target_node_id})")
 
                                         if target_node_id:
                                             # Verificar se o nó de destino tem horário comercial ativo e estamos fora do horário

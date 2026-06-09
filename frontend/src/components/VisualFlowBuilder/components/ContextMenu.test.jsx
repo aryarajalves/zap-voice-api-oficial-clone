@@ -3,6 +3,15 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import ContextMenu from './ContextMenu';
 
+vi.mock('../../../AuthContext', () => ({
+  useAuth: () => ({
+    user: {
+      role: 'super_admin',
+      blocked_nodes: []
+    }
+  })
+}));
+
 vi.mock('react-icons/fi', () => ({
   FiMessageSquare: () => <span data-testid="icon-message" />,
   FiImage: () => <span data-testid="icon-image" />,
@@ -15,6 +24,13 @@ vi.mock('react-icons/fi', () => ({
   FiUser: () => <span data-testid="icon-user" />,
   FiCalendar: () => <span data-testid="icon-calendar" />,
   FiGlobe: () => <span data-testid="icon-globe" />,
+  FiGift: () => <span data-testid="icon-gift" />,
+  FiTarget: () => <span data-testid="icon-target" />,
+  FiSearch: () => <span data-testid="icon-search" />,
+  FiSliders: () => <span data-testid="icon-sliders" />,
+  FiZap: () => <span data-testid="icon-zap" />,
+  FiFileText: () => <span data-testid="icon-filetext" />,
+  FiDatabase: () => <span data-testid="icon-database" />,
 }));
 
 const defaultProps = {

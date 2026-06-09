@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
+import { createPortal } from 'react-dom';
 import { FiDatabase, FiCheck, FiX, FiClock, FiZap, FiMaximize2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../../AuthContext';
@@ -269,7 +270,7 @@ const InputDataNode = ({ id, data }) => {
             </div>
 
             {/* Modal para maximizar campo de texto */}
-            {maximizedField && (
+            {maximizedField && createPortal(
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
                     <div className="bg-[#1e293b] border border-white/10 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0f172a]/50">
@@ -289,7 +290,7 @@ const InputDataNode = ({ id, data }) => {
                         </div>
                         <div className="p-6 space-y-4">
                             <textarea
-                                className="w-full h-80 bg-[#0b1120] border border-white/5 rounded-2xl p-4 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-rose-500/30 transition-all custom-scrollbar shadow-inner resize-none"
+                                className="w-full h-80 bg-[#0b1120] border border-white/5 rounded-2xl p-4 text-xs text-gray-200 outline-none focus:ring-2 focus:ring-rose-500/30 transition-all custom-scrollbar shadow-inner resize-none font-sans"
                                 value={
                                     maximizedField === 'question' ? question :
                                     maximizedField === 'aiInstructions' ? aiInstructions :
@@ -322,7 +323,8 @@ const InputDataNode = ({ id, data }) => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

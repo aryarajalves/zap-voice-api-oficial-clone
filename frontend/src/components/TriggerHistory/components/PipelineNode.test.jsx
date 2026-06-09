@@ -98,7 +98,7 @@ describe('PipelineNode Component', () => {
       type: 'mediaNode',
       label: 'Disparo em Massa',
       status: 'completed',
-      bulkStats: { sent: 5, waiting: 2, failed: 1 },
+      bulkStats: { sent: 5, waiting: 2, suspended: 3, failed: 1 },
       onStatClick
     };
 
@@ -109,6 +109,9 @@ describe('PipelineNode Component', () => {
 
     fireEvent.click(screen.getByTitle('Ver contatos na fila'));
     expect(onStatClick).toHaveBeenCalledWith('waiting');
+
+    fireEvent.click(screen.getByTitle('Ver contatos aguardando'));
+    expect(onStatClick).toHaveBeenCalledWith('suspended');
 
     fireEvent.click(screen.getByTitle('Ver contatos com falhas'));
     expect(onStatClick).toHaveBeenCalledWith('failed');
@@ -166,5 +169,49 @@ describe('PipelineNode Component', () => {
     expect(screen.getByText('https://api.test.com/webhook?phone=5511999999999')).toBeInTheDocument();
     expect(screen.getByText('Payload Enviado:')).toBeInTheDocument();
     expect(screen.getByText('{"phone": "5511999999999"}')).toBeInTheDocument();
+  });
+
+  it('deve renderizar nó de entrada de dados corretamente com fallback de nome amigável', () => {
+    const mockData = {
+      type: 'inputDataNode',
+      label: 'Passo',
+      varName: 'cpf_cliente',
+      collectionType: 'traditional',
+      latestLogMessage: 'Dado extraído com sucesso: cpf_cliente = 12345678900',
+      status: 'processing'
+    };
+
+    render(<PipelineNode id="node-input" data={mockData} />);
+
+    expect(screen.getAllByText('Entrada de Dados').length).toBe(2); // título do header e displayName
+    expect(screen.getByText('cpf_cliente')).toBeInTheDocument();
+    expect(screen.getByText('📋 Tradicional (Regex)')).toBeInTheDocument();
+    expect(screen.getByText(/Dado extraído com sucesso: cpf_cliente = 12345678900/)).toBeInTheDocument();
+  });
+
+  it('deve renderizar nó de atualizar contato com nome customizado', () => {
+    const mockData = {
+      type: 'updateContactNode',
+      label: 'Renomear Usuário',
+      status: 'completed'
+    };
+
+    render(<PipelineNode id="node-update" data={mockData} />);
+
+    expect(screen.getByText('Renomear Usuário')).toBeInTheDocument();
+    expect(screen.getByText('Atualizar Contato')).toBeInTheDocument(); // título do header
+  });
+
+  it('deve renderizar o selo 🏁 INÍCIO se o nó for o de início do fluxo', () => {
+    const mockData = {
+      type: 'messageNode',
+      label: 'Primeira Mensagem',
+      isStart: true,
+      status: 'completed'
+    };
+
+    render(<PipelineNode id="node-start" data={mockData} />);
+
+    expect(screen.getByText('🏁 INÍCIO')).toBeInTheDocument();
   });
 });

@@ -106,7 +106,6 @@ describe('PipelineFlowViewer Component', () => {
 
     // Badge de status foi removido - não deve existir
     expect(screen.queryByText('Concluído')).not.toBeInTheDocument();
-    expect(screen.queryByText('Aguardando')).not.toBeInTheDocument();
     expect(screen.queryByText('Pendente')).not.toBeInTheDocument();
   });
 

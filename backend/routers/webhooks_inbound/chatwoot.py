@@ -19,7 +19,7 @@ router = APIRouter()
 @router.post("/chatwoot")
 @router.post("/chatwoot_events")
 @router.post("/webhooks/chatwoot_events")
-@limiter.limit("5000/minute")
+@limiter.exempt
 async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, payload: dict = Body(...), db: Session = Depends(get_db)):
     chatwoot_secret = os.getenv("CHATWOOT_WEBHOOK_SECRET", "")
     if chatwoot_secret:

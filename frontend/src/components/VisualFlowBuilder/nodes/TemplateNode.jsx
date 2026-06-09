@@ -30,6 +30,7 @@ const TemplateNode = ({ id, data }) => {
                 icon={FiFileText}
                 colorClass="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
                 onSetStart={() => data.onSetStart(id, 'templateNode')}
             />

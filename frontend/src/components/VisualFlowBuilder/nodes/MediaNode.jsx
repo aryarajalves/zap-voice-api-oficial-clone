@@ -80,6 +80,7 @@ const MediaNode = ({ id, data }) => {
                 icon={FiImage}
                 colorClass="bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
                 onSetStart={() => data.onSetStart(id, 'mediaNode')}
             />
@@ -122,6 +123,9 @@ const MediaNode = ({ id, data }) => {
                             value={data.caption || ''}
                             onChange={(e) => data.onChange(id, { caption: e.target.value })}
                         />
+                        <div className="mt-1 text-[9px] text-gray-400 dark:text-gray-500">
+                            💡 Suporta Spintax: <code className="bg-gray-100 dark:bg-gray-900 px-1 py-0.5 rounded text-pink-500 dark:text-pink-400">{`{Oi|Olá}`}</code>
+                        </div>
                     </div>
                 </div>
             ) : (

@@ -232,7 +232,8 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
             if (!logForNode) return;
 
             const isWaiting = logForNode.status === 'waiting' || logForNode.status === 'processing';
-            const alreadyMoved = isWaiting && logForNode.nodeOrder < maxNodeOrder;
+            const isSuspended = logForNode.status === 'suspended';
+            const alreadyMoved = (isWaiting || isSuspended) && logForNode.nodeOrder < maxNodeOrder;
 
             // Determinar a categoria real do contato neste nó
             let effectiveStatus;
@@ -240,6 +241,8 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                 effectiveStatus = 'completed';
             } else if (isWaiting) {
                 effectiveStatus = 'waiting';
+            } else if (isSuspended) {
+                effectiveStatus = 'suspended';
             } else if (logForNode.status === 'failed') {
                 effectiveStatus = 'failed';
             } else if (logForNode.status === 'cancelled') {
@@ -272,6 +275,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
         const statusTitles = {
             completed: 'Aprovados',
             waiting: 'Na Fila',
+            suspended: 'Aguardando',
             failed: 'Falhas',
             cancelled: 'Parados'
         };

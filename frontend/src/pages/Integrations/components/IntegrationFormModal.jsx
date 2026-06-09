@@ -14,7 +14,8 @@ const IntegrationFormModal = ({
   templates, 
   funnels,
   chatwootLabels,
-  setIsMappingGuideOpen
+  setIsMappingGuideOpen,
+  existingInternalTags
 }) => {
   if (!isOpen) return null;
 
@@ -97,6 +98,7 @@ const IntegrationFormModal = ({
               chatwootLabels={chatwootLabels}
               setIsMappingGuideOpen={setIsMappingGuideOpen}
               discoveredProducts={formData.discovered_products || []}
+              existingInternalTags={existingInternalTags}
             />
           </form>
         </div>

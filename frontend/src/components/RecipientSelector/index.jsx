@@ -61,7 +61,7 @@ const RecipientSelector = ({
             <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-4 px-2">
                 {title}
             </h3>
-            <div className="bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative overflow-hidden group">
+            <div className="bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative group">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50"></div>
 
                 <Tabs mode={hook.mode} setMode={hook.setMode} />
@@ -82,6 +82,13 @@ const RecipientSelector = ({
                         setFileVariables={hook.setFileVariables}
                         activeDropdown={hook.activeDropdown}
                         setActiveDropdown={hook.setActiveDropdown}
+                        availableTags={hook.availableTags}
+                        saveLeadsTags={hook.saveLeadsTags}
+                        setSaveLeadsTags={hook.setSaveLeadsTags}
+                        isSaveTagsDropdownOpen={hook.isSaveTagsDropdownOpen}
+                        setIsSaveTagsDropdownOpen={hook.setIsSaveTagsDropdownOpen}
+                        saveTagsSearch={hook.saveTagsSearch}
+                        setSaveTagsSearch={hook.setSaveTagsSearch}
                     />
                 ) : (
                     <TagSelector 
@@ -140,6 +147,7 @@ const RecipientSelector = ({
                     progress={hook.progress}
                     variableFilters={hook.variableFilters}
                     setVariableFilters={hook.setVariableFilters}
+                    exclusionList={exclusionList}
                 />
             )}
 
@@ -193,6 +201,17 @@ const RecipientSelector = ({
                 templateVariables={templateVariables}
                 onConfirm={hook.confirmColumns}
                 onClose={() => hook.setShowColumnSelector(false)}
+                availableTags={hook.availableTags}
+                saveLeadsTags={hook.saveLeadsTags}
+                setSaveLeadsTags={hook.setSaveLeadsTags}
+                isSaveTagsDropdownOpen={hook.isSaveTagsDropdownOpen}
+                setIsSaveTagsDropdownOpen={hook.setIsSaveTagsDropdownOpen}
+                saveTagsSearch={hook.saveTagsSearch}
+                setSaveTagsSearch={hook.setSaveTagsSearch}
+                nameColumn={hook.nameColumn}
+                setNameColumn={hook.setNameColumn}
+                emailColumn={hook.emailColumn}
+                setEmailColumn={hook.setEmailColumn}
             />
         </div>
     );

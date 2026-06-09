@@ -26,6 +26,11 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = "user"
     client_ids: Optional[List[int]] = []
+    seller_weight: Optional[int] = 1
+    blocked_features: Optional[List[str]] = []
+    blocked_nodes: Optional[List[str]] = []
+
+
 
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
@@ -71,12 +76,25 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     """
     Retorna informações detalhadas (ID, email, nome) do usuário autenticado atualmente.
     """
+    import json
+    try:
+        blocked = json.loads(current_user.blocked_features or "[]")
+    except:
+        blocked = []
+    try:
+        blocked_nodes = json.loads(current_user.blocked_nodes or "[]")
+    except:
+        blocked_nodes = []
     return {
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
-        "role": current_user.role
+        "role": current_user.role,
+        "blocked_features": blocked,
+        "blocked_nodes": blocked_nodes
     }
+
+
 
 @router.put("/me", summary="Atualizar Meu Perfil")
 async def update_my_profile(
@@ -140,14 +158,19 @@ async def register(
         if db_user:
             raise HTTPException(status_code=400, detail="Este email já está cadastrado")
 
+        import json
         hashed_password = get_password_hash(user.password)
         new_user = User(
             email=user.email,
             hashed_password=hashed_password,
             full_name=user.full_name,
             role=user.role or "user",
+            seller_weight=user.seller_weight if user.seller_weight is not None else 1,
+            blocked_features=json.dumps(user.blocked_features or []),
+            blocked_nodes=json.dumps(user.blocked_nodes or []),
             is_active=True
         )
+
 
         if user.client_ids:
             clients = db.query(Client).filter(Client.id.in_(user.client_ids)).all()
@@ -164,10 +187,15 @@ async def register(
                 "email": new_user.email,
                 "full_name": new_user.full_name,
                 "role": new_user.role,
+                "seller_weight": new_user.seller_weight,
                 "is_active": new_user.is_active,
+                "blocked_features": user.blocked_features or [],
+                "blocked_nodes": user.blocked_nodes or [],
                 "client_ids": [c.id for c in new_user.accessible_clients]
             }
         })
+
+
 
         return {"message": "User created successfully", "user_id": new_user.id}
     except HTTPException:
@@ -266,18 +294,33 @@ async def list_users(
     Retorna a lista de todos os usuários cadastrados no sistema.
     Requer Super Admin. Não retorna senhas.
     """
+    import json
     users = db.query(User).all()
-    return [
-        {
+    out = []
+    for u in users:
+        try:
+            blocked = json.loads(u.blocked_features or "[]")
+        except:
+            blocked = []
+        try:
+            blocked_n = json.loads(u.blocked_nodes or "[]")
+        except:
+            blocked_n = []
+
+        out.append({
             "id": u.id,
             "email": u.email,
             "full_name": u.full_name,
             "role": u.role,
+            "seller_weight": u.seller_weight,
             "is_active": u.is_active,
+            "blocked_features": blocked,
+            "blocked_nodes": blocked_n,
             "client_ids": [c.id for c in u.accessible_clients]
-        }
-        for u in users
-    ]
+        })
+    return out
+
+
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Excluir Usuário")
 async def delete_user(
@@ -324,8 +367,13 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     password: Optional[str] = None
     role: Optional[str] = None
+    seller_weight: Optional[int] = None
     is_active: Optional[bool] = None
     client_ids: Optional[List[int]] = None
+    blocked_features: Optional[List[str]] = None
+    blocked_nodes: Optional[List[str]] = None
+
+
 
 @router.put("/users/{user_id}", summary="Atualizar Usuário")
 async def update_user(
@@ -366,20 +414,48 @@ async def update_user(
     if user_in.is_active is not None and not is_super_admin_original:
         user.is_active = user_in.is_active
 
+    if user_in.seller_weight is not None:
+        # Garantir peso válido entre 1 e 10
+        weight = max(1, min(10, user_in.seller_weight))
+        user.seller_weight = weight
+
     if user_in.client_ids is not None:
         clients = db.query(Client).filter(Client.id.in_(user_in.client_ids)).all()
         user.accessible_clients = clients
+
+    if user_in.blocked_features is not None:
+        import json
+        user.blocked_features = json.dumps(user_in.blocked_features)
+
+    if user_in.blocked_nodes is not None:
+        import json
+        user.blocked_nodes = json.dumps(user_in.blocked_nodes)
+
 
     try:
         db.commit()
         db.refresh(user)
 
+        import json
+        try:
+            blocked = json.loads(user.blocked_features or "[]")
+        except:
+            blocked = []
+        try:
+            blocked_n = json.loads(user.blocked_nodes or "[]")
+        except:
+            blocked_n = []
+
         user_data = {
+
             "id": user.id,
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role,
+            "seller_weight": user.seller_weight,
             "is_active": user.is_active,
+            "blocked_features": blocked,
+            "blocked_nodes": blocked_n,
             "client_ids": [c.id for c in user.accessible_clients]
         }
         logger.info(f"User {user.id} updated by {current_user.id}")
@@ -389,10 +465,12 @@ async def update_user(
             "data": user_data
         })
 
+
         return {"message": "Usuário atualizado com sucesso", "user_id": user.id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar: {str(e)}")
+
 
 
 # --- Schemas de Convite ---
@@ -400,6 +478,8 @@ class InvitationCreate(BaseModel):
     validity_hours: Optional[int] = None # None significa sem expiração
     role: str # admin, premium, user
     client_ids: List[int] = []
+    blocked_features: Optional[List[str]] = []
+    blocked_nodes: Optional[List[str]] = []
 
 class InvitationOut(BaseModel):
     id: int
@@ -409,9 +489,13 @@ class InvitationOut(BaseModel):
     is_used: bool
     created_at: datetime
     client_ids: List[int]
+    blocked_features: List[str]
+    blocked_nodes: List[str]
 
     class Config:
         from_attributes = True
+
+
 
 class UserRegisterInvite(BaseModel):
     full_name: str
@@ -429,9 +513,18 @@ async def list_invitations(
     Retorna todos os convites criados.
     Requer Super Admin.
     """
+    import json
     invitations = db.query(UserInvitation).order_by(UserInvitation.created_at.desc()).all()
     out = []
     for invite in invitations:
+        try:
+            blocked = json.loads(invite.blocked_features or "[]")
+        except:
+            blocked = []
+        try:
+            blocked_n = json.loads(invite.blocked_nodes or "[]")
+        except:
+            blocked_n = []
         out.append(InvitationOut(
             id=invite.id,
             token=invite.token,
@@ -439,9 +532,13 @@ async def list_invitations(
             expires_at=invite.expires_at,
             is_used=invite.is_used,
             created_at=invite.created_at,
+            blocked_features=blocked,
+            blocked_nodes=blocked_n,
             client_ids=[c.id for c in invite.accessible_clients]
         ))
     return out
+
+
 
 @router.delete("/invitations/{id}", summary="Excluir/Revogar Convite de Usuário")
 async def delete_invitation(
@@ -489,12 +586,15 @@ async def create_invitation(
         if invite_in.client_ids:
             clients = db.query(Client).filter(Client.id.in_(invite_in.client_ids)).all()
 
+        import json
         new_invite = UserInvitation(
             token=token,
             role=invite_in.role,
             expires_at=expires_at,
             is_used=False,
             created_by_id=current_user.id,
+            blocked_features=json.dumps(invite_in.blocked_features or []),
+            blocked_nodes=json.dumps(invite_in.blocked_nodes or []),
             accessible_clients=clients
         )
 
@@ -509,8 +609,11 @@ async def create_invitation(
             expires_at=new_invite.expires_at,
             is_used=new_invite.is_used,
             created_at=new_invite.created_at,
+            blocked_features=invite_in.blocked_features or [],
+            blocked_nodes=invite_in.blocked_nodes or [],
             client_ids=[c.id for c in new_invite.accessible_clients]
         )
+
     except Exception as e:
         db.rollback()
         logger.error(f"Erro ao criar convite: {e}")
@@ -538,11 +641,24 @@ async def get_invitation_by_token(
         if expires_at_utc < now:
             raise HTTPException(status_code=400, detail="Este convite expirou.")
 
+    import json
+    try:
+        blocked = json.loads(invite.blocked_features or "[]")
+    except:
+        blocked = []
+    try:
+        blocked_nodes = json.loads(invite.blocked_nodes or "[]")
+    except:
+        blocked_nodes = []
     return {
         "token": invite.token,
         "role": invite.role,
+        "blocked_features": blocked,
+        "blocked_nodes": blocked_nodes,
         "client_names": [c.name for c in invite.accessible_clients]
     }
+
+
 
 @router.post("/invitations/{token}/register", summary="Registrar Usuário via Convite (Público)")
 async def register_by_invitation(
@@ -574,12 +690,28 @@ async def register_by_invitation(
 
     try:
         # Criar o usuário
+        import json
+        try:
+            blocked_features_val = invite.blocked_features or "[]"
+            # Validar se decodifica como array
+            json.loads(blocked_features_val)
+        except:
+            blocked_features_val = "[]"
+
+        try:
+            blocked_nodes_val = invite.blocked_nodes or "[]"
+            json.loads(blocked_nodes_val)
+        except:
+            blocked_nodes_val = "[]"
+
         hashed_password = get_password_hash(user_in.password)
         new_user = User(
             email=user_in.email,
             hashed_password=hashed_password,
             full_name=user_in.full_name,
             role=invite.role,
+            blocked_features=blocked_features_val,
+            blocked_nodes=blocked_nodes_val,
             is_active=True
         )
 
@@ -592,6 +724,16 @@ async def register_by_invitation(
         db.commit()
         db.refresh(new_user)
 
+        try:
+            blocked_arr = json.loads(blocked_features_val)
+        except:
+            blocked_arr = []
+
+        try:
+            blocked_nodes_arr = json.loads(blocked_nodes_val)
+        except:
+            blocked_nodes_arr = []
+
         # Enviar websocket de sincronização para a lista de usuários logados
         await manager.broadcast({
             "event": "user_created",
@@ -601,11 +743,15 @@ async def register_by_invitation(
                 "full_name": new_user.full_name,
                 "role": new_user.role,
                 "is_active": new_user.is_active,
+                "blocked_features": blocked_arr,
+                "blocked_nodes": blocked_nodes_arr,
                 "client_ids": [c.id for c in new_user.accessible_clients]
             }
         })
 
+
         return {"message": "Conta registrada e ativada com sucesso!", "user_id": new_user.id}
+
     except Exception as e:
         db.rollback()
         logger.error(f"Erro ao registrar usuário via convite: {e}")

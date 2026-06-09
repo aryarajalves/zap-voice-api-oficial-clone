@@ -12,6 +12,7 @@ export function useBackup() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isManualBackupUpdating, setIsManualBackupUpdating] = useState(false);
 
   // Formulário de configuração
   const [enabled, setEnabled] = useState(false);
@@ -129,7 +130,9 @@ export function useBackup() {
   }, [fetchConfig, fetchBackups]);
 
   const handleRunNow = async () => {
+    const previousBackupAt = config?.last_backup_at;
     setIsRunning(true);
+    setIsManualBackupUpdating(true);
     try {
       const res = await fetchWithAuth(`${API_URL}/backup/manual`, {
         method: 'POST',
@@ -138,14 +141,49 @@ export function useBackup() {
         const err = await res.json();
         throw new Error(err.detail || 'Falha ao iniciar backup.');
       }
-      toast.success('✅ Backup iniciado! Atualize a lista em alguns instantes.', { duration: 5000 });
-      setTimeout(() => {
-        fetchConfig();
-        fetchBackups();
-      }, 4000);
+      
+      let attempts = 0;
+      const maxAttempts = 40; // max ~60 segundos
+      
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const configRes = await fetchWithAuth(`${API_URL}/backup/config`);
+          if (configRes.ok) {
+            const configData = await configRes.json();
+            setConfig(configData);
+            setEnabled(configData.enabled);
+            setIntervalType(configData.interval_type || 'manual');
+            setIntervalValue(configData.interval_value || 24);
+            setRetentionCount(configData.retention_count || 30);
+            
+            const isFinished = configData.last_backup_status === 'error' || 
+                               (configData.last_backup_status === 'success' && configData.last_backup_at !== previousBackupAt) ||
+                               (configData.last_backup_status !== 'running' && attempts > 1) ||
+                               attempts >= maxAttempts;
+            
+            if (isFinished) {
+              clearInterval(poll);
+              setIsManualBackupUpdating(false);
+              setIsRunning(false);
+              
+              if (configData.last_backup_status === 'success') {
+                toast.success('✅ Backup e informações atualizados com sucesso!');
+              } else if (configData.last_backup_status === 'error') {
+                toast.error(configData.last_backup_error || 'Erro ao processar backup.');
+              }
+              
+              fetchBackups();
+            }
+          }
+        } catch (e) {
+          console.error('Erro no polling do backup:', e);
+        }
+      }, 1500);
+
     } catch (e) {
       toast.error(e.message || 'Erro ao iniciar backup.');
-    } finally {
+      setIsManualBackupUpdating(false);
       setIsRunning(false);
     }
   };
@@ -330,7 +368,7 @@ export function useBackup() {
   };
 
   return {
-    config, backups, isLoadingConfig, isLoadingBackups, isRunning, isSaving, isRestoring, isUploading,
+    config, backups, isLoadingConfig, isLoadingBackups, isRunning, isSaving, isRestoring, isUploading, isManualBackupUpdating,
     enabled, setEnabled, intervalType, setIntervalType, intervalValue, setIntervalValue, retentionCount, setRetentionCount,
     confirmDelete, setConfirmDelete, confirmRestore, setConfirmRestore, editTagModal, setEditTagModal,
     selectedBackupFilenames, setSelectedBackupFilenames, confirmBulkDelete, setConfirmBulkDelete, isBulkDeleting,

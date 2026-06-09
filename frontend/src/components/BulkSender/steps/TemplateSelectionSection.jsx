@@ -2,6 +2,7 @@ import React from 'react';
 import { FiSearch } from 'react-icons/fi';
 import TemplatePreview from '../common/TemplatePreview';
 import { getTemplateCategoryInfo } from '../utils/templateUtils';
+import MediaHeaderUploader from '../common/MediaHeaderUploader';
 
 const TemplateSelectionSection = ({
     selectedTemplate,
@@ -169,10 +170,23 @@ const TemplateSelectionSection = ({
             </div>
 
             {selectedTemplateObj && (
-                <div className="space-y-10 animate-in zoom-in-95 duration-300">
+                <div className="space-y-8 animate-in zoom-in-95 duration-300">
+
+                    {/* Upload de mídia para cabeçalhos IMAGE/VIDEO/DOCUMENT */}
+                    {(() => {
+                        const headerComp = selectedTemplateObj.components?.find(c => c.type === 'HEADER');
+                        if (!headerComp || !['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) return null;
+                        return (
+                            <MediaHeaderUploader
+                                format={headerComp.format}
+                                templateParams={templateParams}
+                                handleParamChange={handleParamChange}
+                            />
+                        );
+                    })()}
 
                     {/* Pré-visualização embaixo, ocupando largura total */}
-                    <div className="pt-4">
+                    <div className="pt-2">
                         <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest px-1 mb-6">Pré-visualização do Template</h3>
                         <div className="w-full">
                             <TemplatePreview template={selectedTemplateObj} params={templateParams} />

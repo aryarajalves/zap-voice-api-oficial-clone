@@ -262,6 +262,12 @@ class ChatwootClient:
             return {"success": True}
         return await self._cw.remove_label_from_conversation(conversation_id, labels, *args, **kwargs)
 
+    async def assign_agent_to_conversation(self, conversation_id: int, agent_id: int):
+        if self.simulate:
+            logger.info(f"🤖 [MOCK assign_agent_to_conversation] Atribuindo agente {agent_id} à conversa {conversation_id}")
+            return {"success": True}
+        return await self._cw.assign_agent_to_conversation(conversation_id, agent_id)
+
     async def remove_label_from_contact(self, contact_id, labels, *args, **kwargs):
         if self.simulate:
             self._maybe_raise_ratelimit()

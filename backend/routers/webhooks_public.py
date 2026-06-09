@@ -27,6 +27,8 @@ from services.webhooks import (
     replace_variables_in_string,
 )
 
+from core.security import limiter
+
 router = APIRouter()
 
 # Centralized logic in services/webhooks.py
@@ -36,6 +38,7 @@ GLOBAL_WEBHOOK_LOCKS = {}
 
 @router.post("/webhooks/{integration_uuid}")
 @router.get("/webhooks/{integration_uuid}")
+@limiter.exempt
 async def handle_external_webhook(
     integration_uuid: str,
     request: Request,
@@ -292,6 +295,62 @@ async def handle_external_webhook(
             variables=final_vars,
             history_id=history.id
         )
+
+        # Retomar funis suspensos no nó de aguardar ação (WaitEvent) para o mesmo contato
+        if final_vars.get("phone"):
+            async def check_and_resume_wait_event_funnels(phone, client_id, event):
+                db_res = SessionLocal()
+                try:
+                    from sqlalchemy import or_
+                    suffix_p = phone[-8:] if len(phone) >= 8 else phone
+                    suspended_triggers = db_res.query(models.ScheduledTrigger).filter(
+                        models.ScheduledTrigger.client_id == client_id,
+                        or_(
+                            models.ScheduledTrigger.contact_phone == phone,
+                            models.ScheduledTrigger.contact_phone.like(f"%{suffix_p}")
+                        ),
+                        models.ScheduledTrigger.status == "suspended",
+                        models.ScheduledTrigger.current_node_id != None
+                    ).all()
+                    
+                    for st in suspended_triggers:
+                        funnel = st.funnel
+                        if funnel and funnel.steps:
+                            nodes = {str(n["id"]): n for n in funnel.steps.get("nodes", [])}
+                            current_node = nodes.get(st.current_node_id)
+                            if current_node and current_node.get("type") in ["waitEventNode", "wait_event"]:
+                                node_event = current_node.get("data", {}).get("eventType", "compra_aprovada")
+                                node_product = current_node.get("data", {}).get("productName", "").strip()
+                                
+                                # Verifica se o evento corresponde
+                                if node_event == event:
+                                    # Se houver filtro por produto, valida se coincide com o produto do webhook
+                                    if node_product:
+                                        payload_product = (final_vars.get("product_name") or "").strip()
+                                        if node_product.lower() not in payload_product.lower():
+                                            logger.info(f"⏭️ [WAIT_EVENT_RESUME] Evento coincide, mas produto '{payload_product}' não bate com o esperado '{node_product}'. Pulando.")
+                                            continue
+
+                                    logger.info(f"🚀 [WAIT_EVENT_RESUME] Retomando funil suspenso #{st.id} no nó {st.current_node_id} (Evento '{event}' recebido).")
+                                    st.status = "processing"
+                                    st.scheduled_time = datetime.now(timezone.utc)
+                                    db_res.commit()
+                                    
+                                    await rabbitmq.publish("zapvoice_funnel_executions", {
+                                        "trigger_id": st.id,
+                                        "funnel_id": funnel.id,
+                                        "conversation_id": st.conversation_id,
+                                        "contact_phone": st.contact_phone,
+                                        "chatwoot_contact_id": st.chatwoot_contact_id,
+                                        "chatwoot_account_id": st.chatwoot_account_id,
+                                        "chatwoot_inbox_id": st.chatwoot_inbox_id
+                                    })
+                except Exception as e_res:
+                    logger.error(f"❌ [WAIT_EVENT_RESUME] Erro ao retomar funis do WaitEvent: {e_res}")
+                finally:
+                    db_res.close()
+
+            background_tasks.add_task(check_and_resume_wait_event_funnels, final_vars["phone"], integration.client_id, event_type)
 
         return {
             "status": "success", 

@@ -11,7 +11,8 @@ const ContactTable = ({
     setDisplayLimit,
     filteredContactsCount,
     variableFilters = {},
-    setVariableFilters
+    setVariableFilters,
+    exclusionList = []
 }) => {
     const toggleVarFilter = (varKey) => {
         setVariableFilters(prev => {
@@ -57,48 +58,52 @@ const ContactTable = ({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {displayedContacts.map((c, i) => (
-                            <tr key={c.phone} className="group/row hover:bg-white/[0.03] transition-colors border-l-2 border-l-transparent hover:border-l-emerald-500/50">
-                                <td className="px-4 py-4 text-center text-[11px] font-black text-slate-600 w-12 tabular-nums">
-                                    {i + 1}
-                                </td>
-                                <td className="px-8 py-4 font-mono text-sm text-slate-200 tracking-wider">
-                                    {c.phone}
-                                </td>
-                                {activeVarColumns.map(v => {
-                                    const val = c.vars?.[v.key];
-                                    const isFirstName = variableFilters[v.key] === 'first_name';
-                                    const formattedVal = val && isFirstName 
-                                        ? String(val).trim().split(' ')[0] 
-                                        : val;
-                                    
-                                    return (
-                                        <td key={v.key} className="px-4 py-4 text-center text-xs text-emerald-300 font-medium max-w-[120px] truncate">
-                                            {formattedVal || <span className="text-slate-700">—</span>}
-                                        </td>
-                                    );
-                                })}
-                                {showValidation && (
-                                    <td className="px-8 py-4 text-center">
-                                        {c.is_blocked ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => unblockContact(c.phone)}
-                                                className="text-[10px] font-black text-red-400 bg-red-500/10 hover:bg-red-500/25 px-3 py-1.5 rounded-xl border border-red-500/20 uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer inline-flex items-center gap-1.5 group/unblock"
-                                                title="Remover este contato da lista de bloqueio"
-                                            >
-                                                <span>Bloqueado</span>
-                                                <span className="text-[8px] text-red-500/50 group-hover/unblock:text-red-400/90 lowercase tracking-normal">(desbloquear)</span>
-                                            </button>
-                                        ) : c.status === 'pending' ? (
-                                            <span className="inline-flex w-2 h-2 rounded-full bg-slate-700 animate-pulse"></span>
-                                        ) : c.status === 'verified' ? (
-                                            <span className="text-[10px] font-black text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 uppercase">Cadastrado</span>
-                                        ) : (
-                                            <span className="text-[10px] font-black text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 uppercase">Novo</span>
-                                        )}
+                        {displayedContacts.map((c, i) => {
+                            const isExcluded = exclusionList.includes(c.phone);
+                            return (
+                                <tr key={c.phone} className={`group/row hover:bg-white/[0.03] transition-colors border-l-2 border-l-transparent hover:border-l-emerald-500/50 ${isExcluded ? 'opacity-40 line-through decoration-red-500/50' : ''}`}>
+                                    <td className="px-4 py-4 text-center text-[11px] font-black text-slate-600 w-12 tabular-nums">
+                                        {i + 1}
                                     </td>
-                                )}
+                                    <td className={`px-8 py-4 font-mono text-sm tracking-wider ${isExcluded ? 'text-red-400' : 'text-slate-200'}`}>
+                                        {c.phone}
+                                    </td>
+                                    {activeVarColumns.map(v => {
+                                        const val = c.vars?.[v.key];
+                                        const isFirstName = variableFilters[v.key] === 'first_name';
+                                        const formattedVal = val && isFirstName 
+                                            ? String(val).trim().split(' ')[0] 
+                                            : val;
+                                        
+                                        return (
+                                            <td key={v.key} className="px-4 py-4 text-center text-xs text-emerald-300 font-medium max-w-[120px] truncate">
+                                                {formattedVal || <span className="text-slate-700">—</span>}
+                                            </td>
+                                        );
+                                    })}
+                                    {showValidation && (
+                                        <td className="px-8 py-4 text-center">
+                                            {isExcluded ? (
+                                                <span className="text-[10px] font-black text-red-500 bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20 uppercase">Excluído</span>
+                                            ) : c.is_blocked ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => unblockContact(c.phone)}
+                                                    className="text-[10px] font-black text-red-400 bg-red-500/10 hover:bg-red-500/25 px-3 py-1.5 rounded-xl border border-red-500/20 uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer inline-flex items-center gap-1.5 group/unblock"
+                                                    title="Remover este contato da lista de bloqueio"
+                                                >
+                                                    <span>Bloqueado</span>
+                                                    <span className="text-[8px] text-red-500/50 group-hover/unblock:text-red-400/90 lowercase tracking-normal">(desbloquear)</span>
+                                                </button>
+                                            ) : c.status === 'pending' ? (
+                                                <span className="inline-flex w-2 h-2 rounded-full bg-slate-700 animate-pulse"></span>
+                                            ) : c.status === 'verified' ? (
+                                                <span className="text-[10px] font-black text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 uppercase">Cadastrado</span>
+                                            ) : (
+                                                <span className="text-[10px] font-black text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 uppercase">Novo</span>
+                                            )}
+                                        </td>
+                                    )}
                                 {showValidation && (
                                     <td className="px-6 py-4 text-center">
                                         {c.status === 'verified' ? (
@@ -121,8 +126,9 @@ const ContactTable = ({
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
                                 </td>
-                            </tr>
-                        ))}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
 

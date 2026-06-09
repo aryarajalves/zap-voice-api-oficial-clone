@@ -26,6 +26,7 @@ const LinkFunnelNode = ({ id, data }) => {
                 icon={FiLink}
                 colorClass="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400"
                 onDelete={() => data.onDelete(id)}
+                onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
             // No onSetStart
             />

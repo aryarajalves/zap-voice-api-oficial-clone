@@ -217,6 +217,21 @@ export default function Integrations() {
     }
   };
 
+  const existingInternalTags = React.useMemo(() => {
+    const tagsSet = new Set();
+    (integrations || []).forEach(integration => {
+      (integration.mappings || []).forEach(m => {
+        if (m.internal_tags) {
+          m.internal_tags.split(',').forEach(t => {
+            const clean = t.trim();
+            if (clean) tagsSet.add(clean);
+          });
+        }
+      });
+    });
+    return Array.from(tagsSet);
+  }, [integrations]);
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-700">
       {/* Banner de Boas-vindas (Conforme Imagem Original) */}
@@ -272,7 +287,7 @@ export default function Integrations() {
               <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition-all group">
                 <td className="px-8 py-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">{(item.name || '?').charAt(0).toUpperCase()}</div>
+                     <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">{(item.name || '?').charAt(0).toUpperCase()}</div>
                     <span className="font-bold text-gray-900 dark:text-white">{item.name}</span>
                   </div>
                 </td>
@@ -284,7 +299,7 @@ export default function Integrations() {
                     <span className="truncate text-[11px] font-mono text-gray-500 dark:text-gray-400">
                       {`${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`}
                     </span>
-
+ 
                     <FiCopy 
                       className="cursor-pointer text-gray-400 hover:text-blue-500 transition-colors shrink-0" 
                       onClick={() => { 
@@ -326,9 +341,9 @@ export default function Integrations() {
           </tbody>
         </table>
       </div>
-
+ 
       {/* Modals */}
-      <IntegrationFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} formData={formData} setFormData={setFormData} isSaving={isSaving} onSave={handleSaveIntegration} editingIntegration={editingIntegration} templates={templates} funnels={funnels} chatwootLabels={chatwootLabels} setIsMappingGuideOpen={setIsMappingGuideOpen} />
+      <IntegrationFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} formData={formData} setFormData={setFormData} isSaving={isSaving} onSave={handleSaveIntegration} editingIntegration={editingIntegration} templates={templates} funnels={funnels} chatwootLabels={chatwootLabels} setIsMappingGuideOpen={setIsMappingGuideOpen} existingInternalTags={existingInternalTags} />
       <HistoryModal 
         isOpen={isHistoryModalOpen} 
         onClose={() => {

@@ -124,6 +124,49 @@ def apply_vars(text: str, trigger, global_map: dict) -> str:
         "first_name": first_name,
     }
     
+    # Injetar dados e variáveis customizadas do WebhookLead do contato correspondente
+    session = None
+    try:
+        from sqlalchemy.orm import Session
+        session = Session.object_session(trigger)
+    except Exception:
+        pass
+        
+    if session and trigger.contact_phone:
+        try:
+            from models.trigger import WebhookLead
+            from sqlalchemy import or_
+            phone_lookup = "".join(filter(str.isdigit, str(trigger.contact_phone)))
+            last_8 = phone_lookup[-8:] if len(phone_lookup) >= 8 else phone_lookup
+            
+            if last_8:
+                lead = session.query(WebhookLead).filter(
+                    WebhookLead.client_id == trigger.client_id,
+                    or_(
+                        WebhookLead.phone == phone_lookup,
+                        WebhookLead.phone.like(f"%{last_8}")
+                    )
+                ).first()
+                
+                if lead:
+                    if lead.email:
+                        local_vars["email"] = lead.email
+                    if lead.platform:
+                        local_vars["plataforma"] = lead.platform
+                        local_vars["platform"] = lead.platform
+                    if lead.payment_method:
+                        local_vars["metodo_pagamento"] = lead.payment_method
+                        local_vars["payment_method"] = lead.payment_method
+                    if lead.price:
+                        local_vars["preco"] = lead.price
+                        local_vars["price"] = lead.price
+                    
+                    if lead.variables and isinstance(lead.variables, dict):
+                        for k, v in lead.variables.items():
+                            local_vars[k] = str(v)
+        except Exception as e:
+            logger.error(f"⚠️ Erro ao obter variáveis do WebhookLead em apply_vars: {e}")
+    
     t_comp = trigger.template_components
     if t_comp:
         # Se for uma lista (formato Meta/WhatsApp), extraímos os parâmetros de texto
@@ -149,6 +192,10 @@ def apply_vars(text: str, trigger, global_map: dict) -> str:
          if isinstance(trigger.processed_data, dict):
              local_vars.update({k: str(v) for k, v in trigger.processed_data.items()})
 
+    if hasattr(trigger, 'direct_message_params') and trigger.direct_message_params:
+         if isinstance(trigger.direct_message_params, dict):
+             local_vars.update({k: str(v) for k, v in trigger.direct_message_params.items()})
+
     full_map = {**local_vars, **global_map}
     
     # Substituição das variáveis {{key}}
@@ -161,6 +208,19 @@ def apply_vars(text: str, trigger, global_map: dict) -> str:
     # Fallback para {{1}} como nome se ainda estiver no texto
     if "{{1}}" in text and trigger.contact_name:
         text = text.replace("{{1}}", trigger.contact_name)
+        
+    # --- Suporte Nativo a Spintax {opção1|opção2} ---
+    import random
+    spintax_pattern = re.compile(r"\{([^{}]+)\}")
+    
+    # Processa recursivamente para suportar Spintax aninhado caso ocorra
+    while True:
+        match = spintax_pattern.search(text)
+        if not match:
+            break
+        options = match.group(1).split('|')
+        choice = random.choice(options)
+        text = text[:match.start()] + choice + text[match.end():]
         
     return text
 

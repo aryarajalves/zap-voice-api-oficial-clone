@@ -1,6 +1,7 @@
 import React from 'react';
 import { FiPlay, FiTrash2, FiChevronDown, FiZap, FiSettings, FiRefreshCw } from 'react-icons/fi';
 import SearchableSelect from '../SearchableSelect';
+import InternalTagsInput from './InternalTagsInput';
 import { EVENT_TYPES } from '../../constants';
 import ManyChatSection from './ManyChatSection';
 import SmartCancelSection from './SmartCancelSection';
@@ -26,7 +27,8 @@ const MappingItem = ({
   addFollowupVariable,
   removeFollowupVariable,
   updateFollowupVariable,
-  discoveredProducts
+  discoveredProducts,
+  existingInternalTags
 }) => {
   return (
     <div className="group bg-white dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden hover:border-blue-500/30 transition-all duration-300">
@@ -169,18 +171,32 @@ const MappingItem = ({
 
           {/* Configurações Avançadas de Gatilho */}
           <div className="pt-6 border-t border-gray-50 dark:border-slate-800">
-            <div className="space-y-2 max-w-xl">
-              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
-                <FiSettings size={12} /> Etiquetas a aplicar no Chatwoot
-              </label>
-              <SearchableSelect
-                isMulti={true}
-                options={[...new Set((chatwootLabels || []).map(l => typeof l === 'object' ? (l.title || l.name || l.label) : l))].filter(Boolean).map(l => ({ value: l, label: l }))}
-                value={mapping.chatwoot_label || []}
-                onChange={(val) => updateMapping(mIndex, 'chatwoot_label', val)}
-                placeholder="Adicione etiquetas..."
-                colorClass="focus-within:ring-purple-500/20"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
+                  <FiSettings size={12} /> Etiquetas a aplicar no Chatwoot
+                </label>
+                <SearchableSelect
+                  isMulti={true}
+                  options={[...new Set((chatwootLabels || []).map(l => typeof l === 'object' ? (l.title || l.name || l.label) : l))].filter(Boolean).map(l => ({ value: l, label: l }))}
+                  value={mapping.chatwoot_label || []}
+                  onChange={(val) => updateMapping(mIndex, 'chatwoot_label', val)}
+                  placeholder="Adicione etiquetas..."
+                  colorClass="focus-within:ring-purple-500/20"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
+                  <FiSettings size={12} /> Etiquetas Internas do Contato (ZapVoice)
+                </label>
+                <InternalTagsInput
+                  value={mapping.internal_tags || ''}
+                  onChange={(val) => updateMapping(mIndex, 'internal_tags', val)}
+                  existingTags={existingInternalTags}
+                  placeholder="Digite uma tag e aperte Enter..."
+                />
+              </div>
             </div>
           </div>
 

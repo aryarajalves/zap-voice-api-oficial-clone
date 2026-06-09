@@ -1,21 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiGlobe, FiSearch, FiUser } from 'react-icons/fi';
 import { GlobalVarsContext } from '../index';
+import { useClient } from '../../../contexts/ClientContext';
+import { fetchWithAuth } from '../../../AuthContext';
+import { API_URL } from '../../../config';
 
 const VariableSelector = ({ onSelect }) => {
     const vars = React.useContext(GlobalVarsContext);
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [customContactVars, setCustomContactVars] = useState([]);
+
+    let activeClient = null;
+    try {
+        const clientCtx = useClient();
+        activeClient = clientCtx?.activeClient;
+    } catch (e) {
+        // Silencioso se fora do context provider em testes
+    }
 
     const CONTACT_VARS = [
         { id: 'cv-nome', name: 'nome', label: 'Nome do Contato' },
         { id: 'cv-prim-nome', name: 'primeiro_nome', label: 'Primeiro Nome do Contato' },
         { id: 'cv-tel', name: 'telefone', label: 'Telefone' },
         { id: 'cv-prod', name: 'produto', label: 'Nome do Produto' },
+        { id: 'cv-email', name: 'email', label: 'E-mail do Contato' },
+        { id: 'cv-plat', name: 'plataforma', label: 'Plataforma do Lead' },
+        { id: 'cv-pag', name: 'metodo_pagamento', label: 'Método de Pagamento' },
+        { id: 'cv-preco', name: 'preco', label: 'Preço / Valor' },
     ];
+
+    // Carregar variáveis customizadas de leads
+    useEffect(() => {
+        if (!activeClient?.id) return;
+        
+        const loadCustomVars = async () => {
+            try {
+                const res = await fetchWithAuth(`${API_URL}/leads/custom-variables`, {}, activeClient.id);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data)) {
+                        setCustomContactVars(data);
+                    }
+                }
+            } catch (err) {
+                console.error("Erro ao carregar variáveis customizadas de leads:", err);
+            }
+        };
+
+        loadCustomVars();
+    }, [activeClient]);
+
+    // Filtrar chaves personalizadas para não duplicar variáveis estáticas
+    const filteredCustomVars = customContactVars
+        .filter(name => !CONTACT_VARS.some(cv => cv.name === name))
+        .map(name => ({
+            id: `cv-custom-${name}`,
+            name,
+            label: 'Variável Coletada no Contato'
+        }));
 
     const allVars = [
         ...CONTACT_VARS.map(cv => ({ ...cv, isContact: true })),
+        ...filteredCustomVars.map(cv => ({ ...cv, isContact: true })),
         ...(vars || []).map(v => ({ ...v, isGlobal: true }))
     ];
 

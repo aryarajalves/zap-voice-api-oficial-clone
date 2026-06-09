@@ -1,6 +1,7 @@
 import pytest
 import os
 import sys
+import uuid
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -83,6 +84,18 @@ def test_get_lead_filters_includes_tags(db: Session, mock_user: models.User):
     lead1 = models.WebhookLead(client_id=1, name="L1", phone="1", tags="alpha, beta")
     lead2 = models.WebhookLead(client_id=1, name="L2", phone="2", tags="beta, gamma")
     db.add_all([lead1, lead2])
+    
+    # Create integration and event mapping with tags
+    integration = models.WebhookIntegration(id=uuid.UUID("12345678-1234-5678-1234-567812345678"), client_id=1, name="Test Integration", platform="hotmart")
+    db.add(integration)
+    db.flush()
+    
+    mapping = models.WebhookEventMapping(
+        integration_id=integration.id,
+        event_type="purchase_approved",
+        internal_tags="delta, epsilon, alpha" # 'alpha' is duplicate to check deduplication
+    )
+    db.add(mapping)
     db.commit()
 
     result = get_lead_filters(
@@ -91,4 +104,4 @@ def test_get_lead_filters_includes_tags(db: Session, mock_user: models.User):
         current_user=mock_user
     )
     assert "tags" in result
-    assert set(result["tags"]) == {"alpha", "beta", "gamma"}
+    assert set(result["tags"]) == {"alpha", "beta", "gamma", "delta", "epsilon"}

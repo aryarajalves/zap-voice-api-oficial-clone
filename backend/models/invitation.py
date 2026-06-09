@@ -21,6 +21,10 @@ class UserInvitation(Base):
     is_used = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    blocked_features = Column(String, default="[]", nullable=False)
+    blocked_nodes = Column(String, default="[]", nullable=False)
+
+
 
     # Relações
     accessible_clients = relationship("Client", secondary=invitation_clients, backref="associated_invitations")

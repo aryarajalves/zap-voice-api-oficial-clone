@@ -51,11 +51,6 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     }, []);
 
     const setStartNode = useCallback((id, type) => {
-        if (type !== 'messageNode' && type !== 'mediaNode' && type !== 'audioNode' && type !== 'templateNode' && type !== 'delayNode' && type !== 'dateNode' && type !== 'httpRequestNode') {
-            toast.error("Apenas 'Mensagem', 'Mídia', 'Áudio', 'Template', 'Smart Delay', 'Agendamento Data' ou 'Requisição HTTP' podem ser o nó inicial! 🚫");
-            return;
-        }
-
         setNodes((nds) => nds.map((node) => ({
             ...node,
             data: {
@@ -84,6 +79,40 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     const cancelDelete = useCallback(() => {
         setNodeToDelete(null);
     }, []);
+
+    const handleDuplicateNode = useCallback((id) => {
+        setNodes((nds) => {
+            const sourceNode = nds.find(n => n.id === id);
+            if (!sourceNode) return nds;
+
+            // Criar novas coordenadas levemente deslocadas para o nó duplicado
+            const newPosition = {
+                x: sourceNode.position.x + 35,
+                y: sourceNode.position.y + 35
+            };
+
+            // Copia todos os dados do nó, exceto isStart
+            const sourceData = sourceNode.data || {};
+            const duplicatedData = {
+                ...sourceData,
+                isStart: false,
+                onChange: updateNodeData,
+                onDelete: handleDeleteRequest,
+                onSetStart: setStartNode,
+                onDuplicate: handleDuplicateNode
+            };
+
+            const newNode = {
+                id: `node_${Date.now()}`,
+                type: sourceNode.type,
+                position: newPosition,
+                data: duplicatedData
+            };
+
+            return nds.concat(newNode);
+        });
+        toast.success("Nó duplicado com sucesso! 👥");
+    }, [updateNodeData, handleDeleteRequest, setStartNode]);
 
     const onPaneContextMenu = useCallback(
         (event) => {
@@ -123,7 +152,8 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
         const defaultData = {
             onChange: updateNodeData,
             onDelete: handleDeleteRequest,
-            onSetStart: setStartNode
+            onSetStart: setStartNode,
+            onDuplicate: handleDuplicateNode
         };
 
         if (type === 'delayNode') {
@@ -148,13 +178,64 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             defaultData.payloadType = 'fields';
             defaultData.payloadFields = [{ key: '', value: '' }];
             defaultData.payloadRaw = '';
+        } else if (type === 'rouletteNode') {
+            defaultData.winChance = 10;
+            defaultData.dailyLimit = 5;
+        } else if (type === 'hotLeadsNode') {
+            defaultData.alertName = 'Interesse Mentoria';
+            defaultData.priority = 'Média';
+            defaultData.contextMessage = '';
+            defaultData.sellersQueueType = 'all';
+            defaultData.selectedSellerIds = [];
+            defaultData.distributionMode = 'round_robin';
+        } else if (type === 'localSegmentNode') {
+            defaultData.action = 'add_tag';
+            defaultData.tagName = '';
+        } else if (type === 'pixelNode') {
+            defaultData.pixelId = '';
+            defaultData.accessToken = '';
+            defaultData.eventName = 'Lead';
+            defaultData.value = '';
+            defaultData.currency = 'BRL';
+        } else if (type === 'crmActionsNode') {
+            defaultData.platform = 'chatwoot';
+            defaultData.action = 'chatwoot_label';
+            defaultData.value = '';
+        } else if (type === 'businessHoursNode') {
+            defaultData.schedule = {
+                '0': { open: true, start: '08:00', end: '18:00' },
+                '1': { open: true, start: '08:00', end: '18:00' },
+                '2': { open: true, start: '08:00', end: '18:00' },
+                '3': { open: true, start: '08:00', end: '18:00' },
+                '4': { open: true, start: '08:00', end: '18:00' },
+                '5': { open: true, start: '08:00', end: '12:00' },
+                '6': { open: false, start: '08:00', end: '18:00' }
+            };
+            defaultData.waitUntilOpen = false;
+        } else if (type === 'sendTemplateNode') {
+            defaultData.templateName = '';
+            defaultData.language = 'pt_BR';
+            defaultData.mappings = [];
+        } else if (type === 'checkWindowNode') {
+            // Não precisa de dados de configuração, apenas inicializa vazio
+        } else if (type === 'waitEventNode') {
+            defaultData.eventType = 'compra_aprovada';
+            defaultData.waitValue = 1;
+            defaultData.waitUnit = 'hours';
+        } else if (type === 'inputDataNode') {
+            defaultData.collectionType = 'traditional';
+            defaultData.varName = '';
+            defaultData.validationRule = 'none';
+            defaultData.aiInstructions = '';
+            defaultData.timeoutValue = 2;
+            defaultData.timeoutUnit = 'hours';
+            defaultData.errorMessage = '';
         }
 
         setNodes((nds) => {
             const hasStartNode = nds.some(n => n.data?.isStart);
-            const isStartingType = ['messageNode', 'mediaNode', 'audioNode', 'templateNode', 'delayNode', 'dateNode', 'httpRequestNode'].includes(type);
 
-            if (!hasStartNode && isStartingType) {
+            if (!hasStartNode) {
                 defaultData.isStart = true;
             }
 
@@ -187,7 +268,7 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
 
         setMenu(null);
         connectingNodeId.current = null;
-    }, [menu, project, updateNodeData, handleDeleteRequest, setStartNode]);
+    }, [menu, project, updateNodeData, handleDeleteRequest, setStartNode, handleDuplicateNode]);
 
     const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
     const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
@@ -308,23 +389,31 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
                 setBusinessHoursEnd(data.business_hours_end || '18:00');
                 setBusinessHoursDays(data.business_hours_days || [0, 1, 2, 3, 4]);
 
-                if (data.steps && data.steps.nodes) {
-                    const loadedNodes = data.steps.nodes.map(n => ({
-                        ...n,
-                        data: {
-                            ...n.data,
-                            onChange: updateNodeData,
-                            onDelete: handleDeleteRequest,
-                            onSetStart: setStartNode
-                        }
-                    }));
+                 if (data.steps && data.steps.nodes) {
+                    const loadedNodes = data.steps.nodes.map((n, index) => {
+                        const position = n.position && typeof n.position.x === 'number' && typeof n.position.y === 'number'
+                            ? n.position
+                            : { x: 150 * (index + 1), y: 150 };
+
+                        return {
+                            ...n,
+                            position,
+                            data: {
+                                ...n.data,
+                                onChange: updateNodeData,
+                                onDelete: handleDeleteRequest,
+                                onSetStart: setStartNode,
+                                onDuplicate: handleDuplicateNode
+                            }
+                        };
+                    });
                     setNodes(loadedNodes);
                     setEdges(data.steps.edges || []);
                 }
             }
         };
         loadFunnel();
-    }, [funnelId, activeClient, updateNodeData, handleDeleteRequest, setStartNode]);
+    }, [funnelId, activeClient, updateNodeData, handleDeleteRequest, setStartNode, handleDuplicateNode]);
 
     return {
         nodes, setNodes, edges, setEdges, saving, funnelName, setFunnelName,

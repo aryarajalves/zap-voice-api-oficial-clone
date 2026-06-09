@@ -216,22 +216,22 @@ describe('Integrations Page Interactions', () => {
     expect(mappingDropdown).toBeDefined();
 
     await waitFor(() => {
-      expect(screen.getByText('compra_aprovada')).toBeInTheDocument();
-      expect(screen.getByText('evento_desconhecido')).toBeInTheDocument();
+      expect(screen.getByText(/compra_aprovada/)).toBeInTheDocument();
+      expect(screen.getAllByText(/evento_desconhecido/)[0]).toBeInTheDocument();
     }, { timeout: 20000 });
 
     fireEvent.change(mappingDropdown, { target: { value: 'mapped' } });
 
     await waitFor(() => {
-      expect(screen.getByText('compra_aprovada')).toBeInTheDocument();
-      expect(screen.queryByText('evento_desconhecido')).not.toBeInTheDocument();
+      expect(screen.getByText(/compra_aprovada/)).toBeInTheDocument();
+      expect(screen.queryByText(/evento_desconhecido/)).not.toBeInTheDocument();
     });
 
     fireEvent.change(mappingDropdown, { target: { value: 'unmapped' } });
 
     await waitFor(() => {
-      expect(screen.queryByText('compra_aprovada')).not.toBeInTheDocument();
-      expect(screen.getByText('evento_desconhecido')).toBeInTheDocument();
+      expect(screen.queryByText(/compra_aprovada/)).not.toBeInTheDocument();
+      expect(screen.getAllByText(/evento_desconhecido/)[0]).toBeInTheDocument();
     });
   });
 });

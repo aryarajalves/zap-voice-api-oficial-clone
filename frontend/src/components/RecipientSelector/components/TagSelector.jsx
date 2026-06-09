@@ -80,7 +80,7 @@ const TagSelector = ({
                                     {activeDropdown === v.key && (
                                         <>
                                             <div className="fixed inset-0 z-40" onClick={() => setActiveDropdown(null)}></div>
-                                            <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                            <div className="absolute left-0 right-0 top-full mt-2 z-[60] bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                                                 <div className="p-3 bg-slate-800/50 border-b border-white/5 text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">Campos Disponíveis do Lead</div>
                                                 <div className="grid grid-cols-1 divide-y divide-white/5 max-h-64 overflow-y-auto premium-scrollbar">
                                                     {VAR_OPTIONS.map(opt => (

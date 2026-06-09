@@ -35,6 +35,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
 
     const categories = [
         { id: 'campanhas', label: 'Envios & Campanhas' },
+        { id: 'vendas', label: 'Vendas' },
         { id: 'automacao', label: 'Automação' },
         { id: 'contatos', label: 'Contatos' },
         { id: 'admin', label: 'Administração' }
@@ -46,6 +47,9 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'recurring_schedules', label: 'Disparo Recorrente Criado', icon: FiClock, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
         { id: 'schedules', label: 'Agenda de Disparos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
         { id: 'history', label: 'Histórico', icon: FiClock, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
+        
+        // Vendas
+        { id: 'hot_leads', label: 'Leads Quentes', icon: FiZap, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'vendas' },
 
         // Automação
         { id: 'templates', label: 'Criar Template', icon: FiPlus, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
@@ -101,9 +105,33 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
 
             <nav className="flex-1 p-4 space-y-4 overflow-y-auto">
                 {activeClient && categories.map((category) => {
-                    const categoryItems = menuItems.filter(
-                        item => item.category === category.id && item.roles.includes(user?.role)
-                    );
+                    // Mapeia os caminhos/ids do frontend para as strings de blocked_features do backend
+                    const featureMapping = {
+                        'bulk_sender': 'schedules',
+                        'recurring_schedules': 'schedules',
+                        'schedules': 'schedules',
+                        'history': 'history',
+                        'templates': 'whatsapp',
+                        'funnels': 'funnels',
+                        'integrations': 'settings',
+                        'leads': 'leads',
+                        'blocked': 'leads'
+                    };
+
+                    const categoryItems = menuItems.filter(item => {
+                        if (item.category !== category.id) return false;
+                        
+                        const meetsRole = item.roles.includes(user?.role);
+                        if (!meetsRole) return false;
+                        
+                        // Verifica se o recurso está bloqueado nas restrições customizadas do usuário
+                        const backendFeature = featureMapping[item.id];
+                        if (backendFeature && user?.blocked_features?.includes(backendFeature)) {
+                            return false;
+                        }
+                        
+                        return true;
+                    });
 
                     if (categoryItems.length === 0) return null;
 
@@ -113,6 +141,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                             <div className="px-3 pt-2 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest border-b border-gray-100/50 dark:border-white/5 pb-1 mb-2">
                                 {category.label}
                             </div>
+
                             
                             <div className="space-y-1">
                                 {categoryItems.map((item) => {
@@ -142,13 +171,13 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                 {user && (
                     <div className="px-4 py-2 mb-2">
                         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
-                            {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Administrador' : user.role === 'premium' ? 'Usuário Premium' : 'Usuário'}
+                            {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Administrador' : user.role === 'premium' ? 'Usuário Premium' : user.role === 'vendedor' ? 'Vendedor' : 'Usuário'}
                         </p>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{user.full_name || user.email}</p>
                     </div>
                 )}
 
-                {activeClient && (
+                {activeClient && user?.role !== 'vendedor' && !user?.blocked_features?.includes('settings') && (
                     <button
                         onClick={onSettings}
                         className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:shadow-sm hover:text-gray-900 dark:hover:text-white transition-all font-medium text-sm border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
@@ -157,6 +186,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                         Configurações
                     </button>
                 )}
+
                 <button
                     onClick={handleLogoutClick}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium text-sm"

@@ -18,3 +18,8 @@ class User(Base):
 
     accessible_clients = relationship("Client", secondary=user_clients, backref="users_with_access")
     client = relationship("Client", backref="users_in_this_client")
+    seller_weight = Column(Integer, default=1, nullable=False)
+    blocked_features = Column(String, default="[]", nullable=False)
+    blocked_nodes = Column(String, default="[]", nullable=False)
+
+

@@ -201,6 +201,40 @@ describe('BackupDatabase', () => {
     });
   });
 
+  it('deve mostrar o popup central "Atualizando Banco" ao iniciar o backup manual', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/api/backup/config')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockConfig) });
+      }
+      if (url.includes('/api/backup/list')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ backups: [], total: 0 }) });
+      }
+      if (url.includes('/api/backup/manual')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ message: 'Backup iniciado' })
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    await act(async () => {
+      render(<BackupDatabase />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Fazer Backup Agora')).toBeInTheDocument();
+    });
+
+    const btn = screen.getByText('Fazer Backup Agora');
+    fireEvent.click(btn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Atualizando Banco')).toBeInTheDocument();
+      expect(screen.getByText(/Estamos criando um novo backup de segurança/)).toBeInTheDocument();
+    });
+  });
+
   // ─── Formulário de Configuração ────────────────────────────────────────────
 
   it('deve mostrar o valor padrão de retenção (30)', async () => {

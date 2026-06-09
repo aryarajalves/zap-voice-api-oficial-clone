@@ -106,24 +106,6 @@ export const useRecipientSelector = ({
 
     const [originalTagPhones, setOriginalTagPhones] = useState([]);
 
-    // Sub-hooks
-    const fileImport = useFileImport({ 
-        setContacts, 
-        setWorkingMessage, 
-        setIsProcessing, 
-        setShowList, 
-        setIsValidated, 
-        fileVariables 
-    });
-
-    const validation = useValidation({ 
-        contacts, 
-        setContacts, 
-        activeClient, 
-        selectedInbox, 
-        setIsValidated 
-    });
-
     const tags = useTagManagement({ 
         activeClient, 
         selectedList, 
@@ -135,6 +117,29 @@ export const useRecipientSelector = ({
         setShowList, 
         setIsValidated,
         setOriginalTagPhones
+    });
+
+    const { saveLeadsTags } = tags;
+
+    // Sub-hooks
+    const fileImport = useFileImport({ 
+        setContacts, 
+        setWorkingMessage, 
+        setIsProcessing, 
+        setShowList, 
+        setIsValidated, 
+        fileVariables,
+        activeClient,
+        saveLeadsTags,
+        loadFilters: () => tags.loadFilters()
+    });
+
+    const validation = useValidation({ 
+        contacts, 
+        setContacts, 
+        activeClient, 
+        selectedInbox, 
+        setIsValidated 
     });
 
     const lastOnSelectRef = useRef(null);

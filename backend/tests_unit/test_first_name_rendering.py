@@ -131,9 +131,70 @@ def test_engine_apply_vars_first_name():
     
     print("✅ Sucesso: apply_vars resolveu primeiro_nome e first_name com base no contact_name.")
 
+def test_engine_apply_vars_lead_additional_fields_and_custom_variables():
+    print("🧪 Testando apply_vars do Funnel Engine com variáveis adicionais e customizadas do WebhookLead...\n")
+    from database import SessionLocal, Base, engine
+    import models
+    from datetime import datetime, timezone
+    
+    # Garantir que a tabela webhook_leads existe no banco de teste
+    Base.metadata.create_all(bind=engine)
+    
+    db = SessionLocal()
+    try:
+        # Limpar registros anteriores de teste
+        db.query(models.ScheduledTrigger).delete()
+        db.query(models.WebhookLead).delete()
+        db.commit()
+        
+        # 1. Criar o Lead no banco
+        lead = models.WebhookLead(
+            client_id=1,
+            name="João da Silva",
+            phone="5511999999999",
+            email="joaodasilva@email.com",
+            platform="hotmart",
+            payment_method="pix",
+            price="197.00",
+            variables={"chave_secreta": "abracadabra", "cupom": "DESCONTO10"}
+        )
+        db.add(lead)
+        db.commit()
+        
+        # 2. Criar o Trigger e manter na sessão ativa
+        trigger = models.ScheduledTrigger(
+            client_id=1,
+            contact_name="João da Silva",
+            contact_phone="5511999999999",
+            scheduled_time=datetime.now(timezone.utc)
+        )
+        db.add(trigger)
+        db.commit()
+        
+        # Recarregar trigger da sessão ativa
+        db.refresh(trigger)
+        
+        # Testar substituição dos campos padrão e das variáveis customizadas
+        text = "Olá {{nome}}, seu email é {{email}} na plataforma {{plataforma}} ({{platform}}). Pagou via {{metodo_pagamento}} o valor de {{preco}} ({{price}}). Seu cupom é {{cupom}} e a chave é {{chave_secreta}}."
+        replaced = apply_vars(text, trigger, {})
+        
+        print(f"Texto substituído: {replaced}")
+        
+        assert "joaodasilva@email.com" in replaced
+        assert "hotmart" in replaced
+        assert "pix" in replaced
+        assert "197.00" in replaced
+        assert "DESCONTO10" in replaced
+        assert "abracadabra" in replaced
+        
+        print("✅ Sucesso: apply_vars resolveu campos padrão e variáveis customizadas do WebhookLead com base no telefone.")
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     test_webhook_parsing_first_name()
     test_webhook_replace_variables_first_name()
     test_bulk_helpers_first_name()
     test_engine_apply_vars_first_name()
-    print("🎉 Todos os testes de primeiro nome passaram com sucesso!")
+    test_engine_apply_vars_lead_additional_fields_and_custom_variables()
+    print("🎉 Todos os testes de primeiro nome e variáveis de lead passaram com sucesso!")

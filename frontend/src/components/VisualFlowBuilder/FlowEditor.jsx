@@ -1,5 +1,5 @@
 import React from 'react';
-import ReactFlow, { Background, Controls, Panel } from 'reactflow';
+import ReactFlow, { Background, Controls, Panel, ConnectionMode } from 'reactflow';
 import { FiPlus } from 'react-icons/fi';
 import 'reactflow/dist/style.css';
 import { GlobalVarsContext, PortalContext } from './index';
@@ -37,6 +37,7 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
                     nodeTypes={nodeTypes}
                     onPaneContextMenu={onPaneContextMenu}
                     onPaneClick={onPaneClick}
+                    connectionMode={ConnectionMode.Strict}
                     defaultEdgeOptions={{ animated: true, style: { strokeWidth: 2 } }}
                     connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 3 }}
                     proOptions={{ hideAttribution: true }}

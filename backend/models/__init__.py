@@ -15,7 +15,10 @@ from .trigger import (
     WebhookLead, 
     RecurringTrigger, 
     StatusInfo, 
-    ProductStatus
+    ProductStatus,
+    RouletteLog,
+    RoundRobinState,
+    HotLead
 )
 
 # This allows importing all models from the models package
@@ -43,6 +46,9 @@ __all__ = [
     "RecurringTrigger",
     "StatusInfo",
     "ProductStatus",
+    "RouletteLog",
+    "RoundRobinState",
+    "HotLead",
     "BackupConfig",
     "BackupMetadata"
 ]

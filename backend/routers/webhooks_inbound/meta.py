@@ -20,6 +20,7 @@ GLOBAL_META_LOCKS = {}
 
 @router.api_route("/meta", methods=["GET", "POST"], summary="Meta Webhook (Verification & Events)")
 @router.api_route("/meta/", methods=["GET", "POST"], include_in_schema=False)
+@limiter.exempt
 async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), slug: str = None):
     # Identificar client_id associado ao slug, se houver
     client_id = 1
@@ -146,7 +147,7 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
         return {"status": "error_queued_locally"}
 
 @router.post("/whatsapp/status")
-@limiter.limit("5000/minute")
+@limiter.exempt
 async def whatsapp_status_webhook(request: Request, payload: dict = Body(...), db: Session = Depends(get_db)):
     """ Proxy to RabbitMQ """
     try:

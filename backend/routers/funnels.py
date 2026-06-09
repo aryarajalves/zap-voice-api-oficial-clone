@@ -4,7 +4,7 @@ from typing import List, Optional
 import models, schemas
 from database import SessionLocal
 from core.deps import get_current_user, get_validated_client_id
-from core.permissions import require_premium, require_user
+from core.permissions import require_premium, require_user, require_feature
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ def list_funnels(
     is_archived: Optional[bool] = False,
     x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_user)
+    current_user: models.User = Depends(require_feature("funnels"))
 ):
     """
     Retorna uma lista paginada de todos os funis de automação cadastrados.
@@ -193,6 +193,26 @@ def create_funnel(
         # Graph: Already a dict (JSON)
         steps_payload = steps_data
 
+    # Validar nós bloqueados
+    import json
+    try:
+        blocked_nodes = json.loads(current_user.blocked_nodes or "[]")
+    except:
+        blocked_nodes = []
+    
+    if blocked_nodes and current_user.role != "super_admin":
+        # Extrair nós dependendo do formato do payload (legacy list ou graph dict)
+        nodes_list = []
+        if isinstance(steps_payload, list):
+            nodes_list = steps_payload
+        elif isinstance(steps_payload, dict) and "nodes" in steps_payload:
+            nodes_list = steps_payload.get("nodes", [])
+        
+        for node in nodes_list:
+            node_type = node.get("type") if isinstance(node, dict) else getattr(node, "type", None)
+            if node_type in blocked_nodes:
+                raise HTTPException(status_code=403, detail=f"Você não tem permissão para usar o nó do tipo '{node_type}'.")
+
     db_funnel = models.Funnel(
         name=funnel.name, 
         description=funnel.description, 
@@ -208,6 +228,7 @@ def create_funnel(
         tag=funnel.tag,
         client_id=x_client_id
     )
+
     db.add(db_funnel)
     db.commit()
     db.refresh(db_funnel)
@@ -254,13 +275,35 @@ def update_funnel(
     
     steps_data = funnel_update.steps
     if isinstance(steps_data, list):
-        db_funnel.steps = [s.dict() if hasattr(s, 'dict') else s for s in steps_data]
+        steps_payload = [s.dict() if hasattr(s, 'dict') else s for s in steps_data]
     else:
-        db_funnel.steps = steps_data
+        steps_payload = steps_data
+
+    # Validar nós bloqueados
+    import json
+    try:
+        blocked_nodes = json.loads(current_user.blocked_nodes or "[]")
+    except:
+        blocked_nodes = []
+    
+    if blocked_nodes and current_user.role != "super_admin":
+        nodes_list = []
+        if isinstance(steps_payload, list):
+            nodes_list = steps_payload
+        elif isinstance(steps_payload, dict) and "nodes" in steps_payload:
+            nodes_list = steps_payload.get("nodes", [])
+        
+        for node in nodes_list:
+            node_type = node.get("type") if isinstance(node, dict) else getattr(node, "type", None)
+            if node_type in blocked_nodes:
+                raise HTTPException(status_code=403, detail=f"Você não tem permissão para usar o nó do tipo '{node_type}'.")
+
+    db_funnel.steps = steps_payload
         
     db.commit()
     db.refresh(db_funnel)
     return db_funnel
+
 
 @router.patch("/funnels/{funnel_id}/archive", response_model=schemas.Funnel, summary="Arquivar/Desarquivar funil")
 def archive_funnel(
