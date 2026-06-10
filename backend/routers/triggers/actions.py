@@ -98,7 +98,12 @@ async def pause_trigger(trigger_id: int, db: Session = Depends(get_db), current_
     if not trigger: raise HTTPException(status_code=404, detail="Trigger not found")
     if trigger.status != 'processing': raise HTTPException(status_code=400, detail="Somente disparos em processamento podem ser pausados")
     
+    from datetime import datetime
     trigger.status = "paused"
+    pdata = dict(trigger.processed_data or {})
+    pdata["paused_at"] = datetime.utcnow().isoformat()
+    trigger.processed_data = pdata
+    
     db.commit()
     await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "paused", "client_id": trigger.client_id})
     return {"message": "Trigger paused"}
@@ -109,7 +114,23 @@ async def resume_trigger(trigger_id: int, db: Session = Depends(get_db), current
     if not trigger: raise HTTPException(status_code=404, detail="Trigger not found")
     if trigger.status != 'paused': raise HTTPException(status_code=400, detail="Trigger não está pausado")
     
+    from datetime import datetime
     trigger.status = "processing"
+    pdata = dict(trigger.processed_data or {})
+    paused_at_str = pdata.pop("paused_at", None)
+    if paused_at_str:
+        try:
+            # Remover o sufixo Z se houver, convertendo para ISO format padrão
+            if paused_at_str.endswith('Z'):
+                paused_at_str = paused_at_str[:-1]
+            paused_at = datetime.fromisoformat(paused_at_str)
+            diff = (datetime.utcnow() - paused_at).total_seconds()
+            pdata["paused_duration"] = pdata.get("paused_duration", 0) + int(diff)
+        except Exception as e:
+            import logging
+            logging.getLogger("FastAPI.Resume").error(f"Erro ao calcular duracao da pausa: {e}")
+    trigger.processed_data = pdata
+    
     db.commit()
     await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "processing", "client_id": trigger.client_id})
     return {"message": "Trigger resumed"}

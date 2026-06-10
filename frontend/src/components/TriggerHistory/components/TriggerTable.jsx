@@ -204,7 +204,7 @@ const TriggerTableRow = ({
                         <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">{formatDate(triggerWithActions.scheduled_time)}</span>
                     </div>
                     {(() => {
-                        const started = triggerWithActions.processed_data?.started_at;
+                        const started = triggerWithActions.processed_data?.started_at || triggerWithActions.scheduled_time || triggerWithActions.created_at;
                         const finished = triggerWithActions.processed_data?.finished_at;
                         
                         if (!started) return null;
@@ -213,20 +213,38 @@ const TriggerTableRow = ({
                         const DurationTimer = () => {
                             const [elapsed, setElapsed] = React.useState(0);
                             
-                            React.useEffect(() => {
+                            const calculateElapsed = () => {
+                                const pausedAt = triggerWithActions.processed_data?.paused_at;
+                                const pausedDuration = triggerWithActions.processed_data?.paused_duration || 0; // em segundos
+                                
+                                if (pausedAt) {
+                                    const diff = new Date(pausedAt).getTime() - new Date(started).getTime();
+                                    return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+                                }
+                                
                                 if (finished) {
                                     const diff = new Date(finished).getTime() - new Date(started).getTime();
-                                    setElapsed(Math.max(0, Math.floor(diff / 1000)));
+                                    return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+                                }
+                                
+                                const diff = new Date().getTime() - new Date(started).getTime();
+                                return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+                            };
+                            
+                            React.useEffect(() => {
+                                setElapsed(calculateElapsed());
+                                
+                                const pausedAt = triggerWithActions.processed_data?.paused_at;
+                                if (finished || pausedAt) {
                                     return;
                                 }
                                 
                                 const interval = setInterval(() => {
-                                    const diff = new Date().getTime() - new Date(started).getTime();
-                                    setElapsed(Math.max(0, Math.floor(diff / 1000)));
+                                    setElapsed(calculateElapsed());
                                 }, 1000);
                                 
                                 return () => clearInterval(interval);
-                            }, []);
+                            }, [started, finished, triggerWithActions.processed_data?.paused_at, triggerWithActions.processed_data?.paused_duration]);
                             
                             const formatDuration = (sec) => {
                                 const h = Math.floor(sec / 3600);
