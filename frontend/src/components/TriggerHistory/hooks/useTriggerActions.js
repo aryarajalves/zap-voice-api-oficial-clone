@@ -28,12 +28,59 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
         });
     };
 
+    const executeStartNow = async (id) => {
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${id}/start-now`, { method: 'POST' }, activeClient?.id);
+            if (res.ok) {
+                toast.success("Disparo iniciado com sucesso!");
+                fetchHistory();
+            } else {
+                const data = await res.json();
+                toast.error(data.detail || "Erro ao iniciar");
+            }
+        } catch (e) {
+            toast.error("Erro de conexão");
+        }
+    };
+
+    const executeRetry = async (id) => {
+        const loadingToast = toast.loading('Preparando reenvio...');
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${id}/retry`, { method: 'POST' }, activeClient?.id);
+            if (res.ok) {
+                toast.success("Reenvio iniciado com sucesso!", { 
+                    id: loadingToast,
+                    icon: '🚀',
+                    duration: 4000
+                });
+                fetchHistory();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                toast.error(data.detail || "Erro ao tentar reenviar", { id: loadingToast });
+            }
+        } catch (e) {
+            toast.error("Erro de conexão ao tentar reenviar", { id: loadingToast });
+        }
+    };
+
     const handleAction = async (modalConfig) => {
         const { type, id } = modalConfig;
         if (!type || !id) return;
 
         if (type === 'bulk_delete') {
             await handleBulkDeleteAction();
+            return;
+        }
+
+        if (type === 'start_now') {
+            await executeStartNow(id);
+            setModalConfig(prev => ({ ...prev, isOpen: false }));
+            return;
+        }
+
+        if (type === 'retry') {
+            await executeRetry(id);
+            setModalConfig(prev => ({ ...prev, isOpen: false }));
             return;
         }
 
@@ -88,39 +135,28 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
         setModalConfig(prev => ({ ...prev, isOpen: false }));
     };
 
-    const handleStartNow = async (id) => {
-        try {
-            const res = await fetchWithAuth(`${API_URL}/triggers/${id}/start-now`, { method: 'POST' }, activeClient?.id);
-            if (res.ok) {
-                toast.success("Disparo iniciado com sucesso!");
-                fetchHistory();
-            } else {
-                const data = await res.json();
-                toast.error(data.detail || "Erro ao iniciar");
-            }
-        } catch (e) {
-            toast.error("Erro de conexão");
-        }
+    const handleStartNow = (id) => {
+        setModalConfig({
+            isOpen: true,
+            type: 'start_now',
+            id,
+            title: 'Iniciar Disparo',
+            message: 'Tem certeza que deseja iniciar este disparo imediatamente?',
+            confirmText: 'Sim, Iniciar',
+            isDangerous: false
+        });
     };
 
-    const handleRetry = async (id) => {
-        const loadingToast = toast.loading('Preparando reenvio...');
-        try {
-            const res = await fetchWithAuth(`${API_URL}/triggers/${id}/retry`, { method: 'POST' }, activeClient?.id);
-            if (res.ok) {
-                toast.success("Reenvio iniciado com sucesso!", { 
-                    id: loadingToast,
-                    icon: '🚀',
-                    duration: 4000
-                });
-                fetchHistory();
-            } else {
-                const data = await res.json().catch(() => ({}));
-                toast.error(data.detail || "Erro ao tentar reenviar", { id: loadingToast });
-            }
-        } catch (e) {
-            toast.error("Erro de conexão ao tentar reenviar", { id: loadingToast });
-        }
+    const handleRetry = (id) => {
+        setModalConfig({
+            isOpen: true,
+            type: 'retry',
+            id,
+            title: 'Repetir Falhas',
+            message: 'Tem certeza que deseja reenviar apenas as mensagens que falharam neste lote?',
+            confirmText: 'Sim, Reenviar',
+            isDangerous: false
+        });
     };
 
     return {
