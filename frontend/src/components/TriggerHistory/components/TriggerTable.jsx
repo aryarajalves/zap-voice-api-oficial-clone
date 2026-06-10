@@ -21,12 +21,18 @@ const translateError = (msg) => {
   return text;
 };
 
-const formatDate = (dateString) => {
-    if (!dateString) return '-';
+const parseDateToUTC = (dateString) => {
+    if (!dateString) return null;
     let date = new Date(dateString);
-    if (!dateString.endsWith('Z') && !dateString.includes('+') && dateString.slice(19).indexOf('-') === -1) {
+    if (typeof dateString === 'string' && !dateString.endsWith('Z') && !dateString.includes('+') && dateString.slice(19).indexOf('-') === -1) {
         date = new Date(dateString + 'Z');
     }
+    return date;
+};
+
+const formatDate = (dateString) => {
+    const date = parseDateToUTC(dateString);
+    if (!date) return '-';
     return new Intl.DateTimeFormat('pt-BR', {
         day: '2-digit', month: '2-digit', year: '2-digit',
         hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -86,18 +92,26 @@ const DurationTimer = ({ started, finished, triggerWithActions, isFinishedStatus
         const pausedAt = triggerWithActions.processed_data?.paused_at;
         const pausedDuration = triggerWithActions.processed_data?.paused_duration || 0; // em segundos
         
-        if (pausedAt) {
-            const diff = new Date(pausedAt).getTime() - new Date(started).getTime();
+        const startedDate = parseDateToUTC(started);
+        const finishedDate = parseDateToUTC(finished);
+        const pausedAtDate = parseDateToUTC(pausedAt);
+        
+        if (pausedAtDate && startedDate) {
+            const diff = pausedAtDate.getTime() - startedDate.getTime();
             return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
         }
         
-        if (finished) {
-            const diff = new Date(finished).getTime() - new Date(started).getTime();
+        if (finishedDate && startedDate) {
+            const diff = finishedDate.getTime() - startedDate.getTime();
             return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
         }
         
-        const diff = new Date().getTime() - new Date(started).getTime();
-        return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+        if (startedDate) {
+            const diff = new Date().getTime() - startedDate.getTime();
+            return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+        }
+        
+        return 0;
     };
     
     React.useEffect(() => {
