@@ -205,7 +205,8 @@ const TriggerTableRow = ({
                     </div>
                     {(() => {
                         const started = triggerWithActions.processed_data?.started_at || triggerWithActions.scheduled_time || triggerWithActions.created_at;
-                        const finished = triggerWithActions.processed_data?.finished_at;
+                        const isFinishedStatus = ['completed', 'failed', 'aborted', 'cancelled'].includes(triggerWithActions.status);
+                        const finished = triggerWithActions.processed_data?.finished_at || (isFinishedStatus ? triggerWithActions.updated_at : null);
                         
                         if (!started) return null;
                         
@@ -235,7 +236,7 @@ const TriggerTableRow = ({
                                 setElapsed(calculateElapsed());
                                 
                                 const pausedAt = triggerWithActions.processed_data?.paused_at;
-                                if (finished || pausedAt) {
+                                if (finished || pausedAt || isFinishedStatus) {
                                     return;
                                 }
                                 
@@ -244,7 +245,7 @@ const TriggerTableRow = ({
                                 }, 1000);
                                 
                                 return () => clearInterval(interval);
-                            }, [started, finished, triggerWithActions.processed_data?.paused_at, triggerWithActions.processed_data?.paused_duration]);
+                            }, [started, finished, triggerWithActions.processed_data?.paused_at, triggerWithActions.processed_data?.paused_duration, isFinishedStatus]);
                             
                             const formatDuration = (sec) => {
                                 const h = Math.floor(sec / 3600);
@@ -259,7 +260,7 @@ const TriggerTableRow = ({
                             
                             return (
                                 <div className="flex items-center gap-1.5 whitespace-nowrap mt-0.5 text-slate-500 dark:text-slate-400">
-                                    <span className="text-emerald-500 font-bold uppercase tracking-tighter text-[9px]">{finished ? "Duração:" : "Executando:"}</span>
+                                    <span className="text-emerald-500 font-bold uppercase tracking-tighter text-[9px]">{isFinishedStatus ? "Duração:" : "Executando:"}</span>
                                     <span className="font-mono font-bold">{formatDuration(elapsed)}</span>
                                 </div>
                             );
