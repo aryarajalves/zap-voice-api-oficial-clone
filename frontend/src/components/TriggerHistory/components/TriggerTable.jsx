@@ -79,6 +79,61 @@ const CountdownBadge = ({ untilTime, reason, onZero }) => {
     );
 };
 
+const DurationTimer = ({ started, finished, triggerWithActions, isFinishedStatus }) => {
+    const [elapsed, setElapsed] = React.useState(0);
+    
+    const calculateElapsed = () => {
+        const pausedAt = triggerWithActions.processed_data?.paused_at;
+        const pausedDuration = triggerWithActions.processed_data?.paused_duration || 0; // em segundos
+        
+        if (pausedAt) {
+            const diff = new Date(pausedAt).getTime() - new Date(started).getTime();
+            return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+        }
+        
+        if (finished) {
+            const diff = new Date(finished).getTime() - new Date(started).getTime();
+            return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+        }
+        
+        const diff = new Date().getTime() - new Date(started).getTime();
+        return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
+    };
+    
+    React.useEffect(() => {
+        setElapsed(calculateElapsed());
+        
+        const pausedAt = triggerWithActions.processed_data?.paused_at;
+        if (finished || pausedAt || isFinishedStatus) {
+            return;
+        }
+        
+        const interval = setInterval(() => {
+            setElapsed(calculateElapsed());
+        }, 1000);
+        
+        return () => clearInterval(interval);
+    }, [started, finished, triggerWithActions.processed_data?.paused_at, triggerWithActions.processed_data?.paused_duration, isFinishedStatus]);
+    
+    const formatDuration = (sec) => {
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = sec % 60;
+        return [
+            h > 0 ? `${h}h` : '',
+            m > 0 || h > 0 ? `${m}m` : '',
+            `${s}s`
+        ].filter(Boolean).join(' ');
+    };
+    
+    return (
+        <div className="flex items-center gap-1.5 whitespace-nowrap mt-0.5 text-slate-500 dark:text-slate-400">
+            <span className="text-emerald-500 font-bold uppercase tracking-tighter text-[9px]">{isFinishedStatus ? "Duração:" : "Executando:"}</span>
+            <span className="font-mono font-bold">{formatDuration(elapsed)}</span>
+        </div>
+    );
+};
+
 const getStatusBadge = (trigger) => {
     const { status, failure_reason, processed_data } = trigger;
     const isTempPaused = processed_data?.temp_paused === true;
@@ -210,63 +265,14 @@ const TriggerTableRow = ({
                         
                         if (!started) return null;
                         
-                        // Componente funcional interno para manter o temporizador dinâmico atualizado a cada segundo
-                        const DurationTimer = () => {
-                            const [elapsed, setElapsed] = React.useState(0);
-                            
-                            const calculateElapsed = () => {
-                                const pausedAt = triggerWithActions.processed_data?.paused_at;
-                                const pausedDuration = triggerWithActions.processed_data?.paused_duration || 0; // em segundos
-                                
-                                if (pausedAt) {
-                                    const diff = new Date(pausedAt).getTime() - new Date(started).getTime();
-                                    return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
-                                }
-                                
-                                if (finished) {
-                                    const diff = new Date(finished).getTime() - new Date(started).getTime();
-                                    return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
-                                }
-                                
-                                const diff = new Date().getTime() - new Date(started).getTime();
-                                return Math.max(0, Math.floor(diff / 1000) - pausedDuration);
-                            };
-                            
-                            React.useEffect(() => {
-                                setElapsed(calculateElapsed());
-                                
-                                const pausedAt = triggerWithActions.processed_data?.paused_at;
-                                if (finished || pausedAt || isFinishedStatus) {
-                                    return;
-                                }
-                                
-                                const interval = setInterval(() => {
-                                    setElapsed(calculateElapsed());
-                                }, 1000);
-                                
-                                return () => clearInterval(interval);
-                            }, [started, finished, triggerWithActions.processed_data?.paused_at, triggerWithActions.processed_data?.paused_duration, isFinishedStatus]);
-                            
-                            const formatDuration = (sec) => {
-                                const h = Math.floor(sec / 3600);
-                                const m = Math.floor((sec % 3600) / 60);
-                                const s = sec % 60;
-                                return [
-                                    h > 0 ? `${h}h` : '',
-                                    m > 0 || h > 0 ? `${m}m` : '',
-                                    `${s}s`
-                                ].filter(Boolean).join(' ');
-                            };
-                            
-                            return (
-                                <div className="flex items-center gap-1.5 whitespace-nowrap mt-0.5 text-slate-500 dark:text-slate-400">
-                                    <span className="text-emerald-500 font-bold uppercase tracking-tighter text-[9px]">{isFinishedStatus ? "Duração:" : "Executando:"}</span>
-                                    <span className="font-mono font-bold">{formatDuration(elapsed)}</span>
-                                </div>
-                            );
-                        };
-                        
-                        return <DurationTimer />;
+                        return (
+                            <DurationTimer 
+                                started={started}
+                                finished={finished}
+                                triggerWithActions={triggerWithActions}
+                                isFinishedStatus={isFinishedStatus}
+                            />
+                        );
                     })()}
                 </div>
             </td>
