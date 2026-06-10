@@ -34,8 +34,78 @@ const formatDate = (dateString) => {
     }).format(date);
 };
 
+const CountdownBadge = ({ untilTime, reason, onZero }) => {
+    const calculateSeconds = () => {
+        if (!untilTime) return 0;
+        const diff = new Date(untilTime).getTime() - new Date().getTime();
+        return Math.max(0, Math.ceil(diff / 1000));
+    };
+
+    const [secondsLeft, setSecondsLeft] = React.useState(calculateSeconds);
+
+    React.useEffect(() => {
+        const leftNow = calculateSeconds();
+        setSecondsLeft(leftNow);
+        if (leftNow <= 0 && onZero) {
+            onZero();
+        }
+    }, [untilTime]);
+
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            const left = calculateSeconds();
+            setSecondsLeft(left);
+            if (left <= 0) {
+                clearInterval(interval);
+                if (onZero) onZero();
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [untilTime, onZero]);
+
+    if (secondsLeft <= 0) return null;
+
+    return (
+        <div className="flex flex-col items-center gap-1">
+            <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-300/30 dark:border-amber-700/30 animate-pulse flex items-center gap-1">
+                ⏳ Pausado por {secondsLeft}s
+            </span>
+            {reason && (
+                <span className="text-[9px] text-amber-600 dark:text-amber-500 font-medium max-w-[150px] text-center mt-0.5 leading-tight" title={reason}>
+                    Meta Instável
+                </span>
+            )}
+        </div>
+    );
+};
+
 const getStatusBadge = (trigger) => {
-    const { status, failure_reason } = trigger;
+    const { status, failure_reason, processed_data } = trigger;
+    const isTempPaused = processed_data?.temp_paused === true;
+    
+    // Forçar re-renderização quando o countdown zerar
+    const [forceNormal, setForceNormal] = React.useState(false);
+    
+    // Sincronizar estado forceNormal quando processed_data/temp_paused mudarem
+    React.useEffect(() => {
+        setForceNormal(false);
+    }, [processed_data?.temp_paused, processed_data?.temp_paused_until]);
+
+    if (isTempPaused && !forceNormal) {
+        // Se já tiver expirado no momento da renderização
+        const untilTime = processed_data?.temp_paused_until;
+        const secondsLeft = untilTime ? Math.max(0, Math.ceil((new Date(untilTime).getTime() - new Date().getTime()) / 1000)) : 0;
+        if (secondsLeft > 0) {
+            return (
+                <CountdownBadge 
+                    untilTime={untilTime} 
+                    reason={processed_data?.temp_paused_reason} 
+                    onZero={() => setForceNormal(true)} 
+                />
+            );
+        }
+    }
+
     switch (status) {
         case 'completed':
             return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Enviado</span>;
@@ -44,6 +114,8 @@ const getStatusBadge = (trigger) => {
             return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">Fila</span>;
         case 'processing':
             return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">Enviando...</span>;
+        case 'paused':
+            return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Pausado</span>;
         case 'failed':
             return (
                 <div className="flex flex-col items-center gap-1">
@@ -131,6 +203,52 @@ const TriggerTableRow = ({
                         <span className="text-blue-500 font-bold uppercase tracking-tighter text-[9px]">Disparo:</span>
                         <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">{formatDate(triggerWithActions.scheduled_time)}</span>
                     </div>
+                    {(() => {
+                        const started = triggerWithActions.processed_data?.started_at;
+                        const finished = triggerWithActions.processed_data?.finished_at;
+                        
+                        if (!started) return null;
+                        
+                        // Componente funcional interno para manter o temporizador dinâmico atualizado a cada segundo
+                        const DurationTimer = () => {
+                            const [elapsed, setElapsed] = React.useState(0);
+                            
+                            React.useEffect(() => {
+                                if (finished) {
+                                    const diff = new Date(finished).getTime() - new Date(started).getTime();
+                                    setElapsed(Math.max(0, Math.floor(diff / 1000)));
+                                    return;
+                                }
+                                
+                                const interval = setInterval(() => {
+                                    const diff = new Date().getTime() - new Date(started).getTime();
+                                    setElapsed(Math.max(0, Math.floor(diff / 1000)));
+                                }, 1000);
+                                
+                                return () => clearInterval(interval);
+                            }, []);
+                            
+                            const formatDuration = (sec) => {
+                                const h = Math.floor(sec / 3600);
+                                const m = Math.floor((sec % 3600) / 60);
+                                const s = sec % 60;
+                                return [
+                                    h > 0 ? `${h}h` : '',
+                                    m > 0 || h > 0 ? `${m}m` : '',
+                                    `${s}s`
+                                ].filter(Boolean).join(' ');
+                            };
+                            
+                            return (
+                                <div className="flex items-center gap-1.5 whitespace-nowrap mt-0.5 text-slate-500 dark:text-slate-400">
+                                    <span className="text-emerald-500 font-bold uppercase tracking-tighter text-[9px]">{finished ? "Duração:" : "Executando:"}</span>
+                                    <span className="font-mono font-bold">{formatDuration(elapsed)}</span>
+                                </div>
+                            );
+                        };
+                        
+                        return <DurationTimer />;
+                    })()}
                 </div>
             </td>
             <td className="p-4 text-sm font-medium text-gray-800 dark:text-gray-200">
@@ -148,6 +266,12 @@ const TriggerTableRow = ({
                             ) : (
                                 <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">Bulk</span>
                             )}
+                            <span className="text-[10px] bg-slate-105/10 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" title="Delay entre envios">
+                                ⏱️ {triggerWithActions.delay_seconds ?? 5}s
+                            </span>
+                            <span className="text-[10px] bg-slate-105/10 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" title="Limite de concorrência">
+                                👥 {triggerWithActions.concurrency_limit ?? 1}
+                            </span>
                         </div>
                         {triggerWithActions.is_bulk && (triggerWithActions.interaction_funnel || triggerWithActions.block_funnel) && (
                             <div className="flex flex-col gap-0.5 mt-1 text-[11px] text-gray-500 dark:text-gray-400">
@@ -183,6 +307,17 @@ const TriggerTableRow = ({
                                 
                                 {!triggerWithActions.funnel_id && (
                                     <>
+                                        <button 
+                                            onClick={() => handleViewContacts(triggerWithActions, 'queue')} 
+                                            className="flex items-center gap-1.5 hover:opacity-80 transition" 
+                                            title="Ver Fila de Envio (Meta)"
+                                        >
+                                            <span className="text-sm">⏳</span>
+                                            <span className="text-xs font-black text-blue-500">
+                                                {Math.max(0, (triggerWithActions.total_sent || 0) - (triggerWithActions.total_delivered || 0) - (triggerWithActions.total_failed || 0))}
+                                            </span>
+                                        </button>
+
                                         <button onClick={() => handleViewContacts(triggerWithActions, 'delivered')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Entregues">
                                             <span className="text-sm">📬</span>
                                             <span className="text-xs font-black text-emerald-500">{triggerWithActions.total_delivered || 0}</span>
@@ -209,6 +344,21 @@ const TriggerTableRow = ({
                                     <span className="text-sm">❌</span>
                                     <span className="text-xs font-black text-red-500">{triggerWithActions.total_failed || 0}</span>
                                 </button>
+
+                                {/* Novo ícone mostrando a quantidade restante de contatos a serem disparados */}
+                                {(() => {
+                                     const total = triggerWithActions.total_contacts || (triggerWithActions.contacts_list?.length) || 0;
+                                     const processedNum = (triggerWithActions.total_sent || 0) + (triggerWithActions.total_failed || 0) + (triggerWithActions.total_blocked || 0);
+                                     const processedArr = triggerWithActions.processed_contacts?.length || 0;
+                                     const processed = Math.max(processedArr, processedNum);
+                                     const remaining = Math.max(0, total - processed);
+                                     return (
+                                         <div className="flex items-center gap-1.5 cursor-default select-none" title="Faltam para terminar o lote">
+                                             <span className="text-sm">⏳</span>
+                                             <span className="text-xs font-black text-slate-500 dark:text-slate-400">Restam {remaining}</span>
+                                         </div>
+                                     );
+                                 })()}
                             </div>
                         )}
 
@@ -353,6 +503,12 @@ const TriggerTableRow = ({
                         <div className="flex items-center gap-2">
                             <span className="uppercase text-xs font-black tracking-wider text-gray-500 mr-1">{triggerWithActions.event_type?.replace('_', ' ') || 'WEBHOOK'}:</span>
                             {triggerWithActions.funnel?.name || <span className="text-gray-400 italic">Funil Apagado</span>}
+                            <span className="text-[10px] bg-slate-105/10 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" title="Delay entre envios">
+                                ⏱️ {triggerWithActions.delay_seconds ?? 5}s
+                            </span>
+                            <span className="text-[10px] bg-slate-105/10 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" title="Limite de concorrência">
+                                👥 {triggerWithActions.concurrency_limit ?? 1}
+                            </span>
                         </div>
                         {triggerWithActions.total_delivered > 0 && (
                             <div className={`text-[10px] font-bold mt-0.5 ${triggerWithActions.total_cost > 0 ? 'text-green-600 dark:text-green-400' : 'text-blue-500'}`}>
