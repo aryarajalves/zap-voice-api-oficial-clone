@@ -156,6 +156,30 @@ class ScheduledTrigger(ScheduledTriggerBase):
     def parse_chatwoot_label(cls, v):
         from core.utils import robust_extract_labels
         return robust_extract_labels(v)
+
+    @field_validator('processed_data', mode='before')
+    @classmethod
+    def parse_processed_data(cls, v):
+        if v is None:
+            return {}
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, list):
+            # Corrige o caso do SQLite ou PostgreSQL retornar listas vazias [] para JSON em colunas nulas ou vazias
+            return {}
+        if isinstance(v, str):
+            v_trimmed = v.strip()
+            if not v_trimmed:
+                return {}
+            try:
+                parsed = json.loads(v_trimmed)
+                if isinstance(parsed, dict):
+                    return parsed
+            except:
+                pass
+            return {}
+        return {}
+
     updated_at: Optional[datetime] = None
     
     # Nested Funnels
