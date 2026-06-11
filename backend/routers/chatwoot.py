@@ -245,7 +245,7 @@ async def validate_contacts(
             cached_windows = query.all()
             window_map = {w.phone: w for w in cached_windows}
 
-        # 3. Pre-fetch blocked contacts suffixes for the client
+        # 3. Pre-fetch blocked and resting contacts suffixes for the client
         # ---------------------------------------------------
         blocked_suffixes = set()
         try:
@@ -253,7 +253,18 @@ async def validate_contacts(
                 models.BlockedContact.client_id == client_id
             ).all()
             blocked_suffixes = {b.phone[-8:] for b in blocked_entries if len(b.phone) >= 8}
-            logger.debug(f"✅ [VALIDATE] Loaded {len(blocked_suffixes)} blocked suffixes")
+            
+            # Fetch active resting contacts
+            now = datetime.utcnow()
+            resting_entries = db.query(models.RestingContact.phone).filter(
+                models.RestingContact.client_id == client_id,
+                models.RestingContact.expires_at > now
+            ).all()
+            for r in resting_entries:
+                if len(r.phone) >= 8:
+                    blocked_suffixes.add(r.phone[-8:])
+                    
+            logger.debug(f"✅ [VALIDATE] Loaded {len(blocked_suffixes)} blocked/resting suffixes")
         except Exception as e:
             logger.error(f"⚠️ [VALIDATE] Error loading blocked suffixes: {e}")
 

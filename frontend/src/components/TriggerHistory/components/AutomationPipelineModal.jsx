@@ -94,7 +94,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
     useEffect(() => {
         if (!trigger) return;
         let pollInterval;
-        if (trigger.status === 'processing' || trigger.status === 'queued') {
+        if (trigger.status === 'processing' || trigger.status === 'queued' || trigger.status === 'suspended' || trigger.status === 'failed') {
             const fetchLatestTrigger = async () => {
                 try {
                     const res = await fetchWithAuth(`${API_URL}/triggers/${trigger.id}`, {}, activeClient?.id);
@@ -212,11 +212,14 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
         // Agrupar todos os logs por contato
         const logsByContact = {};
         rawHistory.forEach(log => {
+            const nodeId = log.node_id;
+            if (!nodeId) return;
+
             const phone = log.extra?.contact_phone || log.extra?.contact_name || '__single__';
             if (!logsByContact[phone]) logsByContact[phone] = [];
             logsByContact[phone].push({
                 ...log,
-                nodeOrder: nodeOrderMap[log.node_id] ?? 999
+                nodeOrder: nodeOrderMap[nodeId] ?? 999
             });
         });
 
@@ -227,7 +230,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
             const realNodeLogs = contactLogs.filter(l => l.nodeOrder < 999);
             const maxNodeOrder = realNodeLogs.length > 0 ? Math.max(...realNodeLogs.map(l => l.nodeOrder)) : -1;
 
-            // Pegar apenas o log deste contato para o nodeId solicitado
+            // Determinar o log deste contato no nodeId solicitado
             const logForNode = contactLogs.find(l => l.node_id === nodeId);
             if (!logForNode) return;
 

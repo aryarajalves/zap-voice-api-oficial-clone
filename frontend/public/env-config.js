@@ -4,5 +4,7 @@ window._env_ = {
     // Se quiser testar rotas específicas no dev, altere aqui.
     API_URL: "http://localhost:8000/api",
     WS_URL: "ws://localhost:8000/ws",
-    WEBHOOK_BASE_URL: "https://api.aryaraj.shop"
+    WEBHOOK_BASE_URL: "https://api.aryaraj.shop",
+    SIMULATE_MESSAGING: "true",
+    VITE_SIMULATE_MESSAGING: "true"
 };

@@ -60,6 +60,18 @@ async def execute_funnel(
             db.commit()
             return
 
+        # Check resting cooldown block
+        now = datetime.utcnow()
+        if db.query(models.RestingContact).filter(
+            models.RestingContact.client_id == trigger.client_id,
+            or_(models.RestingContact.phone == clean_phone, models.RestingContact.phone.like(f"%{suffix}")),
+            models.RestingContact.expires_at > now
+        ).first():
+            trigger.status = 'failed'
+            trigger.failure_reason = "Contato em Repouso"
+            db.commit()
+            return
+
     # Discovery Log
     resolved_account_id = chatwoot_account_id or trigger.chatwoot_account_id
     if not resolved_account_id:
@@ -187,6 +199,12 @@ async def execute_funnel(
         if trigger.status not in ('queued', 'failed', 'cancelled', 'suspended'):
             trigger.status = 'completed'
             db.commit()
+            
+        if trigger.status == 'suspended':
+            import os
+            if os.getenv("SIMULATE_MESSAGING", "false").lower() in ("true", "1", "yes"):
+                from core.engine.simulator import simulate_funnel_interaction
+                asyncio.create_task(simulate_funnel_interaction(trigger.id))
             
         from rabbitmq_client import rabbitmq
         await rabbitmq.publish_event("trigger_updated", {

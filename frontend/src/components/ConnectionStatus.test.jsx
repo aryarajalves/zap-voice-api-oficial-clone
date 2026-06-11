@@ -2,17 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import ConnectionStatus from './ConnectionStatus';
+import { useAuth, fetchWithAuth } from '../AuthContext';
+import { useClient } from '../contexts/ClientContext';
 
 // Mocks
 vi.mock('../config', () => ({ API_URL: 'http://localhost:8000' }));
 
 vi.mock('../AuthContext', () => ({
-  useAuth: () => ({ user: { role: 'admin' } }),
+  useAuth: vi.fn(() => ({ user: { role: 'admin' } })),
   fetchWithAuth: vi.fn(),
 }));
 
 vi.mock('../contexts/ClientContext', () => ({
-  useClient: () => ({ activeClient: { id: 1, name: 'TestClient' } }),
+  useClient: vi.fn(() => ({ activeClient: { id: 1, name: 'TestClient' } })),
 }));
 
 vi.mock('react-icons/fi', () => ({
@@ -28,10 +30,12 @@ vi.mock('react-icons/fi', () => ({
 describe('ConnectionStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset defaults for mocks
+    vi.mocked(useAuth).mockReturnValue({ user: { role: 'admin' } });
+    vi.mocked(useClient).mockReturnValue({ activeClient: { id: 1, name: 'TestClient' } });
   });
 
   it('não renderiza para usuário com role=user', () => {
-    const { useAuth } = require('../AuthContext');
     vi.mocked(useAuth).mockReturnValue({ user: { role: 'user' } });
 
     const { container } = render(<ConnectionStatus />);
@@ -39,7 +43,6 @@ describe('ConnectionStatus', () => {
   });
 
   it('não renderiza sem activeClient', () => {
-    const { useClient } = require('../contexts/ClientContext');
     vi.mocked(useClient).mockReturnValue({ activeClient: null });
 
     const { container } = render(<ConnectionStatus />);
@@ -47,7 +50,6 @@ describe('ConnectionStatus', () => {
   });
 
   it('renderiza labels dos serviços', async () => {
-    const { fetchWithAuth } = require('../AuthContext');
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       json: async () => ({ whatsapp: 'online', chatwoot: 'online', rabbitmq: 'online' }),
@@ -63,7 +65,6 @@ describe('ConnectionStatus', () => {
   });
 
   it('exibe ícone de loading inicial', async () => {
-    const { fetchWithAuth } = require('../AuthContext');
     // Promessa que nunca resolve para manter estado de loading
     vi.mocked(fetchWithAuth).mockReturnValue(new Promise(() => {}));
 
@@ -74,7 +75,6 @@ describe('ConnectionStatus', () => {
   });
 
   it('exibe erro quando fetch falha', async () => {
-    const { fetchWithAuth } = require('../AuthContext');
     vi.mocked(fetchWithAuth).mockRejectedValue(new Error('Backend offline'));
 
     render(<ConnectionStatus />);
@@ -85,7 +85,6 @@ describe('ConnectionStatus', () => {
   });
 
   it('botão de refresh chama checkHealth novamente', async () => {
-    const { fetchWithAuth } = require('../AuthContext');
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       json: async () => ({ whatsapp: 'online', chatwoot: 'online', rabbitmq: 'online' }),

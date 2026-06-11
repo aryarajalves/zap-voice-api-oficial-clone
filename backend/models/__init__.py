@@ -1,6 +1,6 @@
 from .base import user_clients, Base
 from .auth import User
-from .client import Client, AppConfig, BlockedContact, ContactWindow
+from .client import Client, AppConfig, BlockedContact, ContactWindow, RestingContact
 from .funnel import Funnel, WebhookConfig, WebhookEvent
 from .invitation import UserInvitation, invitation_clients
 from .backup import BackupConfig, BackupMetadata
@@ -31,6 +31,7 @@ __all__ = [
     "AppConfig",
     "BlockedContact",
     "ContactWindow",
+    "RestingContact",
     "Funnel",
     "WebhookConfig",
     "WebhookEvent",

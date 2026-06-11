@@ -1,10 +1,15 @@
 import React from 'react';
 import { Toaster, toast } from 'react-hot-toast';
-import { FiLayers, FiTrash2, FiEdit2, FiPlay, FiGlobe, FiArchive, FiTag, FiChevronLeft, FiChevronRight, FiBookmark } from 'react-icons/fi';
+import { FiLayers, FiTrash2, FiEdit2, FiPlay, FiGlobe, FiArchive, FiTag, FiChevronLeft, FiChevronRight, FiBookmark, FiZap } from 'react-icons/fi';
 import Sidebar from './components/Sidebar';
 import ConnectionStatus from './components/ConnectionStatus';
 import AppModals from './components/AppModals';
 import { useAppLogic } from './hooks/useAppLogic';
+
+const SIMULATE_MESSAGING = import.meta.env.VITE_SIMULATE_MESSAGING === 'true' || 
+                           window._env_?.VITE_SIMULATE_MESSAGING === 'true' || 
+                           window._env_?.SIMULATE_MESSAGING === 'true' || 
+                           window._env_?.SIMULATE_MESSAGING === true;
 
 // View Components
 import FunnelBuilder from './components/FunnelBuilder';
@@ -101,7 +106,15 @@ export default function AppContent() {
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Api Oficial do WhatsApp do cliente {logic.clientName}</p>
                 )}
               </div>
-              <ConnectionStatus refreshKey={logic.settingsRefreshKey} />
+              <div className="flex items-center gap-3">
+                {SIMULATE_MESSAGING && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 dark:bg-yellow-500/20 border border-yellow-500/30 dark:border-yellow-500/40 text-yellow-700 dark:text-yellow-400 text-xs font-bold rounded-xl animate-pulse" title="Modo Simulação / Teste de Estresse Ativo">
+                    <FiZap size={14} className="animate-bounce" />
+                    <span>Modo Simulação Ativo</span>
+                  </div>
+                )}
+                <ConnectionStatus refreshKey={logic.settingsRefreshKey} />
+              </div>
             </header>
 
             <div className="p-8 pt-0">

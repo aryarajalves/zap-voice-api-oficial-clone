@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FiSlash } from 'react-icons/fi';
+import { toast } from 'react-hot-toast';
 import ConfirmModal from '../ConfirmModal';
 import { useBlockedContacts } from './hooks/useBlockedContacts';
 import BlockedTabs from './components/BlockedTabs';
@@ -20,28 +21,33 @@ export default function BlockedContactsModular() {
 
     const confirmUnblockSingle = (contactId) => {
         const contact = hook.contacts.find(c => c.id === contactId);
+        const isResting = hook.listTab === 'resting';
         setConfirmModal({
             isOpen: true,
-            title: 'Desbloquear Contato',
-            message: `Tem certeza que deseja remover o bloqueio do número ${contact?.phone}?`,
-            confirmText: 'Desbloquear',
+            title: isResting ? 'Remover do Repouso' : 'Desbloquear Contato',
+            message: isResting 
+                ? `Tem certeza que deseja tirar o número ${contact?.phone} do repouso?`
+                : `Tem certeza que deseja remover o bloqueio do número ${contact?.phone}?`,
+            confirmText: isResting ? 'Remover' : 'Desbloquear',
             isDangerous: true,
             onConfirm: async () => {
                 const success = await hook.performUnblock(contactId);
                 if (success) {
-                    // toast is handled in hook or here? 
-                    // Let's keep it in hook to reduce code here.
+                    toast.success(isResting ? 'Contato removido do repouso!' : 'Contato desbloqueado!');
                 }
             }
         });
     };
 
     const confirmBulkDelete = () => {
+        const isResting = hook.listTab === 'resting';
         setConfirmModal({
             isOpen: true,
-            title: 'Desbloqueio em Massa',
-            message: `Tem certeza que deseja desbloquear ${hook.selectedIds.size} contatos selecionados?`,
-            confirmText: `Desbloquear ${hook.selectedIds.size}`,
+            title: isResting ? 'Remover em Massa' : 'Desbloqueio em Massa',
+            message: isResting 
+                ? `Tem certeza que deseja remover do repouso os ${hook.selectedIds.size} contatos selecionados?`
+                : `Tem certeza que deseja desbloquear ${hook.selectedIds.size} contatos selecionados?`,
+            confirmText: isResting ? `Remover ${hook.selectedIds.size}` : `Desbloquear ${hook.selectedIds.size}`,
             isDangerous: true,
             onConfirm: hook.handleBulkDelete
         });
@@ -69,6 +75,8 @@ export default function BlockedContactsModular() {
                         handleBlockManual={hook.handleBlockManual}
                         adding={hook.adding}
                         add55ToManualInput={hook.add55ToManualInput}
+                        blockType={hook.blockType}
+                        setBlockType={hook.setBlockType}
                     />
                 )}
 
@@ -98,6 +106,30 @@ export default function BlockedContactsModular() {
                 )}
             </div>
 
+            {/* Abas de Listagem */}
+            <div className="flex bg-gray-100 dark:bg-gray-900/60 p-1 rounded-xl w-80 select-none mb-1">
+                <button
+                    onClick={() => hook.setListTab('permanent')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        hook.listTab === 'permanent' 
+                            ? 'bg-white dark:bg-gray-800 shadow-sm text-red-600 dark:text-red-400' 
+                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                    }`}
+                >
+                    🚫 Permanente
+                </button>
+                <button
+                    onClick={() => hook.setListTab('resting')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        hook.listTab === 'resting' 
+                            ? 'bg-white dark:bg-gray-800 shadow-sm text-amber-600 dark:text-amber-400' 
+                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                    }`}
+                >
+                    ⏰ Em Repouso
+                </button>
+            </div>
+
             {/* Lista de Contatos */}
             <ContactList 
                 loading={hook.loading}
@@ -117,6 +149,7 @@ export default function BlockedContactsModular() {
                 itemsPerPage={hook.itemsPerPage}
                 setItemsPerPage={hook.setItemsPerPage}
                 totalPages={hook.totalPages}
+                listTab={hook.listTab}
             />
 
             {/* Modais e Overlays */}

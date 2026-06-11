@@ -16,9 +16,9 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     const [monitoringTrigger, setMonitoringTrigger] = useState(null);
     const [triggerType, setTriggerType] = useState(initialTriggerType);
 
-    // Auto-refresh do pipeline modal enquanto o trigger ainda está em execução
+    // Auto-refresh do pipeline modal enquanto o trigger ainda está em execução ou suspenso/falhado
     useEffect(() => {
-        const ACTIVE_STATUSES = ['processing', 'queued'];
+        const ACTIVE_STATUSES = ['processing', 'queued', 'suspended', 'failed'];
         if (!monitoringTrigger || !ACTIVE_STATUSES.includes(monitoringTrigger.status)) return;
 
         const interval = setInterval(async () => {
@@ -57,6 +57,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     // Filter & Pagination States
     const [contactsFilter, setContactsFilter] = useState('all');
     const [contactsTypeFilter, setContactsTypeFilter] = useState('all');
+    const [contactsErrorFilter, setContactsErrorFilter] = useState('all');
     const [loadingContacts, setLoadingContacts] = useState(false);
     const [contactsPage, setContactsPage] = useState(1);
     const [contactsPerPage, setContactsPerPage] = useState(20);
@@ -182,7 +183,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                                     total_blocked: d.blocked !== undefined ? d.blocked : (d.total_blocked !== undefined ? d.total_blocked : t.total_blocked),
                                     total_cost: d.cost !== undefined ? d.cost : (d.total_cost !== undefined ? d.total_cost : t.total_cost),
                                     total_memory_sent: d.memory_sent !== undefined ? d.memory_sent : (d.total_memory_sent !== undefined ? d.total_memory_sent : t.total_memory_sent),
-                                    total_paid_templates: d.total_paid_templates !== undefined ? d.total_paid_templates : t.total_paid_templates
+                                    total_paid_templates: d.total_paid_templates !== undefined ? d.total_paid_templates : t.total_paid_templates,
+                                    queue_count: d.queue_count !== undefined ? d.queue_count : t.queue_count,
                                 };
                             }
                             return t;
@@ -191,11 +193,26 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                         if (payload.data.client_id === activeClient?.id) {
                             setTriggers(prev => prev.filter(t => t.id !== payload.data.trigger_id));
                         }
-                    } else if (payload.event === "trigger_updated") {
-                        if (payload.data.client_id === activeClient?.id) {
+                    } else if (payload.event === "trigger_updated" || payload.event === "trigger_progress") {
+                        const triggerData = payload.data?.id ? payload.data : null;
+                        const triggerId = triggerData ? triggerData.id : payload.data.trigger_id;
+                        const triggerStatus = triggerData ? triggerData.status : payload.data.status;
+                        
+                        if (payload.data.client_id === activeClient?.id || (!payload.data.client_id && activeClient)) {
                             setTriggers(prev => prev.map(t => {
-                                if (t.id === payload.data.trigger_id) {
-                                    return { ...t, status: payload.data.status };
+                                if (t.id === triggerId) {
+                                    if (triggerData) {
+                                        return {
+                                            ...t,
+                                            status: triggerStatus,
+                                            total_sent: triggerData.total_sent !== undefined ? triggerData.total_sent : t.total_sent,
+                                            total_delivered: triggerData.total_delivered !== undefined ? triggerData.total_delivered : t.total_delivered,
+                                            total_read: triggerData.total_read !== undefined ? triggerData.total_read : t.total_read,
+                                            total_failed: triggerData.total_failed !== undefined ? triggerData.total_failed : t.total_failed,
+                                            updated_at: triggerData.updated_at || t.updated_at
+                                        };
+                                    }
+                                    return { ...t, status: triggerStatus };
                                 }
                                 return t;
                             }));
@@ -204,8 +221,19 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                                 return {
                                     ...prev,
                                     children: prev.children.map(child => {
-                                        if (child.id === payload.data.trigger_id) {
-                                            return { ...child, status: payload.data.status };
+                                        if (child.id === triggerId) {
+                                            if (triggerData) {
+                                                return {
+                                                    ...child,
+                                                    status: triggerStatus,
+                                                    total_sent: triggerData.total_sent !== undefined ? triggerData.total_sent : child.total_sent,
+                                                    total_delivered: triggerData.total_delivered !== undefined ? triggerData.total_delivered : child.total_delivered,
+                                                    total_read: triggerData.total_read !== undefined ? triggerData.total_read : child.total_read,
+                                                    total_failed: triggerData.total_failed !== undefined ? triggerData.total_failed : child.total_failed,
+                                                    updated_at: triggerData.updated_at || child.updated_at
+                                                };
+                                            }
+                                            return { ...child, status: triggerStatus };
                                         }
                                         return child;
                                     })
@@ -241,27 +269,34 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         }
     };
 
-    const fetchChildren = async (trigger, filterType = 'all') => {
-        setChildrenModal({ 
-            isOpen: true, 
-            triggerId: trigger.id, 
-            triggerName: trigger.template_name || trigger.funnel?.name || 'Disparo', 
-            children: [], 
-            isLoading: true,
-            filterType
-        });
+    const fetchChildren = async (trigger, filterType = 'all', silent = false) => {
+        if (!silent) {
+            setChildrenModal(prev => ({ 
+                ...prev,
+                isOpen: true, 
+                triggerId: trigger.id, 
+                triggerName: trigger.template_name || trigger.funnel?.name || 'Disparo', 
+                children: prev.isOpen ? prev.children : [], 
+                isLoading: true,
+                filterType
+            }));
+        }
         try {
             const res = await fetchWithAuth(`${API_URL}/triggers/${trigger.id}/children`, {}, activeClient?.id);
             if (res.ok) {
                 const data = await res.json();
                 setChildrenModal(prev => ({ ...prev, children: data, isLoading: false }));
             } else {
-                const errorData = await res.json().catch(() => ({}));
-                toast.error(`Erro ${res.status}: ${errorData.detail || "Falha ao buscar funis iniciados"}`);
+                if (!silent) {
+                    const errorData = await res.json().catch(() => ({}));
+                    toast.error(`Erro ${res.status}: ${errorData.detail || "Falha ao buscar funis iniciados"}`);
+                }
                 setChildrenModal(prev => ({ ...prev, isLoading: false }));
             }
         } catch (err) {
-            toast.error("Erro de conexão ao buscar funis iniciados");
+            if (!silent) {
+                toast.error("Erro de conexão ao buscar funis iniciados");
+            }
             setChildrenModal(prev => ({ ...prev, isLoading: false }));
         }
     };
@@ -319,6 +354,9 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
 
             if (contactsFilter !== 'all') params.append('status_filter', contactsFilter);
             if (contactsTypeFilter !== 'all') params.append('message_type', contactsTypeFilter);
+            if ((contactsFilter === 'failed' || contactsFilter === 'blocked') && contactsErrorFilter !== 'all') {
+                params.append('failure_reason', contactsErrorFilter);
+            }
             params.append('limit', contactsPerPage);
             params.append('skip', (contactsPage - 1) * contactsPerPage);
             const queryString = params.toString();
@@ -331,7 +369,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                 setContactsModal(prev => ({
                     ...prev,
                     contacts: data.items || [],
-                    counts: data.counts || {}
+                    counts: data.counts || {},
+                    failureReasons: data.failure_reasons || []
                 }));
             }
         } catch (e) {
@@ -346,7 +385,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         if (contactsModal.isOpen && contactsModal.triggerId) {
             fetchTriggerContacts();
         }
-    }, [contactsFilter, contactsTypeFilter, contactsModal.isOpen, contactsModal.triggerId, contactsPage, contactsPerPage]);
+    }, [contactsFilter, contactsTypeFilter, contactsErrorFilter, contactsModal.isOpen, contactsModal.triggerId, contactsPage, contactsPerPage]);
 
     const handleSelectAll = (e) => {
         if (e.target.checked) {
@@ -365,9 +404,10 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     };
 
     const handleViewContacts = (trigger, initialFilter = 'all') => {
-        const filterLabels = { total: 'Total na Lista', sent: 'Enviados', delivered: 'Recebidas', read: 'Lidos', failed: 'Falhas', interaction: 'Interações', blocked: 'Bloqueados', free: 'Gratuitas', template: 'Templates', private_note: 'Notas Privadas' };
+        const filterLabels = { total: 'Total na Lista', sent: 'Enviados', queue: 'Fila (Meta)', delivered: 'Recebidas', read: 'Lidos', failed: 'Falhas', interaction: 'Interações', blocked: 'Bloqueados', free: 'Gratuitas', template: 'Templates', private_note: 'Notas Privadas' };
         setContactsFilter(initialFilter);
         setContactsPage(1); // Resetar para página 1 ao abrir
+        setContactsErrorFilter('all');
         const label = filterLabels[initialFilter];
         setContactsModal({
             isOpen: true,
@@ -405,7 +445,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     return {
         user, activeClient, triggers, setTriggers, loading, monitoringTrigger, setMonitoringTrigger,
         modalConfig, setModalConfig, contactsModal, setContactsModal, contactsFilter, setContactsFilter,
-        contactsTypeFilter, setContactsTypeFilter, loadingContacts, editParamsModal, setEditParamsModal,
+        contactsTypeFilter, setContactsTypeFilter, contactsErrorFilter, setContactsErrorFilter, loadingContacts, editParamsModal, setEditParamsModal,
         errorModal, setErrorModal, childrenModal, setChildrenModal, selectedIds, setSelectedIds,
         filterName, setFilterName, dateRange, setDateRange, filterStatus, setFilterStatus,
         triggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,

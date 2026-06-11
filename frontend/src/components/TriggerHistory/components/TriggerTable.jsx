@@ -344,40 +344,38 @@ const TriggerTableRow = ({
                                     <span className="text-xs font-black text-gray-500">{triggerWithActions.total_sent || 0}</span>
                                 </button>
                                 
-                                {!triggerWithActions.funnel_id && (
-                                    <>
-                                        <button 
-                                            onClick={() => handleViewContacts(triggerWithActions, 'queue')} 
-                                            className="flex items-center gap-1.5 hover:opacity-80 transition" 
-                                            title="Ver Fila de Envio (Meta)"
-                                        >
-                                            <span className="text-sm">⏳</span>
-                                            <span className="text-xs font-black text-blue-500">
-                                                {Math.max(0, (triggerWithActions.total_sent || 0) - (triggerWithActions.total_delivered || 0) - (triggerWithActions.total_failed || 0))}
-                                            </span>
-                                        </button>
+                                <button 
+                                    onClick={() => handleViewContacts(triggerWithActions, 'queue')} 
+                                    className="flex items-center gap-1.5 hover:opacity-80 transition" 
+                                    title="Ver Fila de Envio (Meta)"
+                                >
+                                    <span className="text-sm">⏳</span>
+                                    <span className="text-xs font-black text-blue-500">
+                                        {triggerWithActions.queue_count !== undefined && triggerWithActions.queue_count !== null
+                                            ? triggerWithActions.queue_count
+                                            : Math.max(0, (triggerWithActions.total_sent || 0) - (triggerWithActions.total_delivered || 0) - (triggerWithActions.total_failed || 0))}
+                                    </span>
+                                </button>
 
-                                        <button onClick={() => handleViewContacts(triggerWithActions, 'delivered')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Entregues">
-                                            <span className="text-sm">📬</span>
-                                            <span className="text-xs font-black text-emerald-500">{triggerWithActions.total_delivered || 0}</span>
-                                        </button>
-                                        
-                                        <button onClick={() => handleViewContacts(triggerWithActions, 'read')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Lidos">
-                                            <span className="text-sm">👀</span>
-                                            <span className="text-xs font-black text-indigo-500">{triggerWithActions.total_read || 0}</span>
-                                        </button>
+                                <button onClick={() => handleViewContacts(triggerWithActions, 'delivered')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Entregues">
+                                    <span className="text-sm">📬</span>
+                                    <span className="text-xs font-black text-emerald-500">{triggerWithActions.total_delivered || 0}</span>
+                                </button>
+                                
+                                <button onClick={() => handleViewContacts(triggerWithActions, 'read')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Lidos">
+                                    <span className="text-sm">👀</span>
+                                    <span className="text-xs font-black text-indigo-500">{triggerWithActions.total_read || 0}</span>
+                                </button>
 
-                                        <button onClick={() => handleViewContacts(triggerWithActions, 'interaction')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Cliques">
-                                            <span className="text-sm">👆</span>
-                                            <span className="text-xs font-black text-amber-500">{triggerWithActions.total_interactions || 0}</span>
-                                        </button>
+                                <button onClick={() => handleViewContacts(triggerWithActions, 'interaction')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Cliques">
+                                    <span className="text-sm">👆</span>
+                                    <span className="text-xs font-black text-amber-500">{triggerWithActions.total_interactions || 0}</span>
+                                </button>
 
-                                        <button onClick={() => handleViewContacts(triggerWithActions, 'blocked')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Bloqueios">
-                                            <span className="text-sm">🚫</span>
-                                            <span className="text-xs font-black text-rose-500">{triggerWithActions.total_blocked || 0}</span>
-                                        </button>
-                                    </>
-                                )}
+                                <button onClick={() => handleViewContacts(triggerWithActions, 'blocked')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Bloqueios">
+                                    <span className="text-sm">🚫</span>
+                                    <span className="text-xs font-black text-rose-500">{triggerWithActions.total_blocked || 0}</span>
+                                </button>
 
                                 <button onClick={() => handleViewContacts(triggerWithActions, 'failed')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Falhas">
                                     <span className="text-sm">❌</span>
@@ -387,7 +385,9 @@ const TriggerTableRow = ({
                                 {/* Novo ícone mostrando a quantidade restante de contatos a serem disparados */}
                                 {(() => {
                                      const total = triggerWithActions.total_contacts || (triggerWithActions.contacts_list?.length) || 0;
-                                     const processedNum = (triggerWithActions.total_sent || 0) + (triggerWithActions.total_failed || 0) + (triggerWithActions.total_blocked || 0);
+                                     // total_blocked já está dentro de total_failed, então NÃO somar novamente
+                                     // Equação correta: sent + failed (que inclui blocked) = total_processados
+                                     const processedNum = (triggerWithActions.total_sent || 0) + (triggerWithActions.total_failed || 0);
                                      const processedArr = triggerWithActions.processed_contacts?.length || 0;
                                      const processed = Math.max(processedArr, processedNum);
                                      const remaining = Math.max(0, total - processed);
@@ -613,8 +613,8 @@ const TriggerTableRow = ({
                 )}
             </td>
             <td className="p-4 text-right flex justify-end gap-2">
-                {/* 0. VISUALIZAR FLUXO (Se houver funil) */}
-                {(triggerWithActions.funnel_id || (triggerWithActions.button_actions && Object.keys(triggerWithActions.button_actions).length > 0)) && 
+                {/* 0. VISUALIZAR FLUXO (Se houver funil ou teste de estresse) */}
+                {(triggerWithActions.funnel_id || triggerWithActions.product_name === 'SCALE_TEST' || (triggerWithActions.button_actions && Object.keys(triggerWithActions.button_actions).length > 0)) && 
                  Array.isArray(triggerWithActions.execution_history) && triggerWithActions.execution_history.some(log => log.node_id) && (
                     <button 
                         onClick={() => handleViewPipeline(triggerWithActions.id)} 

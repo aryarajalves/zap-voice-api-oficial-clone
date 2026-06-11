@@ -216,3 +216,8 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
+
+/* Trava de scroll para modais e popups */
+body.no-scroll, body.no-scroll main {
+    overflow: hidden !important;
+}

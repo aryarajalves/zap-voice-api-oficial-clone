@@ -1,16 +1,25 @@
-import { renderHook, act } from '@testing-library/react-hooks';
-import { useSettingsLogic, INITIAL_FORM_STATE } from './useSettingsLogic';
+import { renderHook, act } from '@testing-library/react';
+import { useSettingsLogic } from './useSettingsLogic';
+import { INITIAL_FORM_STATE } from './useGeneralSettings';
 import { ClientProvider } from '../../../contexts/ClientContext';
 import { AuthProvider } from '../../../AuthContext';
 import React from 'react';
 
+import { describe, it, expect, vi } from 'vitest';
+
 // Mock dependencies
-jest.mock('../../AuthContext', () => ({
-    ...jest.requireActual('../../AuthContext'),
-    fetchWithAuth: jest.fn(() => Promise.resolve({
+vi.mock('../../../AuthContext', () => ({
+    fetchWithAuth: vi.fn(() => Promise.resolve({
         ok: true,
         json: () => Promise.resolve({})
-    }))
+    })),
+    useAuth: () => ({ user: { name: 'Test User', role: 'admin' }, logout: vi.fn() }),
+    AuthProvider: ({ children }) => <div>{children}</div>
+}));
+
+vi.mock('../../../contexts/ClientContext', () => ({
+    useClient: () => ({ activeClient: { id: 1, name: 'Test Client' } }),
+    ClientProvider: ({ children }) => <div>{children}</div>
 }));
 
 const wrapper = ({ children }) => (
@@ -23,7 +32,7 @@ const wrapper = ({ children }) => (
 
 describe('useSettingsLogic', () => {
     it('should initialize with default values', () => {
-        const { result } = renderHook(() => useSettingsLogic(false, jest.fn(), jest.fn()), { wrapper });
+        const { result } = renderHook(() => useSettingsLogic(false, vi.fn(), vi.fn()), { wrapper });
         
         expect(result.current.activeTab).toBe('geral');
         expect(result.current.formData).toEqual(INITIAL_FORM_STATE);
@@ -31,7 +40,7 @@ describe('useSettingsLogic', () => {
     });
 
     it('should change active tab', () => {
-        const { result } = renderHook(() => useSettingsLogic(false, jest.fn(), jest.fn()), { wrapper });
+        const { result } = renderHook(() => useSettingsLogic(false, vi.fn(), vi.fn()), { wrapper });
         
         act(() => {
             result.current.setActiveTab('whatsapp');
@@ -41,7 +50,7 @@ describe('useSettingsLogic', () => {
     });
 
     it('should handle form changes', () => {
-        const { result } = renderHook(() => useSettingsLogic(false, jest.fn(), jest.fn()), { wrapper });
+        const { result } = renderHook(() => useSettingsLogic(false, vi.fn(), vi.fn()), { wrapper });
         
         act(() => {
             result.current.handleChange({

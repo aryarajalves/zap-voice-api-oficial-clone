@@ -205,14 +205,19 @@ class WhatsAppClient:
     async def _meta_request(self, method: str, path: str, **kwargs):
         wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=self.client_id)
         wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
-        if not wa_phone_id or not wa_token: return None
+        if not wa_phone_id or not wa_token: return {"error": True, "detail": "Configuração do WhatsApp ausente"}
         url = f"https://graph.facebook.com/v25.0/{wa_phone_id}/{path}"
         headers = {"Authorization": f"Bearer {wa_token}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.request(method, url, headers=headers, **kwargs)
-                return response.json() if response.status_code in [200, 201] else None
-            except: return None
+                if response.status_code not in [200, 201]:
+                    err_data = response.json()
+                    err_detail = err_data.get("error", {}).get("message", response.text)
+                    return {"error": True, "detail": err_detail, "code": err_data.get("error", {}).get("code")}
+                return response.json()
+            except Exception as e:
+                return {"error": True, "detail": str(e)}
 
     async def _validate_template_params(self, template_name, components):
         try:

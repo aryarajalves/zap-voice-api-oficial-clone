@@ -18,6 +18,23 @@ from datetime import datetime, timezone, timedelta
 logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
 
+def translate_meta_error(reason: str) -> str:
+    if not reason:
+        return reason
+    if "132015" in reason or "paused due to low quality" in reason:
+        return "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade."
+    if "131049" in reason or "healthy ecosystem engagement" in reason:
+        return "Erro Meta 131049: Esta mensagem não foi entregue para manter o engajamento saudável do ecossistema."
+    if "131026" in reason or "undeliverable" in reason.lower():
+        return "Erro Meta 131026: Mensagem não entregável"
+    if "(#2)" in reason or "service temporarily unavailable" in reason.lower():
+        return "(#2) Serviço temporariamente indisponível (Erro do Servidor da Meta)"
+    if "131000" in reason or "something went wrong" in reason.lower():
+        return "(#131000) Algo deu errado (Erro do Servidor da Meta)"
+    if "too many requests" in reason.lower() or "rate limit" in reason.lower() or "limit reached" in reason.lower():
+        return "(#80007) Limite de requisições excedido. Aumente o delay entre os disparos."
+    return reason
+
 async def process_bulk_send(trigger_id: int, template_name: str, contacts: list, delay: int, concurrency: int, language: str = 'pt_BR', components: list = None, direct_message: str = None, direct_message_params: dict = None):
     logger.info(f"Starting BULK SEND {trigger_id} | Contacts: {len(contacts or [])} | Delay: {delay}s |  Concurrency: {concurrency} | Lang: {language} | DM: {bool(direct_message)}")
     
@@ -54,6 +71,12 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         init_trig.total_sent = init_trig.total_failed = init_trig.total_blocked = 0
         init_trig.total_contacts = total
         
+        # Guardar o timestamp de início
+        pdata = dict(init_trig.processed_data or {})
+        pdata["started_at"] = datetime.utcnow().isoformat()
+        pdata.pop("finished_at", None)
+        init_trig.processed_data = pdata
+        
         c_label = init_trig.chatwoot_label
         c_id = init_trig.client_id
 
@@ -75,18 +98,31 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         finally:
             db_tmpl.close()
 
-    for i in range(0, total, concurrency):
+    retries_map = {}
+    i = 0
+    while i < len(contacts):
         db_check = SessionLocal()
         try:
             current_trig = db_check.query(models.ScheduledTrigger).get(trigger_id)
-            if not current_trig or current_trig.status in ['cancelled', 'cancelling', 'deleted_pending']:
-                 if current_trig:
-                     if current_trig.status == 'deleted_pending': db_check.delete(current_trig)
-                     elif current_trig.status == 'cancelling': current_trig.status = 'cancelled'
-                     db_check.commit()
-                 return
+            if not current_trig or current_trig.status in ['cancelled', 'cancelling', 'deleted_pending', 'aborted', 'failed']:
+                if current_trig:
+                    if current_trig.status == 'deleted_pending': db_check.delete(current_trig)
+                    elif current_trig.status == 'cancelling': current_trig.status = 'cancelled'
+                    db_check.commit()
+                return
+
+            # Atualizar heartbeat a cada iteração
+            pdata = dict(current_trig.processed_data or {})
+            pdata["last_heartbeat"] = datetime.utcnow().isoformat()
+            current_trig.processed_data = pdata
+            db_check.commit()
 
             while current_trig and current_trig.status == 'paused':
+                # Atualizar heartbeat enquanto pausado
+                pdata = dict(current_trig.processed_data or {})
+                pdata["last_heartbeat"] = datetime.utcnow().isoformat()
+                current_trig.processed_data = pdata
+                db_check.commit()
                 db_check.close()
                 await asyncio.sleep(5)
                 db_check = SessionLocal()
@@ -100,9 +136,28 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             current_trig.processed_contacts = list(set((current_trig.processed_contacts or []) + batch_phones_norm))
             current_trig.pending_contacts = [p for p in all_phones if p not in current_trig.processed_contacts]
             
-            # Blocked list
+            # Blocked list (guarda tanto o telefone normalizado quanto o sufixo de 8 dígitos)
             blocked_raw = db_check.query(models.BlockedContact.phone).filter_by(client_id=c_id).all()
-            blocked_set = {normalize_phone(b[0]) for b in blocked_raw}
+            blocked_set = set()
+            for b in blocked_raw:
+                p_norm = normalize_phone(b[0])
+                if p_norm:
+                    blocked_set.add(p_norm)
+                    if len(p_norm) >= 8:
+                        blocked_set.add(p_norm[-8:])
+            
+            # Add resting contacts
+            now = datetime.utcnow()
+            resting_raw = db_check.query(models.RestingContact.phone).filter(
+                models.RestingContact.client_id == c_id,
+                models.RestingContact.expires_at > now
+            ).all()
+            for r in resting_raw:
+                p_norm = normalize_phone(r[0])
+                if p_norm:
+                    blocked_set.add(p_norm)
+                    if len(p_norm) >= 8:
+                        blocked_set.add(p_norm[-8:])
             
             sent_phones_set = await get_sent_phones_set(db_check, trigger_id)
             db_check.commit()
@@ -112,10 +167,10 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         # Interaction data pre-fetch
         db_fetch = SessionLocal()
         try:
-             windows = db_fetch.query(models.ContactWindow).filter(models.ContactWindow.client_id == c_id, models.ContactWindow.phone.in_(batch_phones_norm)).all()
-             batch_interaction_map = {w.phone: w.last_interaction_at for w in windows}
+            windows = db_fetch.query(models.ContactWindow).filter(models.ContactWindow.client_id == c_id, models.ContactWindow.phone.in_(batch_phones_norm)).all()
+            batch_interaction_map = {w.phone: w.last_interaction_at for w in windows}
         finally:
-             db_fetch.close()
+            db_fetch.close()
 
         tasks = []
         batch_meta = []
@@ -138,9 +193,10 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                             name = (p0.get("text") if isinstance(p0, dict) else p0) or ""
                             break
 
-            if phone in blocked_set:
+            phone_suffix = phone[-8:] if len(phone) >= 8 else phone
+            if phone in blocked_set or phone_suffix in blocked_set:
                 tasks.append(asyncio.create_task(asyncio.to_thread(record_blocked_status, trigger_id, phone)))
-                batch_meta.append({"phone": phone, "name": name, "blocked": True, "vars": {}})
+                batch_meta.append({"phone": phone, "name": name, "blocked": True, "vars": {}, "contact_obj": c})
                 continue
 
             # Vars extraction (1-5)
@@ -159,7 +215,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 if v_idx == 1 and not val: val = name
                 cvars[f"var{v_idx}"] = str(val) if val is not None else ""
 
-            batch_meta.append({"phone": phone, "name": name, "blocked": False, "vars": cvars, "components": per_contact_components})
+            batch_meta.append({"phone": phone, "name": name, "blocked": False, "vars": cvars, "components": per_contact_components, "contact_obj": c})
             tasks.append(send_smart_message(
                 chatwoot, phone, trigger_id, template_name.split('|')[0], language,
                 components=per_contact_components, direct_message=direct_message, direct_message_params=direct_message_params,
@@ -174,12 +230,15 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         # Persist results
         db_msg = SessionLocal()
         sent_message_ids = []
+        meta_instability_triggered = False
+        meta_instability_reason = ""
+        
         try:
             for idx, res in enumerate(results):
                 meta = batch_meta[idx]
                 if meta["blocked"]:
                     try:
-                        update_trigger_stats(db_msg, trigger_id, blocked=1)
+                        update_trigger_stats(db_msg, trigger_id, failed=1)
                     except Exception as e_block_stat:
                         db_msg.rollback()
                         logger.error(f"❌ Erro ao atualizar estatísticas de bloqueio para {meta['phone']}: {e_block_stat}")
@@ -195,6 +254,20 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     if message_id: is_success = True
 
                 try:
+                    # Deletar qualquer log anterior deste contato neste disparo para evitar duplicidade de estatísticas
+                    existing_status = db_msg.query(models.MessageStatus).filter_by(trigger_id=trigger_id, phone_number=meta["phone"]).first()
+                    if existing_status:
+                        # Decrementar o contador estatístico correspondente
+                        if existing_status.status == 'sent':
+                            update_trigger_stats(db_msg, trigger_id, sent=-1)
+                        elif existing_status.status == 'failed':
+                            if existing_status.failure_reason == 'BLOCKED_VIA_BUTTON':
+                                update_trigger_stats(db_msg, trigger_id, blocked=-1)
+                            else:
+                                update_trigger_stats(db_msg, trigger_id, failed=-1)
+                        db_msg.delete(existing_status)
+                        db_msg.commit()
+
                     if is_success:
                         # Prioridade 1: Renderizar o body do cache com as variáveis do contato
                         if direct_message:
@@ -223,12 +296,16 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     else:
                         # CRIAR REGISTRO DE FALHA PARA O RELATÓRIO
                         reason = "Erro na API da Meta ou dados inválidos"
-                        if isinstance(res, dict) and res.get("error"):
-                            err_val = res.get("error")
-                            if isinstance(err_val, bool):
-                                reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
-                            else:
-                                reason = str(err_val)
+                        if isinstance(res, dict):
+                            if res.get("detail"):
+                                reason = res.get("detail")
+                            elif res.get("error"):
+                                err_val = res.get("error")
+                                if isinstance(err_val, bool):
+                                    reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
+                                else:
+                                    reason = str(err_val)
+                        reason = translate_meta_error(reason)
                         
                         fail_msg = models.MessageStatus(
                             trigger_id=trigger_id,
@@ -242,11 +319,24 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                         
                         update_trigger_stats(db_msg, trigger_id, failed=1)
                         failed_count += 1
+                        
+                        if "132015" in reason or "paused due to low quality" in reason:
+                            reason = "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade."
+                            fail_msg.failure_reason = reason
+                            
+                            db_abort = SessionLocal()
+                            try:
+                                t_abort = db_abort.query(models.ScheduledTrigger).get(trigger_id)
+                                if t_abort:
+                                    t_abort.status = 'aborted'
+                                    t_abort.failure_reason = reason
+                                    db_abort.commit()
+                                    logger.error(f"🛑 [ABORT] Disparo {trigger_id} abortado. Template pausado por baixa qualidade.")
+                            finally:
+                                db_abort.close()
                 except Exception as e_db_single:
                     db_msg.rollback()
                     logger.error(f"❌ Erro de banco de dados ao persistir status para o telefone {meta['phone']}: {e_db_single}")
-                    # Caso seja um erro de chave duplicada ou similar, nós evitamos propagar a exceção
-                    # para que os outros contatos do lote possam ser salvos
             
             # Disparar simulação de ciclo de vida assíncrona se SIMULATE_MESSAGING estiver ativo
             import os
@@ -279,13 +369,14 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
                     "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
                     "total_paid_templates": t_prog.total_paid_templates or 0,
-                    "total": total,
-                    "total_contacts": total
+                    "total": len(contacts),
+                    "total_contacts": len(contacts)
                 })
         finally:
             db_progress.close()
             
-        if i + concurrency < total: await asyncio.sleep(delay)
+        i += concurrency
+        if i < len(contacts): await asyncio.sleep(delay)
 
     # Finalize
     db_final = SessionLocal()
@@ -295,11 +386,17 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             from services.engine import log_node_execution
             client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=t.client_id)
             log_node_execution(db_final, t, node_id='DELIVERY', status='completed', details=f'{client_name}: Envio finalizado para {t.total_sent} contatos.')
+            
+            pdata = dict(t.processed_data or {})
+            pdata["finished_at"] = datetime.utcnow().isoformat()
+            t.processed_data = pdata
             t.status = "completed"
             db_final.commit()
+            
             await rabbitmq.publish_event("bulk_progress", {
                 "trigger_id": trigger_id,
                 "status": "completed",
+                "processed_data": pdata,
                 "sent": t.total_sent or 0,
                 "total_sent": t.total_sent or 0,
                 "failed": t.total_failed or 0,
@@ -319,7 +416,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 "total_contacts": total
             })
     finally:
-        db_final.close()
+         db_final.close()
 
 async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, delay: int, concurrency: int):
     # Modularização simplificada do funnel similar ao bulk_send
@@ -349,6 +446,12 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
             log_node_execution(db_init, t, node_id='DELIVERY', status='processing', details=f'{client_name}: Processando {total} funis...')
             t.pending_contacts = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or '')) for c in contacts]
             t.processed_contacts = []
+            
+            pdata = dict(t.processed_data or {})
+            pdata["started_at"] = datetime.utcnow().isoformat()
+            pdata.pop("finished_at", None)
+            t.processed_data = pdata
+            
             db_init.commit()
             c_id = t.client_id
             sent_phones_set = await get_sent_phones_set(db_init, trigger_id)
@@ -432,7 +535,18 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
                 db_check.commit()
                 return
             
+            # Atualizar heartbeat a cada iteração do funil
+            pdata = dict(t.processed_data or {})
+            pdata["last_heartbeat"] = datetime.utcnow().isoformat()
+            t.processed_data = pdata
+            db_check.commit()
+            
             while t and t.status == 'paused':
+                # Atualizar heartbeat enquanto pausado
+                pdata = dict(t.processed_data or {})
+                pdata["last_heartbeat"] = datetime.utcnow().isoformat()
+                t.processed_data = pdata
+                db_check.commit()
                 db_check.close()
                 await asyncio.sleep(5)
                 db_check = SessionLocal()
@@ -440,6 +554,16 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
 
             blocked_raw = db_check.query(models.BlockedContact.phone).filter_by(client_id=c_id).all()
             blocked_list = {normalize_phone(b[0]) for b in blocked_raw}
+            
+            # Add resting contacts
+            now = datetime.utcnow()
+            resting_raw = db_check.query(models.RestingContact.phone).filter(
+                models.RestingContact.client_id == c_id,
+                models.RestingContact.expires_at > now
+            ).all()
+            for r in resting_raw:
+                blocked_list.add(normalize_phone(r[0]))
+
             blocked_suffixes = {p[-8:] for p in blocked_list if len(p) >= 8}
             db_check.commit()
         finally:
@@ -457,7 +581,7 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
                     db_persist.execute(text("UPDATE scheduled_triggers SET total_sent = COALESCE(total_sent, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
                 elif r["status"] == "blocked":
                     failed_count += 1
-                    db_persist.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1, total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+                    db_persist.execute(text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
                     fail_msg = models.MessageStatus(
                         trigger_id=trigger_id,
                         phone_number=r["phone"],
@@ -536,13 +660,18 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
             # Refresh / re-get the trigger to avoid losing changes due to db.expire in log_node_execution
             t = db_final.query(models.ScheduledTrigger).get(trigger_id)
             if t:
+                pdata = dict(t.processed_data or {})
+                pdata["finished_at"] = datetime.utcnow().isoformat()
+                t.processed_data = pdata
                 t.status = 'completed' if failed_count == 0 else 'processed'
                 t.total_sent = sent_count
                 t.total_failed = failed_count
                 db_final.commit()
+            
             await rabbitmq.publish_event("bulk_progress", {
                 "trigger_id": trigger_id,
                 "status": t.status,
+                "processed_data": t.processed_data,
                 "sent": t.total_sent or 0,
                 "total_sent": t.total_sent or 0,
                 "failed": t.total_failed or 0,
@@ -718,6 +847,40 @@ async def simulate_lifecycle(message_id: str, trigger_id: int, client_id: int):
                             logger.info(f"🚀 [SIMULATE] Funil de bloqueio {trigger.block_funnel_id} iniciado para {msg.phone_number}")
                         except Exception as e_funnel:
                             logger.error(f"❌ [SIMULATE] Erro ao disparar funil de bloqueio simulado: {e_funnel}")
+        else:
+            logger.info(f"❌ [SIMULATE] Simulando falha de entrega para message_id={message_id}")
+            msg.status = 'failed'
+            
+            reasons = None
+            if trigger and trigger.processed_data and isinstance(trigger.processed_data, dict):
+                reasons = trigger.processed_data.get("simulated_error_reasons")
+                
+            if not reasons or not isinstance(reasons, list) or len(reasons) == 0:
+                reasons = [
+                    "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade.",
+                    "Erro Meta 131049: Esta mensagem não foi entregue para manter o engajamento saudável do ecossistema.",
+                    "Erro Meta 131026: Mensagem não entregável",
+                    "Lista de Exclusão (Bloqueado)"
+                ]
+                
+            selected_reason = translate_meta_error(random.choice(reasons))
+                
+            msg.failure_reason = selected_reason
+            msg.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            
+            db.execute(text("UPDATE scheduled_triggers SET total_sent = COALESCE(total_sent, 1) - 1, total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"), {"tid": trigger_id})
+            db.commit()
+            
+            # Se o template foi pausado por baixa qualidade, aborta o disparo
+            if "132015" in msg.failure_reason or "paused due to low quality" in msg.failure_reason:
+                if trigger:
+                    trigger.status = 'aborted'
+                    trigger.failure_reason = msg.failure_reason
+                    db.commit()
+                    logger.error(f"🛑 [ABORT - SIMULATE] Disparo {trigger_id} abortado. Template pausado por baixa qualidade.")
+            
+            await notify_progress(db, trigger_id)
     except Exception as e:
         logger.error(f"Erro na simulação de ciclo de vida do wamid {message_id}: {e}")
     finally:
@@ -727,6 +890,31 @@ async def notify_progress(db, trigger_id):
     db.commit()
     t_prog = db.query(models.ScheduledTrigger).get(trigger_id)
     if t_prog:
+        # Calcular queue_count via SQL real para garantir consistência com o modal de fila
+        try:
+            from sqlalchemy import func
+            # Para bulk: subquery agrupada por telefone (pega último registro por phone)
+            if t_prog.is_bulk:
+                subquery = db.query(func.max(models.MessageStatus.id)).filter(
+                    models.MessageStatus.trigger_id == trigger_id
+                ).group_by(models.MessageStatus.phone_number).subquery()
+                queue_count = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.id.in_(subquery),
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count()
+            else:
+                queue_count = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.trigger_id == trigger_id,
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count()
+        except Exception:
+            # Fallback: cálculo estimado baseado nos contadores do trigger
+            queue_count = max(0, (t_prog.total_sent or 0) - (t_prog.total_delivered or 0) - (t_prog.total_failed or 0))
+
         await rabbitmq.publish_event("bulk_progress", {
             "trigger_id": trigger_id,
             "status": t_prog.status,
@@ -746,6 +934,7 @@ async def notify_progress(db, trigger_id):
             "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
             "total_paid_templates": t_prog.total_paid_templates or 0,
             "total": t_prog.total_contacts or 0,
-            "total_contacts": t_prog.total_contacts or 0
+            "total_contacts": t_prog.total_contacts or 0,
+            "queue_count": queue_count
         })
 

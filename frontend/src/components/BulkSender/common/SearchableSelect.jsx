@@ -13,7 +13,11 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
         if (isOpen && containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             const spaceBelow = window.innerHeight - rect.bottom;
-            setDirection('up');
+            const spaceAbove = rect.top;
+            
+            // Abre para baixo se houver espaço (pelo menos 250px) ou se houver mais espaço abaixo do que acima
+            const bestDirection = (spaceBelow > 250 || spaceBelow > spaceAbove) ? 'down' : 'up';
+            setDirection(bestDirection);
             setCoords({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width });
         }
     }, [isOpen]);

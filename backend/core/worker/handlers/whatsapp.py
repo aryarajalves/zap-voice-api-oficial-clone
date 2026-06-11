@@ -156,40 +156,10 @@ async def handle_whatsapp_event(data: dict):
                                         err = meta_errors[0]
                                         reason = f"Erro Meta {err.get('code')}: {err.get('message') or err.get('title')}"
                                     message_record.failure_reason = reason
-                                    if old_status != 'failed':
-                                        db.execute(
-                                            text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :tid"),
-                                            {"tid": trigger.id}
-                                        )
-                                        if trigger.parent_id:
-                                            db.execute(
-                                                text("UPDATE scheduled_triggers SET total_failed = COALESCE(total_failed, 0) + 1 WHERE id = :pid"),
-                                                {"pid": trigger.parent_id}
-                                            )
+                                    pass
                                 
                                 if status == 'delivered' and not message_record.delivered_counted:
                                     message_record.delivered_counted = True
-                                    db.flush()
-                                    
-                                    # Recalculate unique delivered contacts
-                                    delivered_count = db.query(models.MessageStatus.phone_number).filter(
-                                        models.MessageStatus.trigger_id == trigger.id,
-                                        models.MessageStatus.status.in_(['delivered', 'read'])
-                                    ).distinct().count()
-                                    trigger.total_delivered = delivered_count
-                                    
-                                    if trigger.parent_id:
-                                        parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
-                                        if parent_trigger:
-                                            total_parent_delivered = db.query(models.MessageStatus.phone_number).join(
-                                                models.ScheduledTrigger,
-                                                models.MessageStatus.trigger_id == models.ScheduledTrigger.id
-                                            ).filter(
-                                                (models.ScheduledTrigger.id == parent_trigger.id) | 
-                                                (models.ScheduledTrigger.parent_id == parent_trigger.id),
-                                                models.MessageStatus.status.in_(['delivered', 'read'])
-                                            ).distinct().count()
-                                            parent_trigger.total_delivered = total_parent_delivered
                                     trigger_delivered = True
                                     is_first_charge = True
                                 
@@ -197,50 +167,15 @@ async def handle_whatsapp_event(data: dict):
                                     message_record.read_counted = True
                                     if not message_record.delivered_counted:
                                         message_record.delivered_counted = True
-                                        db.flush()
-                                        
-                                        # Recalculate unique delivered contacts
-                                        delivered_count = db.query(models.MessageStatus.phone_number).filter(
-                                            models.MessageStatus.trigger_id == trigger.id,
-                                            models.MessageStatus.status.in_(['delivered', 'read'])
-                                        ).distinct().count()
-                                        trigger.total_delivered = delivered_count
-                                        
-                                        if trigger.parent_id:
-                                            parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
-                                            if parent_trigger:
-                                                total_parent_delivered = db.query(models.MessageStatus.phone_number).join(
-                                                    models.ScheduledTrigger,
-                                                    models.MessageStatus.trigger_id == models.ScheduledTrigger.id
-                                                ).filter(
-                                                    (models.ScheduledTrigger.id == parent_trigger.id) | 
-                                                    (models.ScheduledTrigger.parent_id == parent_trigger.id),
-                                                    models.MessageStatus.status.in_(['delivered', 'read'])
-                                                ).distinct().count()
-                                                parent_trigger.total_delivered = total_parent_delivered
                                         trigger_delivered = True
-                                        is_first_charge = True
-                                    
-                                    db.flush()
-                                    # Recalculate unique read contacts
-                                    read_count = db.query(models.MessageStatus.phone_number).filter(
-                                        models.MessageStatus.trigger_id == trigger.id,
-                                        models.MessageStatus.status == 'read'
-                                    ).distinct().count()
-                                    trigger.total_read = read_count
-                                    
-                                    if trigger.parent_id:
-                                        parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
-                                        if parent_trigger:
-                                            total_parent_read = db.query(models.MessageStatus.phone_number).join(
-                                                models.ScheduledTrigger,
-                                                models.MessageStatus.trigger_id == models.ScheduledTrigger.id
-                                            ).filter(
-                                                (models.ScheduledTrigger.id == parent_trigger.id) | 
-                                                (models.ScheduledTrigger.parent_id == parent_trigger.id),
-                                                models.MessageStatus.status == 'read'
-                                            ).distinct().count()
-                                            parent_trigger.total_read = total_parent_read
+                                    is_first_charge = True
+                                
+                                db.flush()
+                                # Recalcular as estatísticas de contatos únicos
+                                from services.triggers_service import reconcile_trigger_stats_logic
+                                await reconcile_trigger_stats_logic(trigger.id, trigger.client_id, db)
+                                if trigger.parent_id:
+                                    await reconcile_trigger_stats_logic(trigger.parent_id, trigger.client_id, db)
 
                                 if is_first_charge:
                                     # Extrair pricing da Meta
@@ -305,6 +240,21 @@ async def handle_whatsapp_event(data: dict):
                                 if trigger_to_notify.is_bulk:
                                     try:
                                         db.refresh(trigger_to_notify)
+                                        # Calcular queue_count via SQL real (consistente com o modal de fila)
+                                        try:
+                                            from sqlalchemy import func as sqlfunc
+                                            ttn_id = trigger_to_notify.id
+                                            subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(
+                                                models.MessageStatus.trigger_id == ttn_id
+                                            ).group_by(models.MessageStatus.phone_number).subquery()
+                                            ws_queue_count = db.query(models.MessageStatus).filter(
+                                                models.MessageStatus.id.in_(subq),
+                                                models.MessageStatus.status == 'sent',
+                                                models.MessageStatus.delivered_counted == False,
+                                                models.MessageStatus.read_counted == False
+                                            ).count()
+                                        except Exception:
+                                            ws_queue_count = max(0, (trigger_to_notify.total_sent or 0) - (trigger_to_notify.total_delivered or 0) - (trigger_to_notify.total_failed or 0))
                                         await rabbitmq.publish_event("bulk_progress", {
                                             "trigger_id": trigger_to_notify.id,
                                             "status": trigger_to_notify.status,
@@ -324,7 +274,8 @@ async def handle_whatsapp_event(data: dict):
                                             "total_blocked": trigger_to_notify.total_blocked or 0,
                                             "cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
                                             "total_cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
-                                            "total_paid_templates": trigger_to_notify.total_paid_templates or 0
+                                            "total_paid_templates": trigger_to_notify.total_paid_templates or 0,
+                                            "queue_count": ws_queue_count
                                         })
                                     except Exception as ws_err:
                                         logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")
@@ -647,13 +598,42 @@ async def handle_whatsapp_event(data: dict):
                                 if action_type == "block":
                                     message_record.is_interaction = False
                                     message_record.failure_reason = 'BLOCKED_VIA_BUTTON'
-                                    db.execute(text("UPDATE scheduled_triggers SET total_blocked = COALESCE(total_blocked, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
+                                    
+                                    # Adiciona o contato na lista de exclusão/bloqueados imediatamente
+                                    suffix_b = from_phone[-8:]
+                                    already = db.query(models.BlockedContact).filter(
+                                        models.BlockedContact.client_id == target_cid,
+                                        or_(
+                                            models.BlockedContact.phone == from_phone,
+                                            models.BlockedContact.phone.like(f"%{suffix_b}")
+                                        )
+                                    ).first()
+                                    if not already:
+                                        db.add(models.BlockedContact(
+                                            client_id=target_cid,
+                                            phone=from_phone,
+                                            name=contacts_map.get(raw_from, "Contato"),
+                                            reason="Botão de Bloqueio (Disparo em Massa)"
+                                        ))
                                     db.commit()
+                                    
+                                    # Recalcular estatísticas
+                                    from services.triggers_service import reconcile_trigger_stats_logic
+                                    await reconcile_trigger_stats_logic(message_record.trigger_id, target_cid, db)
+                                    if trigger_ref.parent_id:
+                                        await reconcile_trigger_stats_logic(trigger_ref.parent_id, target_cid, db)
+                                        
                                     logger.info(f"🚫 [BUTTON_BLOCK_COUNT] Bloqueio imediato via botão detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
                                 else:
                                     message_record.is_interaction = True
-                                    db.execute(text("UPDATE scheduled_triggers SET total_interactions = COALESCE(total_interactions, 0) + 1 WHERE id = :tid"), {"tid": message_record.trigger_id})
                                     db.commit()
+                                    
+                                    # Recalcular estatísticas
+                                    from services.triggers_service import reconcile_trigger_stats_logic
+                                    await reconcile_trigger_stats_logic(message_record.trigger_id, target_cid, db)
+                                    if trigger_ref.parent_id:
+                                        await reconcile_trigger_stats_logic(trigger_ref.parent_id, target_cid, db)
+                                        
                                     logger.info(f"👆 [INTERACTION_COUNT] Clique em botão detectado para Trigger {message_record.trigger_id} (Phone: {from_phone})")
 
                             if is_button_click and user_input and message_record and trigger_ref:

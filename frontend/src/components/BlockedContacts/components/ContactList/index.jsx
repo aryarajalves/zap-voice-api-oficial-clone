@@ -20,7 +20,8 @@ export default function ContactList({
     setCurrentPage,
     itemsPerPage,
     setItemsPerPage,
-    totalPages
+    totalPages,
+    listTab
 }) {
     const isAllVisibleSelected = paginatedContacts.length > 0 && paginatedContacts.every(c => selectedIds.has(c.id));
 
@@ -51,6 +52,7 @@ export default function ContactList({
                         toggleSelectAll={toggleSelectAll}
                         isAllVisibleSelected={isAllVisibleSelected}
                         onUnblock={onUnblock}
+                        listTab={listTab}
                     />
                     
                     <Pagination 

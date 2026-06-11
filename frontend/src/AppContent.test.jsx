@@ -1,38 +1,38 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import AppContent from '../AppContent';
-import { useAppLogic } from '../hooks/useAppLogic';
-import { AuthProvider } from '../AuthContext';
-import { ClientProvider } from '../contexts/ClientContext';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import AppContent from './AppContent';
+import { useAppLogic } from './hooks/useAppLogic';
+import { AuthProvider } from './AuthContext';
+import { ClientProvider } from './contexts/ClientContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Mocking dependencies
-vi.mock('../hooks/useAppLogic');
-vi.mock('../AuthContext', async () => {
-    const actual = await vi.importActual('../AuthContext');
+vi.mock('./hooks/useAppLogic');
+vi.mock('./AuthContext', async () => {
+    const actual = await vi.importActual('./AuthContext');
     return {
         ...actual,
         useAuth: () => ({ user: { name: 'Test User', role: 'admin' }, logout: vi.fn() }),
         AuthProvider: ({ children }) => <div>{children}</div>
     };
 });
-vi.mock('../contexts/ClientContext', async () => {
-    const actual = await vi.importActual('../contexts/ClientContext');
+vi.mock('./contexts/ClientContext', async () => {
+    const actual = await vi.importActual('./contexts/ClientContext');
     return {
         ...actual,
         useClient: () => ({ activeClient: { id: 1, name: 'Test Client' } }),
         ClientProvider: ({ children }) => <div>{children}</div>
     };
 });
-vi.mock('../contexts/ThemeContext', () => ({
+vi.mock('./contexts/ThemeContext', () => ({
     ThemeProvider: ({ children }) => <div>{children}</div>,
     useTheme: () => ({ theme: 'dark' })
 }));
 
 describe('AppContent Component', () => {
     const mockLogic = {
-        user: { name: 'Test User', role: 'admin' },
+        user: { name: 'Test User', full_name: 'Test User', email: 'test@user.com', role: 'admin' },
         activeClient: { id: 1, name: 'Test Client' },
         currentView: 'bulk_sender',
         handleViewChange: vi.fn(),
@@ -94,10 +94,12 @@ describe('AppContent Component', () => {
         );
 
         // Sidebar should have user name
-        expect(screen.getByText(/Test User/i)).toBeDefined();
+        const nameElements = screen.getAllByText(/Test User/i);
+        expect(nameElements.length).toBeGreaterThan(0);
         
         // Main header should show current view title
-        expect(screen.getByText(/Disparo em Massa/i)).toBeDefined();
+        const titleElements = screen.getAllByText(/Disparo em Massa/i);
+        expect(titleElements.length).toBeGreaterThan(0);
     });
 
     it('renders "Inicie uma Sessão" when no activeClient', () => {
@@ -120,6 +122,7 @@ describe('AppContent Component', () => {
 
         render(<AppContent />);
 
-        expect(screen.getByText(/Meus Funis/i)).toBeDefined();
+        const titles = screen.getAllByText(/Meus Funis/i);
+        expect(titles.length).toBeGreaterThan(0);
     });
 });

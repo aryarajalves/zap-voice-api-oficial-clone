@@ -21,6 +21,7 @@ class Client(Base):
     webhooks = relationship("WebhookConfig", back_populates="client", cascade="all, delete-orphan")
     contact_windows = relationship("ContactWindow", back_populates="client", cascade="all, delete-orphan")
     recurring_triggers = relationship("RecurringTrigger", back_populates="client", cascade="all, delete-orphan")
+    resting_contacts = relationship("RestingContact", back_populates="client", cascade="all, delete-orphan")
 
 
 class AppConfig(Base):
@@ -62,3 +63,17 @@ class ContactWindow(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     client = relationship("Client", back_populates="contact_windows")
+
+
+class RestingContact(Base):
+    __tablename__ = "resting_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    phone = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=True)
+    reason = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+    client = relationship("Client", back_populates="resting_contacts")

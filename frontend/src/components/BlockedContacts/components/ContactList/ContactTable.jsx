@@ -7,8 +7,27 @@ export default function ContactTable({
     toggleSelectRow, 
     toggleSelectAll, 
     isAllVisibleSelected,
-    onUnblock 
+    onUnblock,
+    listTab
 }) {
+    const isResting = listTab === 'resting';
+
+    const getRemainingTime = (expiresAt) => {
+        if (!expiresAt) return 'Expirado';
+        const now = new Date();
+        const exp = new Date(expiresAt);
+        const diffMs = exp - now;
+        if (diffMs <= 0) return 'Expirado';
+
+        const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (diffHrs > 0) {
+            return `${diffHrs}h ${diffMins}m`;
+        }
+        return `${diffMins}m`;
+    };
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -25,7 +44,7 @@ export default function ContactTable({
                         <th className="px-6 py-4 font-bold">Telefone</th>
                         <th className="px-6 py-4 font-bold">Nome</th>
                         <th className="px-6 py-4 font-bold">Motivo</th>
-                        <th className="px-6 py-4 font-bold">Data/Hora Bloqueio</th>
+                        <th className="px-6 py-4 font-bold">{isResting ? 'Tempo de Repouso' : 'Data/Hora Bloqueio'}</th>
                         <th className="px-6 py-4 font-bold text-right">Ações</th>
                     </tr>
                 </thead>
@@ -59,16 +78,28 @@ export default function ContactTable({
                                 </span>
                             </td>
                             <td className="px-6 py-4 text-xs text-gray-500 dark:text-gray-400">
-                                {new Date(contact.created_at).toLocaleString('pt-BR', {
-                                    day: '2-digit', month: '2-digit', year: 'numeric',
-                                    hour: '2-digit', minute: '2-digit'
-                                })}
+                                {isResting ? (
+                                    <span className="font-bold text-amber-500 flex flex-col">
+                                        <span>⏰ {getRemainingTime(contact.expires_at)}</span>
+                                        <span className="text-[10px] font-normal text-gray-400 dark:text-gray-500">
+                                            Expira: {new Date(contact.expires_at).toLocaleString('pt-BR', {
+                                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                                hour: '2-digit', minute: '2-digit'
+                                            })}
+                                        </span>
+                                    </span>
+                                ) : (
+                                    new Date(contact.created_at).toLocaleString('pt-BR', {
+                                        day: '2-digit', month: '2-digit', year: 'numeric',
+                                        hour: '2-digit', minute: '2-digit'
+                                    })
+                                )}
                             </td>
                             <td className="px-6 py-4 text-right">
                                 <button
                                     onClick={() => onUnblock(contact.id)}
                                     className="text-red-400 hover:text-red-500 p-2 rounded-lg transition-all hover:bg-red-500/10"
-                                    title="Desbloquear"
+                                    title={isResting ? 'Remover do Repouso' : 'Desbloquear'}
                                 >
                                     <FiTrash2 size={18} />
                                 </button>

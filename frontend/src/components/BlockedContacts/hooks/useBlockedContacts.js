@@ -16,6 +16,10 @@ export function useBlockedContacts() {
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [mode, setMode] = useState('manual'); // 'manual' | 'upload'
 
+    const [listTab, setListTab] = useState('permanent'); // 'permanent' | 'resting'
+
+    const [blockType, setBlockType] = useState('permanent'); // 'permanent' | 'resting'
+
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(50);
@@ -40,7 +44,8 @@ export function useBlockedContacts() {
         if (!activeClient) return;
         setLoading(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/blocked/`, {}, activeClient?.id);
+            const endpoint = listTab === 'resting' ? `${API_URL}/resting/` : `${API_URL}/blocked/`;
+            const res = await fetchWithAuth(endpoint, {}, activeClient?.id);
             if (res && res.ok) {
                 const data = await res.json();
                 setContacts(data || []);
@@ -48,15 +53,15 @@ export function useBlockedContacts() {
             }
         } catch (err) {
             console.error("Erro ao buscar bloqueados:", err);
-            toast.error("Erro ao carregar lista de bloqueios");
+            toast.error("Erro ao carregar lista");
         } finally {
             setLoading(false);
         }
-    }, [activeClient]);
+    }, [activeClient, listTab]);
 
     useEffect(() => {
         fetchBlockedContacts();
-    }, [fetchBlockedContacts]);
+    }, [fetchBlockedContacts, listTab]);
 
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
@@ -170,25 +175,27 @@ export function useBlockedContacts() {
             return;
         }
 
-        setImportLabel('Importando Contatos');
+        const isResting = blockType === 'resting';
+        setImportLabel(isResting ? 'Colocando em Repouso' : 'Importando Contatos');
         setImportProgress({ current: 0, total: entries.length });
 
         const batchSize = 100;
+        const bulkEndpoint = isResting ? `${API_URL}/resting/rest_bulk` : `${API_URL}/blocked/block_bulk`;
         for (let i = 0; i < entries.length; i += batchSize) {
             const batch = entries.slice(i, i + batchSize);
             try {
-                const res = await fetchWithAuth(`${API_URL}/blocked/block_bulk`, {
+                const res = await fetchWithAuth(bulkEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contacts: batch.map(e => ({ ...e, reason: 'Importação' }))
+                        contacts: batch.map(e => ({ ...e, reason: isResting ? 'Importação (Repouso)' : 'Importação' }))
                     })
                 }, activeClient?.id);
 
                 if (res && res.ok) {
                     const result = await res.json();
                     successCount += result.success_count;
-                    alreadyCount += result.already_blocked_count;
+                    alreadyCount += isResting ? result.already_resting_count : result.already_blocked_count;
                 } else {
                     failCount += batch.length;
                 }
@@ -202,7 +209,7 @@ export function useBlockedContacts() {
             }
         }
 
-        toast.success(`${successCount} contatos importados!`);
+        toast.success(`${successCount} contatos processados!`);
         if (alreadyCount > 0) toast.success(`${alreadyCount} já estavam na lista.`);
         if (failCount > 0) toast.error(`${failCount} falhas.`);
 
@@ -222,25 +229,28 @@ export function useBlockedContacts() {
             return;
         }
 
-        setWorkingMessage(`Bloqueando ${entries.length} contatos...`);
+        const isResting = blockType === 'resting';
+        setWorkingMessage(isResting ? `Repousando ${entries.length} contatos...` : `Bloqueando ${entries.length} contatos...`);
         setIsWorking(true);
         setAdding(true);
         let successCount = 0;
         let failCount = 0;
 
+        const manualEndpoint = isResting ? `${API_URL}/resting/` : `${API_URL}/blocked/`;
         await Promise.all(entries.map(async (entry) => {
             try {
-                const res = await fetchWithAuth(`${API_URL}/blocked/`, {
+                const res = await fetchWithAuth(manualEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: entry.phone, name: entry.name, reason: 'Manual' })
+                    body: JSON.stringify({ phone: entry.phone, name: entry.name, reason: isResting ? 'Repouso Manual' : 'Manual' })
                 }, activeClient?.id);
 
                 if (res && res.ok) {
                     successCount++;
                 } else {
                     const data = await res.json();
-                    if (res.status !== 400 || !data.detail?.includes("já está bloqueado")) {
+                    const errMsg = isResting ? "já está em repouso" : "já está bloqueado";
+                    if (res.status !== 400 || !data.detail?.includes(errMsg)) {
                         failCount++;
                     }
                 }
@@ -250,11 +260,11 @@ export function useBlockedContacts() {
         }));
 
         if (successCount > 0) {
-            toast.success(`${successCount} contatos bloqueados!`);
+            toast.success(isResting ? `${successCount} contatos em repouso por 24h!` : `${successCount} contatos bloqueados!`);
             setManualInput('');
             fetchBlockedContacts();
         } else if (entries.length > 0) {
-            toast.success("Todos os números já estavam bloqueados.");
+            toast.success(isResting ? "Todos os números já estavam em repouso." : "Todos os números já estavam bloqueados.");
             setManualInput('');
         }
 
@@ -277,7 +287,8 @@ export function useBlockedContacts() {
 
     const performUnblock = async (id) => {
         try {
-            const res = await fetchWithAuth(`${API_URL}/blocked/${id}`, { method: 'DELETE' }, activeClient?.id);
+            const endpoint = listTab === 'resting' ? `${API_URL}/resting/${id}` : `${API_URL}/blocked/${id}`;
+            const res = await fetchWithAuth(endpoint, { method: 'DELETE' }, activeClient?.id);
             if (res && res.ok) {
                 setContacts(prev => prev.filter(c => c.id !== id));
                 setSelectedIds(prev => {
@@ -301,7 +312,8 @@ export function useBlockedContacts() {
         
         const idsToDelete = Array.from(selectedIds);
         try {
-            const res = await fetchWithAuth(`${API_URL}/blocked/unblock_bulk`, {
+            const endpoint = listTab === 'resting' ? `${API_URL}/resting/unrest_bulk` : `${API_URL}/blocked/unblock_bulk`;
+            const res = await fetchWithAuth(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ids: idsToDelete })
@@ -309,7 +321,7 @@ export function useBlockedContacts() {
 
             if (res && res.ok) {
                 const result = await res.json();
-                toast.success(`${result.deleted_count || 0} contatos desbloqueados.`);
+                toast.success(`${result.deleted_count || 0} contatos removidos.`);
                 fetchBlockedContacts();
             } else {
                 toast.error("Erro ao realizar exclusão em massa.");
@@ -345,7 +357,7 @@ export function useBlockedContacts() {
             const singleSuffix = getLast8(cleanSearch);
             const contactSuffix = getLast8(c.phone);
             if (singleSuffix.length === 8) return contactSuffix.endsWith(singleSuffix);
-            return c.phone.includes(singleSuffix) || c.phone.includes(cleanSearch);
+            return (singleSuffix && c.phone.includes(singleSuffix)) || c.phone.includes(cleanSearch);
         });
     }, [contacts, searchTerm]);
 
@@ -414,7 +426,7 @@ export function useBlockedContacts() {
 
     return {
         contacts, loading, manualInput, setManualInput, adding, searchTerm, setSearchTerm,
-        selectedIds, mode, setMode, currentPage, setCurrentPage, itemsPerPage, setItemsPerPage,
+        selectedIds, mode, setMode, listTab, setListTab, blockType, setBlockType, currentPage, setCurrentPage, itemsPerPage, setItemsPerPage,
         importData, setImportData, selectedPhoneCols, setSelectedPhoneCols, selectedNameCol, setSelectedNameCol,
         isWorking, workingMessage, importing, showColumnSelector, setShowColumnSelector,
         importProgress, importLabel, showFullPreview, setShowFullPreview, isReadingFile,

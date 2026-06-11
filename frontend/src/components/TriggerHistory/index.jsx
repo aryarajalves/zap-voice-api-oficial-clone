@@ -15,7 +15,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
     const {
         user, activeClient, triggers, loading, monitoringTrigger, setMonitoringTrigger,
         modalConfig, setModalConfig, contactsModal, setContactsModal, contactsFilter, setContactsFilter,
-        contactsTypeFilter, setContactsTypeFilter, loadingContacts, editParamsModal, setEditParamsModal,
+        contactsTypeFilter, setContactsTypeFilter, contactsErrorFilter, setContactsErrorFilter, loadingContacts, editParamsModal, setEditParamsModal,
         errorModal, setErrorModal, childrenModal, setChildrenModal, selectedIds, setSelectedIds,
         filterName, setFilterName, dateRange, setDateRange, filterStatus, setFilterStatus,
         triggerType: currentTriggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
@@ -101,12 +101,16 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 setContactsFilter={setContactsFilter}
                 contactsTypeFilter={contactsTypeFilter}
                 setContactsTypeFilter={setContactsTypeFilter}
+                contactsErrorFilter={contactsErrorFilter}
+                setContactsErrorFilter={setContactsErrorFilter}
                 loadingContacts={loadingContacts}
                 contactsPage={contactsPage}
                 setContactsPage={setContactsPage}
                 contactsPerPage={contactsPerPage}
                 setContactsPerPage={setContactsPerPage}
                 contactsTotal={contactsTotal}
+                activeClient={activeClient}
+                onRefresh={fetchHistory}
             />
 
             <ErrorReportModal 
@@ -118,6 +122,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 childrenModal={childrenModal} 
                 setChildrenModal={setChildrenModal} 
                 setMonitoringTrigger={setMonitoringTrigger} 
+                fetchChildren={fetchChildren}
             />
 
             <TriggerFilters 

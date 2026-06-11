@@ -125,6 +125,7 @@ class ScheduledTrigger(ScheduledTriggerBase):
     chatwoot_label: Optional[List[str]] = Field(default_factory=list)
     button_actions: Optional[Dict[str, Any]] = None
     funnel_snapshot: Optional[Union[dict, list]] = None
+    processed_data: Optional[Dict[str, Any]] = None
 
     @field_validator('button_actions', mode='before')
     @classmethod

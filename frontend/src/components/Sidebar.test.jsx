@@ -19,6 +19,7 @@ vi.mock('react-icons/fi', () => ({
   FiZap: () => <span />,
   FiDollarSign: () => <span />,
   FiDatabase: () => <span />,
+  FiInstagram: () => <span />,
 }));
 
 vi.mock('./ClientSelector', () => ({

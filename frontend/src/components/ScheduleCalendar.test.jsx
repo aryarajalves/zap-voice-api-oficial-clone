@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ScheduleCalendar from './ScheduleCalendar';
 
 // Mock active client context
-vi.mock('./contexts/ClientContext', () => ({
+vi.mock('../contexts/ClientContext', () => ({
     useClient: () => ({
         activeClient: { id: 1, name: 'Cliente Teste' }
     })

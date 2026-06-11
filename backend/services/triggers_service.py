@@ -13,6 +13,7 @@ from services.utils.phone_utils import normalize_phone
 async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Session):
     """
     Recalcula todos os contadores do disparo baseando-se nos registros detalhados da tabela message_status.
+    Garante contagem de contatos únicos e regras idênticas ao modal do frontend.
     """
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == trigger_id,
@@ -25,30 +26,53 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     # 1. Buscar todos os status de mensagem associados (do próprio trigger ou de seus filhos)
     child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
     all_trigger_ids = [trigger_id] + child_ids
-    statuses = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids)).all()
+    
+    # Obter o ID do status mais recente de cada telefone (contatos únicos)
+    from sqlalchemy import func, or_
+    subquery = db.query(func.max(models.MessageStatus.id)).filter(
+        models.MessageStatus.trigger_id.in_(all_trigger_ids)
+    ).group_by(models.MessageStatus.phone_number).subquery()
+    
+    statuses = db.query(models.MessageStatus).filter(models.MessageStatus.id.in_(subquery)).all()
 
     # 2. Inicializar contadores
-    sent_phones = set()
-    delivered_phones = set()
-    read_phones = set()
+    sent = 0
+    delivered = 0
+    read = 0
     failed = 0
+    blocked = 0
+    interactions = 0
     total_cost = 0.0
     paid_templates = 0
 
-    # 3. Processar cada registro
+    # 3. Processar cada registro único
     for ms in statuses:
-        # Contagem por contato único
-        if ms.status in ['sent', 'delivered', 'read'] or ms.is_interaction:
-            sent_phones.add(ms.phone_number)
-            if ms.status in ['delivered', 'read'] or ms.is_interaction:
-                delivered_phones.add(ms.phone_number)
-                if ms.status == 'read' or ms.is_interaction:
-                    read_phones.add(ms.phone_number)
+        # Contagem de Sent
+        if ms.status in ['sent', 'delivered', 'read', 'interaction'] or ms.delivered_counted or ms.read_counted:
+            sent += 1
+            
+        # Contagem de Delivered
+        if ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction:
+            delivered += 1
+            
+        # Contagem de Read
+        if ms.status in ['read', 'interaction'] or ms.read_counted or ms.is_interaction:
+            read += 1
+
+        # Contagem de Blocked (apenas opt-out ativo pós-envio via botão)
+        if ms.failure_reason == 'BLOCKED_VIA_BUTTON':
+            blocked += 1
+        
+        # Contagem de Failed (inclui falhas de entrega e contatos na Lista de Exclusão)
         elif ms.status == 'failed':
             failed += 1
-        
-        # Custo (Apenas se entregue ou lido)
-        if ms.status in ['delivered', 'read'] or ms.is_interaction:
+
+        # Contagem de Interactions
+        if (ms.is_interaction or ms.interaction_counted) and ms.failure_reason != 'BLOCKED_VIA_BUTTON':
+            interactions += 1
+
+        # Custo (Apenas se entregue ou lido/interagido)
+        if ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction:
             if ms.meta_price_brl is not None:
                 total_cost += float(ms.meta_price_brl)
                 if ms.meta_price_brl > 0:
@@ -57,15 +81,13 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
                  total_cost += float(trigger.cost_per_unit)
                  paid_templates += 1
 
-    sent = len(sent_phones)
-    delivered = len(delivered_phones)
-    read = len(read_phones)
-
     # 4. Atualizar o Trigger
     trigger.total_sent = sent
     trigger.total_delivered = delivered
     trigger.total_read = read
     trigger.total_failed = failed
+    trigger.total_blocked = blocked
+    trigger.total_interactions = interactions
     trigger.total_cost = total_cost
     trigger.total_paid_templates = paid_templates
     
@@ -84,6 +106,8 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         "delivered": delivered,
         "read": read,
         "failed": failed,
+        "blocked": blocked,
+        "interactions": interactions,
         "cost": total_cost
     }
 
@@ -228,6 +252,27 @@ async def start_now_trigger_logic(trigger_id: int, db: Session):
 
     if trigger.status == "processing" and not trigger.is_bulk:
         return "already_processing"
+
+    # Verificar se já existe um worker ativo processando esse disparo (heartbeat recente nos últimos 30 segundos)
+    is_worker_alive = False
+    if trigger.is_bulk and trigger.processed_data and "last_heartbeat" in trigger.processed_data:
+        try:
+            last_hb = datetime.fromisoformat(trigger.processed_data["last_heartbeat"])
+            if last_hb.tzinfo is not None:
+                last_hb = last_hb.astimezone(timezone.utc).replace(tzinfo=None)
+            diff = (datetime.utcnow() - last_hb).total_seconds()
+            if diff < 30:
+                is_worker_alive = True
+        except Exception as e_hb:
+            logger.error(f"Erro ao verificar heartbeat do worker: {e_hb}")
+
+    if is_worker_alive:
+        logger.info(f"⚡ [START_NOW] Worker ativo detectado para trigger {trigger_id} (heartbeat recente). Apenas atualizando status.")
+        trigger.status = "processing"
+        trigger.failure_reason = None
+        db.commit()
+        await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "processing", "client_id": trigger.client_id})
+        return {"status": "success", "message": "Disparo retomado com sucesso (worker ativo)"}
 
     logger.info(f"⚡ Forçando início imediato do trigger {trigger_id}")
     

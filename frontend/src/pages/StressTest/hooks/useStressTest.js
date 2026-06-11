@@ -21,6 +21,32 @@ export function useStressTest() {
   const [interactionFunnelId, setInteractionFunnelId] = useState(() => localStorage.getItem('stress_test_interaction_funnel_id') || '');
   const [blockFunnelId, setBlockFunnelId] = useState(() => localStorage.getItem('stress_test_block_funnel_id') || '');
 
+  const ALL_ERRORS = [
+    "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade.",
+    "Erro Meta 131049: Esta mensagem não foi entregue para manter o engajamento saudável do ecossistema.",
+    "Erro Meta 131026: Mensagem não entregável",
+    "(#2) Serviço temporariamente indisponível (Erro do Servidor da Meta)",
+    "(#131000) Algo deu errado (Erro do Servidor da Meta)",
+    "Lista de Exclusão (Bloqueado)"
+  ];
+  const [selectedErrors, setSelectedErrors] = useState(() => {
+      const saved = localStorage.getItem('stress_test_selected_errors');
+      if (!saved) return ALL_ERRORS;
+      try {
+          const parsed = JSON.parse(saved);
+          return parsed.map(err => {
+              if (err.includes("132015")) return ALL_ERRORS[0];
+              if (err.includes("131049")) return ALL_ERRORS[1];
+              if (err.includes("131026")) return ALL_ERRORS[2];
+              if (err.includes("(#2)") || err.includes("Service temporarily")) return ALL_ERRORS[3];
+              if (err.includes("131000") || err.includes("Something went wrong")) return ALL_ERRORS[4];
+              return err;
+          });
+      } catch (e) {
+          return ALL_ERRORS;
+      }
+  });
+
   // List of funnels
   const [funnels, setFunnels] = useState([]);
   const [loadingFunnels, setLoadingFunnels] = useState(false);
@@ -59,7 +85,8 @@ export function useStressTest() {
       localStorage.setItem('stress_test_pricing_category', pricingCategory);
       localStorage.setItem('stress_test_interaction_funnel_id', interactionFunnelId);
       localStorage.setItem('stress_test_block_funnel_id', blockFunnelId);
-  }, [testType, funnelId, templateName, numberOfContacts, delaySeconds, concurrencyLimit, simulateRateLimit, pricingCategory, interactionFunnelId, blockFunnelId]);
+      localStorage.setItem('stress_test_selected_errors', JSON.stringify(selectedErrors));
+  }, [testType, funnelId, templateName, numberOfContacts, delaySeconds, concurrencyLimit, simulateRateLimit, pricingCategory, interactionFunnelId, blockFunnelId, selectedErrors]);
 
   // Fetch active funnels
   useEffect(() => {
@@ -161,7 +188,8 @@ export function useStressTest() {
               concurrency_limit: parseInt(concurrencyLimit),
               pricing_category: pricingCategory,
               interaction_funnel_id: (testType === 'template' && interactionFunnelId) ? parseInt(interactionFunnelId) : null,
-              block_funnel_id: (testType === 'template' && blockFunnelId) ? parseInt(blockFunnelId) : null
+              block_funnel_id: (testType === 'template' && blockFunnelId) ? parseInt(blockFunnelId) : null,
+              simulated_error_reasons: selectedErrors
           };
 
           const res = await fetchWithAuth(`${API_URL}/stress-test`, {
@@ -198,8 +226,6 @@ export function useStressTest() {
   // Cancel active test
   const handleCancelTest = async () => {
       if (!activeTriggerId || !activeClient) return;
-      const confirmCancel = window.confirm("Tem certeza que deseja abortar este teste de estresse em execução?");
-      if (!confirmCancel) return;
 
       try {
           const res = await fetchWithAuth(`${API_URL}/triggers/${activeTriggerId}/cancel`, {
@@ -227,6 +253,6 @@ export function useStressTest() {
     pricingCategory, setPricingCategory, interactionFunnelId, setInteractionFunnelId,
     blockFunnelId, setBlockFunnelId, funnels, loadingFunnels,
     activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning,
-    handleStartTest, handleCancelTest
+    handleStartTest, handleCancelTest, selectedErrors, setSelectedErrors, ALL_ERRORS
   };
 }

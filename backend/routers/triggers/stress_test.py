@@ -25,6 +25,9 @@ async def start_stress_test(
     concurrency_limit = payload.get("concurrency_limit", 5)
     pricing_category = payload.get("pricing_category", "marketing")
 
+    interaction_funnel_id = payload.get("interaction_funnel_id")
+    block_funnel_id = payload.get("block_funnel_id")
+
     cost_per_unit = 0.35 if pricing_category == "marketing" else 0.07
 
     if not funnel_id and not template_name:
@@ -50,6 +53,11 @@ async def start_stress_test(
             }
         })
 
+    simulated_error_reasons = payload.get("simulated_error_reasons")
+    processed_data = {}
+    if simulated_error_reasons and isinstance(simulated_error_reasons, list):
+        processed_data["simulated_error_reasons"] = simulated_error_reasons
+
     # Criar trigger no banco
     trigger = models.ScheduledTrigger(
         client_id=x_client_id,
@@ -64,7 +72,10 @@ async def start_stress_test(
         delay_seconds=delay_seconds,
         concurrency_limit=concurrency_limit,
         product_name="SCALE_TEST",
-        cost_per_unit=cost_per_unit
+        cost_per_unit=cost_per_unit,
+        processed_data=processed_data,
+        interaction_funnel_id=interaction_funnel_id,
+        block_funnel_id=block_funnel_id
     )
 
     db.add(trigger)
@@ -80,7 +91,9 @@ async def start_stress_test(
         "delay": delay_seconds,
         "concurrency": concurrency_limit,
         "language": "pt_BR",
-        "type": "funnel_bulk" if trigger.funnel_id else "template_bulk"
+        "type": "funnel_bulk" if trigger.funnel_id else "template_bulk",
+        "interaction_funnel_id": interaction_funnel_id,
+        "block_funnel_id": block_funnel_id
     }
 
     # Notificar Frontend via WS (RabbitMQ Events)

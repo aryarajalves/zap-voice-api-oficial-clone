@@ -314,6 +314,72 @@ describe('TriggerTable Component', () => {
     expect(simBadge).toBeInTheDocument();
     expect(simBadge).toHaveClass('bg-purple-100');
   });
+
+  it('deve renderizar o botão de Fila de Envio (Meta) e chamar handleViewContacts quando clicado', () => {
+    const queueTrigger = {
+      id: 12,
+      is_bulk: true,
+      status: 'processing',
+      created_at: new Date().toISOString(),
+      total_sent: 15,
+      total_delivered: 5,
+      total_failed: 3,
+      child_count: 0,
+      funnel: null
+    };
+
+    const handleViewContactsMock = vi.fn();
+
+    render(
+      <TriggerTable 
+        {...defaultProps} 
+        triggers={[queueTrigger]} 
+        handleViewContacts={handleViewContactsMock}
+      />
+    );
+
+    const queueButton = screen.getByTitle('Ver Fila de Envio (Meta)');
+    expect(queueButton).toBeInTheDocument();
+    // Sem queue_count definido, deve usar fallback: 15 - 5 - 3 = 7
+    expect(screen.getByText('7')).toBeInTheDocument();
+
+    queueButton.click();
+    expect(handleViewContactsMock).toHaveBeenCalledWith(expect.objectContaining({ id: 12 }), 'queue');
+  });
+
+  it('deve usar queue_count do WebSocket como fonte de verdade quando disponível', () => {
+    const queueTrigger = {
+      id: 13,
+      is_bulk: true,
+      status: 'processing',
+      created_at: new Date().toISOString(),
+      total_sent: 15,
+      total_delivered: 10,
+      total_failed: 3,
+      // queue_count vindo do WebSocket (valor real do banco)
+      queue_count: 4,
+      child_count: 0,
+      funnel: null
+    };
+
+    const handleViewContactsMock = vi.fn();
+
+    render(
+      <TriggerTable 
+        {...defaultProps} 
+        triggers={[queueTrigger]} 
+        handleViewContacts={handleViewContactsMock}
+      />
+    );
+
+    const queueButton = screen.getByTitle('Ver Fila de Envio (Meta)');
+    expect(queueButton).toBeInTheDocument();
+    // Com queue_count definido (4), deve usar o valor do WebSocket (não o fallback 15-10-3=2)
+    expect(screen.getByText('4')).toBeInTheDocument();
+
+    queueButton.click();
+    expect(handleViewContactsMock).toHaveBeenCalledWith(expect.objectContaining({ id: 13 }), 'queue');
+  });
 });
 
 

@@ -45,6 +45,16 @@ const mockContacts = [
   }
 ];
 
+vi.mock('./BulkSendContactsModal', () => ({
+    default: ({ isOpen, onClose, selectedPhones, onSuccess }) => isOpen ? (
+        <div data-testid="bulk-send-modal">
+            Bulk Send Modal Open for {selectedPhones.length}
+            <button onClick={onSuccess}>Simulate Success Send</button>
+            <button onClick={onClose}>Close</button>
+        </div>
+    ) : null
+}));
+
 describe('ContactsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -94,6 +104,7 @@ describe('ContactsModal', () => {
     contactsPerPage: 20,
     setContactsPerPage: vi.fn(),
     contactsTotal: 2,
+    onRefresh: vi.fn(),
   };
 
   it('renderiza o modal e lista de contatos com checkboxes', () => {
@@ -365,6 +376,132 @@ describe('ContactsModal', () => {
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('5511999999999\n5511888888888');
     expect(toast.success).toHaveBeenCalledWith('Lista copiada!');
+  });
+
+  it('exibe o dropdown de erros nos filtros de falhas e bloqueios quando existem motivos de erro', () => {
+    const propsComFalhas = {
+      ...defaultProps,
+      contactsFilter: 'failed',
+      contactsModal: {
+        ...defaultProps.contactsModal,
+        failureReasons: ['Too Many Requests', 'Invalid Number']
+      },
+      contactsErrorFilter: 'all',
+      setContactsErrorFilter: vi.fn(),
+    };
+    const { rerender } = render(<ContactsModal {...propsComFalhas} />);
+
+    // Dropdown de erros deve estar presente na aba failed
+    let select = document.getElementById('contacts-error-filter');
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe('all');
+
+    // Clicar no select e mudar valor
+    fireEvent.change(select, { target: { value: 'Too Many Requests' } });
+    expect(propsComFalhas.setContactsErrorFilter).toHaveBeenCalledWith('Too Many Requests');
+
+    // Se mudarmos para a aba 'blocked', também deve exibir o dropdown
+    const propsComBloqueios = {
+      ...propsComFalhas,
+      contactsFilter: 'blocked'
+    };
+    rerender(<ContactsModal {...propsComBloqueios} />);
+    select = document.getElementById('contacts-error-filter');
+    expect(select).toBeInTheDocument();
+
+    // Se contactsFilter não for nem 'failed' nem 'blocked', não deve exibir o dropdown
+    const propsSemFiltro = {
+      ...propsComFalhas,
+      contactsFilter: 'all'
+    };
+    rerender(<ContactsModal {...propsSemFiltro} />);
+    expect(document.getElementById('contacts-error-filter')).not.toBeInTheDocument();
+  });
+
+  it('exibe o botão Bloquear apenas na listagem de falhas quando há contatos selecionados', async () => {
+    const propsComFalhas = {
+      ...defaultProps,
+      contactsFilter: 'failed',
+    };
+    const { rerender } = render(<ContactsModal {...propsComFalhas} />);
+
+    // Nenhum contato selecionado inicialmente (deve haver 0 botões com texto 'Bloquear (X)')
+    expect(screen.queryByRole('button', { name: /^Bloquear \(/ })).not.toBeInTheDocument();
+
+    // Selecionar o primeiro contato
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[1]);
+
+    // Botão de bloquear deve aparecer
+    const blockButton = screen.getByRole('button', { name: /^Bloquear \(1\)$/ });
+    expect(blockButton).toBeInTheDocument();
+
+    // Se mudarmos para a aba 'all', o botão de bloquear não deve aparecer mesmo com selecionados
+    const propsSemFalhas = {
+      ...propsComFalhas,
+      contactsFilter: 'all',
+    };
+    rerender(<ContactsModal {...propsSemFalhas} />);
+    expect(screen.queryByRole('button', { name: /^Bloquear \(/ })).not.toBeInTheDocument();
+  });
+
+  it('deve bloquear o scroll do body quando o modal estiver aberto e liberar ao fechar/desmontar', () => {
+    // Garante estado limpo antes do teste
+    document.body.classList.remove('no-scroll');
+
+    const { unmount, rerender } = render(<ContactsModal {...defaultProps} />);
+    expect(document.body.classList.contains('no-scroll')).toBe(true);
+
+    // Mudar para fechado
+    const closedProps = {
+      ...defaultProps,
+      contactsModal: {
+        ...defaultProps.contactsModal,
+        isOpen: false,
+      }
+    };
+    rerender(<ContactsModal {...closedProps} />);
+    expect(document.body.classList.contains('no-scroll')).toBe(false);
+
+    // Abrir de novo
+    rerender(<ContactsModal {...defaultProps} />);
+    expect(document.body.classList.contains('no-scroll')).toBe(true);
+
+    // Desmontar o componente
+    unmount();
+    expect(document.body.classList.contains('no-scroll')).toBe(false);
+  });
+
+  it('exibe a explicação de BOT_BLOCK corretamento ao clicar no ícone de ajuda', async () => {
+    const propsComBloqueioBot = {
+      ...defaultProps,
+      contactsModal: {
+        ...defaultProps.contactsModal,
+        contacts: [
+          {
+            phone_number: '5511999999999',
+            status: 'failed',
+            failure_reason: 'BLOCKED_VIA_BUTTON',
+          }
+        ]
+      }
+    };
+
+    render(<ContactsModal {...propsComBloqueioBot} />);
+    expect(screen.getByText('BLOQUEOU O BOT')).toBeInTheDocument();
+
+    const infoButton = screen.getByTitle('Explicar erro');
+    expect(infoButton).toBeInTheDocument();
+
+    fireEvent.click(infoButton);
+
+    // Deve exibir o título explicativo e o conteúdo
+    expect(screen.getByText('Bloqueou o Bot (Ação do Contato)')).toBeInTheDocument();
+    expect(screen.getByText(/O contato recebeu a mensagem e voluntariamente clicou/i)).toBeInTheDocument();
+
+    const closeExplanationButton = screen.getByRole('button', { name: 'Entendido' });
+    fireEvent.click(closeExplanationButton);
+    expect(screen.queryByText('Bloqueou o Bot (Ação do Contato)')).not.toBeInTheDocument();
   });
 });
 

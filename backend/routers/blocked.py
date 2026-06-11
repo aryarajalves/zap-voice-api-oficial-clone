@@ -108,20 +108,28 @@ def check_bulk_blocked(
     """
     client_id = x_client_id if x_client_id else current_user.client_id
 
-    # 1. Fetch ALL blocked contacts for this client (assuming list < 10k, this is efficient enough)
-    # If list grows huge, we might need a different strategy (e.g. partial index or bloom filter),
-    # but for now Python set matching is fast.
+    # 1. Fetch ALL blocked contacts for this client
     blocked_entries = db.query(BlockedContact.phone).filter(
         BlockedContact.client_id == client_id
     ).all()
     
-    # 2. Create a set of suffixes (last 8 digits) from the DB
-    # We filter only those with length >= 8
+    # 2. Fetch active resting contacts
+    now = datetime.utcnow()
+    from models import RestingContact
+    resting_entries = db.query(RestingContact.phone).filter(
+        RestingContact.client_id == client_id,
+        RestingContact.expires_at > now
+    ).all()
+    
+    # 3. Create a set of suffixes (last 8 digits) from the DB
     blocked_suffixes = {b.phone[-8:] for b in blocked_entries if len(b.phone) >= 8}
+    for r in resting_entries:
+        if len(r.phone) >= 8:
+            blocked_suffixes.add(r.phone[-8:])
     
     blocked_found = []
     
-    # 3. Check input phones
+    # 4. Check input phones
     for original_phone in data.phones:
         # Normalize to get digits
         digits = "".join(filter(str.isdigit, original_phone))
@@ -250,6 +258,32 @@ def block_bulk(
         
     if new_entries:
         db.bulk_save_objects(new_entries)
+        
+        # Remove os registros do MessageStatus com falha para esses telefones bloqueados
+        from models.trigger import MessageStatus, ScheduledTrigger
+        
+        for entry in new_entries:
+            clean_phone = entry.phone
+            suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+            
+            # Localizar mensagens deste cliente cujo status seja falha e o telefone corresponda ao bloqueado
+            failed_messages = db.query(MessageStatus).filter(
+                MessageStatus.status == 'failed',
+                MessageStatus.phone_number.like(f"%{suffix}")
+            ).all()
+            
+            for msg in failed_messages:
+                # Decrementar total_failed e total_contacts no trigger correspondente
+                trigger = db.query(ScheduledTrigger).filter(ScheduledTrigger.id == msg.trigger_id).first()
+                if trigger:
+                    # Ajusta os contadores do histórico
+                    if trigger.total_failed > 0:
+                        trigger.total_failed -= 1
+                    if trigger.total_contacts > 0:
+                        trigger.total_contacts -= 1
+                        
+                db.delete(msg)
+                
         db.commit()
         
     return {

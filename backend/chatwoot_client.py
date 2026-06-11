@@ -302,6 +302,20 @@ class ChatwootClient:
         if self.simulate:
             self._maybe_raise_ratelimit()
             await asyncio.sleep(random.uniform(0.01, 0.05))
+            
+            # Simular instabilidade do servidor da Meta com 3% de chance total
+            # Sorteando entre os erros #2 e #131000 para testar o fluxo de pausa de 30s e retentativas
+            if random.random() < 0.03:
+                error_type = random.choice([
+                    "(#2) Serviço temporariamente indisponível (Erro do Servidor da Meta)",
+                    "(#131000) Algo deu errado (Erro do Servidor da Meta)"
+                ])
+                logger.warning(f"🤖 [MOCK send_template] Simulado erro do Servidor da Meta para {contact_phone}: {error_type}")
+                return {
+                    "error": True,
+                    "detail": error_type
+                }
+                
             logger.info(f"🤖 [MOCK send_template] Enviando template {template_name} para {contact_phone}")
             return {
                 "messages": [{"id": f"wamid.simulated_{uuid.uuid4().hex}"}]

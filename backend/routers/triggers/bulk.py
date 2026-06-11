@@ -294,5 +294,37 @@ async def schedule_bulk_send(
     )
     db.add(trigger)
     db.commit()
+
+    remove_failures_id = payload.get("remove_failures_from_trigger_id")
+    if remove_failures_id:
+        orig_trigger = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.id == remove_failures_id,
+            models.ScheduledTrigger.client_id == x_client_id
+        ).first()
+        if orig_trigger:
+            child_ids = [cid[0] for cid in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == orig_trigger.id).all()]
+            all_trigger_ids = [orig_trigger.id] + child_ids
+            
+            for c in formatted_contacts:
+                phone_val = c.get("phone") if isinstance(c, dict) else c
+                clean_phone = "".join(filter(str.isdigit, str(phone_val)))
+                if clean_phone:
+                    suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                    failed_messages = db.query(models.MessageStatus).filter(
+                        models.MessageStatus.trigger_id.in_(all_trigger_ids),
+                        models.MessageStatus.status == 'failed',
+                        models.MessageStatus.phone_number.like(f"%{suffix}")
+                    ).all()
+                    
+                    for msg in failed_messages:
+                        t_obj = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == msg.trigger_id).first()
+                        if t_obj:
+                            if t_obj.total_failed > 0:
+                                t_obj.total_failed -= 1
+                            if t_obj.total_contacts > 0:
+                                t_obj.total_contacts -= 1
+                        db.delete(msg)
+            db.commit()
+
     db.refresh(trigger)
     return trigger

@@ -1,6 +1,30 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { FiActivity, FiPlay, FiAlertCircle, FiCheckCircle, FiXCircle, FiSlash } from 'react-icons/fi';
 import { useStressTest } from './StressTest/hooks/useStressTest';
+
+const CountdownBadge = ({ temp_paused_until }) => {
+    const calculateSeconds = () => {
+        if (!temp_paused_until) return 0;
+        const diff = new Date(temp_paused_until).getTime() - new Date().getTime();
+        return Math.max(0, Math.ceil(diff / 1000));
+    };
+
+    const [secondsLeft, setSecondsLeft] = React.useState(calculateSeconds);
+
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            const left = calculateSeconds();
+            setSecondsLeft(left);
+            if (left <= 0) {
+                clearInterval(interval);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [temp_paused_until]);
+
+    return <span>{secondsLeft}</span>;
+};
 
 const StressTest = () => {
     const {
@@ -11,8 +35,44 @@ const StressTest = () => {
         interactionFunnelId, setInteractionFunnelId, blockFunnelId, setBlockFunnelId,
         funnels, loadingFunnels,
         activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning,
-        handleStartTest, handleCancelTest
+        handleStartTest, handleCancelTest, selectedErrors, setSelectedErrors, ALL_ERRORS
     } = useStressTest();
+
+    const [showConfirmCancel, setShowConfirmCancel] = React.useState(false);
+    const [explainError, setExplainError] = React.useState(null);
+
+    const ERROR_EXPLANATIONS = {
+        "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade.": {
+            titulo: "Template Pausado por Baixa Qualidade",
+            descricao: "O modelo de mensagem (template) foi pausado temporariamente pelo WhatsApp/Meta após receber feedback negativo (denúncias de spam ou baixa qualidade) dos clientes.",
+            acao: "Pare imediatamente o disparo! Revise o conteúdo da mensagem e aguarde a liberação ou crie um novo template mais amigável para evitar bloqueios na API."
+        },
+        "Erro Meta 131049: Esta mensagem não foi entregue para manter o engajamento saudável do ecossistema.": {
+            titulo: "Bloqueio de Integridade Meta",
+            descricao: "O WhatsApp bloqueou o envio para proteger os destinatários contra possíveis abusos ou excesso de mensagens não solicitadas (spam).",
+            acao: "Evite continuar disparando a mesma mensagem em lote imediatamente. Aumente o delay de disparo e utilize um funil com interação prévia para aquecer os leads."
+        },
+        "Erro Meta 131026: Mensagem não entregável": {
+            titulo: "Número Inválido ou Inexistente",
+            descricao: "O número de telefone de destino não está registrado no WhatsApp ou está inválido.",
+            acao: "Remova este contato da sua lista de disparos. Tentar enviar repetidamente para números inexistentes prejudica a reputação do seu número na Meta."
+        },
+        "(#2) Serviço temporariamente indisponível (Erro do Servidor da Meta)": {
+            titulo: "Instabilidade Temporária da Meta",
+            descricao: "Falha momentânea ou instabilidade nos servidores da própria Meta/WhatsApp Cloud API.",
+            acao: "Não se preocupe com o contato. Este erro é de infraestrutura da Meta. Você pode tentar reenviar a mensagem para eles daqui a alguns minutos."
+        },
+        "(#131000) Algo deu errado (Erro do Servidor da Meta)": {
+            titulo: "Erro Interno da Meta",
+            descricao: "Um erro interno genérico desconhecido ocorreu nos servidores do WhatsApp Cloud API.",
+            acao: "Falha técnica temporária do sistema deles. Não indica problema no contato ou template. Pode tentar realizar o reenvio mais tarde."
+        },
+        "Lista de Exclusão (Bloqueado)": {
+            titulo: "Contato Bloqueado Internamente",
+            descricao: "O destinatário foi inserido na lista interna de exclusão (Blacklist/Opt-out) para não receber novos disparos.",
+            acao: "Respeite a privacidade do contato. O ZapVoice bloqueou o envio automaticamente. Não envie mensagens manualmente por outros meios para evitar denúncias."
+        }
+    };
 
     if (user?.role !== 'super_admin') {
         return (
@@ -54,7 +114,7 @@ const StressTest = () => {
                                     className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
                                         testType === 'funnel'
                                             ? 'bg-blue-600 text-white shadow-md'
-                                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'
+                                             : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'
                                     }`}
                                 >
                                     Funil
@@ -144,7 +204,7 @@ const StressTest = () => {
                                     <select
                                         value={blockFunnelId}
                                         onChange={(e) => setBlockFunnelId(e.target.value)}
-                                        className="w-full bg-gray-900/50 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 transition-all outline-none"
+                                        className="w-full bg-gray-950/50 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30 transition-all outline-none"
                                     >
                                         <option value="" className="bg-[#131722] text-white">Nenhum</option>
                                         {funnels.map(f => (
@@ -191,6 +251,49 @@ const StressTest = () => {
                             </div>
                         </div>
 
+                        <div className="bg-amber-500/10 dark:bg-yellow-500/5 border border-amber-500/20 rounded-2xl p-4 mt-2 space-y-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                <FiAlertCircle className="shrink-0" /> Erros Simulados (Taxa de 10%)
+                            </span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                Selecione quais tipos de erro deseja que ocorram aleatoriamente durante o teste de escala:
+                            </p>
+                            <div className="space-y-2.5 pt-1 border-l border-amber-500/20 pl-2">
+                                {ALL_ERRORS.map((errorReason) => {
+                                    const isChecked = selectedErrors.includes(errorReason);
+                                    return (
+                                        <div key={errorReason} className="flex items-start justify-between gap-2 text-[11px] font-mono text-gray-650 dark:text-gray-400">
+                                            <label className="flex items-start gap-2 cursor-pointer select-none flex-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {
+                                                        if (isChecked) {
+                                                            setSelectedErrors(prev => prev.filter(e => e !== errorReason));
+                                                        } else {
+                                                            setSelectedErrors(prev => [...prev, errorReason]);
+                                                        }
+                                                    }}
+                                                    className="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500/20 w-3.5 h-3.5 bg-transparent transition-all"
+                                                />
+                                                <span className={isChecked ? "text-gray-800 dark:text-gray-200" : "text-gray-450 line-through"}>
+                                                    {errorReason}
+                                                </span>
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setExplainError(errorReason)}
+                                                className="shrink-0 p-1 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 dark:hover:bg-blue-500/5 rounded transition-all"
+                                                title="Explicar erro"
+                                            >
+                                                <FiAlertCircle className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         <div className="flex items-center gap-3 pt-2">
                             <button
                                 type="submit"
@@ -213,8 +316,8 @@ const StressTest = () => {
                             </div>
                             {isRunning && (
                                 <button
-                                    onClick={handleCancelTest}
-                                    className="px-4 py-1.5 bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl font-bold hover:bg-red-200 transition-all text-xs flex items-center gap-1.5"
+                                    onClick={() => setShowConfirmCancel(true)}
+                                    className="px-4 py-1.5 bg-red-150 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl font-bold hover:bg-red-200 transition-all text-xs flex items-center gap-1.5 cursor-pointer border-0"
                                 >
                                     <FiSlash /> Abortar Teste
                                 </button>
@@ -227,7 +330,18 @@ const StressTest = () => {
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div className="bg-gray-50 dark:bg-gray-800/40 p-4 rounded-2xl border border-gray-100 dark:border-white/5">
                                         <span className="text-xs text-gray-550 dark:text-gray-400 block font-bold uppercase">Status</span>
-                                        <span className="text-base font-black text-blue-500 uppercase">{triggerDetails?.status || 'Processando'}</span>
+                                        {triggerDetails?.processed_data?.temp_paused ? (
+                                            <div className="flex flex-col">
+                                                <span className="text-base font-black text-amber-500 uppercase animate-pulse">
+                                                    ⏳ Pausado
+                                                </span>
+                                                <span className="text-[10px] text-amber-500 font-bold">
+                                                    Retomando em <CountdownBadge temp_paused_until={triggerDetails.processed_data.temp_paused_until} />s
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-base font-black text-blue-500 uppercase">{triggerDetails?.status || 'Processando'}</span>
+                                        )}
                                     </div>
                                     <div className="bg-gray-50 dark:bg-gray-800/40 p-4 rounded-2xl border border-gray-100 dark:border-white/5">
                                         <span className="text-xs text-gray-550 dark:text-gray-400 block font-bold uppercase">Contatos</span>
@@ -250,6 +364,21 @@ const StressTest = () => {
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Banner de Pausa Temporária por instabilidade da Meta */}
+                                {triggerDetails?.processed_data?.temp_paused && (
+                                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 animate-pulse">
+                                        <FiAlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                        <div className="space-y-1">
+                                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block uppercase tracking-wider">
+                                                Disparo Pausado Temporariamente
+                                            </span>
+                                            <p className="text-xs text-gray-650 dark:text-gray-300">
+                                                {triggerDetails.processed_data.temp_paused_reason || "Instabilidade detectada nos servidores da Meta. Aguardando para retomar..."}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Progress bar */}
                                 <div>
@@ -314,8 +443,82 @@ const StressTest = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Popup Bonito de Confirmação para Abortar Teste */}
+            {showConfirmCancel && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 w-screen h-screen">
+                    <div className="w-full max-w-sm bg-white dark:bg-[#131722] border border-gray-200 dark:border-white/5 rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 text-center">
+                        <FiAlertCircle className="w-14 h-14 text-rose-500 mx-auto mb-4 animate-pulse" />
+                        <h3 className="text-lg font-black text-gray-900 dark:text-white mb-2">
+                            Abortar Teste de Escala?
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
+                            Você tem certeza que deseja cancelar imediatamente este teste de estresse em execução? Esta ação não pode ser desfeita.
+                        </p>
+                        
+                        <div className="flex items-center gap-3 justify-center">
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmCancel(false)}
+                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-bold transition-all active:scale-95 border-0"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    handleCancelTest();
+                                    setShowConfirmCancel(false);
+                                }}
+                                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md hover:shadow-rose-500/20 border-0"
+                            >
+                                Sim, Abortar
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {explainError && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 w-screen h-screen">
+                    <div className="w-full max-w-md bg-white dark:bg-[#131722] border border-gray-200 dark:border-white/5 rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                            <FiAlertCircle className="text-blue-500 w-5 h-5" /> 
+                            {ERROR_EXPLANATIONS[explainError]?.titulo || "Explicação do Erro"}
+                        </h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider block mb-1">O que é este erro:</span>
+                                <p className="text-xs text-gray-650 dark:text-gray-300 leading-relaxed bg-gray-50 dark:bg-gray-800/40 p-3 rounded-xl border border-gray-150 dark:border-white/5">
+                                    {ERROR_EXPLANATIONS[explainError]?.descricao}
+                                </p>
+                            </div>
+
+                            <div>
+                                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block mb-1">O que fazer com os contatos:</span>
+                                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed bg-amber-500/10 dark:bg-yellow-500/5 p-3 rounded-xl border border-amber-500/20">
+                                    {ERROR_EXPLANATIONS[explainError]?.acao}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setExplainError(null)}
+                                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md hover:shadow-blue-500/20"
+                            >
+                                Entendido
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+            )}
         </div>
     );
 };
 
 export default StressTest;
+

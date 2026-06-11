@@ -78,100 +78,132 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
         logger.info(f"📍 [GRAPH] Processando Nó: {current_node_id} (Tipo: {node_type})")
         source_handle = None 
         
-        # Orquestração de Handlers
-        if node_type == "start": pass
-        elif node_type in ["message", "messageNode"]:
-            res = await handle_message_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel)
-            if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
-            if res in ["stop", "abort"]: 
-                logger.info(f"🛑 [GRAPH] Nó {current_node_id} solicitou interrupção: {res}")
-                return
-        elif node_type == "audioNode":
-            res = await handle_audio_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel)
-            if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
-            if res in ["stop", "abort"]: 
-                logger.info(f"🛑 [GRAPH] Nó {current_node_id} solicitou interrupção: {res}")
-                return
-        elif node_type in ["media", "mediaNode"]:
-            res = await handle_media_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel, chatwoot_contact_id)
-            if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
-            if res in ["stop", "abort"]: 
-                logger.info(f"🛑 [GRAPH] Nó {current_node_id} solicitou interrupção: {res}")
-                return
-        elif node_type in ["delay", "delayNode"]:
-            res = await handle_delay_node(db, trigger, node, edges, funnel)
-            if res == "stop": 
-                logger.info(f"🛑 [GRAPH] Nó {current_node_id} (Delay) interrompeu a execução.")
-                return
-            if res == "break": 
-                logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Delay) pausou a execução (Scheduled).")
-                break
-            source_handle = res
-        elif node_type in ["date", "dateNode"]:
-            res = await handle_date_node(db, trigger, node, edges, funnel)
-            if res == "stop": 
-                logger.info(f"🛑 [GRAPH] Nó {current_node_id} (Date) interrompeu a execução.")
-                return
-            if res == "break": 
-                logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Date) pausou a execução (Scheduled).")
-                break
-            source_handle = res
-        elif node_type in ["condition", "conditionNode"]:
-            res = await handle_condition_node(db, trigger, node, chatwoot, contact_phone, edges, conversation_id)
-            if res == "stop": return
-            if res in ["break", "abort"]: break
-            source_handle = res
-        elif node_type in ["template", "templateNode"]:
-            res = await handle_template_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, chatwoot_contact_id)
-            if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
-            if res in ["stop", "abort"]: return
-        elif node_type in ["update_contact", "updateContactNode"]:
-            await handle_update_contact_node(db, trigger, node, chatwoot, contact_phone, apply_vars_func)
-        elif node_type in ["chatwoot_label", "labelNode"]:
-            await handle_label_node(db, trigger, node, chatwoot, contact_phone, conversation_id)
-        elif node_type in ["randomizer", "randomizerNode"]:
-            source_handle = await handle_randomizer_node(db, trigger, node)
-        elif node_type in ["link_funnel", "linkFunnelNode"]:
-            await handle_link_funnel_node(db, trigger, node, contact_phone, conversation_id)
-        elif node_type in ["httpRequestNode", "http_request"]:
-            source_handle = await handle_http_request_node(db, trigger, node, apply_vars_func)
-        elif node_type in ["rouletteNode", "roulette"]:
-            source_handle = await handle_roulette_node(db, trigger, node, contact_phone)
-        elif node_type in ["localSegmentNode", "local_segment"]:
-            source_handle = await handle_local_segment_node(db, trigger, node, contact_phone)
-        elif node_type in ["pixelNode", "pixel"]:
-            source_handle = await handle_pixel_node(db, trigger, node, contact_phone)
-        elif node_type in ["crmActionsNode", "crm_actions"]:
-            source_handle = await handle_crm_actions_node(db, trigger, node, chatwoot, contact_phone, conversation_id, apply_vars_func)
-        elif node_type in ["businessHoursNode", "business_hours"]:
-            res = await handle_business_hours_node(db, trigger, node, edges, funnel)
-            if res == "break":
-                logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Business Hours) pausou a execução (Scheduled).")
-                break
-            source_handle = res
-        elif node_type in ["hotLeadsNode", "hot_leads"]:
-            source_handle = await handle_hot_leads_node(db, trigger, node, contact_phone)
-        elif node_type in ["sendTemplateNode", "send_template"]:
-            res = await handle_send_template_node(db, trigger, node, chatwoot, contact_phone, apply_vars_func)
-            if res == "stop": 
-                logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Template) pausou a execução (Suspended).")
-                return
-            source_handle = res
-        elif node_type in ["checkWindowNode", "check_window"]:
-            source_handle = await handle_check_window_node(db, trigger, node, chatwoot, contact_phone, conversation_id)
-        elif node_type in ["waitEventNode", "wait_event"]:
-            res = await handle_wait_event_node(db, trigger, node, chatwoot, contact_phone)
-            if res == "stop":
-                logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (WaitEvent) pausou a execução (Suspended).")
-                return
-            source_handle = res
-        elif node_type in ["inputDataNode", "input_data"]:
-            res = await handle_input_data_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel)
-            if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
-            if res in ["stop", "abort"]:
-                logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (InputData) pausou a execução (Suspended).")
-                return
-            source_handle = res
+        try:
+            # Orquestração de Handlers
+            if node_type == "start": pass
+            elif node_type in ["message", "messageNode"]:
+                res = await handle_message_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel)
+                if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
+                if res == "stop":
+                    logger.info(f"🛑 [GRAPH] Nó {current_node_id} solicitou interrupção.")
+                    return
+                elif res == "abort":
+                    logger.warning(f"❌ [GRAPH] Nó {current_node_id} abortado.")
+                    log_node_execution(db, trigger, current_node_id, "failed", f"Nó {node_type} ({current_node_id}) falhou durante a execução.")
+                    return
+            elif node_type == "audioNode":
+                res = await handle_audio_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel)
+                if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
+                if res == "stop":
+                    logger.info(f"🛑 [GRAPH] Nó {current_node_id} solicitou interrupção.")
+                    return
+                elif res == "abort":
+                    logger.warning(f"❌ [GRAPH] Nó {current_node_id} abortado.")
+                    log_node_execution(db, trigger, current_node_id, "failed", f"Nó {node_type} ({current_node_id}) falhou durante a execução.")
+                    return
+            elif node_type in ["media", "mediaNode"]:
+                res = await handle_media_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel, chatwoot_contact_id)
+                if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
+                if res == "stop":
+                    logger.info(f"🛑 [GRAPH] Nó {current_node_id} solicitou interrupção.")
+                    return
+                elif res == "abort":
+                    logger.warning(f"❌ [GRAPH] Nó {current_node_id} abortado.")
+                    log_node_execution(db, trigger, current_node_id, "failed", f"Nó {node_type} ({current_node_id}) falhou durante a execução.")
+                    return
+            elif node_type in ["delay", "delayNode"]:
+                res = await handle_delay_node(db, trigger, node, edges, funnel)
+                if res == "stop": 
+                    logger.info(f"🛑 [GRAPH] Nó {current_node_id} (Delay) interrompeu a execução.")
+                    return
+                if res == "break": 
+                    logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Delay) pausou a execução (Scheduled).")
+                    break
+                source_handle = res
+            elif node_type in ["date", "dateNode"]:
+                res = await handle_date_node(db, trigger, node, edges, funnel)
+                if res == "stop": 
+                    logger.info(f"🛑 [GRAPH] Nó {current_node_id} (Date) interrompeu a execução.")
+                    return
+                if res == "break": 
+                    logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Date) pausou a execução (Scheduled).")
+                    break
+                source_handle = res
+            elif node_type in ["condition", "conditionNode"]:
+                res = await handle_condition_node(db, trigger, node, chatwoot, contact_phone, edges, conversation_id)
+                if res == "stop": return
+                if res == "break": break
+                if res == "abort":
+                    logger.warning(f"❌ [GRAPH] Nó {current_node_id} abortado.")
+                    log_node_execution(db, trigger, current_node_id, "failed", f"Nó {node_type} ({current_node_id}) falhou durante a execução.")
+                    return
+                source_handle = res
+            elif node_type in ["template", "templateNode"]:
+                res = await handle_template_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, chatwoot_contact_id)
+                if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
+                if res == "stop": return
+                if res == "abort":
+                    logger.warning(f"❌ [GRAPH] Nó {current_node_id} abortado.")
+                    log_node_execution(db, trigger, current_node_id, "failed", f"Nó {node_type} ({current_node_id}) falhou durante a execução.")
+                    return
+            elif node_type in ["update_contact", "updateContactNode"]:
+                await handle_update_contact_node(db, trigger, node, chatwoot, contact_phone, apply_vars_func)
+            elif node_type in ["chatwoot_label", "labelNode"]:
+                await handle_label_node(db, trigger, node, chatwoot, contact_phone, conversation_id)
+            elif node_type in ["randomizer", "randomizerNode"]:
+                source_handle = await handle_randomizer_node(db, trigger, node)
+            elif node_type in ["link_funnel", "linkFunnelNode"]:
+                await handle_link_funnel_node(db, trigger, node, contact_phone, conversation_id)
+            elif node_type in ["httpRequestNode", "http_request"]:
+                source_handle = await handle_http_request_node(db, trigger, node, apply_vars_func)
+            elif node_type in ["rouletteNode", "roulette"]:
+                source_handle = await handle_roulette_node(db, trigger, node, contact_phone)
+            elif node_type in ["localSegmentNode", "local_segment"]:
+                source_handle = await handle_local_segment_node(db, trigger, node, contact_phone)
+            elif node_type in ["pixelNode", "pixel"]:
+                source_handle = await handle_pixel_node(db, trigger, node, contact_phone)
+            elif node_type in ["crmActionsNode", "crm_actions"]:
+                source_handle = await handle_crm_actions_node(db, trigger, node, chatwoot, contact_phone, conversation_id, apply_vars_func)
+            elif node_type in ["businessHoursNode", "business_hours"]:
+                res = await handle_business_hours_node(db, trigger, node, edges, funnel)
+                if res == "break":
+                    logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Business Hours) pausou a execução (Scheduled).")
+                    break
+                source_handle = res
+            elif node_type in ["hotLeadsNode", "hot_leads"]:
+                source_handle = await handle_hot_leads_node(db, trigger, node, contact_phone)
+            elif node_type in ["sendTemplateNode", "send_template"]:
+                res = await handle_send_template_node(db, trigger, node, chatwoot, contact_phone, apply_vars_func)
+                if res == "stop": 
+                    logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (Template) pausou a execução (Suspended).")
+                    return
+                source_handle = res
+            elif node_type in ["checkWindowNode", "check_window"]:
+                source_handle = await handle_check_window_node(db, trigger, node, chatwoot, contact_phone, conversation_id)
+            elif node_type in ["waitEventNode", "wait_event"]:
+                res = await handle_wait_event_node(db, trigger, node, chatwoot, contact_phone)
+                if res == "stop":
+                    logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (WaitEvent) pausou a execução (Suspended).")
+                    return
+                source_handle = res
+            elif node_type in ["inputDataNode", "input_data"]:
+                res = await handle_input_data_node(db, trigger, node, chatwoot, conversation_id, contact_phone, apply_vars_func, funnel)
+                if isinstance(res, dict): conversation_id = res.get("conversation_id", conversation_id)
+                if res == "stop":
+                    logger.info(f"⏸️ [GRAPH] Nó {current_node_id} (InputData) pausou a execução (Suspended).")
+                    return
+                elif res == "abort":
+                    logger.warning(f"❌ [GRAPH] Nó {current_node_id} abortado.")
+                    log_node_execution(db, trigger, current_node_id, "failed", f"Nó {node_type} ({current_node_id}) falhou durante a execução.")
+                    return
+                source_handle = res
+        except Exception as node_err:
+            logger.error(f"❌ [GRAPH] Erro ao executar Nó {current_node_id} (Tipo: {node_type}): {node_err}")
+            log_node_execution(db, trigger, current_node_id, "failed", f"Erro no nó {node_type}: {node_err}")
+            trigger.status = 'failed'
+            trigger.failure_reason = f"Erro no nó {node_type}: {node_err}"
+            db.commit()
+            raise node_err
 
         next_node_id = get_next_node(current_node_id, edges, source_handle)
         if not next_node_id and source_handle in ["default", "approach", "past"]:

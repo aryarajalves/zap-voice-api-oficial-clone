@@ -64,7 +64,8 @@ from routers import (
     financial,      # Controle financeiro e planos
     backup,         # Backup do banco de dados (Super Admin)
     hot_leads,      # Leads quentes e roteamento interno
-    instagram       # Automação do Instagram
+    instagram,      # Automação do Instagram
+    resting         # Contatos em repouso
 )
 
 # Webhook de entrada do Chatwoot (recebe eventos em tempo real)
@@ -261,6 +262,7 @@ app.include_router(whatsapp.router, prefix="/api", tags=["WhatsApp"])
 app.include_router(whatsapp_profile.router, prefix="/api", tags=["WhatsApp"])
 app.include_router(settings.router, prefix="/api", tags=["Settings"])
 app.include_router(blocked.router, prefix="/api", tags=["Blocked"])
+app.include_router(resting.router, prefix="/api", tags=["Resting"])
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(global_vars.router, prefix="/api")
 app.include_router(leads.router, prefix="/api", tags=["Leads"])

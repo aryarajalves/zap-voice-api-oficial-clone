@@ -19,6 +19,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 - **`app_config`**: Configurações dinâmicas (WhatsApp/Chatwoot tokens).
 - **`blocked_contacts`**: Whitelist/Blacklist de contatos.
 - **`contact_windows`**: Cache de janelas de 24h para envio de mensagens grátis.
+- **`resting_contacts`**: Contatos em repouso por 24 horas para reaquecimento.
 
 ---
 
@@ -26,6 +27,8 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 10/06/2026 | Contatos em Repouso | `resting_contacts` | Tabela nova completa | `backend/create_resting_contacts_table.py` |
+| 09/06/2026 | Automação de Comentários no Instagram | `instagram_automations` | Tabela nova completa | `backend/scripts/create_instagram_automations_table.py` |
 | 01/05/2026 | Adição de Tracking de Custos | `scheduled_triggers` | `cost_per_unit`, `total_cost`, `total_delivered`, `total_read` | `migrate_db.py` |
 | 01/05/2026 | Persistência de Variáveis | `message_status` | `var1`, `var2`, `var3`, `var4`, `var5` | `add_var_columns_to_status.py` |
 | 01/05/2026 | Automação ManyChat | `webhook_event_mappings` | `manychat_tag_automation`, `manychat_tag_prefix`, `manychat_tag_rotation_day` | `migrate_chatwoot_labels.py` |

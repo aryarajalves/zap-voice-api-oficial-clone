@@ -7,6 +7,8 @@ from services.bulk import process_bulk_send, process_bulk_funnel
 logger = setup_logger("Worker.Bulk")
 MESSAGE_DELAY = float(os.getenv("RABBITMQ_MESSAGE_DELAY", 1.0))
 
+ACTIVE_TRIGGERS = set()
+
 async def handle_bulk_send(data: dict):
     """
     Processa mensagens de disparo em massa da fila 'zapvoice_bulk_sends'
@@ -14,6 +16,11 @@ async def handle_bulk_send(data: dict):
     trigger_id = data.get("trigger_id")
     logger.info(f"📨 Recebido Job de Bulk Send: {trigger_id}")
     
+    if trigger_id in ACTIVE_TRIGGERS:
+        logger.warning(f"🚫 [ACTIVE LOCK] Trigger {trigger_id} já está rodando ativamente neste worker. Abortando duplicidade.")
+        return
+
+    ACTIVE_TRIGGERS.add(trigger_id)
     should_wait = True
     try:
         # 1. Trava de Segurança Atômica
@@ -24,7 +31,7 @@ async def handle_bulk_send(data: dict):
             trigger = db_lock.query(ScheduledTrigger).filter(ScheduledTrigger.id == trigger_id).with_for_update(skip_locked=True).first()
             
             if not trigger:
-                # Se não retornou a linha, ou ela não existe ou está bloqueada por outro processo (transação ativa)
+                # Se não retornou a linha, ou ela não existe ou está bloqueada por outro processo (transação activa)
                 logger.warning(f"🚫 [BULK LOCK] Trigger {trigger_id} está sendo processado por outro worker ou processo atômico. Abortando.")
                 should_wait = False # Não gasta slot do worker esperando se foi apenas uma duplicidade de fila
                 return
@@ -86,6 +93,7 @@ async def handle_bulk_send(data: dict):
         finally:
             db.close()
     finally:
+        ACTIVE_TRIGGERS.discard(trigger_id)
         # Throttling entre jobs (Apenas se processou algo)
         if should_wait and MESSAGE_DELAY > 0:
             logger.info(f"⏳ Aguardando {MESSAGE_DELAY}s antes de liberar slot...")

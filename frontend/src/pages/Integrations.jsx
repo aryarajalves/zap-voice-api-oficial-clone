@@ -394,6 +394,7 @@ export default function Integrations() {
           setSelectedDispatch(trigger);
           setIsPipelineModalOpen(true);
         }} 
+        fetchChildren={fetchChildren}
       />
       <ContactsViewerModal isOpen={contactsModal.isOpen} onClose={() => setContactsModal(prev => ({ ...prev, isOpen: false }))} triggerId={contactsModal.triggerId} contacts={contactsModal.contacts} counts={contactsModal.counts} filter={contactsFilter} setFilter={setContactsFilter} loading={loadingContacts} title={contactsModal.title} setContactsModal={setContactsModal} />
       <MaximizedJsonModal isOpen={!!maximizedJson} data={maximizedJson} onClose={() => setMaximizedJson(null)} toast={toast} />

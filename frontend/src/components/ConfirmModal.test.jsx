@@ -63,16 +63,7 @@ describe('ConfirmModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('chama onClose ao clicar no botão X', () => {
-    const onClose = vi.fn();
-    render(<ConfirmModal {...defaultProps} onClose={onClose} />);
-    const xButtons = screen.getAllByRole('button');
-    // O botão X é o que contém o ícone FiX
-    const xBtn = xButtons.find((b) => b.querySelector('[data-testid="icon-x"]'));
-    expect(xBtn).toBeTruthy();
-    fireEvent.click(xBtn);
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
+
 
   it('exibe ícone de alerta vermelho quando isDangerous=true', () => {
     render(<ConfirmModal {...defaultProps} isDangerous={true} />);

@@ -5,7 +5,10 @@ import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
 import { resolveUrl } from '../config';
 
-const SIMULATE_MESSAGING = import.meta.env.VITE_SIMULATE_MESSAGING === 'true';
+const SIMULATE_MESSAGING = import.meta.env.VITE_SIMULATE_MESSAGING === 'true' || 
+                           window._env_?.VITE_SIMULATE_MESSAGING === 'true' || 
+                           window._env_?.SIMULATE_MESSAGING === 'true' || 
+                           window._env_?.SIMULATE_MESSAGING === true;
 
 export default function Sidebar({ activeView, onViewChange, onLogout, onSettings, user, clientName, onClientCreate, appBranding }) {
     const { activeClient } = useClient();
