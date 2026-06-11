@@ -107,6 +107,9 @@ export const useTagManagement = ({
                     return;
                 }
 
+                const contactsWithoutName = data.items.filter(lead => !lead.name || lead.name.trim() === '');
+                const hasContactsWithoutName = contactsWithoutName.length > 0;
+
                 setContacts(prev => {
                     const existingPhones = new Set(prev.map(c => c.phone));
                     const seenInBatch = new Set();
@@ -130,6 +133,24 @@ export const useTagManagement = ({
                 setShowList(true);
                 setIsValidated(false);
                 toast.success(`${incoming.length} contatos carregados da etiqueta!`);
+
+                if (hasContactsWithoutName) {
+                    setTimeout(() => {
+                        toast.error(
+                            `Atenção: ${contactsWithoutName.length} contato(s) carregado(s) não possui(em) nome cadastrado na base de dados.`,
+                            {
+                                duration: 6000,
+                                icon: '⚠️',
+                                style: {
+                                    borderRadius: '12px',
+                                    background: '#1e293b',
+                                    color: '#f87171',
+                                    border: '1px solid rgba(248, 113, 113, 0.2)'
+                                }
+                            }
+                        );
+                    }, 800);
+                }
             }
         } catch (err) {
             console.error(err);

@@ -75,7 +75,16 @@ def get_trigger_messages(
         elif status_filter == 'blocked':
             base_query = base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
         elif status_filter in ('interaction', 'interactions'):
-            base_query = base_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True), or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'))
+            if trigger.is_bulk:
+                interaction_phones = db.query(models.MessageStatus.phone_number).filter(
+                    models.MessageStatus.trigger_id.in_(all_trigger_ids),
+                    or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True),
+                    or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON')
+                ).distinct().all()
+                interaction_phones = [p[0] for p in interaction_phones if p[0]]
+                base_query = base_query.filter(models.MessageStatus.phone_number.in_(interaction_phones))
+            else:
+                base_query = base_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True), or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'))
         elif status_filter == 'private_note':
             base_query = base_query.filter(models.MessageStatus.private_note_posted == True)
 
@@ -110,6 +119,10 @@ def get_trigger_messages(
                 if status_filter == 'failed' and child.status not in ('failed', 'aborted', 'cancelled'):
                     continue
                 if status_filter in ('delivered', 'read') and child.status not in ('completed', 'processing'):
+                    continue
+                if status_filter in ('interaction', 'interactions') and not child.is_interaction:
+                    continue
+                if status_filter == 'blocked' and not child.skip_block_check:
                     continue
                 
                 # Filter virtual items by failure reason if requested

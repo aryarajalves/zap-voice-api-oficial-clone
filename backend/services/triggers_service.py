@@ -27,13 +27,10 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
     all_trigger_ids = [trigger_id] + child_ids
     
-    # Obter o ID do status mais recente de cada telefone (contatos únicos)
-    from sqlalchemy import func, or_
-    subquery = db.query(func.max(models.MessageStatus.id)).filter(
+    # Buscar todos os registros de status de mensagem para esses triggers
+    all_statuses = db.query(models.MessageStatus).filter(
         models.MessageStatus.trigger_id.in_(all_trigger_ids)
-    ).group_by(models.MessageStatus.phone_number).subquery()
-    
-    statuses = db.query(models.MessageStatus).filter(models.MessageStatus.id.in_(subquery)).all()
+    ).all()
 
     # 2. Inicializar contadores
     sent = 0
@@ -45,41 +42,42 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     total_cost = 0.0
     paid_templates = 0
 
-    # 3. Processar cada registro único
-    for ms in statuses:
-        # Contagem de Sent
-        if ms.status in ['sent', 'delivered', 'read', 'interaction'] or ms.delivered_counted or ms.read_counted:
-            sent += 1
-            
-        # Contagem de Delivered
-        if ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction:
-            delivered += 1
-            
-        # Contagem de Read
-        if ms.status in ['read', 'interaction'] or ms.read_counted or ms.is_interaction:
-            read += 1
+    # 3. Agrupar por telefone em Python para consolidar contadores de contatos únicos
+    phone_groups = {}
+    for ms in all_statuses:
+        phone = ms.phone_number
+        if phone not in phone_groups:
+            phone_groups[phone] = []
+        phone_groups[phone].append(ms)
 
-        # Contagem de Blocked (apenas opt-out ativo pós-envio via botão)
-        if ms.failure_reason == 'BLOCKED_VIA_BUTTON':
-            blocked += 1
+    for phone, group in phone_groups.items():
+        has_interaction = any((ms.is_interaction or ms.interaction_counted) and ms.failure_reason != 'BLOCKED_VIA_BUTTON' for ms in group)
+        has_sent = any(ms.status in ['sent', 'delivered', 'read', 'interaction'] or ms.delivered_counted or ms.read_counted for ms in group)
+        has_delivered = any(ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction for ms in group)
+        has_read = any(ms.status in ['read', 'interaction'] or ms.read_counted or ms.is_interaction for ms in group)
+        has_blocked = any(ms.failure_reason == 'BLOCKED_VIA_BUTTON' for ms in group)
         
-        # Contagem de Failed (inclui falhas de entrega e contatos na Lista de Exclusão)
-        elif ms.status == 'failed':
-            failed += 1
+        # Para falha, consideramos se o status final (mais recente) do contato é falha
+        latest_ms = max(group, key=lambda x: x.id)
+        has_failed = latest_ms.status == 'failed' and latest_ms.failure_reason != 'BLOCKED_VIA_BUTTON'
 
-        # Contagem de Interactions
-        if (ms.is_interaction or ms.interaction_counted) and ms.failure_reason != 'BLOCKED_VIA_BUTTON':
-            interactions += 1
+        if has_sent: sent += 1
+        if has_delivered: delivered += 1
+        if has_read: read += 1
+        if has_blocked: blocked += 1
+        elif has_failed: failed += 1
+        if has_interaction: interactions += 1
 
-        # Custo (Apenas se entregue ou lido/interagido)
-        if ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction:
-            if ms.meta_price_brl is not None:
-                total_cost += float(ms.meta_price_brl)
-                if ms.meta_price_brl > 0:
+        # Calcular custo acumulando de todos os itens do grupo
+        for ms in group:
+            if ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction:
+                if ms.meta_price_brl is not None:
+                    total_cost += float(ms.meta_price_brl)
+                    if ms.meta_price_brl > 0:
+                        paid_templates += 1
+                elif trigger.cost_per_unit and ms.message_type != 'FREE_MESSAGE':
+                    total_cost += float(trigger.cost_per_unit)
                     paid_templates += 1
-            elif trigger.cost_per_unit and ms.message_type != 'FREE_MESSAGE':
-                 total_cost += float(trigger.cost_per_unit)
-                 paid_templates += 1
 
     # 4. Atualizar o Trigger
     trigger.total_sent = sent
@@ -92,7 +90,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     trigger.total_paid_templates = paid_templates
     
     # Marcar registros como contados
-    for ms in statuses:
+    for ms in all_statuses:
         if ms.status in ['delivered', 'read']:
             ms.delivered_counted = True
         if ms.status == 'read' or ms.is_interaction:

@@ -379,6 +379,59 @@ def pin_funnel(
     db.refresh(db_funnel)
     return db_funnel
 
+@router.post("/funnels/{funnel_id}/duplicate", response_model=schemas.Funnel, summary="Duplicar funil existente")
+def duplicate_funnel(
+    funnel_id: int,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Clona um funil existente, gerando um nome exclusivo com o sufixo ' (Cópia)'
+    """
+    db_funnel = db.query(models.Funnel).filter(
+        models.Funnel.id == funnel_id,
+        models.Funnel.client_id == x_client_id
+    ).first()
+    if not db_funnel:
+        raise HTTPException(status_code=404, detail="Funnel not found")
+
+    # Gerar nome único para a cópia
+    base_name = f"{db_funnel.name} (Cópia)"
+    new_name = base_name
+    counter = 1
+    while True:
+        existing = db.query(models.Funnel).filter(
+            models.Funnel.name == new_name,
+            models.Funnel.client_id == x_client_id
+        ).first()
+        if not existing:
+            break
+        counter += 1
+        new_name = f"{base_name} {counter}"
+
+    # Duplicar objeto
+    duplicated_funnel = models.Funnel(
+        name=new_name,
+        description=db_funnel.description,
+        steps=db_funnel.steps,
+        trigger_phrase=db_funnel.trigger_phrase,
+        allowed_phones=db_funnel.allowed_phones,
+        blocked_phones=db_funnel.blocked_phones,
+        allowed_phone=db_funnel.allowed_phone,
+        business_hours_start=db_funnel.business_hours_start,
+        business_hours_end=db_funnel.business_hours_end,
+        business_hours_days=db_funnel.business_hours_days,
+        is_archived=db_funnel.is_archived,
+        tag=db_funnel.tag,
+        client_id=x_client_id
+    )
+
+    db.add(duplicated_funnel)
+    db.commit()
+    db.refresh(duplicated_funnel)
+    return duplicated_funnel
+
 @router.delete("/funnels/{funnel_id}", summary="Excluir funil")
 def delete_funnel(
     funnel_id: int,

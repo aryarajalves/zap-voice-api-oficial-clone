@@ -62,7 +62,10 @@ export function ViewMessageModal({ viewingMessageSchedule, onClose, onSave, temp
         if (!templateObj?.components) return [];
         const buttonsComp = templateObj.components.find(c => c.type === 'BUTTONS');
         if (!buttonsComp?.buttons) return [];
-        return buttonsComp.buttons.map(b => b.text).filter(Boolean);
+        return buttonsComp.buttons
+            .filter(b => b.type !== 'URL' && b.type !== 'PHONE')
+            .map(b => b.text)
+            .filter(Boolean);
     };
 
     const extractTemplateVariables = (templateObj) => {

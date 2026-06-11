@@ -372,7 +372,7 @@ export function useAppLogic() {
             
             if (res.ok) {
                 toast.dismiss(loadingToast);
-                toast.success("Etiquetas em lote atualizadas!");
+                toast.success("Etiquetas em lote updated!");
                 fetchFunnels();
                 setSelectedFunnelIds([]);
             } else {
@@ -382,6 +382,29 @@ export function useAppLogic() {
             console.error(e);
             toast.dismiss(loadingToast);
             toast.error("Erro ao salvar etiquetas em lote");
+        }
+    };
+
+    const handleDuplicateFunnel = async (funnelId, e) => {
+        if (e) e.stopPropagation();
+        const loadingToast = toast.loading("Duplicando funil...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/funnels/${funnelId}/duplicate`, {
+                method: 'POST'
+            }, activeClient?.id);
+            
+            if (res.ok) {
+                toast.dismiss(loadingToast);
+                toast.success("Funil duplicado com sucesso!");
+                fetchFunnels();
+            } else {
+                const errData = await res.json();
+                throw new Error(errData.detail || "Erro ao duplicar funil");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.dismiss(loadingToast);
+            toast.error(e.message || "Erro ao duplicar funil");
         }
     };
 
@@ -415,6 +438,6 @@ export function useAppLogic() {
         handleArchiveFunnel, handleTagFunnel, handlePinFunnel,
         handleCreateFunnel, handleEdit, confirmDelete, handleDelete,
         toggleFunnelSelection, handleBulkDelete, toggleSelectAll, handleViewChange,
-        handleBulkArchive, handleBulkTagConfirm
+        handleBulkArchive, handleBulkTagConfirm, handleDuplicateFunnel
     };
 }

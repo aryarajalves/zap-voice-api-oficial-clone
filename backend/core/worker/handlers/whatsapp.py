@@ -161,22 +161,18 @@ async def handle_whatsapp_event(data: dict):
                                 if status == 'delivered' and not message_record.delivered_counted:
                                     message_record.delivered_counted = True
                                     trigger_delivered = True
-                                    is_first_charge = True
+                                    # Só é a primeira cobrança se nunca tivermos atribuído um preço a esta mensagem
+                                    if message_record.meta_price_brl is None:
+                                        is_first_charge = True
                                 
                                 if status == 'read' and not message_record.read_counted:
                                     message_record.read_counted = True
                                     if not message_record.delivered_counted:
                                         message_record.delivered_counted = True
                                         trigger_delivered = True
-                                    is_first_charge = True
+                                        if message_record.meta_price_brl is None:
+                                            is_first_charge = True
                                 
-                                db.flush()
-                                # Recalcular as estatísticas de contatos únicos
-                                from services.triggers_service import reconcile_trigger_stats_logic
-                                await reconcile_trigger_stats_logic(trigger.id, trigger.client_id, db)
-                                if trigger.parent_id:
-                                    await reconcile_trigger_stats_logic(trigger.parent_id, trigger.client_id, db)
-
                                 if is_first_charge:
                                     # Extrair pricing da Meta
                                     pricing = status_data.get("pricing", {})
@@ -211,6 +207,13 @@ async def handle_whatsapp_event(data: dict):
                                             text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :pid"),
                                             {"cost": cost_to_add, "paid": paid_increment, "pid": trigger.parent_id}
                                         )
+
+                                db.flush()
+                                # Recalcular as estatísticas de contatos únicos
+                                from services.triggers_service import reconcile_trigger_stats_logic
+                                await reconcile_trigger_stats_logic(trigger.id, trigger.client_id, db)
+                                if trigger.parent_id:
+                                    await reconcile_trigger_stats_logic(trigger.parent_id, trigger.client_id, db)
 
                                 # Disparar webhook de memória para qualquer template entregue.
                                 # A verificação de URL configurada fica no próprio serviço ai_memory,

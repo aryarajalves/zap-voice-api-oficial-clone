@@ -123,7 +123,10 @@ const BulkSendContactsModal = ({ isOpen, onClose, selectedPhones, clientId, trig
         if (!templateObj?.components) return [];
         const buttonsComp = templateObj.components.find(c => c.type === 'BUTTONS');
         if (!buttonsComp?.buttons) return [];
-        return buttonsComp.buttons.map((b, idx) => ({ text: b.text, index: idx })).filter(b => b.text);
+        return buttonsComp.buttons
+            .filter(b => b.type !== 'URL' && b.type !== 'PHONE')
+            .map((b, idx) => ({ text: b.text, index: idx }))
+            .filter(b => b.text);
     };
 
     const variables = extractTemplateVariables(selectedTemplate);

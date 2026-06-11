@@ -1,6 +1,6 @@
 import React from 'react';
 import { Toaster, toast } from 'react-hot-toast';
-import { FiLayers, FiTrash2, FiEdit2, FiPlay, FiGlobe, FiArchive, FiTag, FiChevronLeft, FiChevronRight, FiBookmark, FiZap } from 'react-icons/fi';
+import { FiLayers, FiTrash2, FiEdit2, FiPlay, FiGlobe, FiArchive, FiTag, FiChevronLeft, FiChevronRight, FiBookmark, FiZap, FiCopy } from 'react-icons/fi';
 import Sidebar from './components/Sidebar';
 import ConnectionStatus from './components/ConnectionStatus';
 import AppModals from './components/AppModals';
@@ -445,6 +445,16 @@ const FunnelList = ({ logic }) => {
                 >
                   <FiArchive size={16} />
                   <span className="text-xs font-bold uppercase tracking-wider">{funnel.is_archived ? 'Restaurar' : 'Arquivar'}</span>
+                </button>
+
+                {/* Botão de Duplicar */}
+                <button
+                  onClick={(e) => logic.handleDuplicateFunnel(funnel.id, e)}
+                  className="px-3 py-1.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg text-indigo-600 flex items-center gap-1.5 transition-all"
+                  title="Duplicar Funil"
+                >
+                  <FiCopy size={16} />
+                  <span className="text-xs font-bold uppercase tracking-wider">Duplicar</span>
                 </button>
 
                 {/* Botão de Editar */}

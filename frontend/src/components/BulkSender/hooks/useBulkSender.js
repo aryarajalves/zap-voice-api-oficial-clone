@@ -380,7 +380,11 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         if (!templateObj?.components) return [];
         const buttonsComp = templateObj.components.find(c => c.type === 'BUTTONS');
         if (!buttonsComp?.buttons) return [];
-        return buttonsComp.buttons.map(b => b.text).filter(Boolean);
+        // Filtra botões que NÃO sejam do tipo URL ou PHONE (ou seja, apenas os QUICK_REPLY/REPLY)
+        return buttonsComp.buttons
+            .filter(b => b.type !== 'URL' && b.type !== 'PHONE')
+            .map(b => b.text)
+            .filter(Boolean);
     };
 
     const extractTemplateVariables = (templateObj) => {
