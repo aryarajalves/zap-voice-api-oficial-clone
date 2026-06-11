@@ -111,15 +111,23 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
                         if inbox_id_str and str(inbox_id_str).isdigit():
                             effective_inbox_id = int(inbox_id_str)
                     
-                    conv = await chatwoot.ensure_conversation(contact_phone, name=trigger.contact_name or contact_phone, inbox_id=effective_inbox_id)
-                    if conv and conv.get("conversation_id"):
-                        conversation_id = conv.get("conversation_id")
-                        trigger.conversation_id = conversation_id
-                        db.commit()
-                        
+                    from core.engine.sync_utils import safe_chatwoot_sync
+                    
+                    async def do_sync_media(c_id):
                         # Postar a cópia da mídia no Chatwoot
-                        await chatwoot.send_attachment(conversation_id, file_url, media_type, caption=caption_processed)
-                        logger.info(f"✅ [SYNC_CHATWOOT] Cópia da mídia postada no Chatwoot (Conversa {conversation_id})")
+                        await chatwoot.send_attachment(c_id, file_url, media_type, caption=caption_processed)
+                        
+                    await safe_chatwoot_sync(
+                        db=db,
+                        trigger=trigger,
+                        contact_phone=contact_phone,
+                        client_id=trigger.client_id,
+                        effective_inbox_id=effective_inbox_id,
+                        chatwoot_client=chatwoot,
+                        sync_fn=do_sync_media
+                    )
+                    conversation_id = trigger.conversation_id
+                    logger.info(f"✅ [SYNC_CHATWOOT] Cópia da mídia postada no Chatwoot (Conversa {conversation_id})")
                 except Exception as e_sync:
                     logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar mídia no Chatwoot: {e_sync}")
                 

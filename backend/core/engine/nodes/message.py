@@ -79,7 +79,28 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                 
                 try:
                     formatted_copy = final_content + "\n\n🔘 [Botões]: " + ", ".join([f"[{b}]" for b in buttons])
-                    await chatwoot.send_private_note(conversation_id, formatted_copy)
+                    
+                    from core.engine.sync_utils import safe_chatwoot_sync
+                    effective_inbox_id = trigger.chatwoot_inbox_id
+                    if not effective_inbox_id:
+                        from config_loader import get_setting
+                        inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
+                        if inbox_id_str and str(inbox_id_str).isdigit():
+                            effective_inbox_id = int(inbox_id_str)
+                            
+                    async def do_sync_chatwoot_buttons(c_id):
+                        await chatwoot.send_private_note(c_id, formatted_copy)
+                        
+                    await safe_chatwoot_sync(
+                        db=db,
+                        trigger=trigger,
+                        contact_phone=contact_phone,
+                        client_id=trigger.client_id,
+                        effective_inbox_id=effective_inbox_id,
+                        chatwoot_client=chatwoot,
+                        sync_fn=do_sync_chatwoot_buttons
+                    )
+                    conversation_id = trigger.conversation_id
                 except Exception as e_sync:
                     logger.error(f"❌ [SYNC_CHATWOOT] Erro ao enviar nota privada no Chatwoot: {e_sync}")
                 
@@ -97,7 +118,29 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                 return "abort"
         else:
             # Enviar via Chatwoot
-            res = await chatwoot.send_message(conversation_id, final_content)
+            effective_inbox_id = trigger.chatwoot_inbox_id
+            if not effective_inbox_id:
+                from config_loader import get_setting
+                inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
+                if inbox_id_str and str(inbox_id_str).isdigit():
+                    effective_inbox_id = int(inbox_id_str)
+                    
+            from core.engine.sync_utils import safe_chatwoot_sync
+            res = None
+            async def do_send_message(c_id):
+                nonlocal res
+                res = await chatwoot.send_message(c_id, final_content)
+                
+            await safe_chatwoot_sync(
+                db=db,
+                trigger=trigger,
+                contact_phone=contact_phone,
+                client_id=trigger.client_id,
+                effective_inbox_id=effective_inbox_id,
+                chatwoot_client=chatwoot,
+                sync_fn=do_send_message
+            )
+            conversation_id = trigger.conversation_id
 
         if res and isinstance(res, dict) and not res.get("error"):
             raw_msg_id = res.get("source_id") or str(res.get("id"))
@@ -169,13 +212,23 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                         if inbox_id_str and str(inbox_id_str).isdigit():
                             effective_inbox_id = int(inbox_id_str)
                     
-                    conv = await chatwoot.ensure_conversation(contact_phone, trigger.contact_name or contact_phone, effective_inbox_id)
-                    if conv and conv.get("conversation_id"):
-                        conversation_id = conv.get("conversation_id")
-                        trigger.conversation_id = conversation_id
-                        db.commit()
-                        formatted_copy = final_content + "\n\n🔘 [Botões]: " + ", ".join([f"[{b}]" for b in buttons])
-                        await chatwoot.send_private_note(conversation_id, formatted_copy)
+                    from core.engine.sync_utils import safe_chatwoot_sync
+                    formatted_copy = final_content + "\n\n🔘 [Botões]: " + ", ".join([f"[{b}]" for b in buttons])
+                    
+                    async def do_sync(c_id):
+                        await chatwoot.send_private_note(c_id, formatted_copy)
+                        
+                    await safe_chatwoot_sync(
+                        db=db,
+                        trigger=trigger,
+                        contact_phone=contact_phone,
+                        client_id=trigger.client_id,
+                        effective_inbox_id=effective_inbox_id,
+                        chatwoot_client=chatwoot,
+                        sync_fn=do_sync
+                    )
+                    # Atualiza a referência local da conversation_id após a sincronia
+                    conversation_id = trigger.conversation_id
                 except Exception as e_sync:
                     logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar cópia no Chatwoot (Meta Direto): {e_sync}")
                 
@@ -209,13 +262,21 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                         if inbox_id_str and str(inbox_id_str).isdigit():
                             effective_inbox_id = int(inbox_id_str)
                     
-                    conv = await chatwoot.ensure_conversation(contact_phone, trigger.contact_name or contact_phone, effective_inbox_id)
-                    if conv and conv.get("conversation_id"):
-                        conversation_id = conv.get("conversation_id")
-                        trigger.conversation_id = conversation_id
-                        db.commit()
-                        # Envia como nota privada para que apareça visualmente no Chatwoot sem ser reenviada via webhook
-                        await chatwoot.send_private_note(conversation_id, f"[Enviado via Meta]: {final_content}")
+                    from core.engine.sync_utils import safe_chatwoot_sync
+                    
+                    async def do_sync_simple(c_id):
+                        await chatwoot.send_private_note(c_id, f"[Enviado via Meta]: {final_content}")
+                        
+                    await safe_chatwoot_sync(
+                        db=db,
+                        trigger=trigger,
+                        contact_phone=contact_phone,
+                        client_id=trigger.client_id,
+                        effective_inbox_id=effective_inbox_id,
+                        chatwoot_client=chatwoot,
+                        sync_fn=do_sync_simple
+                    )
+                    conversation_id = trigger.conversation_id
                 except Exception as e_sync:
                     logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar cópia no Chatwoot: {e_sync}")
             else:

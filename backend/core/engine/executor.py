@@ -137,25 +137,34 @@ async def execute_funnel(
             except Exception as e_api:
                 logger.error(f"❌ [ENGINE] Erro ao buscar conversa existente via API: {e_api}")
     
+    from core.engine.sync_utils import safe_chatwoot_sync
+    
+    effective_inbox_id = trigger.chatwoot_inbox_id
+    if not effective_inbox_id:
+        inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
+        if inbox_id_str and str(inbox_id_str).isdigit():
+            effective_inbox_id = int(inbox_id_str)
+            
     if trigger.chatwoot_label:
         try:
             from core.utils import robust_extract_labels
             clean_labels = robust_extract_labels(trigger.chatwoot_label)
             if clean_labels:
-                # Tentar encontrar a conversa se estiver ausente
-                if not target_convo_id:
-                    logger.info(f"🔍 [ENGINE] Buscando conversa para {contact_phone} para aplicar etiquetas")
-                    conv = await chatwoot.ensure_conversation(contact_phone)
-                    if conv:
-                        target_convo_id = conv.get("conversation_id")
-                        trigger.conversation_id = target_convo_id
-                        db.commit()
-
-                if target_convo_id:
-                    logger.info(f"🏷️ [ENGINE] Aplicando etiquetas {clean_labels} na conversa {target_convo_id}")
-                    await chatwoot.add_label_to_conversation(target_convo_id, clean_labels)
-                else:
-                    logger.warning(f"⚠️ [ENGINE] Não foi possível encontrar conversa para aplicar etiquetas para {contact_phone}")
+                async def do_sync_labels(c_id):
+                    logger.info(f"🏷️ [ENGINE] Aplicando etiquetas {clean_labels} na conversa {c_id}")
+                    await chatwoot.add_label_to_conversation(c_id, clean_labels)
+                
+                await safe_chatwoot_sync(
+                    db=db,
+                    trigger=trigger,
+                    contact_phone=contact_phone,
+                    client_id=trigger.client_id,
+                    effective_inbox_id=effective_inbox_id,
+                    chatwoot_client=chatwoot,
+                    sync_fn=do_sync_labels
+                )
+                target_convo_id = trigger.conversation_id
+                conversation_id = target_convo_id
         except Exception as e_lbl:
             logger.error(f"❌ [ENGINE] Erro ao aplicar etiquetas: {e_lbl}")
 
@@ -167,22 +176,24 @@ async def execute_funnel(
                 logger.info(f"⏳ [ENGINE] Aguardando {delay}s para enviar nota privada...")
                 await asyncio.sleep(delay)
             
-            # Tentar encontrar a conversa se estiver ausente
-            if not target_convo_id:
-                logger.info(f"🔍 [ENGINE] Buscando conversa para {contact_phone} para enviar nota privada")
-                conv = await chatwoot.ensure_conversation(contact_phone)
-                if conv:
-                    target_convo_id = conv.get("conversation_id")
-                    trigger.conversation_id = target_convo_id
-                    db.commit()
-
-            if target_convo_id:
-                logger.info(f"📝 [ENGINE] Enviando nota privada para conversa {target_convo_id}")
-                final_note = apply_vars_func(trigger.private_message)
-                await chatwoot.create_private_note(target_convo_id, final_note)
+            final_note = apply_vars_func(trigger.private_message)
+            
+            async def do_sync_note(c_id):
+                logger.info(f"📝 [ENGINE] Enviando nota privada para conversa {c_id}")
+                await chatwoot.create_private_note(c_id, final_note)
                 logger.info(f"✅ [ENGINE] Nota privada enviada com sucesso!")
-            else:
-                logger.warning(f"⚠️ [ENGINE] Não foi possível encontrar conversa para enviar nota privada para {contact_phone}")
+                
+            await safe_chatwoot_sync(
+                db=db,
+                trigger=trigger,
+                contact_phone=contact_phone,
+                client_id=trigger.client_id,
+                effective_inbox_id=effective_inbox_id,
+                chatwoot_client=chatwoot,
+                sync_fn=do_sync_note
+            )
+            target_convo_id = trigger.conversation_id
+            conversation_id = target_convo_id
         except Exception as e_note:
             logger.error(f"❌ [ENGINE] Erro ao enviar nota privada: {e_note}")
 

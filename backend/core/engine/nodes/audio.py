@@ -81,15 +81,23 @@ async def handle_audio_node(db, trigger, node, chatwoot, conversation_id, contac
                 if inbox_id_str and str(inbox_id_str).isdigit():
                     effective_inbox_id = int(inbox_id_str)
             
-            conv = await chatwoot.ensure_conversation(contact_phone, name=trigger.contact_name or contact_phone, inbox_id=effective_inbox_id)
-            if conv and conv.get("conversation_id"):
-                conversation_id = conv.get("conversation_id")
-                trigger.conversation_id = conversation_id
-                db.commit()
-                
+            from core.engine.sync_utils import safe_chatwoot_sync
+            
+            async def do_sync_audio(c_id):
                 # Criar apenas a mensagem informativa em texto no Chatwoot para evitar duplicidade de envio via anexo do Chatwoot (evitando erro 131053)
-                await chatwoot.create_message(conversation_id, f"[Áudio enviado: {file_url}]", "outgoing")
-                logger.info(f"✅ [SYNC_CHATWOOT] Registro de áudio postado no Chatwoot (Conversa {conversation_id})")
+                await chatwoot.create_message(c_id, f"[Áudio enviado: {file_url}]", "outgoing")
+                
+            await safe_chatwoot_sync(
+                db=db,
+                trigger=trigger,
+                contact_phone=contact_phone,
+                client_id=trigger.client_id,
+                effective_inbox_id=effective_inbox_id,
+                chatwoot_client=chatwoot,
+                sync_fn=do_sync_audio
+            )
+            conversation_id = trigger.conversation_id
+            logger.info(f"✅ [SYNC_CHATWOOT] Registro de áudio postado no Chatwoot (Conversa {conversation_id})")
         except Exception as e_sync:
             logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar áudio no Chatwoot: {e_sync}")
         
