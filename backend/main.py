@@ -118,12 +118,12 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 app = FastAPI(
     title="ZapVoice API Oficial",
-    version="3.9.5",
+    version="4.0.5",
     docs_url="/docs" if DEBUG else None,
     redoc_url="/redoc" if DEBUG else None,
     openapi_url="/openapi.json" if DEBUG else None,
     description="""
-## 🚀 ZapVoice API v3.9.5
+## 🚀 ZapVoice API v4.0.5
 
 Esta API fornece todo o backend para automação de mensagens no Chatwoot.
 
@@ -624,7 +624,7 @@ async def root():
         "message": "ZapVoice Chatwoot API",
         "docs": "/docs",
         "status": "online",
-        "version": "3.9.5",
+        "version": "4.0.5",
         "mode": "production"
     }
 
