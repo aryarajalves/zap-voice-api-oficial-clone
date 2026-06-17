@@ -20,6 +20,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 - **`blocked_contacts`**: Whitelist/Blacklist de contatos.
 - **`contact_windows`**: Cache de janelas de 24h para envio de mensagens grátis.
 - **`resting_contacts`**: Contatos em repouso por 24 horas para reaquecimento.
+- **`contact_import_history`**: Histórico e status de importações de contatos em segundo plano.
 
 ---
 
@@ -27,6 +28,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 17/06/2026 | Histórico de Importação de Contatos | `contact_import_history` | Tabela nova completa | `backend/scripts/database/create_import_history_table.py` |
 | 10/06/2026 | Contatos em Repouso | `resting_contacts` | Tabela nova completa | `backend/create_resting_contacts_table.py` |
 | 09/06/2026 | Automação de Comentários no Instagram | `instagram_automations` | Tabela nova completa | `backend/scripts/create_instagram_automations_table.py` |
 | 01/05/2026 | Adição de Tracking de Custos | `scheduled_triggers` | `cost_per_unit`, `total_cost`, `total_delivered`, `total_read` | `migrate_db.py` |
@@ -62,8 +64,8 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 06/06/2026 | Restrição de Módulos (Painéis) | `users`, `user_invitations` | `blocked_features` (TEXT) | `backend/scripts/add_blocked_features_column.py` |
 | 06/06/2026 | Restrição de Nós de Funil | `users`, `user_invitations` | `blocked_nodes` (TEXT) | `backend/scripts/add_blocked_nodes_column.py` |
 | 07/06/2026 | Snapshot de Fidelidade do Funil no Disparo | `scheduled_triggers` | `funnel_snapshot` (JSONB) | `backend/scripts/add_funnel_snapshot_column.py` |
-| 08/06/2026 | Variáveis Coletadas no Disparo (IA/Entrada) | `scheduled_triggers` | `processed_data` (JSONB) | `backend/scripts/database/add_processed_data_to_trigger.py` |
 | 09/06/2026 | Automação de Comentários no Instagram | `instagram_automations` | Tabela nova completa | `backend/scripts/create_instagram_automations_table.py` |
+| 15/06/2026 | Histórico de Execução do Instagram | `instagram_logs` | Tabela nova completa | `backend/scripts/create_instagram_logs_table.py` |
 
 
 

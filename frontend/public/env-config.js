@@ -1,10 +1,1 @@
-// Arquivo de configuração dinâmico para ambiente de DESENVOLVIMENTO
-// Em produção, este arquivo é gerado e servido pelo servidor original.
-window._env_ = {
-    // Se quiser testar rotas específicas no dev, altere aqui.
-    API_URL: "http://localhost:8000/api",
-    WS_URL: "ws://localhost:8000/ws",
-    WEBHOOK_BASE_URL: "https://api.aryaraj.shop",
-    SIMULATE_MESSAGING: "false",
-    VITE_SIMULATE_MESSAGING: "false"
-};
+window._env_ = { API_URL: 'http://localhost:8000/api', WS_URL: 'ws://localhost:8000/ws', META_APP_ID: '911469058334354', META_CONFIG_ID: '1031733899184595', WEBHOOK_BASE_URL: 'https://api.aryaraj.shop' };

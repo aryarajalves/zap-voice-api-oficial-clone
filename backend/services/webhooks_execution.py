@@ -83,19 +83,25 @@ async def execute_webhook_resend_logic(
         template_name = mapping.template_name
         funnel_id = getattr(mapping, 'funnel_id', None)
 
-        # Fallback para o cache do template se o nome estiver nulo
-        if not template_name and mapping.template_id:
+        # Fallback para o cache do template e busca de header_format
+        header_format = None
+        if mapping.template_id:
             tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
                 models.WhatsAppTemplateCache.id == mapping.template_id
             ).first()
             if tpl_cache:
-                template_name = tpl_cache.name
+                if not template_name:
+                    template_name = tpl_cache.name
+                if tpl_cache.components:
+                    header_comp = next((c for c in tpl_cache.components if c.get("type") == "HEADER"), None)
+                    if header_comp:
+                        header_format = header_comp.get("format")
 
         if not template_name and not funnel_id:
              # Permitir continuar se houver label ou nota privada
              pass
             
-        components = extract_mapped_variables(payload, parsed_data, mapping.variables_mapping or {})
+        components = extract_mapped_variables(payload, parsed_data, mapping.variables_mapping or {}, header_format)
         
         private_msg_text = None
         mapping_note = getattr(mapping, "private_note", None)
@@ -218,8 +224,21 @@ async def execute_webhook_resend_logic(
             total_fu_delay = total_delay_sec + fu_delay_sec
             fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=total_fu_delay)
             
+            fu_header_format = None
+            if mapping.followup_template_id:
+                try:
+                    fu_tpl = db.query(models.WhatsAppTemplateCache).filter(
+                        models.WhatsAppTemplateCache.id == mapping.followup_template_id
+                    ).first()
+                    if fu_tpl and fu_tpl.components:
+                        fu_header_comp = next((c for c in fu_tpl.components if c.get("type") == "HEADER"), None)
+                        if fu_header_comp:
+                            fu_header_format = fu_header_comp.get("format")
+                except Exception as e:
+                    logger.error(f"Erro ao obter fu_header_format para mapping {mapping.id}: {e}")
+
             # Nota: usamos parsed_data pois é a representação do payload processado nesta função
-            fu_components = extract_mapped_variables(payload, parsed_data, mapping.followup_variables_mapping or {})
+            fu_components = extract_mapped_variables(payload, parsed_data, mapping.followup_variables_mapping or {}, fu_header_format)
             
             import hashlib
             payload_str = json.dumps(payload, sort_keys=True)

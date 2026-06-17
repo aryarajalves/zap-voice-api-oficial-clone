@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { API_URL } from '../../../config';
 import { useClient } from '../../../contexts/ClientContext';
@@ -15,6 +15,19 @@ const MediaHeaderUploader = ({ format, templateParams, handleParamChange }) => {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadedFile, setUploadedFile] = useState(null); // { name, url, type }
+
+    useEffect(() => {
+        const url = templateParams?.['HEADER_0'] || '';
+        if (url) {
+            if (!uploadedFile || uploadedFile.url !== url) {
+                const parts = url.split('/');
+                const name = parts[parts.length - 1] || 'arquivo-mapeado';
+                setUploadedFile({ name, url, type: format });
+            }
+        } else {
+            setUploadedFile(null);
+        }
+    }, [templateParams?.['HEADER_0'], format]);
 
     const mediaTypeLabel = format === 'IMAGE' ? 'Imagem' : format === 'VIDEO' ? 'Vídeo' : 'Documento';
     const mediaIcon = format === 'IMAGE' ? '🖼️' : format === 'VIDEO' ? '🎬' : '📄';

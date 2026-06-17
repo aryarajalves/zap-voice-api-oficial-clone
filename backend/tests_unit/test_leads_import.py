@@ -17,7 +17,7 @@ from services.leads import upsert_webhook_lead
 from routers.leads import execute_import
 
 # Configuração do banco de testes (SQLite em memória)
-TEST_DATABASE_URL = "sqlite:///./test_import.db"
+TEST_DATABASE_URL = "sqlite://"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -25,19 +25,25 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 def db():
     # Cria as tabelas
     Base.metadata.create_all(bind=engine)
+    
+    # Mock database.SessionLocal
+    import database
+    original_session_local = database.SessionLocal
+    database.SessionLocal = TestingSessionLocal
+    
     db = TestingSessionLocal()
     try:
         yield db
     finally:
         db.close()
-        # Limpa após o teste
+        # Restaurar
+        database.SessionLocal = original_session_local
         Base.metadata.drop_all(bind=engine)
-        if os.path.exists("./test_import.db"):
-            os.remove("./test_import.db")
 
 @pytest.fixture
 def mock_user():
     return models.User(id=1, email="test@example.com", role="admin", client_id=1)
+
 
 @pytest.mark.asyncio
 async def test_lead_import_from_csv(db: Session, mock_user: models.User):
@@ -63,8 +69,11 @@ async def test_lead_import_from_csv(db: Session, mock_user: models.User):
     })
     
     # 4. Call execute_import
+    from fastapi import BackgroundTasks
+    background_tasks = BackgroundTasks()
     from routers.leads import execute_import as router_execute_import
     result = await router_execute_import(
+        background_tasks=background_tasks,
         file=file,
         mapping=mapping,
         x_client_id=1,
@@ -73,8 +82,11 @@ async def test_lead_import_from_csv(db: Session, mock_user: models.User):
     )
     
     assert result["status"] == "success"
-    # Router deduplication should keep only 1 Alice (first one) and 1 Bob
-    assert result["imported"] == 2
+    assert "import_id" in result
+    
+    # Executar as tarefas em segundo plano manualmente para o teste
+    for task in background_tasks.tasks:
+        task.func(*task.args, **task.kwargs)
     
     # Verify in DB
     # The first Alice (with 9th digit) should be the one in DB
@@ -123,8 +135,11 @@ async def test_lead_import_from_xlsx(db: Session, mock_user: models.User):
     })
     
     # 4. Execute
+    from fastapi import BackgroundTasks
+    background_tasks = BackgroundTasks()
     from routers.leads import execute_import as router_execute_import
     result = await router_execute_import(
+        background_tasks=background_tasks,
         file=file,
         mapping=mapping,
         x_client_id=1,
@@ -133,7 +148,11 @@ async def test_lead_import_from_xlsx(db: Session, mock_user: models.User):
     )
     
     assert result["status"] == "success"
-    assert result["imported"] == 2
+    assert "import_id" in result
+    
+    # Executar as tarefas em segundo plano manualmente para o teste
+    for task in background_tasks.tasks:
+        task.func(*task.args, **task.kwargs)
     
     # Verify in DB
     charlie = db.query(models.WebhookLead).filter(models.WebhookLead.phone == "5511933333333").first()
@@ -142,3 +161,4 @@ async def test_lead_import_from_xlsx(db: Session, mock_user: models.User):
     assert "LabelX" in charlie.tags
 
     print("\n✅ Teste de Importação de Leads via XLSX concluído com sucesso!")
+

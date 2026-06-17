@@ -150,6 +150,7 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                                 <WhatsAppTab 
                                     user={logic.user}
                                     formData={logic.formData}
+                                    setFormData={logic.setFormData}
                                     handleChange={logic.handleChange}
                                     visibleFields={logic.visibleFields}
                                     handleRevealSetting={logic.handleRevealSetting}

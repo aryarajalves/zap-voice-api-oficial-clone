@@ -26,7 +26,7 @@ const FiltersBar = ({
 }) => {
   return (
     <div className="px-6 pt-4 pb-0 shrink-0">
-      <div className="mb-3 grid grid-cols-1 md:grid-cols-7 gap-3 items-end bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
+      <div className="mb-3 grid grid-cols-1 md:grid-cols-8 gap-3 items-end bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
         <div className="md:col-span-1">
           <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Buscar</label>
           <div className="relative group">
@@ -36,7 +36,7 @@ const FiltersBar = ({
               placeholder="Telefone ou nome..."
               value={dispatchSearch}
               onChange={(e) => setDispatchSearch(e.target.value)}
-              className="w-full bg-[#0b1120] border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none shadow-inner"
+              className="w-full bg-[#0b1120] border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none shadow-inner"
             />
           </div>
         </div>
@@ -131,44 +131,45 @@ const FiltersBar = ({
           </div>
         </div>
 
-        <div className="md:col-span-2 flex gap-3">
-          <div className="flex-1">
-            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Desde</label>
-            <input
-              type="date"
-              value={dispatchStartDate}
-              onChange={(e) => setDispatchStartDate(e.target.value)}
-              className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none [color-scheme:dark] shadow-inner"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Até</label>
-            <input
-              type="date"
-              value={dispatchEndDate}
-              onChange={(e) => setDispatchEndDate(e.target.value)}
-              className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none [color-scheme:dark] shadow-inner"
-            />
-          </div>
-          <div className="flex items-end mb-0.5">
-            <button
-              onClick={() => {
-                setDispatchSearch('');
-                setDispatchEventFilter('');
-                setDispatchTypeFilter('');
-                setDispatchStatusFilter('');
-                setDispatchTemplateFilter('');
-                setDispatchStartDate('');
-                setDispatchEndDate('');
-                setDispatchPage(1);
-                fetchDispatches(integrationId, 1, dispatchLimit, '', '', '', '', '', '', '', '');
-              }}
-              className="p-2.5 bg-white/5 hover:bg-orange-500/20 text-gray-400 hover:text-orange-500 rounded-xl transition-all border border-transparent hover:border-orange-500/20"
-              title="Limpar Filtros e Resetar"
-            >
-              <FiRefreshCw size={14} />
-            </button>
-          </div>
+        <div>
+          <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Desde</label>
+          <input
+            type="date"
+            value={dispatchStartDate}
+            onChange={(e) => setDispatchStartDate(e.target.value)}
+            className="w-full h-[38px] bg-[#0b1120] border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none [color-scheme:dark] shadow-inner"
+          />
+        </div>
+
+        <div>
+          <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 block px-1">Até</label>
+          <input
+            type="date"
+            value={dispatchEndDate}
+            onChange={(e) => setDispatchEndDate(e.target.value)}
+            className="w-full h-[38px] bg-[#0b1120] border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500/30 transition-all outline-none [color-scheme:dark] shadow-inner"
+          />
+        </div>
+
+        <div className="flex items-end">
+          <button
+            onClick={() => {
+              setDispatchSearch('');
+              setDispatchEventFilter('');
+              setDispatchTypeFilter('');
+              setDispatchStatusFilter('');
+              setDispatchTemplateFilter('');
+              setDispatchStartDate('');
+              setDispatchEndDate('');
+              setDispatchPage(1);
+              fetchDispatches(integrationId, 1, dispatchLimit, '', '', '', '', '', '', '', '');
+            }}
+            className="w-full h-[38px] flex items-center justify-center bg-white/5 hover:bg-orange-500/20 text-gray-400 hover:text-orange-500 rounded-xl transition-all border border-white/10 hover:border-orange-500/20 shadow-sm"
+            title="Limpar Filtros e Resetar"
+          >
+            <FiRefreshCw size={12} className="mr-1.5" />
+            <span className="text-[9px] font-black uppercase tracking-wider">Limpar</span>
+          </button>
         </div>
 
       </div>

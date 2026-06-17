@@ -58,6 +58,38 @@ def test_multi_tag_and_removal(db: Session):
     
     print("\n✅ Teste de Precedência de Remoção de Etiquetas concluído com sucesso!")
 
+def test_clean_bracket_and_quote_tags(db: Session):
+    client_id = 1
+    phone = "5511977776666"
+    
+    # Test with brackets and quotes as input
+    data = {"phone": phone, "name": "Bracket Test", "event_type": "bracket_test"}
+    lead = upsert_webhook_lead(
+        db, client_id, "test", data, 
+        tag='["tag-a", "tag-b", "tag-c"]'
+    )
+    
+    tags = [t.strip() for t in lead.tags.split(",")]
+    assert "tag-a" in tags
+    assert "tag-b" in tags
+    assert "tag-c" in tags
+    assert "[" not in lead.tags
+    assert "]" not in lead.tags
+    assert '"' not in lead.tags
+    
+    # Test with mixed format/brackets without valid json but manual brackets/quotes
+    data_mixed = {"phone": phone, "name": "Bracket Test Mixed", "event_type": "bracket_test_mixed"}
+    lead_mixed = upsert_webhook_lead(
+        db, client_id, "test", data_mixed, 
+        tag="[tag-d, 'tag-e']"
+    )
+    
+    tags_mixed = [t.strip() for t in lead_mixed.tags.split(",")]
+    assert "tag-d" in tags_mixed
+    assert "tag-e" in tags_mixed
+    
+    print("\n✅ Teste de Limpeza de Etiquetas com Colchetes e Aspas concluído com sucesso!")
+
 if __name__ == "__main__":
     # This block allows running the test directly if needed
     pass

@@ -79,4 +79,32 @@ describe('SearchableSelect with Tags Filtering', () => {
 
     expect(mockOnChange).toHaveBeenCalledWith('t2');
   });
+
+  it('deve ordenar opções pinadas no topo', () => {
+    const testOptions = [
+      { value: 'u1', label: 'Unpinned One', is_pinned: false },
+      { value: 'p1', label: 'Pinned One', is_pinned: true },
+      { value: 'u2', label: 'Unpinned Two', is_pinned: false },
+      { value: 'p2', label: 'Pinned Two', is_pinned: true }
+    ];
+
+    render(
+      <SearchableSelect
+        options={testOptions}
+        value=""
+        onChange={mockOnChange}
+        placeholder="Selecione um Template..."
+      />
+    );
+
+    // Abre o dropdown
+    fireEvent.click(screen.getByText('Selecione um Template...'));
+
+    const items = screen.getAllByText(/Pinned|Unpinned/);
+    // Deve renderizar na ordem: Pinned One, Pinned Two, Unpinned One, Unpinned Two
+    expect(items[0].textContent).toContain('Pinned One');
+    expect(items[1].textContent).toContain('Pinned Two');
+    expect(items[2].textContent).toContain('Unpinned One');
+    expect(items[3].textContent).toContain('Unpinned Two');
+  });
 });

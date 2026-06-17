@@ -41,7 +41,7 @@ function getPresetLabel(datePreset) {
 
 export default function Filters({
   search, setSearch,
-  selectedTag, setSelectedTag,
+  selectedTags = [], setSelectedTags,
   availableFilters,
   total,
   datePreset, setDatePreset,
@@ -50,13 +50,17 @@ export default function Filters({
   handleClearDateFilters,
 }) {
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
   const dropdownRef = useRef(null);
+  const tagDropdownRef = useRef(null);
+  const tagSearchRef = useRef(null);
   const monthOptions = getMonthOptions();
   const activePresetLabel = getPresetLabel(datePreset);
   const hasDateFilter = !!datePreset;
   const hasCustomDates = datePreset === 'custom';
 
-  // Fecha o dropdown ao clicar fora
+  // Fecha o dropdown de data ao clicar fora
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -69,6 +73,22 @@ export default function Filters({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [dateDropdownOpen]);
 
+  // Fecha o dropdown de etiquetas ao clicar fora
+  useEffect(() => {
+    function handleTagClickOutside(e) {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target)) {
+        setTagDropdownOpen(false);
+        setTagSearch('');
+      }
+    }
+    if (tagDropdownOpen) {
+      document.addEventListener('mousedown', handleTagClickOutside);
+      // Foca o campo de busca ao abrir
+      setTimeout(() => tagSearchRef.current?.focus(), 50);
+    }
+    return () => document.removeEventListener('mousedown', handleTagClickOutside);
+  }, [tagDropdownOpen]);
+
   const handleSelectPreset = (value) => {
     setDatePreset(value);
     if (value !== 'custom') {
@@ -79,6 +99,12 @@ export default function Filters({
   const handleClearAll = () => {
     handleClearDateFilters();
     setDateDropdownOpen(false);
+  };
+
+  const handleToggleTag = (tag) => {
+    setSelectedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
   };
 
   return (
@@ -99,20 +125,126 @@ export default function Filters({
           />
         </div>
 
-        {/* Etiquetas */}
-        <div className="relative">
-          <FiTag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <select
-            id="contacts-tag-filter"
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-            value={selectedTag}
-            onChange={(e) => setSelectedTag(e.target.value)}
+        {/* Etiquetas — Dropdown com busca e checkboxes */}
+        <div className="relative" ref={tagDropdownRef}>
+          <button
+            id="contacts-tag-filter-btn"
+            onClick={() => setTagDropdownOpen(o => !o)}
+            className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all outline-none
+              ${selectedTags.length > 0
+                ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-200 dark:shadow-purple-900/40'
+                : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-purple-400'
+              }`}
           >
-            <option value="">Todas as Etiquetas</option>
-            {availableFilters.tags?.map(tag => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
+            <span className="flex items-center gap-2 truncate">
+              <FiTag size={15} className="flex-shrink-0" />
+              <span className="truncate">
+                {selectedTags.length > 0
+                  ? (selectedTags.length === 1 
+                      ? selectedTags[0] 
+                      : `${selectedTags[0]} +${selectedTags.length - 1}`)
+                  : 'Todas as Etiquetas'
+                }
+              </span>
+            </span>
+            <FiChevronDown
+              size={15}
+              className={`flex-shrink-0 transition-transform duration-200 ${tagDropdownOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {/* Dropdown de etiquetas com busca e multi-seleção */}
+          {tagDropdownOpen && (
+            <div
+              className="absolute top-full left-0 right-0 mt-2 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden"
+              style={{ minWidth: '260px' }}
+            >
+              {/* Header com campo de busca */}
+              <div className="p-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <div className="relative">
+                  <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
+                  <input
+                    ref={tagSearchRef}
+                    id="contacts-tag-search-input"
+                    type="text"
+                    placeholder="Buscar etiqueta..."
+                    value={tagSearch}
+                    onChange={(e) => setTagSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                  />
+                  {tagSearch && (
+                    <button
+                      onClick={() => setTagSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <FiX size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Lista de etiquetas filtradas */}
+              <div className="max-h-60 overflow-y-auto p-2 space-y-0.5">
+                {/* Opção "Todas as Etiquetas" */}
+                <button
+                  id="contacts-tag-option-all"
+                  onClick={() => { setSelectedTags([]); setTagDropdownOpen(false); setTagSearch(''); }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                    ${selectedTags.length === 0
+                      ? 'bg-purple-600 text-white'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-700'
+                    }`}
+                >
+                  Todas as Etiquetas
+                </button>
+
+                {/* Divisor */}
+                {(availableFilters.tags?.filter(tag =>
+                  !tagSearch || tag.toLowerCase().includes(tagSearch.toLowerCase())
+                ).length > 0) && (
+                  <div className="mx-1 my-1 border-t border-dashed border-gray-100 dark:border-gray-700" />
+                )}
+
+                {/* Lista filtrada com Checkboxes */}
+                {availableFilters.tags
+                  ?.filter(tag => !tagSearch || tag.toLowerCase().includes(tagSearch.toLowerCase()))
+                  .map(tag => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        id={`contacts-tag-option-${tag}`}
+                        onClick={() => handleToggleTag(tag)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors truncate
+                          ${isSelected
+                            ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-700'
+                          }`}
+                        title={tag}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}} // Tratado no clique do botão pai
+                          className="rounded text-purple-600 focus:ring-purple-500 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                        />
+                        <span className="truncate">{tag}</span>
+                      </button>
+                    );
+                  })
+                }
+
+                {/* Sem resultados */}
+                {tagSearch && availableFilters.tags?.filter(tag =>
+                  tag.toLowerCase().includes(tagSearch.toLowerCase())
+                ).length === 0 && (
+                  <p className="text-center text-xs text-gray-400 py-4">
+                    Nenhuma etiqueta encontrada
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Botão de Filtro por Data */}
@@ -262,7 +394,7 @@ export default function Filters({
       </div>
 
       {/* Badges de filtros ativos */}
-      {(hasDateFilter || selectedTag) && (
+      {(hasDateFilter || (selectedTags && selectedTags.length > 0)) && (
         <div className="flex flex-wrap items-center gap-2 px-1">
           <span className="text-xs text-gray-400 font-medium">Filtros ativos:</span>
 
@@ -280,19 +412,19 @@ export default function Filters({
             </span>
           )}
 
-          {selectedTag && (
-            <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50">
+          {selectedTags && selectedTags.map(tag => (
+            <span key={tag} className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50">
               <FiTag size={11} />
-              {selectedTag}
+              {tag}
               <button
-                id="contacts-tag-badge-remove"
-                onClick={() => setSelectedTag('')}
+                id={`contacts-tag-badge-remove-${tag}`}
+                onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
                 className="ml-0.5 text-purple-400 hover:text-purple-600 transition-colors"
               >
                 <FiX size={11} />
               </button>
             </span>
-          )}
+          ))}
 
           <span className="ml-auto text-xs font-semibold text-gray-400">
             {total} resultado{total !== 1 ? 's' : ''}
@@ -300,7 +432,7 @@ export default function Filters({
         </div>
       )}
 
-      {!hasDateFilter && !selectedTag && (
+      {!hasDateFilter && (!selectedTags || selectedTags.length === 0) && (
         <div className="flex items-center justify-end px-1">
           <span className="text-xs font-semibold text-gray-400">Total: {total} contatos</span>
         </div>

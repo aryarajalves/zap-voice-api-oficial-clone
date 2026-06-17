@@ -2,6 +2,7 @@ import React from 'react';
 import { FiZap, FiPlus, FiTrash2 } from 'react-icons/fi';
 import SearchableSelect from '../SearchableSelect';
 import { HEADER_VAR_OPTIONS, BODY_VAR_OPTIONS } from '../../constants';
+import MediaHeaderUploader from '../../../../components/BulkSender/common/MediaHeaderUploader';
 
 const VariablesSection = ({ 
   mapping, 
@@ -53,10 +54,39 @@ const VariablesSection = ({
     v => !templateVars.some(tv => tv.key === v.key && (tv.type === v.type || (tv.type === 'body' && !v.type)))
   );
 
+  const headerVar = (mapping.variables_mapping || []).find(v => v.type === 'header');
+  const currentHeaderUrl = headerVar ? headerVar.custom_value : '';
+  const templateParams = { HEADER_0: currentHeaderUrl };
+
+  const handleMediaHeaderChange = (key, url) => {
+    const newVars = [...(mapping.variables_mapping || [])];
+    const existingIdx = newVars.findIndex(v => v.type === 'header');
+    if (url) {
+      const newVar = { type: 'header', key: '0', value: 'custom', custom_value: url };
+      if (existingIdx !== -1) {
+        newVars[existingIdx] = newVar;
+      } else {
+        newVars.push(newVar);
+      }
+    } else {
+      if (existingIdx !== -1) {
+        newVars.splice(existingIdx, 1);
+      }
+    }
+    updateMapping(mIndex, 'variables_mapping', newVars);
+  };
+
   const showAdditionalVars = mapping.template_id && (hasVars || hasMedia || hasDynamicButtons || hasManualVars);
 
   return (
     <div className="space-y-6">
+      {hasMedia && (
+        <MediaHeaderUploader
+          format={headerComp.format}
+          templateParams={templateParams}
+          handleParamChange={(key, val) => handleMediaHeaderChange(key, val)}
+        />
+      )}
       {/* Variáveis do Template Selecionado (Dinâmicas) */}
       {mapping.template_id && templateVars.length > 0 && (
         <div className="bg-blue-500/[0.02] dark:bg-blue-500/[0.03] border border-blue-500/10 rounded-2xl p-5 space-y-4 animate-in slide-in-from-top-2 duration-300">

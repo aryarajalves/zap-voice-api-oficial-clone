@@ -22,6 +22,7 @@ import TemplateCreator from './components/TemplateCreator';
 import Monitoring from './pages/Monitoring';
 import Integrations from './pages/Integrations';
 import WebhookLeads from './pages/WebhookLeads';
+import ImportHistoryPage from './pages/WebhookLeads/ImportHistoryPage';
 import Financial from './pages/Financial';
 import RecurringSchedules from './components/RecurringSchedules';
 import VisualFlowBuilder from './components/VisualFlowBuilder';
@@ -29,6 +30,7 @@ import StressTest from './pages/StressTest';
 import BackupDatabase from './pages/BackupDatabase';
 import HotLeads from './pages/HotLeads/HotLeads';
 import InstagramAutomation from './pages/InstagramAutomation';
+
 
 export default function AppContent() {
   const logic = useAppLogic();
@@ -82,11 +84,13 @@ export default function AppContent() {
                     {logic.currentView === 'integrations' && 'Integrações Webhook'}
                     {logic.currentView === 'financial' && 'Financeiro'}
                     {logic.currentView === 'leads' && 'Webhook Leads'}
+                    {logic.currentView === 'import_history' && 'Histórico de Importação de Contatos'}
                     {logic.currentView === 'stress_test' && 'Teste de Escala'}
                     {logic.currentView === 'backup_db' && 'Backup Banco'}
                     {logic.currentView === 'hot_leads' && 'Leads Quentes'}
                     {logic.currentView === 'instagram_automation' && 'Automação Instagram'}
                   </h1>
+
                   
                   {/* Guide Buttons */}
                   {logic.currentView === 'funnels' && !logic.showBuilder && (
@@ -124,13 +128,15 @@ export default function AppContent() {
               {logic.currentView === 'schedules' && <SchedulePage />}
               {logic.currentView === 'monitoring' && <Monitoring />}
               {logic.currentView === 'integrations' && <Integrations />}
-              {logic.currentView === 'leads' && <WebhookLeads />}
+              {logic.currentView === 'leads' && <WebhookLeads onNavigateToImportHistory={() => logic.setCurrentView('import_history')} />}
+              {logic.currentView === 'import_history' && <ImportHistoryPage />}
               {logic.currentView === 'financial' && <Financial />}
               {logic.currentView === 'recurring_schedules' && <RecurringSchedules />}
               {logic.currentView === 'stress_test' && <StressTest />}
               {logic.currentView === 'backup_db' && <BackupDatabase />}
               {logic.currentView === 'hot_leads' && <HotLeads />}
               {logic.currentView === 'instagram_automation' && <InstagramAutomation />}
+
               
               {logic.currentView === 'bulk_sender' && (
                 <div className="space-y-8">

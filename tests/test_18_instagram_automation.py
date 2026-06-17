@@ -1,7 +1,9 @@
 import os
 import requests
+import sys
 from dotenv import load_dotenv
 
+sys.stdout.reconfigure(encoding='utf-8')
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "backend", ".env"))
 
 BASE_URL = os.getenv("VITE_API_URL", "http://localhost:8000/api")
@@ -360,6 +362,30 @@ def test_get_instagram_posts(token, client_id):
         return False, f"❌ Instagram - Erro ao testar obtenção de posts: {e}"
 
 
+def test_get_instagram_logs(token, client_id):
+    """Testa que GET /instagram/logs retorna os logs corretamente paginados."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Client-ID": str(client_id)
+    }
+    try:
+        response = requests.get(f"{BASE_URL}/instagram/logs", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            assert "logs" in data, "Resposta não contem chave 'logs'"
+            assert "total" in data, "Resposta não contem chave 'total'"
+            assert "page" in data, "Resposta não contem chave 'page'"
+            assert "pages" in data, "Resposta não contem chave 'pages'"
+            print(f"✅ Instagram - Endpoint de logs respondeu com sucesso: {response.status_code}")
+            return True, "✅ Instagram - Endpoint de logs OK"
+        else:
+            msg = f"❌ Instagram - Endpoint de logs retornou status inesperado: {response.status_code} | {response.text[:200]}"
+            print(msg)
+            return False, msg
+    except Exception as e:
+        return False, f"❌ Instagram - Erro ao testar obtenção de logs: {e}"
+
+
 def run_instagram_tests():
     print("\n--- [18] Testes de Automação de Comentários no Instagram ---")
     token = get_token()
@@ -387,6 +413,7 @@ def run_instagram_tests():
         test_create_invalid_no_keywords(token, client_id),
         test_scope_isolation(token),
         test_get_instagram_posts(token, client_id),
+        test_get_instagram_logs(token, client_id),
     ]
 
     # Teste CRUD encadeado

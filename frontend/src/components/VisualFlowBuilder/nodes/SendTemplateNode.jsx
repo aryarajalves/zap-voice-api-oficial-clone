@@ -185,7 +185,8 @@ const SendTemplateNode = ({ id, data }) => {
                             options={sortedAndFilteredTemplates.map(t => ({
                                 value: t.name,
                                 label: `${t.is_pinned ? '📌 ' : ''}${t.name} (${t.language})`,
-                                tags: t.tags
+                                tags: t.tags,
+                                is_pinned: t.is_pinned
                             }))}
                             value={templateName}
                             onChange={(selectedName) => {

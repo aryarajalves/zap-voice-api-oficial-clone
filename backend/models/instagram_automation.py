@@ -27,3 +27,23 @@ class InstagramAutomation(Base):
     # Relationships
     client = relationship("Client")
     funnel = relationship("Funnel")
+
+class InstagramLog(Base):
+    __tablename__ = "instagram_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    instagram_username = Column(String, nullable=True)
+    instagram_user_id = Column(String, nullable=True)
+    post_id = Column(String, nullable=True)
+    comment_id = Column(String, nullable=True)
+    comment_text = Column(String, nullable=True)
+    
+    status = Column(String, nullable=False, default="no_match")  # "success", "no_match", "error"
+    actions_taken = Column(String, nullable=True)  # ex: "Respondeu comentário e iniciou funil 'Campanha 1'"
+    error_message = Column(String, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    client = relationship("Client")

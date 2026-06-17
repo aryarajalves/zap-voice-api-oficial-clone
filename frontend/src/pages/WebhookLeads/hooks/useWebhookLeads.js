@@ -69,7 +69,7 @@ export function useWebhookLeads(activeClient) {
   // Filtros base
   const [search, setSearch] = useState('');
   const [eventType, setEventType] = useState('');
-  const [selectedTag, setSelectedTag] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]);
   const [availableFilters, setAvailableFilters] = useState({ event_types: [], product_names: [], tags: [] });
 
   // Filtros de data
@@ -98,7 +98,7 @@ export function useWebhookLeads(activeClient) {
     
     const currentSearch = overrides.search !== undefined ? overrides.search : search;
     const currentEventType = overrides.eventType !== undefined ? overrides.eventType : eventType;
-    const currentTag = overrides.tag !== undefined ? overrides.tag : selectedTag;
+    const currentTags = overrides.tags !== undefined ? overrides.tags : selectedTags;
     const currentPage = overrides.page !== undefined ? overrides.page : page;
     const currentDatePreset = overrides.datePreset !== undefined ? overrides.datePreset : datePreset;
     const currentCustomFrom = overrides.customDateFrom !== undefined ? overrides.customDateFrom : customDateFrom;
@@ -111,7 +111,11 @@ export function useWebhookLeads(activeClient) {
       let url = `${API_URL}/leads?skip=${currentPage * limit}&limit=${limit}`;
       if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
       if (currentEventType) url += `&event_type=${encodeURIComponent(currentEventType)}`;
-      if (currentTag) url += `&tag=${encodeURIComponent(currentTag)}`;
+      if (currentTags && currentTags.length > 0) {
+        currentTags.forEach(t => {
+          url += `&tag=${encodeURIComponent(t)}`;
+        });
+      }
       if (from) url += `&date_from=${from}`;
       if (to) url += `&date_to=${to}`;
 
@@ -127,7 +131,7 @@ export function useWebhookLeads(activeClient) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient?.id, limit, search, eventType, selectedTag, page, datePreset, customDateFrom, customDateTo]);
+  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo]);
 
   const fetchFilters = useCallback(async () => {
     if (!activeClient?.id) return;
@@ -151,7 +155,7 @@ export function useWebhookLeads(activeClient) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClient?.id, page, eventType, selectedTag, limit, datePreset, customDateFrom, customDateTo]);
+  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo]);
 
   const lastSearch = useRef('');
 
@@ -204,7 +208,11 @@ export function useWebhookLeads(activeClient) {
       } else {
         if (search) url += `search=${encodeURIComponent(search)}&`;
         if (eventType) url += `event_type=${encodeURIComponent(eventType)}&`;
-        if (selectedTag) url += `tag=${encodeURIComponent(selectedTag)}&`;
+        if (selectedTags && selectedTags.length > 0) {
+          selectedTags.forEach(t => {
+            url += `tag=${encodeURIComponent(t)}&`;
+          });
+        }
         if (from) url += `date_from=${from}&`;
         if (to) url += `date_to=${to}&`;
       }
@@ -314,7 +322,7 @@ export function useWebhookLeads(activeClient) {
 
   return {
     leads, total, loading, page, setPage, limit, setLimit,
-    search, setSearch, eventType, setEventType, selectedTag, setSelectedTag, availableFilters,
+    search, setSearch, eventType, setEventType, selectedTags, setSelectedTags, availableFilters,
     // Filtros de data
     datePreset, setDatePreset: handleSetDatePreset,
     customDateFrom, setCustomDateFrom: handleSetCustomDateFrom,

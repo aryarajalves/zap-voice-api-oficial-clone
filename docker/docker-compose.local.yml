@@ -73,11 +73,11 @@ services:
       - /app/node_modules
     ports:
       - "5176:5173" # Alterado para 5176 para evitar conflitos
-    command: sh -c "npm install && npm run dev"
+    command: ["sh", "-c", "echo \"window._env_ = { API_URL: '$$VITE_API_URL', WS_URL: '$$VITE_WS_URL', META_APP_ID: '$$META_APP_ID', META_CONFIG_ID: '$$META_CONFIG_ID', WEBHOOK_BASE_URL: '$$WEBHOOK_BASE_URL' };\" > public/env-config.js && npm install && npm run dev"]
     networks:
       - zapvoice_net
     env_file:
-      - ../.env
+      - ../backend/.env
     environment:
       - VITE_API_URL=${VITE_API_URL:-http://localhost:8000/api}
       - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:8000/ws}

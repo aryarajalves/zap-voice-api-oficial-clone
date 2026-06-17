@@ -1,6 +1,7 @@
 import React from 'react';
 import { FiEyeOff, FiEye, FiCopy, FiImage, FiUpload, FiShield, FiAlertCircle, FiZap } from 'react-icons/fi';
-import { resolveUrl, WEBHOOK_BASE_URL } from '../../../config';
+import { toast } from 'react-hot-toast';
+import { resolveUrl, WEBHOOK_BASE_URL, META_APP_ID, META_CONFIG_ID } from '../../../config';
 
 const tierMapping = {
     'TIER_250': '250',
@@ -11,7 +12,7 @@ const tierMapping = {
 };
 
 const WhatsAppTab = ({
-    user, formData, handleChange, visibleFields, handleRevealSetting, copyToClipboard,
+    user, formData, setFormData, handleChange, visibleFields, handleRevealSetting, copyToClipboard,
     whatsappProfile, whatsappAbout, setWhatsappAbout, handleUpdateWhatsAppAbout, isUpdatingWaAbout,
     whatsappName, setWhatsappName, handleUpdateWhatsAppName, isUpdatingWaName,
     handleRegisterWhatsAppNumber, isRegisteringWa, handleWhatsAppLogoUpload, isUpdatingWaLogo
@@ -21,6 +22,105 @@ const WhatsAppTab = ({
     const metaWebhookUrl = isUniqueWebhook && formData.WA_WEBHOOK_SLUG
         ? `${baseWebhookUrl}/api/meta/${formData.WA_WEBHOOK_SLUG}`.replace('http://', 'https://')
         : `${baseWebhookUrl}/api/meta`.replace('http://', 'https://');
+
+    React.useEffect(() => {
+        if (!META_APP_ID) return;
+        
+        window.fbAsyncInit = function() {
+            window.FB.init({
+                appId: META_APP_ID,
+                cookie: true,
+                xfbml: true,
+                version: 'v19.0'
+            });
+        };
+
+        (function(d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) return;
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/pt_BR/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
+    }, []);
+
+    const handleMetaEmbeddedSignup = () => {
+        if (!META_APP_ID || !META_CONFIG_ID) {
+            toast.error("Configurações da Meta incompletas no arquivo .env (META_APP_ID ou META_CONFIG_ID ausentes).");
+            return;
+        }
+
+        if (!window.FB) {
+            toast.error("O SDK do Facebook ainda não foi carregado. Aguarde um instante ou verifique bloqueadores de anúncios.");
+            return;
+        }
+
+        window.FB.login((response) => {
+            if (response.authResponse) {
+                const accessToken = response.authResponse.accessToken;
+                
+                const toastId = toast.loading("Autenticado! Buscando contas e números do WhatsApp na Meta...");
+
+                fetch(`https://graph.facebook.com/v19.0/me/whatsapp_business_accounts?access_token=${accessToken}`)
+                    .then(res => res.json())
+                    .then(wabaData => {
+                        if (wabaData.data && wabaData.data.length > 0) {
+                            const waba = wabaData.data[0];
+                            const wabaId = waba.id;
+
+                            fetch(`https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?access_token=${accessToken}`)
+                                .then(res => res.json())
+                                .then(phoneData => {
+                                    let phoneId = "";
+                                    if (phoneData.data && phoneData.data.length > 0) {
+                                        phoneId = phoneData.data[0].id;
+                                    }
+
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        WA_ACCESS_TOKEN: accessToken,
+                                        WA_BUSINESS_ACCOUNT_ID: wabaId,
+                                        WA_PHONE_NUMBER_ID: phoneId
+                                    }));
+
+                                    toast.success("Conectado com sucesso! Os campos WABA ID, Phone ID e Access Token foram preenchidos de forma automática.", { id: toastId });
+                                })
+                                .catch(err => {
+                                    console.error("Erro ao carregar números de telefone da Meta:", err);
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        WA_ACCESS_TOKEN: accessToken,
+                                        WA_BUSINESS_ACCOUNT_ID: wabaId
+                                    }));
+                                    toast.success("Conectado! WABA ID e Access Token preenchidos (não foi possível autodescobrir o Phone ID).", { id: toastId });
+                                });
+                        } else {
+                            setFormData(prev => ({
+                                ...prev,
+                                WA_ACCESS_TOKEN: accessToken
+                            }));
+                            toast.success("Conectado! Access Token preenchido (nenhuma conta comercial WhatsApp encontrada).", { id: toastId });
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Erro ao carregar WABA da Meta:", err);
+                        setFormData(prev => ({
+                            ...prev,
+                            WA_ACCESS_TOKEN: accessToken
+                        }));
+                        toast.success("Conectado! Access Token preenchido (erro ao autodescobrir contas).", { id: toastId });
+                    });
+
+            } else {
+                toast.error("Conexão cancelada ou não autorizada.");
+            }
+        }, {
+            config_id: META_CONFIG_ID,
+            response_type: 'token',
+            override_default_response_type: true,
+            scope: 'whatsapp_business_management,whatsapp_business_messaging'
+        });
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -35,6 +135,39 @@ const WhatsAppTab = ({
                         </span>
                         <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">WhatsApp Cloud API (Meta)</h3>
                     </div>
+
+                    {/* Botão de Embedded Signup da Meta */}
+                    {META_APP_ID && META_CONFIG_ID ? (
+                        <div className="p-4 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-500/20 rounded-xl space-y-3">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 bg-blue-600 rounded-lg text-white mt-0.5 shadow-md shadow-blue-500/20">
+                                    <FiZap size={18} />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-semibold text-gray-800 dark:text-white">Conexão Rápida com o Cadastro Incorporado</h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
+                                        Clique no botão abaixo para conectar sua conta comercial da Meta e autodescobrir seus IDs do WhatsApp instantaneamente.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleMetaEmbeddedSignup}
+                                className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-500/20"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                                </svg>
+                                Conectar com a Meta
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                            <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+                                💡 <b>Dica:</b> Para habilitar o cadastro incorporado e preencher os dados de forma automática, configure as variáveis <code>META_APP_ID</code> e <code>META_CONFIG_ID</code> no seu arquivo <code>.env</code>.
+                            </p>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">

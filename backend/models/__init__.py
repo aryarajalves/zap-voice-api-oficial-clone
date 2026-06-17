@@ -4,7 +4,8 @@ from .client import Client, AppConfig, BlockedContact, ContactWindow, RestingCon
 from .funnel import Funnel, WebhookConfig, WebhookEvent
 from .invitation import UserInvitation, invitation_clients
 from .backup import BackupConfig, BackupMetadata
-from .instagram_automation import InstagramAutomation
+from .instagram_automation import InstagramAutomation, InstagramLog
+from .import_history import ContactImportHistory
 from .trigger import (
     ScheduledTrigger, 
     MessageStatus, 
@@ -38,6 +39,7 @@ __all__ = [
     "UserInvitation",
     "invitation_clients",
     "InstagramAutomation",
+    "InstagramLog",
     "ScheduledTrigger",
     "MessageStatus",
     "WebhookIntegration",
@@ -53,5 +55,7 @@ __all__ = [
     "RoundRobinState",
     "HotLead",
     "BackupConfig",
-    "BackupMetadata"
+    "BackupMetadata",
+    "ContactImportHistory"
 ]
+

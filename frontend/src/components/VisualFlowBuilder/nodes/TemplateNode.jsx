@@ -51,7 +51,8 @@ const TemplateNode = ({ id, data }) => {
                                 .map(t => ({
                                     value: t.name,
                                     label: `${t.name} (${t.language})`,
-                                    tags: t.tags
+                                    tags: t.tags,
+                                    is_pinned: t.is_pinned
                                 })) : []
                             }
                             value={data.templateName || ''}

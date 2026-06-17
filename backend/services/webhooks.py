@@ -135,7 +135,20 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             return
 
         # Extrai variáveis para o template
-        components = extract_mapped_variables(payload, variables, mapping.variables_mapping or {})
+        header_format = None
+        if mapping.template_id:
+            try:
+                tpl = db.query(models.WhatsAppTemplateCache).filter(
+                    models.WhatsAppTemplateCache.id == mapping.template_id
+                ).first()
+                if tpl and tpl.components:
+                    header_comp = next((c for c in tpl.components if c.get("type") == "HEADER"), None)
+                    if header_comp:
+                        header_format = header_comp.get("format")
+            except Exception as e:
+                logger.error(f"Erro ao obter header_format para mapping {mapping.id}: {e}")
+
+        components = extract_mapped_variables(payload, variables, mapping.variables_mapping or {}, header_format)
         
         # Nota privada (Forçando ativo por padrão, a não ser que seja nota customizada no legado)
         private_msg_text = "true"
@@ -199,8 +212,20 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                     
                 total_fu_delay = total_delay_sec + fu_delay_sec
                 fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=total_fu_delay)
-                
-                fu_components = extract_mapped_variables(payload, variables, mapping.followup_variables_mapping or {})
+                fu_header_format = None
+                if mapping.followup_template_id:
+                    try:
+                        fu_tpl = db.query(models.WhatsAppTemplateCache).filter(
+                            models.WhatsAppTemplateCache.id == mapping.followup_template_id
+                        ).first()
+                        if fu_tpl and fu_tpl.components:
+                            fu_header_comp = next((c for c in fu_tpl.components if c.get("type") == "HEADER"), None)
+                            if fu_header_comp:
+                                fu_header_format = fu_header_comp.get("format")
+                    except Exception as e:
+                        logger.error(f"Erro ao obter fu_header_format para mapping {mapping.id}: {e}")
+
+                fu_components = extract_mapped_variables(payload, variables, mapping.followup_variables_mapping or {}, fu_header_format)
                 
                 fu_idempotency_key = f"fu_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
                 

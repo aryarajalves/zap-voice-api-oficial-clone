@@ -62,7 +62,9 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
 
         // Contatos
         { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
+        { id: 'import_history', label: 'Histórico importação de contatos', icon: FiClock, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
         { id: 'blocked', label: 'Contatos Bloqueados', icon: FiSlash, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
+
 
         // Administração
         { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'admin' },
@@ -119,8 +121,10 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                         'funnels': 'funnels',
                         'integrations': 'settings',
                         'leads': 'leads',
+                        'import_history': 'leads',
                         'blocked': 'leads'
                     };
+
 
                     const categoryItems = menuItems.filter(item => {
                         if (item.category !== category.id) return false;

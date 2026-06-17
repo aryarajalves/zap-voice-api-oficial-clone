@@ -50,8 +50,16 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
     return matchesSearch && matchesTag;
   });
 
+  const sortedFiltered = React.useMemo(() => {
+    return [...filteredOptions].sort((a, b) => {
+      const aPinned = a.is_pinned ? 1 : 0;
+      const bPinned = b.is_pinned ? 1 : 0;
+      return bPinned - aPinned;
+    });
+  }, [filteredOptions]);
+
   // Se permitir "Nenhum" e não estiver filtrando por tag (ou "Nenhum" bate com o filtro)
-  const displayOptions = [...filteredOptions];
+  const displayOptions = [...sortedFiltered];
   if (allowNone && !isMulti && !selectedTag && (!searchTerm || "nenhum".includes(searchTerm.toLowerCase()))) {
     displayOptions.unshift({ value: "", label: "Nenhum" });
   }
@@ -186,7 +194,10 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
                       }}
                     >
                       <div className="flex items-center justify-between w-full gap-2 min-w-0">
-                        <span className="truncate">{opt.label}</span>
+                        <span className="truncate">
+                          {opt.is_pinned && !String(opt.label).includes('📌') && <span className="mr-1">📌</span>}
+                          {opt.label}
+                        </span>
                         {opt.tags && opt.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 justify-end max-w-[50%] shrink-0">
                             {opt.tags.map(t => (

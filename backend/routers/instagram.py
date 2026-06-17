@@ -35,7 +35,68 @@ class InstagramAutomationResponse(InstagramAutomationBase):
     class Config:
         from_attributes = True
 
+class InstagramLogResponse(BaseModel):
+    id: int
+    client_id: int
+    instagram_username: Optional[str] = None
+    instagram_user_id: Optional[str] = None
+    post_id: Optional[str] = None
+    comment_id: Optional[str] = None
+    comment_text: Optional[str] = None
+    status: str
+    actions_taken: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
 # --- API Endpoints ---
+
+@router.get("/logs")
+def list_logs(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_feature("settings"))
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    query = db.query(models.InstagramLog).filter(
+        models.InstagramLog.client_id == client_id
+    )
+
+    if status:
+        query = query.filter(models.InstagramLog.status == status)
+
+    total = query.count()
+    offset = (page - 1) * limit
+    logs = query.order_by(models.InstagramLog.created_at.desc()).offset(offset).limit(limit).all()
+
+    # Formatar datas para strings ISO legíveis
+    formatted_logs = []
+    for log in logs:
+        formatted_logs.append({
+            "id": log.id,
+            "client_id": log.client_id,
+            "instagram_username": log.instagram_username,
+            "instagram_user_id": log.instagram_user_id,
+            "post_id": log.post_id,
+            "comment_id": log.comment_id,
+            "comment_text": log.comment_text,
+            "status": log.status,
+            "actions_taken": log.actions_taken,
+            "error_message": log.error_message,
+            "created_at": log.created_at.isoformat() if log.created_at else None
+        })
+
+    return {
+        "logs": formatted_logs,
+        "total": total,
+        "page": page,
+        "pages": max(1, (total + limit - 1) // limit)
+    }
 
 @router.get("/automations", response_model=List[InstagramAutomationResponse])
 def list_automations(
@@ -302,6 +363,7 @@ async def process_instagram_webhook_event(payload: dict, db: Session, slug: Opti
                 logger.info(f"💬 Comentário recebido de @{from_user_username}: '{comment_text}' no Post {post_id}")
 
                 # Tentar dar match com as automações
+                matched_aut = None
                 for aut in automations:
                     # Verifica post_id
                     if aut.post_id != "all":
@@ -320,9 +382,41 @@ async def process_instagram_webhook_event(payload: dict, db: Session, slug: Opti
                             is_match = True
 
                     if is_match:
-                        logger.info(f"🎯 Automação '{aut.name}' ativada para @{from_user_username}")
-                        await execute_actions(aut, comment_id, from_user_id, access_token, db)
-                        break  # Roda apenas a primeira automação que der match
+                        matched_aut = aut
+                        break
+
+                if matched_aut:
+                    logger.info(f"🎯 Automação '{matched_aut.name}' ativada para @{from_user_username}")
+                    actions_desc, err_msg = await execute_actions(matched_aut, comment_id, from_user_id, access_token, db)
+                    
+                    # Criar Log com Match
+                    log_entry = models.InstagramLog(
+                        client_id=client_id,
+                        instagram_username=from_user_username,
+                        instagram_user_id=str(from_user_id),
+                        post_id=str(post_id),
+                        comment_id=comment_id,
+                        comment_text=comment_text,
+                        status="error" if err_msg else "success",
+                        actions_taken=actions_desc,
+                        error_message=err_msg
+                    )
+                    db.add(log_entry)
+                    db.commit()
+                else:
+                    # Criar Log sem Match
+                    log_entry = models.InstagramLog(
+                        client_id=client_id,
+                        instagram_username=from_user_username,
+                        instagram_user_id=str(from_user_id),
+                        post_id=str(post_id),
+                        comment_id=comment_id,
+                        comment_text=comment_text,
+                        status="no_match",
+                        actions_taken="Nenhuma regra correspondente"
+                    )
+                    db.add(log_entry)
+                    db.commit()
     except Exception as e:
         logger.error(f"❌ Erro ao processar webhook do Instagram: {e}", exc_info=True)
 
@@ -333,10 +427,14 @@ async def execute_actions(
     user_id: str,
     access_token: str,
     db: Session
-):
+) -> tuple[str, Optional[str]]:
     """
     Executa as ações de responder comentário e enviar Direct Message.
+    Retorna uma tupla (ações executadas, mensagem de erro se houver).
     """
+    actions_taken = []
+    error_msg = None
+
     # 1. Responder Comentário
     if automation.action_type in ("reply_comment", "both") and automation.reply_comments:
         reply_text = random.choice(automation.reply_comments)
@@ -350,35 +448,41 @@ async def execute_actions(
                 )
                 if response.status_code == 200:
                     logger.info(f"✅ Resposta de comentário enviada com sucesso.")
+                    actions_taken.append(f"Respondeu comentário com '{reply_text}'")
                 else:
                     logger.error(f"❌ Erro ao responder comentário: {response.text}")
+                    error_msg = f"Erro API Comentário: {response.text}"
         except Exception as e_reply:
             logger.error(f"❌ Falha de rede ao responder comentário: {e_reply}")
+            error_msg = f"Falha de rede Comentário: {str(e_reply)}"
 
     # 2. Enviar Direct Message (DM)
     if automation.action_type in ("send_dm", "both"):
         # Mensagem Padrão de Boas-vindas baseada no Funil ou Mensagem Estática
         dm_text = "Olá! Te enviei as informações no Direct."
+        funnel_name = None
         
         # Se um funil estiver associado, tenta pegar o texto do primeiro nó de mensagem dele
         if automation.funnel_id:
             try:
                 funnel = db.query(models.Funnel).get(automation.funnel_id)
-                if funnel and funnel.steps:
-                    # Se for funil legado (lista) ou grafo (dict com nós)
-                    first_msg = None
-                    if isinstance(funnel.steps, list) and funnel.steps:
-                        for step in funnel.steps:
-                            if step.get("type") == "message" and step.get("data", {}).get("content"):
-                                first_msg = step["data"]["content"]
-                                break
-                    elif isinstance(funnel.steps, dict) and "nodes" in funnel.steps:
-                        for node in funnel.steps["nodes"]:
-                            if node.get("type") == "message" and node.get("data", {}).get("content"):
-                                first_msg = node["data"]["content"]
-                                break
-                    if first_msg:
-                        dm_text = first_msg
+                if funnel:
+                    funnel_name = funnel.name
+                    if funnel.steps:
+                        # Se for funil legado (lista) ou grafo (dict com nós)
+                        first_msg = None
+                        if isinstance(funnel.steps, list) and funnel.steps:
+                            for step in funnel.steps:
+                                if step.get("type") == "message" and step.get("data", {}).get("content"):
+                                    first_msg = step["data"]["content"]
+                                    break
+                        elif isinstance(funnel.steps, dict) and "nodes" in funnel.steps:
+                            for node in funnel.steps["nodes"]:
+                                if node.get("type") == "message" and node.get("data", {}).get("content"):
+                                    first_msg = node["data"]["content"]
+                                    break
+                        if first_msg:
+                            dm_text = first_msg
             except Exception as e_funnel:
                 logger.error(f"⚠️ Não foi possível obter o texto do funil {automation.funnel_id}: {e_funnel}")
 
@@ -401,10 +505,21 @@ async def execute_actions(
                 )
                 if response.status_code == 200:
                     logger.info(f"✅ Direct Message enviada com sucesso.")
+                    if funnel_name:
+                        actions_taken.append(f"Iniciou funil '{funnel_name}' via DM")
+                    else:
+                        actions_taken.append("Enviou mensagem direta (DM)")
                 else:
                     logger.error(f"❌ Erro ao enviar DM: {response.text}")
+                    if not error_msg:
+                        error_msg = f"Erro API DM: {response.text}"
         except Exception as e_dm:
             logger.error(f"❌ Falha de rede ao enviar DM: {e_dm}")
+            if not error_msg:
+                error_msg = f"Falha de rede DM: {str(e_dm)}"
+
+    actions_desc = " e ".join(actions_taken) if actions_taken else "Ações falharam"
+    return actions_desc, error_msg
 
 
 @router.post("/webhook")

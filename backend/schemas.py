@@ -601,6 +601,7 @@ class WebhookLeadUpdate(BaseModel):
     phone: Optional[str] = None
     tags: Optional[str] = None
     is_locked: Optional[bool] = None
+    variables: Optional[Dict[str, Any]] = None
 
 class WebhookLeadListResponse(BaseModel):
     items: List[WebhookLead]

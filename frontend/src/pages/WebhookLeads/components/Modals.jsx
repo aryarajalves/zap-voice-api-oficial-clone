@@ -9,7 +9,7 @@ export default function Modals({
   isDeleteModalOpen, setIsDeleteModalOpen, setLeadToDelete, executeDelete, leadToDelete, selectedLeads, isDeleting,
   isImportModalOpen, setIsImportModalOpen, fetchLeads, fetchFilters,
   isEditModalOpen, setIsEditModalOpen, setLeadToEdit, leadToEdit,
-  isCreateModalOpen, setIsCreateModalOpen
+  isCreateModalOpen, setIsCreateModalOpen, onNavigateToImportHistory
 }) {
   return (
     <>
@@ -45,6 +45,9 @@ export default function Modals({
         onImportComplete={() => {
           fetchLeads();
           fetchFilters();
+          if (onNavigateToImportHistory) {
+            onNavigateToImportHistory();
+          }
         }}
       />
 

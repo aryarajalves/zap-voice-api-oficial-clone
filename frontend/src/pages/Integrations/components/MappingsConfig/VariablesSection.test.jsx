@@ -14,6 +14,10 @@ vi.mock('react-icons/fi', () => ({
   FiTrash2: () => <span data-testid="icon-trash" />,
 }));
 
+vi.mock('../../../../components/BulkSender/common/MediaHeaderUploader', () => ({
+  default: ({ format }) => <div data-testid="mock-media-uploader">Uploader Format: {format}</div>
+}));
+
 const defaultProps = {
   mapping: {
     template_id: 'tpl-1',
@@ -111,5 +115,25 @@ describe('VariablesSection Component', () => {
     };
     render(<VariablesSection {...props} />);
     expect(screen.getByText(/Variáveis Adicionais \/ Cabeçalho/i)).toBeInTheDocument();
+  });
+
+  it('deve renderizar o uploader de midia se o template contiver cabecalho de midia', () => {
+    const templatesWithMedia = [
+      {
+        id: 'tpl-1',
+        name: 'Test Template',
+        components: [
+          { type: 'HEADER', format: 'VIDEO' },
+          { type: 'BODY', text: 'Olá!' }
+        ]
+      }
+    ];
+    const props = {
+      ...defaultProps,
+      templates: templatesWithMedia
+    };
+    render(<VariablesSection {...props} />);
+    expect(screen.getByTestId('mock-media-uploader')).toBeInTheDocument();
+    expect(screen.getByText('Uploader Format: VIDEO')).toBeInTheDocument();
   });
 });

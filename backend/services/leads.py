@@ -86,7 +86,17 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
         # Helper to split tags robustly
         def split_tags(t_str):
             if not t_str: return []
-            return [t.strip() for t in str(t_str).split(",") if t.strip()]
+            val = str(t_str).strip()
+            if val.startswith('[') and val.endswith(']'):
+                try:
+                    import json
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        return [str(t).strip() for t in parsed if str(t).strip()]
+                except Exception:
+                    pass
+            cleaned = val.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
+            return [t.strip() for t in cleaned.split(",") if t.strip()]
 
         tags_to_add = split_tags(tag)
         tags_to_del = split_tags(tags_to_remove)

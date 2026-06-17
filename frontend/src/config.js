@@ -17,6 +17,8 @@ raw_ws_url = raw_ws_url.replace(/\/+$/, '');
 export const API_URL = raw_api_url;
 export const WS_URL = raw_ws_url;
 export const WEBHOOK_BASE_URL = raw_webhook_url.replace(/\/+$/, ''); // Remove trailing slashes
+export const META_APP_ID = window._env_?.META_APP_ID || import.meta.env.VITE_META_APP_ID || '';
+export const META_CONFIG_ID = window._env_?.META_CONFIG_ID || import.meta.env.VITE_META_CONFIG_ID || '';
 
 
 /**
@@ -36,5 +38,5 @@ export const resolveUrl = (url) => {
     return `${baseUrl}${normalizedUrl}`;
 };
 
-console.log('Environment Config Loaded:', { API_URL, WS_URL, WEBHOOK_BASE_URL, source: window._env_ ? 'runtime (window._env_)' : 'build-time (import.meta.env)' });
+console.log('Environment Config Loaded:', { API_URL, WS_URL, WEBHOOK_BASE_URL, META_APP_ID, META_CONFIG_ID, source: window._env_ ? 'runtime (window._env_)' : 'build-time (import.meta.env)' });
 

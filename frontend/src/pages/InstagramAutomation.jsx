@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FiPlus, FiTrash2, FiEdit2, FiZap, FiSettings, FiCheckCircle, FiXCircle, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiEdit2, FiZap, FiSettings, FiCheckCircle, FiXCircle, FiEye, FiEyeOff, FiList, FiClock } from 'react-icons/fi';
 import { API_URL } from '../config';
 import { useClient } from '../contexts/ClientContext';
 import { fetchWithAuth } from '../AuthContext';
 import { toast } from 'react-hot-toast';
 import ConfirmModal from '../components/ConfirmModal';
+import PostSelectorModal from './InstagramAutomation/PostSelectorModal';
+import InstagramLogsTab from './InstagramAutomation/InstagramLogsTab';
 
 export default function InstagramAutomation() {
   const { activeClient } = useClient();
@@ -13,8 +15,18 @@ export default function InstagramAutomation() {
   const [funnels, setFunnels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Tabs & Logs State
+  const [activeTab, setActiveTab] = useState('rules'); // 'rules' or 'logs'
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsTotalPages, setLogsTotalPages] = useState(1);
+  const [logsTotalItems, setLogsTotalItems] = useState(0);
+  const [logsStatusFilter, setLogsStatusFilter] = useState(null);
   
   // Form State
   const [editingId, setEditingId] = useState(null);
@@ -64,6 +76,29 @@ export default function InstagramAutomation() {
       toast.error("Erro ao carregar automações do Instagram.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLogs = async () => {
+    if (!activeClient) return;
+    setLogsLoading(true);
+    try {
+      let url = `${API_URL}/instagram/logs?page=${logsPage}&limit=10`;
+      if (logsStatusFilter) {
+        url += `&status=${logsStatusFilter}`;
+      }
+      const res = await fetchWithAuth(url, {}, activeClient.id);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+        setLogsTotalPages(data.pages || 1);
+        setLogsTotalItems(data.total || 0);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar logs do Instagram:", err);
+      toast.error("Erro ao carregar histórico.");
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -156,6 +191,12 @@ export default function InstagramAutomation() {
     fetchSettings();
     fetchInstagramPosts();
   }, [activeClient]);
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      fetchLogs();
+    }
+  }, [activeClient, activeTab, logsPage, logsStatusFilter]);
 
   const handleSaveSettings = async () => {
     if (!activeClient) return;
@@ -360,9 +401,33 @@ export default function InstagramAutomation() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 p-1 bg-gray-100 dark:bg-[#1e293b]/40 rounded-2xl w-fit border border-gray-200/50 dark:border-white/5">
+        <button
+          onClick={() => setActiveTab('rules')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+            activeTab === 'rules'
+              ? 'bg-white dark:bg-[#0f172a] text-pink-500 shadow-md shadow-black/5'
+              : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+        >
+          <FiList size={14} /> Regras de Automação
+        </button>
+        <button
+          onClick={() => setActiveTab('logs')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+            activeTab === 'logs'
+              ? 'bg-white dark:bg-[#0f172a] text-pink-500 shadow-md shadow-black/5'
+              : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+        >
+          <FiClock size={14} /> Histórico / Webhooks
+        </button>
+      </div>
 
-      {/* Tabela de Automacões */}
-      <div className="bg-white/50 dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 backdrop-blur-xl shadow-xl overflow-hidden">
+      {activeTab === 'rules' ? (
+        /* Tabela de Automacões */
+        <div className="bg-white/50 dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 backdrop-blur-xl shadow-xl overflow-hidden">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-800/50">
@@ -424,6 +489,22 @@ export default function InstagramAutomation() {
           </tbody>
         </table>
       </div>
+      ) : (
+        <InstagramLogsTab
+          logsData={logs}
+          loading={logsLoading}
+          onRefresh={fetchLogs}
+          page={logsPage}
+          totalPages={logsTotalPages}
+          totalItems={logsTotalItems}
+          onPageChange={setLogsPage}
+          statusFilter={logsStatusFilter}
+          onStatusFilterChange={(val) => {
+            setLogsStatusFilter(val);
+            setLogsPage(1);
+          }}
+        />
+      )}
 
       {/* Modal Criar / Editar - Portal para cobrir 100% da tela */}
       {isModalOpen && createPortal(
@@ -464,16 +545,14 @@ export default function InstagramAutomation() {
 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Posts do Instagram</label>
-                {loadingPosts ? (
-                  <div className="text-xs text-gray-400 animate-pulse py-1">Carregando posts...</div>
-                ) : postsError ? (
-                  <div className="text-xs text-red-500 py-1">{postsError}</div>
-                ) : null}
+                {postsError && (
+                  <div className="text-xs text-red-500 py-1 mb-1">{postsError}</div>
+                )}
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="w-full text-left px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white flex justify-between items-center"
+                    onClick={() => setIsPostModalOpen(true)}
+                    className="w-full text-left px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white flex justify-between items-center hover:bg-gray-200 dark:hover:bg-gray-700"
                   >
                     <span>
                       {selectedPostIds.includes('all')
@@ -482,65 +561,22 @@ export default function InstagramAutomation() {
                         ? '1 post selecionado'
                         : `${selectedPostIds.length} posts selecionados`}
                     </span>
-                    <span className="text-gray-400">▼</span>
+                    <span className="px-2.5 py-1 rounded bg-pink-500/10 text-pink-500 text-[10px] font-black uppercase tracking-wider">
+                      Selecionar
+                    </span>
                   </button>
                   
-                  {isDropdownOpen && (
-                    <div className="absolute z-[999999] mt-2 w-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-2xl max-h-60 overflow-y-auto p-2 space-y-1">
-                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg cursor-pointer text-xs font-semibold text-gray-900 dark:text-white">
-                        <input
-                          type="checkbox"
-                          checked={selectedPostIds.includes('all')}
-                          onChange={() => {
-                            if (selectedPostIds.includes('all')) {
-                              setSelectedPostIds([]);
-                            } else {
-                              setSelectedPostIds(['all']);
-                            }
-                          }}
-                          className="rounded text-pink-600 focus:ring-pink-500"
-                        />
-                        <span>Todos os Posts (Qualquer Post)</span>
-                      </label>
-                      
-                      <div className="border-t border-gray-100 dark:border-gray-705 my-1"></div>
-                      
-                      {instagramPosts.length === 0 ? (
-                        <div className="text-xs text-gray-500 italic p-2 text-center">Nenhum post encontrado.</div>
-                      ) : (
-                        instagramPosts.map(post => {
-                          const isChecked = selectedPostIds.includes(post.id);
-                          return (
-                            <label key={post.id} className="flex items-start gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg cursor-pointer text-xs text-gray-900 dark:text-white">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => {
-                                  let newSelection = [...selectedPostIds].filter(id => id !== 'all');
-                                  if (isChecked) {
-                                    newSelection = newSelection.filter(id => id !== post.id);
-                                  } else {
-                                    newSelection.push(post.id);
-                                  }
-                                  if (newSelection.length === 0) {
-                                    newSelection = ['all'];
-                                  }
-                                  setSelectedPostIds(newSelection);
-                                }}
-                                className="rounded text-pink-600 focus:ring-pink-500 mt-0.5"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <p className="font-bold truncate">{post.caption || 'Sem legenda'}</p>
-                                <p className="text-[10px] text-gray-400 font-mono mt-0.5">{post.id}</p>
-                              </div>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
+                  <PostSelectorModal
+                    isOpen={isPostModalOpen}
+                    onClose={() => setIsPostModalOpen(false)}
+                    posts={instagramPosts}
+                    selectedIds={selectedPostIds}
+                    onSelect={setSelectedPostIds}
+                    loading={loadingPosts}
+                    error={postsError}
+                  />
                 </div>
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">Escolha todos, um ou múltiplos posts para ativar esta automação.</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">Clique para ver e selecionar um ou múltiplos posts no grid do Instagram.</span>
               </div>
 
               <div>

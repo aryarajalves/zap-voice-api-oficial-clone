@@ -91,9 +91,37 @@ class TestLeadsTags(unittest.TestCase):
         mock_user.client_id = self.client_id
 
         # Chamada para exportar com filtro
-        response = export_leads_csv(tag="tag_teste_1", x_client_id=self.client_id, db=self.db, current_user=mock_user)
+        response = export_leads_csv(tag=["tag_teste_1"], x_client_id=self.client_id, db=self.db, current_user=mock_user)
         
         # StreamingResponse deve estar presente
+        self.assertIsNotNone(response)
+        self.assertEqual(response.media_type, "text/csv; charset=utf-8")
+
+    def test_filter_leads_by_multiple_tags(self):
+        """Valida se a listagem de leads filtra corretamente por múltiplas etiquetas usando OR"""
+        from routers.leads import list_leads
+        
+        mock_user = MagicMock()
+        mock_user.client_id = self.client_id
+
+        # Filtrar por ['tag_teste_1', 'tag_teste_2'] (deve vir 2 leads)
+        res = list_leads(tag=["tag_teste_1", "tag_teste_2"], x_client_id=self.client_id, db=self.db, current_user=mock_user)
+        self.assertEqual(res["total"], 2)
+
+        # Filtrar por ['tag_teste_1'] (deve vir 1 lead)
+        res_single = list_leads(tag=["tag_teste_1"], x_client_id=self.client_id, db=self.db, current_user=mock_user)
+        self.assertEqual(res_single["total"], 1)
+
+    def test_export_csv_with_multiple_tags_filter(self):
+        """Valida se a exportação CSV aceita múltiplos filtros de etiquetas"""
+        from routers.leads import export_leads_csv
+        
+        mock_user = MagicMock()
+        mock_user.client_id = self.client_id
+
+        # Chamada para exportar com filtros múltiplos
+        response = export_leads_csv(tag=["tag_teste_1", "tag_teste_2"], x_client_id=self.client_id, db=self.db, current_user=mock_user)
+        
         self.assertIsNotNone(response)
         self.assertEqual(response.media_type, "text/csv; charset=utf-8")
 

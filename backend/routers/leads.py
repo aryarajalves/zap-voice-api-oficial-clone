@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from chatwoot_client import ChatwootClient
 from sqlalchemy import or_, desc, cast, String
@@ -27,7 +27,11 @@ class BulkCreateLeadsRequest(BaseModel):
     leads: List[LeadBatchItem]
     tags: Optional[str] = None
 
+class RenameImportRequest(BaseModel):
+    filename: str
+
 router = APIRouter()
+
 
 
 @router.post("/leads/bulk", summary="Salvar múltiplos leads em massa")
@@ -90,26 +94,29 @@ async def preview_import(
         content = await file.read()
         file_extension = file.filename.split('.')[-1].lower()
         
+        # Carregar o DataFrame completo para saber os totais reais
         if file_extension == 'csv':
-            # Tentar detectar o separador (vírgula ou ponto-e-vírgula)
             try:
-                df = pd.read_csv(io.BytesIO(content), sep=';', nrows=3)
-                if len(df.columns) <= 1:
-                    df = pd.read_csv(io.BytesIO(content), sep=',', nrows=3)
+                df_full = pd.read_csv(io.BytesIO(content), sep=';')
+                if len(df_full.columns) <= 1:
+                    df_full = pd.read_csv(io.BytesIO(content), sep=',')
             except:
-                df = pd.read_csv(io.BytesIO(content), nrows=3)
+                df_full = pd.read_csv(io.BytesIO(content))
         elif file_extension in ['xls', 'xlsx']:
-            df = pd.read_excel(io.BytesIO(content), nrows=3)
+            df_full = pd.read_excel(io.BytesIO(content))
         else:
             raise HTTPException(status_code=400, detail="Formato de arquivo não suportado. Use CSV ou Excel.")
 
+        # Obter primeiras 3 linhas para a prévia
+        df_preview = df_full.head(3)
+
         # Converter para strings para o JSON
-        headers = df.columns.tolist()
-        preview_rows = df.fillna("").values.tolist()
+        headers = df_full.columns.tolist()
+        preview_rows = df_preview.fillna("").values.tolist()
         
         # Tentar detectar coluna de telefone para contagem de únicos
-        unique_contacts = len(df)
-        total_rows = len(df)
+        total_rows = len(df_full)
+        unique_contacts = total_rows
         
         phone_cols = [h for h in headers if any(word in h.lower() for word in ['tel', 'phone', 'zap', 'whats', 'cel'])]
         if phone_cols:
@@ -119,10 +126,13 @@ async def preview_import(
                 clean = "".join(filter(str.isdigit, str(p)))
                 return clean[-8:] if len(clean) >= 8 else clean
             
-            unique_contacts = df[p_col].apply(get_last_8).nunique()
+            # Remover duplicatas com base no telefone limpo
+            temp_clean = df_full[p_col].apply(clean_p) if 'clean_p' in locals() else df_full[p_col].apply(lambda p: "".join(filter(str.isdigit, str(p))) if not pd.isna(p) else "")
+            temp_clean = temp_clean[temp_clean.str.len() >= 8]
+            unique_contacts = temp_clean.str[-8:].nunique()
 
         return {
-            "headers": df.columns.tolist(),
+            "headers": headers,
             "preview_rows": preview_rows,
             "filename": file.filename,
             "total_rows": total_rows,
@@ -133,24 +143,26 @@ async def preview_import(
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
 
-@router.post("/leads/import/execute", summary="Executar importação de contatos")
-async def execute_import(
-    file: UploadFile = File(...),
-    mapping: str = Form(...), # JSON string do mapeamento
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_premium)
-):
-    """
-    Processa o arquivo aplicando o mapeamento de colunas e salvando no banco.
-    """
+def process_import_in_bg(import_id: int, content: bytes, file_extension: str, mapping_dict: dict, client_id: int):
+    # Obtain a fresh database session
+    from database import SessionLocal
+    from datetime import datetime, timezone
+    import models
+    import pandas as pd
+    import io
+    from services.leads import upsert_webhook_lead
+    
+    db = SessionLocal()
     try:
-        client_id = x_client_id if x_client_id else current_user.client_id
-        mapping_dict = json.loads(mapping) # {"name": "col_a", "phone": "col_b", ...}
+        # Get the history record
+        history = db.query(models.ContactImportHistory).filter(models.ContactImportHistory.id == import_id).first()
+        if not history:
+            return
         
-        content = await file.read()
-        file_extension = file.filename.split('.')[-1].lower()
-        
+        history.status = "processing"
+        db.commit()
+
+        # Load dataframe
         if file_extension == 'csv':
             try:
                 df = pd.read_csv(io.BytesIO(content), sep=';')
@@ -161,38 +173,39 @@ async def execute_import(
         elif file_extension in ['xls', 'xlsx']:
             df = pd.read_excel(io.BytesIO(content))
         else:
-            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado.")
+            history.status = "failed"
+            history.error_message = "Formato de arquivo não suportado."
+            db.commit()
+            return
 
         # Normalização: Garantir que as colunas mapeadas existem no DF
         for key, col_name in mapping_dict.items():
             if col_name and col_name not in df.columns:
-                raise HTTPException(status_code=400, detail=f"Coluna '{col_name}' não encontrada no arquivo.")
+                history.status = "failed"
+                history.error_message = f"Coluna '{col_name}' não encontrada no arquivo."
+                db.commit()
+                return
 
         # --- Pré-processamento e Deduplicação ---
-        # 1. Limpar telefone e remover o que não for dígito
         def clean_p(p):
             if pd.isna(p): return ""
             return "".join(filter(str.isdigit, str(p)))
 
         phone_col = mapping_dict.get('phone')
         df['temp_clean_phone'] = df[phone_col].apply(clean_p)
-        
-        # 2. Remover linhas sem telefone válido (mínimo 8 dígitos)
         df = df[df['temp_clean_phone'].str.len() >= 8]
-        
-        # 3. Criar coluna de comparação (últimos 8 dígitos)
         df['temp_last_8'] = df['temp_clean_phone'].str[-8:]
-        
-        # 4. Remover duplicatas na própria planilha baseado nos últimos 8 dígitos
-        # Mantemos a primeira ocorrência encontrada
         df = df.drop_duplicates(subset=['temp_last_8'], keep='first')
-        # --- Fim do Pré-processamento ---
+
+        total_rows = len(df)
+        history.total_rows = total_rows
+        db.commit()
 
         success_count = 0
         error_count = 0
-        
-        # Iterar e importar
-        for _, row in df.iterrows():
+
+        # Iterar e importar em lotes para atualizar o status de progresso
+        for idx, (_, row) in enumerate(df.iterrows()):
             try:
                 clean_phone = row['temp_clean_phone']
                 
@@ -203,7 +216,6 @@ async def execute_import(
                     "event_type": "importado"
                 }
                 
-                # Limpar strings 'nan'
                 for k, v in lead_data.items():
                     if str(v).strip().lower() == 'nan':
                         lead_data[k] = None
@@ -216,24 +228,182 @@ async def execute_import(
                 if str(tags_to_remove).strip().lower() == 'nan':
                     tags_to_remove = None
 
-                # Chamar serviço de upsert (já atualizado para dar match pelos últimos 8 dígitos e gerenciar múltiplas tags)
                 upsert_webhook_lead(db, client_id, "importação", lead_data, tag=tag, tags_to_remove=tags_to_remove)
                 success_count += 1
             except Exception as e:
                 print(f"Erro ao importar linha: {e}")
                 error_count += 1
+            
+            # Periodicamente commitar e salvar progresso
+            if idx % 100 == 0 or idx == total_rows - 1:
+                history.imported_rows = success_count
+                history.error_rows = error_count
+                db.commit()
 
+        history.status = "completed"
+        history.imported_rows = success_count
+        history.error_rows = error_count
+        history.updated_at = datetime.now(timezone.utc)  # Marca exatamente quando a importação terminou
         db.commit()
+
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        try:
+            history = db.query(models.ContactImportHistory).filter(models.ContactImportHistory.id == import_id).first()
+            if history:
+                history.status = "failed"
+                history.error_message = str(e)
+                history.updated_at = datetime.now(timezone.utc)  # Marca exatamente quando a falha ocorreu
+                db.commit()
+        except:
+            pass
+    finally:
+        db.close()
+
+@router.post("/leads/import/execute", summary="Executar importação de contatos")
+async def execute_import(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    mapping: str = Form(...), # JSON string do mapeamento
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Inicia o processamento do arquivo aplicando o mapeamento de colunas em segundo plano.
+    """
+    try:
+        client_id = x_client_id if x_client_id else current_user.client_id
+        mapping_dict = json.loads(mapping) # {"name": "col_a", "phone": "col_b", ...}
+        
+        content = await file.read()
+        file_extension = file.filename.split('.')[-1].lower()
+        
+        # Criar registro de histórico inicial
+        history = models.ContactImportHistory(
+            client_id=client_id,
+            filename=file.filename,
+            status="pending",
+            total_rows=0,
+            imported_rows=0,
+            error_rows=0
+        )
+        db.add(history)
+        db.commit()
+        db.refresh(history)
+        
+        # Adicionar background task
+        background_tasks.add_task(
+            process_import_in_bg,
+            history.id,
+            content,
+            file_extension,
+            mapping_dict,
+            client_id
+        )
+        
         return {
             "status": "success",
-            "imported": success_count,
-            "errors": error_count,
-            "message": f"Importação concluída: {success_count} contatos importados/atualizados."
+            "import_id": history.id,
+            "message": "Importação iniciada em segundo plano."
         }
     except Exception as e:
         import traceback
         print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Erro interno na importação: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao iniciar importação: {str(e)}")
+
+@router.get("/leads/import/history", summary="Obter histórico de importações")
+def get_import_history(
+    skip: int = 0,
+    limit: int = 20,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Retorna o histórico de importações paginado para o cliente ativo.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    query = db.query(models.ContactImportHistory).filter(
+        models.ContactImportHistory.client_id == client_id
+    )
+    total = query.count()
+    imports = query.order_by(desc(models.ContactImportHistory.created_at)).offset(skip).limit(limit).all()
+    return {
+        "items": imports,
+        "total": total
+    }
+
+
+@router.put("/leads/import/{import_id}/rename", summary="Renomear lista importada")
+def rename_import(
+    import_id: int,
+    request: RenameImportRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Renomeia o arquivo ou lista importada.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    history = db.query(models.ContactImportHistory).filter(
+        models.ContactImportHistory.id == import_id,
+        models.ContactImportHistory.client_id == client_id
+    ).first()
+    
+    if not history:
+        raise HTTPException(status_code=404, detail="Importação não encontrada.")
+        
+    history.filename = request.filename
+    db.commit()
+    db.refresh(history)
+    return history
+
+
+class DeleteImportsRequest(BaseModel):
+    import_ids: List[int]
+
+
+@router.delete("/leads/import/{import_id}", summary="Deletar uma importação do histórico")
+def delete_import(
+    import_id: int,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    history = db.query(models.ContactImportHistory).filter(
+        models.ContactImportHistory.id == import_id,
+        models.ContactImportHistory.client_id == client_id
+    ).first()
+    
+    if not history:
+        raise HTTPException(status_code=404, detail="Importação não encontrada.")
+        
+    db.delete(history)
+    db.commit()
+    return {"status": "success", "message": "Importação deletada com sucesso."}
+
+
+@router.post("/leads/import/bulk-delete", summary="Deletar múltiplas importações do histórico")
+def bulk_delete_imports(
+    request: DeleteImportsRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    deleted_count = db.query(models.ContactImportHistory).filter(
+        models.ContactImportHistory.id.in_(request.import_ids),
+        models.ContactImportHistory.client_id == client_id
+    ).delete(synchronize_session=False)
+    
+    db.commit()
+    return {"status": "success", "message": f"{deleted_count} importações deletadas com sucesso."}
+
+
 
 @router.post("/leads", response_model=schemas.WebhookLead, summary="Criar ou atualizar lead manualmente")
 def create_manual_lead(
@@ -325,7 +495,7 @@ def list_leads(
     search: Optional[str] = None,
     event_type: Optional[str] = None,
     product_name: Optional[str] = None,
-    tag: Optional[str] = None,
+    tag: Optional[List[str]] = Query(None),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
@@ -354,7 +524,15 @@ def list_leads(
         query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
 
     if tag:
-        query = query.filter(models.WebhookLead.tags.ilike(f"%{tag}%"))
+        if isinstance(tag, str):
+            tag = [tag]
+        tags_filter = []
+        for t in tag:
+            if t:
+                parts = [x.strip() for x in t.split(",") if x.strip()]
+                tags_filter.extend(parts)
+        if tags_filter:
+            query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
 
     # Filtro de data de criação do contato
     if date_from:
@@ -495,7 +673,7 @@ def export_leads_csv(
     search: Optional[str] = None,
     event_type: Optional[str] = None,
     product_name: Optional[str] = None,
-    tag: Optional[str] = None,
+    tag: Optional[List[str]] = Query(None),
     ids: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -534,7 +712,15 @@ def export_leads_csv(
             query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
 
         if tag:
-            query = query.filter(models.WebhookLead.tags.ilike(f"%{tag}%"))
+            if isinstance(tag, str):
+                tag = [tag]
+            tags_filter = []
+            for t in tag:
+                if t:
+                    parts = [x.strip() for x in t.split(",") if x.strip()]
+                    tags_filter.extend(parts)
+            if tags_filter:
+                query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
 
         # Filtro de data (exportação também respeita o range selecionado)
         if date_from:

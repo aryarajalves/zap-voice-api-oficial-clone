@@ -1,110 +1,151 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import Table from './Table';
+import { useClient } from '../../../contexts/ClientContext';
 import { toast } from 'react-hot-toast';
 
-// Mock dependencies
 vi.mock('../../../contexts/ClientContext', () => ({
-  useClient: () => ({
-    activeClient: { id: 1, name: 'Client Test' }
-  })
+  useClient: vi.fn(),
+}));
+
+vi.mock('react-icons/fi', () => ({
+  FiExternalLink: () => <span data-testid="icon-external-link" />,
+  FiMessageSquare: () => <span data-testid="icon-message-square" />,
+  FiEdit2: () => <span data-testid="icon-edit" />,
+  FiTrash2: () => <span data-testid="icon-trash" />,
+  FiCalendar: () => <span data-testid="icon-calendar" />,
+  FiLock: () => <span data-testid="icon-lock" />,
+  FiUnlock: () => <span data-testid="icon-unlock" />,
+  FiDatabase: () => <span data-testid="icon-database" />,
 }));
 
 vi.mock('react-hot-toast', () => ({
   toast: {
     success: vi.fn(),
-    error: vi.fn()
-  }
+    error: vi.fn(),
+  },
 }));
 
-describe('Table Component - Lock and Delete Behavior', () => {
-  const mockLeads = [
-    {
-      id: 1,
-      name: 'Lead Bloqueado',
-      phone: '5511999999991',
-      email: 'locked@example.com',
-      is_locked: true,
-      created_at: '2026-05-27T17:44:00Z'
-    },
-    {
-      id: 2,
-      name: 'Lead Normal',
-      phone: '5511999999992',
-      email: 'normal@example.com',
-      is_locked: false,
-      created_at: '2026-05-27T17:44:00Z'
-    }
-  ];
+vi.mock('../../../AuthContext', () => ({
+  fetchWithAuth: vi.fn(),
+}));
 
-  const mockProps = {
-    loading: false,
-    leads: mockLeads,
-    selectedLeads: [],
-    handleSelectAll: vi.fn(),
-    handleSelectLead: vi.fn(),
-    setLeadToEdit: vi.fn(),
-    setIsEditModalOpen: vi.fn(),
-    setLeadToDelete: vi.fn(),
-    setIsDeleteModalOpen: vi.fn(),
-    page: 0,
-    setPage: vi.fn(),
-    total: 2,
-    limit: 20,
-    setLimit: vi.fn(),
-    fetchLeads: vi.fn(),
-  };
+import { fetchWithAuth } from '../../../AuthContext';
 
+const mockLeads = [
+  {
+    id: 1,
+    name: 'Leonardo José Da Silva',
+    phone: '5521972696605',
+    email: 'leonardojose35diacono@gmail.com',
+    tags: 'tag1, tag2, tag3, tag4, tag5',
+    created_at: '2026-06-17T12:18:00.000Z',
+    is_locked: false,
+  }
+];
+
+const defaultProps = {
+  loading: false,
+  leads: mockLeads,
+  selectedLeads: [],
+  handleSelectAll: vi.fn(),
+  handleSelectLead: vi.fn(),
+  setLeadToEdit: vi.fn(),
+  setIsEditModalOpen: vi.fn(),
+  setLeadToDelete: vi.fn(),
+  setIsDeleteModalOpen: vi.fn(),
+  page: 0,
+  setPage: vi.fn(),
+  total: 1,
+  limit: 20,
+  setLimit: vi.fn(),
+  fetchLeads: vi.fn(),
+};
+
+describe('Leads Table - Tags Limit and Visibilities Selector Modal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useClient.mockReturnValue({
+      activeClient: { id: 1, name: 'Client Test' },
+    });
   });
 
-  it('exibe erro toast e não abre modal de delete ao clicar no botão de exclusão de lead bloqueado', () => {
-    render(<Table {...mockProps} />);
+  it('exibe no máximo 3 tags para contatos e oculta o restante com botão +N', () => {
+    render(<Table {...defaultProps} />);
 
-    // Buscar os botões de exclusão. Existem dois na tabela.
-    // O primeiro botão é do Lead Bloqueado.
-    const deleteButtons = screen.getAllByTitle(/Excluir Contato e Histórico|Contato bloqueado — desbloqueie para excluir/);
-    expect(deleteButtons).toHaveLength(2);
+    expect(screen.getByText('tag1')).toBeInTheDocument();
+    expect(screen.getByText('tag2')).toBeInTheDocument();
+    expect(screen.getByText('tag3')).toBeInTheDocument();
 
-    // Clicar no botão do lead bloqueado (primeiro item)
-    fireEvent.click(deleteButtons[0]);
-
-    // Verificar que disparou toast.error e não chamou as funções de abrir modal
-    expect(toast.error).toHaveBeenCalledWith('Não é possível deletar um contato bloqueado.');
-    expect(mockProps.setLeadToDelete).not.toHaveBeenCalled();
-    expect(mockProps.setIsDeleteModalOpen).not.toHaveBeenCalled();
+    expect(screen.queryByText('tag4')).not.toBeInTheDocument();
+    expect(screen.queryByText('tag5')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+2' })).toBeInTheDocument();
   });
 
-  it('abre o modal de exclusão ao clicar no botão de exclusão de lead normal', () => {
-    render(<Table {...mockProps} />);
+  it('abre popup modal de visibilidade ao clicar no botão +N, valida limite de 3 tags visíveis e envia atualização', async () => {
+    fetchWithAuth.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    const deleteButtons = screen.getAllByTitle(/Excluir Contato e Histórico/);
-    // Como o primeiro é bloqueado, o título correspondente de excluir ativo é apenas o do segundo
-    expect(deleteButtons).toHaveLength(1);
+    render(<Table {...defaultProps} />);
 
-    // Clicar no botão do lead normal
-    fireEvent.click(deleteButtons[0]);
+    const plusTwoBtn = screen.getByRole('button', { name: '+2' });
+    fireEvent.click(plusTwoBtn);
 
-    // Verificar que NÃO disparou toast.error e chamou as funções de abrir modal
-    expect(toast.error).not.toHaveBeenCalled();
-    expect(mockProps.setLeadToDelete).toHaveBeenCalledWith(mockLeads[1]);
-    expect(mockProps.setIsDeleteModalOpen).toHaveBeenCalledWith(true);
+    // Deve abrir o modal interativo
+    expect(screen.getByText(/Gerenciar Etiquetas de:/)).toBeInTheDocument();
+    expect(screen.getAllByText('Leonardo José Da Silva')).toHaveLength(2);
+
+    // As tags devem aparecer com seus status
+    expect(screen.getAllByText('tag1')).toHaveLength(2);
+    expect(screen.getByText('tag4')).toBeInTheDocument();
+    
+    // As 3 primeiras devem começar marcadas como "Visível"
+    const visibleBadges = screen.getAllByText('Visível');
+    expect(visibleBadges.length).toBe(3);
+
+    // Tentar marcar uma 4ª tag como visível (tag4) deve gerar erro
+    const tag4Row = screen.getByText('tag4').closest('div');
+    fireEvent.click(tag4Row);
+    expect(toast.error).toHaveBeenCalledWith("Você pode selecionar no máximo 3 etiquetas para exibir na tela inicial.");
+
+    // Desmarcar uma tag visível (tag1 - a do modal é a segunda ocorrência na tela)
+    const tag1Row = screen.getAllByText('tag1')[1].closest('div');
+    fireEvent.click(tag1Row);
+
+    // Agora deve permitir marcar a tag4 como visível
+    fireEvent.click(tag4Row);
+    
+    // Clica em Salvar Alterações
+    const saveBtn = screen.getByRole('button', { name: 'Salvar Alterações' });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(fetchWithAuth).toHaveBeenCalled();
+    });
   });
 
-  it('desabilita o checkbox de seleção para contatos bloqueados e o mantém habilitado para normais', () => {
-    render(<Table {...mockProps} />);
+  it('renderiza apenas as tags especificadas em variables.visible_tags', () => {
+    const leadsWithPref = [
+      {
+        ...mockLeads[0],
+        variables: {
+          visible_tags: ['tag1', 'tag4']
+        }
+      }
+    ];
 
-    // Buscar os checkboxes. Na tabela temos 1 do header + 2 das linhas.
-    const checkboxes = screen.getAllByRole('checkbox');
-    expect(checkboxes).toHaveLength(3);
+    render(<Table {...defaultProps} leads={leadsWithPref} />);
 
-    const headerCheckbox = checkboxes[0];
-    const lockedCheckbox = checkboxes[1];
-    const normalCheckbox = checkboxes[2];
+    // Devem aparecer apenas tag1 e tag4 na tabela principal
+    expect(screen.getByText('tag1')).toBeInTheDocument();
+    expect(screen.getByText('tag4')).toBeInTheDocument();
 
-    expect(lockedCheckbox).toBeDisabled();
-    expect(normalCheckbox).not.toBeDisabled();
+    // Outras não devem aparecer como visíveis
+    expect(screen.queryByText('tag2')).not.toBeInTheDocument();
+    expect(screen.queryByText('tag3')).not.toBeInTheDocument();
+    expect(screen.queryByText('tag5')).not.toBeInTheDocument();
+
+    // Deve mostrar +3 para as tags ocultas (tag2, tag3, tag5)
+    expect(screen.getByRole('button', { name: '+3' })).toBeInTheDocument();
   });
 });

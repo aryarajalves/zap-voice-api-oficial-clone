@@ -177,9 +177,12 @@ export function useContactImport(onClose, onImportComplete) {
 
       if (response.ok) {
         const result = await response.json();
-        setImportResult(result);
-        setStep(3);
-        onImportComplete();
+        toast.success("Importação iniciada em segundo plano!");
+        onClose();
+        if (onImportComplete) {
+          onImportComplete();
+        }
+        reset();
       } else {
         const error = await response.json();
         toast.error(error.detail || 'Erro na importação.');
@@ -191,6 +194,7 @@ export function useContactImport(onClose, onImportComplete) {
       setLoading(false);
     }
   };
+
 
   const reset = () => {
     setStep(1);
