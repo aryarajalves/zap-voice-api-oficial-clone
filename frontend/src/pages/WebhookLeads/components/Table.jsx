@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar, FiLock, FiUnlock, FiDatabase } from 'react-icons/fi';
-import { SiChatwoot } from 'react-icons/si';
+import { FiDatabase } from 'react-icons/fi';
 import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
 import { useClient } from '../../../contexts/ClientContext';
 import { toast } from 'react-hot-toast';
 import CustomFieldsModal from './CustomFieldsModal';
+import LeadTableRow from './LeadTableRow';
+import { TagsVisibilityModal } from './TagsVisibilityModal';
 
 export default function Table({
   loading,
@@ -25,53 +26,47 @@ export default function Table({
   fetchLeads,
 }) {
   const { activeClient } = useClient();
-  const [togglingLock, setTogglingLock] = useState(null); // id do lead sendo processado
+  const [togglingLock, setTogglingLock] = useState(null);
 
-  // Custom Variables States
+  // Custom Columns
   const [showCustomColumns, setShowCustomColumns] = useState(false);
+
+  // Variables Modal
   const [isVariablesModalOpen, setIsVariablesModalOpen] = useState(false);
   const [leadForVariables, setLeadForVariables] = useState(null);
+
+  // Tags Visibility Modal
   const [selectedTagsForModal, setSelectedTagsForModal] = useState(null);
-  const [modalTags, setModalTags] = useState([]); // Array of { name: string, visible: boolean }
+  const [modalTags, setModalTags] = useState([]);
   const [savingTags, setSavingTags] = useState(false);
+
+  const customColumnsKeys = React.useMemo(() => {
+    const keysSet = new Set();
+    leads.forEach(l => {
+      if (l.variables && typeof l.variables === 'object') Object.keys(l.variables).forEach(k => keysSet.add(k));
+    });
+    return Array.from(keysSet);
+  }, [leads]);
 
   const handleOpenTagsModal = (lead) => {
     const cleanedTags = lead.tags
       ? lead.tags.replace(/[\[\]'"]/g, '').split(',').map(t => t.trim()).filter(Boolean)
       : [];
-    
     const prefVisible = lead.variables?.visible_tags;
-    let tagsWithVisibility = [];
-    
-    if (Array.isArray(prefVisible)) {
-      tagsWithVisibility = cleanedTags.map(name => ({
-        name,
-        visible: prefVisible.includes(name)
-      }));
-    } else {
-      tagsWithVisibility = cleanedTags.map((name, idx) => ({
-        name,
-        visible: idx < 3
-      }));
-    }
-    
+    const tagsWithVisibility = Array.isArray(prefVisible)
+      ? cleanedTags.map(name => ({ name, visible: prefVisible.includes(name) }))
+      : cleanedTags.map((name, idx) => ({ name, visible: idx < 3 }));
     setModalTags(tagsWithVisibility);
-    setSelectedTagsForModal({
-      leadId: lead.id,
-      contactName: lead.name || 'Sem Nome',
-      leadVariables: lead.variables || {}
-    });
+    setSelectedTagsForModal({ leadId: lead.id, contactName: lead.name || 'Sem Nome', leadVariables: lead.variables || {} });
   };
 
   const handleToggleTagVisibility = (index) => {
     const targetTag = modalTags[index];
     const currentlyVisibleCount = modalTags.filter(t => t.visible).length;
-
     if (!targetTag.visible && currentlyVisibleCount >= 3) {
       toast.error("Você pode selecionar no máximo 3 etiquetas para exibir na tela inicial.");
       return;
     }
-
     const updated = [...modalTags];
     updated[index] = { ...targetTag, visible: !targetTag.visible };
     setModalTags(updated);
@@ -81,22 +76,12 @@ export default function Table({
     setSavingTags(true);
     try {
       const visible = modalTags.filter(t => t.visible).map(t => t.name);
-      
-      const updatedVariables = {
-        ...selectedTagsForModal.leadVariables,
-        visible_tags: visible
-      };
-
+      const updatedVariables = { ...selectedTagsForModal.leadVariables, visible_tags: visible };
       const res = await fetchWithAuth(`${API_URL}/leads/${selectedTagsForModal.leadId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          variables: updatedVariables
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variables: updatedVariables })
       }, activeClient?.id);
-
       if (res.ok) {
         toast.success("Visibilidade das etiquetas salva com sucesso!");
         setSelectedTagsForModal(null);
@@ -111,16 +96,6 @@ export default function Table({
       setSavingTags(false);
     }
   };
-
-  const customColumnsKeys = React.useMemo(() => {
-    const keysSet = new Set();
-    leads.forEach(l => {
-      if (l.variables && typeof l.variables === 'object') {
-        Object.keys(l.variables).forEach(k => keysSet.add(k));
-      }
-    });
-    return Array.from(keysSet);
-  }, [leads]);
 
   const handleToggleLock = async (lead) => {
     setTogglingLock(lead.id);
@@ -140,22 +115,6 @@ export default function Table({
     }
   };
 
-  const formatDateBrasilia = (isoStr) => {
-    if (!isoStr) return '---';
-    try {
-      return new Date(isoStr).toLocaleString('pt-BR', {
-        timeZone: 'America/Sao_Paulo',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return '---';
-    }
-  };
-
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="px-6 py-4 bg-gray-50/55 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center flex-wrap gap-2">
@@ -164,8 +123,8 @@ export default function Table({
           <button
             onClick={() => setShowCustomColumns(!showCustomColumns)}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
-              showCustomColumns 
-                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' 
+              showCustomColumns
+                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
                 : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50'
             }`}
           >
@@ -185,11 +144,7 @@ export default function Table({
                 <input 
                   type="checkbox" 
                   className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800"
-                  checked={
-                    leads.length > 0 && 
-                    leads.filter(l => !l.is_locked).length > 0 && 
-                    selectedLeads.length === leads.filter(l => !l.is_locked).length
-                  }
+                  checked={leads.length > 0 && leads.filter(l => !l.is_locked).length > 0 && selectedLeads.length === leads.filter(l => !l.is_locked).length}
                   onChange={handleSelectAll}
                 />
               </th>
@@ -200,9 +155,7 @@ export default function Table({
                 <th key={key} className="px-6 py-4 text-xs font-bold text-rose-500 uppercase tracking-wider font-mono">{key}</th>
               ))}
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Chegada</th>
-              <th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Ações
-              </th>
+              <th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -210,330 +163,63 @@ export default function Table({
               Array(5).fill(0).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   <td colSpan="6" className="px-6 py-8">
-                     <div className="h-4 bg-gray-100 dark:bg-gray-700 rounded w-full"></div>
+                    <div className="h-4 bg-gray-100 dark:bg-gray-700 rounded w-full"></div>
                   </td>
                 </tr>
               ))
             ) : leads.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="px-6 py-12 text-center text-gray-500 italic">
-                  Nenhum lead encontrado com os filtros atuais.
-                </td>
-              </tr>
+              <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500 italic">Nenhum lead encontrado com os filtros atuais.</td></tr>
             ) : (
-              leads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
-                  <td className="px-6 py-4">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                      checked={selectedLeads.includes(lead.id)}
-                      onChange={() => handleSelectLead(lead.id)}
-                      disabled={lead.is_locked}
-                      title={lead.is_locked ? "Contatos bloqueados não podem ser selecionados para exclusão em massa." : ""}
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold border border-blue-100 dark:border-blue-800">
-                        {lead.name ? lead.name[0].toUpperCase() : '?'}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-gray-900 dark:text-white leading-tight">
-                            {lead.name || 'Sem Nome'}
-                          </p>
-                          {lead.platform === 'chatwoot_import' && (
-                            <span
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50"
-                              title="Importado do Chatwoot"
-                            >
-                              <SiChatwoot size={9} />
-                              Chatwoot
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-gray-500 font-mono">{lead.phone}</span>
-                          <a 
-                            href={`https://wa.me/${lead.phone}`} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-600 transition-opacity"
-                            title="Abrir WhatsApp"
-                          >
-                            <FiExternalLink size={12} />
-                          </a>
-                          {lead.chatwoot_url && (
-                            <a 
-                              href={lead.chatwoot_url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="opacity-0 group-hover:opacity-100 text-purple-500 hover:text-purple-600 transition-opacity"
-                              title="Abrir Chat no Chatwoot"
-                            >
-                              <FiMessageSquare size={12} />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                      <span className="text-sm truncate max-w-[200px]" title={lead.email}>
-                        {lead.email || '---'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1.5 items-center max-w-[240px]">
-                      {(() => {
-                        if (!lead.tags) return <span className="text-[10px] text-gray-400 italic">Sem etiquetas</span>;
-                        const cleanedTags = lead.tags
-                          .replace(/[\[\]'"]/g, '')
-                          .split(',')
-                          .map(t => t.trim())
-                          .filter(Boolean);
-                        if (cleanedTags.length === 0) return <span className="text-[10px] text-gray-400 italic">Sem etiquetas</span>;
-                        
-                        const prefVisible = lead.variables?.visible_tags;
-                        let displayedTags = [];
-                        let hiddenTags = [];
-                        
-                        if (Array.isArray(prefVisible)) {
-                          displayedTags = cleanedTags.filter(t => prefVisible.includes(t));
-                          hiddenTags = cleanedTags.filter(t => !prefVisible.includes(t));
-                        } else {
-                          displayedTags = cleanedTags.slice(0, 3);
-                          hiddenTags = cleanedTags.slice(3);
-                        }
-                        
-                        const hasMore = hiddenTags.length > 0;
-                        return (
-                          <>
-                            {displayedTags.map((tag, idx) => (
-                              <span 
-                                key={idx} 
-                                className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                            {displayedTags.length === 0 && (
-                              <span className="text-[10px] text-gray-400 italic">Ocultas</span>
-                            )}
-                            {hasMore && (
-                              <button 
-                                onClick={() => handleOpenTagsModal(lead)}
-                                className="px-2 py-0.5 bg-gray-150 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md text-[10px] font-bold transition-all shadow-sm"
-                                title="Ver todas as etiquetas"
-                              >
-                                +{hiddenTags.length}
-                              </button>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </td>
-                  {showCustomColumns && customColumnsKeys.map(key => (
-                    <td key={key} className="px-6 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono">
-                      {(lead.variables && lead.variables[key]) || '---'}
-                    </td>
-                  ))}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                      <FiCalendar size={12} className="flex-shrink-0 text-gray-400" />
-                      <span className="text-xs font-mono">{formatDateBrasilia(lead.created_at)}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end gap-2">
-                      {lead.chatwoot_url && (
-                        <a
-                          href={lead.chatwoot_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-2 text-purple-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                          title="Ver Conversa no Chatwoot"
-                        >
-                          <FiMessageSquare size={18} />
-                        </a>
-                      )}
-                      <button
-                        onClick={() => { setLeadForVariables(lead); setIsVariablesModalOpen(true); }}
-                        className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
-                        title="Ver Variáveis Extraídas"
-                      >
-                        <FiDatabase size={18} />
-                      </button>
-                      <button
-                        onClick={() => { setLeadToEdit(lead); setIsEditModalOpen(true); }}
-                        className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                        title="Editar Informações"
-                      >
-                        <FiEdit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleToggleLock(lead)}
-                        disabled={togglingLock === lead.id}
-                        className={`p-2 rounded-lg transition-colors ${
-                          lead.is_locked
-                            ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                            : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                        } disabled:opacity-50`}
-                        title={lead.is_locked ? 'Desbloquear contato' : 'Bloquear contato (impede exclusão)'}
-                      >
-                        {lead.is_locked ? <FiLock size={18} /> : <FiUnlock size={18} />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (lead.is_locked) {
-                            toast.error("Não é possível deletar um contato bloqueado.");
-                          } else {
-                            setLeadToDelete(lead);
-                            setIsDeleteModalOpen(true);
-                          }
-                        }}
-                        className={`p-2 rounded-lg transition-colors ${
-                          lead.is_locked
-                            ? 'text-gray-400/30 cursor-not-allowed'
-                            : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
-                        }`}
-                        title={lead.is_locked ? 'Contato bloqueado — desbloqueie para excluir' : 'Excluir Contato e Histórico'}
-                      >
-                        <FiTrash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+              leads.map(lead => (
+                <LeadTableRow
+                  key={lead.id}
+                  lead={lead}
+                  selectedLeads={selectedLeads}
+                  showCustomColumns={showCustomColumns}
+                  customColumnsKeys={customColumnsKeys}
+                  togglingLock={togglingLock}
+                  onSelectLead={handleSelectLead}
+                  onEdit={(l) => { setLeadToEdit(l); setIsEditModalOpen(true); }}
+                  onDelete={(l) => { setLeadToDelete(l); setIsDeleteModalOpen(true); }}
+                  onToggleLock={handleToggleLock}
+                  onOpenVariables={(l) => { setLeadForVariables(l); setIsVariablesModalOpen(true); }}
+                  onOpenTagsModal={handleOpenTagsModal}
+                />
               ))
             )}
           </tbody>
         </table>
       </div>
 
-      {/* PAGINATION */}
+      {/* Paginação */}
       <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-4 flex-wrap">
-        <button
-          disabled={page === 0}
-          onClick={() => setPage(p => p - 1)}
-          className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 disabled:opacity-50 transition-colors"
-        >
-          Anterior
-        </button>
-
+        <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 disabled:opacity-50 transition-colors">Anterior</button>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">
-            Página {page + 1} de {Math.ceil(total / limit) || 1}
-          </span>
+          <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Página {page + 1} de {Math.ceil(total / limit) || 1}</span>
           <span className="text-gray-300 dark:text-gray-600">|</span>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400">Exibir</span>
-            <select
-              value={limit}
-              onChange={(e) => {
-                setLimit(Number(e.target.value));
-                setPage(0);
-              }}
-              className="text-xs font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              {[20, 50, 100, 500, 1000, 999999].map(n => (
-                <option key={n} value={n}>{n === 999999 ? 'Todos' : n}</option>
-              ))}
+            <select value={limit} onChange={(e) => { setLimit(Number(e.target.value)); setPage(0); }} className="text-xs font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+              {[20, 50, 100, 500, 1000].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
             <span className="text-xs text-gray-400">por página</span>
           </div>
           <span className="text-gray-300 dark:text-gray-600">|</span>
           <span className="text-xs text-gray-400">{total} total</span>
         </div>
-
-        <button
-          disabled={(page + 1) * limit >= total}
-          onClick={() => setPage(p => p + 1)}
-          className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 disabled:opacity-50 transition-colors"
-        >
-          Próxima
-        </button>
+        <button disabled={(page + 1) * limit >= total} onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 disabled:opacity-50 transition-colors">Próxima</button>
       </div>
 
-      <CustomFieldsModal
-        isOpen={isVariablesModalOpen}
-        onClose={() => {
-          setIsVariablesModalOpen(false);
-          setLeadForVariables(null);
-        }}
-        lead={leadForVariables}
+      <CustomFieldsModal isOpen={isVariablesModalOpen} onClose={() => { setIsVariablesModalOpen(false); setLeadForVariables(null); }} lead={leadForVariables} />
+
+      <TagsVisibilityModal
+        selectedTagsForModal={selectedTagsForModal}
+        modalTags={modalTags}
+        savingTags={savingTags}
+        onClose={() => setSelectedTagsForModal(null)}
+        onToggle={handleToggleTagVisibility}
+        onSave={handleSaveTagsVisibility}
       />
-
-      {/* Modal para gerenciar visibilidade de todas as etiquetas do lead */}
-      {selectedTagsForModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200 p-6 flex flex-col gap-4">
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                Gerenciar Etiquetas de: <span className="text-blue-500">{selectedTagsForModal.contactName}</span>
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Selecione no máximo 3 etiquetas para ficarem visíveis na tela inicial. As demais ficarão ocultas sob o indicador +N.
-              </p>
-            </div>
-            
-            <div className="flex flex-col gap-1.5 max-h-[260px] overflow-y-auto p-1.5 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-800/80">
-              {modalTags.length === 0 ? (
-                <p className="text-xs text-gray-400 italic text-center py-4">Sem etiquetas associadas.</p>
-              ) : (
-                modalTags.map((tag, idx) => (
-                  <div 
-                    key={idx} 
-                    onClick={() => handleToggleTagVisibility(idx)}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50 cursor-pointer transition-all border border-transparent hover:border-gray-200/50 dark:hover:border-gray-700 select-none"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <input 
-                        type="checkbox"
-                        checked={tag.visible}
-                        onChange={() => {}} // event bubbles from onClick on parent div
-                        className="rounded border-gray-300 dark:border-gray-650 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800 h-4 w-4 pointer-events-none"
-                      />
-                      <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded text-xs font-semibold border border-blue-100 dark:border-blue-800/30 whitespace-nowrap">
-                        {tag.name}
-                      </span>
-                    </div>
-                    {tag.visible ? (
-                      <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30">
-                        Visível
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-bold text-gray-400 dark:text-gray-550 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700/50">
-                        Oculto
-                      </span>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2.5 mt-2">
-              <button 
-                onClick={() => setSelectedTagsForModal(null)}
-                disabled={savingTags}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 text-xs font-semibold rounded-lg transition-all disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={handleSaveTagsVisibility}
-                disabled={savingTags}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all shadow-md shadow-blue-500/10 disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {savingTags ? 'Salvando...' : 'Salvar Alterações'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
