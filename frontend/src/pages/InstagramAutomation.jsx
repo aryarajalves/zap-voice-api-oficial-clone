@@ -1,367 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { FiPlus, FiTrash2, FiEdit2, FiZap, FiSettings, FiCheckCircle, FiXCircle, FiList, FiClock } from 'react-icons/fi';
 import { createPortal } from 'react-dom';
-import { FiPlus, FiTrash2, FiEdit2, FiZap, FiSettings, FiCheckCircle, FiXCircle, FiEye, FiEyeOff, FiList, FiClock } from 'react-icons/fi';
-import { API_URL } from '../config';
 import { useClient } from '../contexts/ClientContext';
-import { fetchWithAuth } from '../AuthContext';
-import { toast } from 'react-hot-toast';
 import ConfirmModal from '../components/ConfirmModal';
-import PostSelectorModal from './InstagramAutomation/PostSelectorModal';
 import InstagramLogsTab from './InstagramAutomation/InstagramLogsTab';
+import InstagramSettingsModal from './InstagramAutomation/InstagramSettingsModal';
+import AutomationFormModal from './InstagramAutomation/AutomationFormModal';
+import useInstagramAutomation from './InstagramAutomation/useInstagramAutomation';
 
 export default function InstagramAutomation() {
   const { activeClient } = useClient();
-  const [automations, setAutomations] = useState([]);
-  const [funnels, setFunnels] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Tabs & Logs State
-  const [activeTab, setActiveTab] = useState('rules'); // 'rules' or 'logs'
-  const [logs, setLogs] = useState([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsPage, setLogsPage] = useState(1);
-  const [logsTotalPages, setLogsTotalPages] = useState(1);
-  const [logsTotalItems, setLogsTotalItems] = useState(0);
-  const [logsStatusFilter, setLogsStatusFilter] = useState(null);
-  
-  // Form State
-  const [editingId, setEditingId] = useState(null);
-  const [name, setName] = useState('');
-  const [postId, setPostId] = useState('all');
-  const [triggerType, setTriggerType] = useState('keyword');
-  const [keywords, setKeywords] = useState('');
-  const [actionType, setActionType] = useState('both');
-  const [replyComments, setReplyComments] = useState(['']);
-  const [funnelId, setFunnelId] = useState('');
-  const [isActive, setIsActive] = useState(true);
-
-  // Settings configs
-  const [instaAccountID, setInstaAccountID] = useState('');
-  const [instaAccessToken, setInstaAccessToken] = useState('');
-  const [isConfiguringSettings, setIsConfiguringSettings] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [tokenJaConfigurado, setTokenJaConfigurado] = useState(false);
-  const [showToken, setShowToken] = useState(false);
-  const [revealingToken, setRevealingToken] = useState(false);
-  const [tokenRevelado, setTokenRevelado] = useState('');
-  const [webhookBaseUrl, setWebhookBaseUrl] = useState('');
-  const [instaWebhookSlug, setInstaWebhookSlug] = useState('');
-
-  // Confirm delete
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-
-  // Instagram Posts state
-  const [instagramPosts, setInstagramPosts] = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(false);
-  const [postsError, setPostsError] = useState('');
-  const [selectedPostIds, setSelectedPostIds] = useState(['all']);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-  const fetchAutomations = async () => {
-    if (!activeClient) return;
-    setLoading(true);
-    try {
-      const res = await fetchWithAuth(`${API_URL}/instagram/automations`, {}, activeClient.id);
-      if (res.ok) {
-        const data = await res.json();
-        setAutomations(data);
-      }
-    } catch (err) {
-      console.error("Erro ao buscar automações:", err);
-      toast.error("Erro ao carregar automações do Instagram.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchLogs = async () => {
-    if (!activeClient) return;
-    setLogsLoading(true);
-    try {
-      let url = `${API_URL}/instagram/logs?page=${logsPage}&limit=10`;
-      if (logsStatusFilter) {
-        url += `&status=${logsStatusFilter}`;
-      }
-      const res = await fetchWithAuth(url, {}, activeClient.id);
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.logs || []);
-        setLogsTotalPages(data.pages || 1);
-        setLogsTotalItems(data.total || 0);
-      }
-    } catch (err) {
-      console.error("Erro ao buscar logs do Instagram:", err);
-      toast.error("Erro ao carregar histórico.");
-    } finally {
-      setLogsLoading(false);
-    }
-  };
-
-  const fetchFunnels = async () => {
-    if (!activeClient) return;
-    try {
-      const res = await fetchWithAuth(`${API_URL}/funnels`, {}, activeClient.id);
-      if (res.ok) {
-        const data = await res.json();
-        setFunnels(data);
-      }
-    } catch (err) {
-      console.error("Erro ao buscar funis:", err);
-    }
-  };
-
-  const fetchSettings = async () => {
-    if (!activeClient) return;
-    try {
-      const res = await fetchWithAuth(`${API_URL}/settings/`, {}, activeClient.id);
-      if (res.ok) {
-        const data = await res.json();
-        setInstaAccountID(data.INSTAGRAM_ACCOUNT_ID || '');
-        // O backend mascara o token (ex: EAAb****7xyz) — se vier preenchido, já foi configurado
-        setTokenJaConfigurado(!!(data.INSTAGRAM_ACCESS_TOKEN));
-        setWebhookBaseUrl(data.WEBHOOK_BASE_URL || '');
-        setInstaWebhookSlug(data.INSTAGRAM_WEBHOOK_SLUG || '');
-        // Reseta o token revelado ao recarregar settings
-        setTokenRevelado('');
-        setShowToken(false);
-      }
-    } catch (err) {
-      console.error('Erro ao carregar configurações do Instagram:', err);
-    }
-  };
-
-  const fetchInstagramPosts = async () => {
-    if (!activeClient) return;
-    setLoadingPosts(true);
-    setPostsError('');
-    try {
-      const res = await fetchWithAuth(`${API_URL}/instagram/posts`, {}, activeClient.id);
-      if (res.ok) {
-        const data = await res.json();
-        setInstagramPosts(data);
-      } else {
-        const err = await res.json();
-        setPostsError(err.detail || "Não foi possível carregar os posts do Instagram.");
-      }
-    } catch (err) {
-      console.error(err);
-      setPostsError("Erro ao conectar ao servidor para buscar posts.");
-    } finally {
-      setLoadingPosts(false);
-    }
-  };
-
-  const handleRevealToken = async () => {
-    if (tokenRevelado) {
-      // Já revelado: apenas alterna visibilidade
-      setShowToken(prev => !prev);
-      return;
-    }
-    if (!activeClient || !tokenJaConfigurado) return;
-    setRevealingToken(true);
-    try {
-      const res = await fetchWithAuth(`${API_URL}/settings/reveal`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'INSTAGRAM_ACCESS_TOKEN' })
-      }, activeClient.id);
-      if (res.ok) {
-        const data = await res.json();
-        setTokenRevelado(data.value || '');
-        setInstaAccessToken(data.value || '');
-        setShowToken(true);
-      } else {
-        toast.error('Não foi possível revelar o token.');
-      }
-    } catch (err) {
-      toast.error('Erro ao revelar o token.');
-    } finally {
-      setRevealingToken(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAutomations();
-    fetchFunnels();
-    fetchSettings();
-    fetchInstagramPosts();
-  }, [activeClient]);
-
-  useEffect(() => {
-    if (activeTab === 'logs') {
-      fetchLogs();
-    }
-  }, [activeClient, activeTab, logsPage, logsStatusFilter]);
-
-  const handleSaveSettings = async () => {
-    if (!activeClient) return;
-    setIsConfiguringSettings(true);
-    const loadingToast = toast.loading("Salvando configurações...");
-    try {
-      // Monta o payload: inclui o token APENAS se o usuário digitou algo novo
-      const settingsPayload = {
-        INSTAGRAM_ACCOUNT_ID: instaAccountID,
-        INSTAGRAM_WEBHOOK_SLUG: instaWebhookSlug,
-      };
-      if (instaAccessToken.trim()) {
-        settingsPayload.INSTAGRAM_ACCESS_TOKEN = instaAccessToken;
-      }
-
-      const res = await fetchWithAuth(`${API_URL}/settings/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: settingsPayload })
-      }, activeClient.id);
-
-      if (res.ok) {
-        toast.success("Configurações do Instagram salvas com sucesso!", { id: loadingToast });
-        fetchSettings();
-      } else {
-        const err = await res.json();
-        toast.error(err.detail || "Erro ao salvar configurações.", { id: loadingToast });
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro de conexão ao salvar configurações.", { id: loadingToast });
-    } finally {
-      setIsConfiguringSettings(false);
-    }
-  };
-
-  const handleOpenNew = () => {
-    setEditingId(null);
-    setName('');
-    setPostId('all');
-    setSelectedPostIds(['all']);
-    setTriggerType('keyword');
-    setKeywords('');
-    setActionType('both');
-    setReplyComments(['']);
-    setFunnelId('');
-    setIsActive(true);
-    setIsModalOpen(true);
-    setIsDropdownOpen(false);
-    fetchInstagramPosts();
-  };
-
-  const handleOpenEdit = (item) => {
-    setEditingId(item.id);
-    setName(item.name);
-    setPostId(item.post_id);
-    if (item.post_id === 'all') {
-      setSelectedPostIds(['all']);
-    } else {
-      setSelectedPostIds(item.post_id.split(',').map(s => s.trim()));
-    }
-    setTriggerType(item.trigger_type);
-    setKeywords(item.keywords || '');
-    setActionType(item.action_type);
-    setReplyComments(item.reply_comments || ['']);
-    setFunnelId(item.funnel_id || '');
-    setIsActive(item.is_active);
-    setIsModalOpen(true);
-    setIsDropdownOpen(false);
-    fetchInstagramPosts();
-  };
-
-  const handleAddReplyVariation = () => {
-    setReplyComments([...replyComments, '']);
-  };
-
-  const handleRemoveReplyVariation = (index) => {
-    if (replyComments.length <= 1) return;
-    const newReplies = replyComments.filter((_, i) => i !== index);
-    setReplyComments(newReplies);
-  };
-
-  const handleReplyChange = (index, val) => {
-    const newReplies = [...replyComments];
-    newReplies[index] = val;
-    setReplyComments(newReplies);
-  };
-
-  const handleSaveAutomation = async (e) => {
-    e.preventDefault();
-    if (!activeClient) return;
-
-    const filteredReplies = replyComments.filter(r => r.trim());
-    if (actionType !== 'send_dm' && filteredReplies.length === 0) {
-      toast.error("Você precisa definir pelo menos uma resposta de comentário.");
-      return;
-    }
-
-    setIsSaving(true);
-    const payload = {
-      name,
-      post_id: selectedPostIds.includes('all') ? 'all' : selectedPostIds.join(','),
-      trigger_type: triggerType,
-      keywords: triggerType === 'keyword' ? keywords : null,
-      action_type: actionType,
-      reply_comments: filteredReplies,
-      funnel_id: funnelId ? parseInt(funnelId) : null,
-      is_active: isActive
-    };
-
-    try {
-      const url = editingId 
-        ? `${API_URL}/instagram/automations/${editingId}`
-        : `${API_URL}/instagram/automations`;
-      const method = editingId ? 'PUT' : 'POST';
-
-      const res = await fetchWithAuth(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }, activeClient.id);
-
-      if (res.ok) {
-        toast.success(editingId ? "Automação atualizada!" : "Automação criada!");
-        setIsModalOpen(false);
-        fetchAutomations();
-      } else {
-        const err = await res.json();
-        toast.error(err.detail || "Erro ao salvar automação.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao conectar com o servidor.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const confirmDelete = (item) => {
-    setDeleteTarget(item);
-    setDeleteModalOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (!activeClient || !deleteTarget) return;
-    setIsDeleting(true);
-    try {
-      const res = await fetchWithAuth(`${API_URL}/instagram/automations/${deleteTarget.id}`, {
-        method: 'DELETE'
-      }, activeClient.id);
-
-      if (res.ok) {
-        toast.success("Automação excluída com sucesso!");
-        setDeleteModalOpen(false);
-        fetchAutomations();
-      } else {
-        toast.error("Erro ao deletar automação.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro de conexão ao excluir.");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  const state = useInstagramAutomation(activeClient);
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-700">
@@ -380,20 +28,20 @@ export default function InstagramAutomation() {
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              setInstaAccessToken('');
-              fetchSettings();
-              setIsSettingsModalOpen(true);
+              state.setInstaAccessToken('');
+              state.fetchSettings();
+              state.setIsSettingsModalOpen(true);
             }}
             className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-800/50 hover:bg-gray-800 text-gray-300 transition-all font-bold text-[10px] border border-white/5 uppercase tracking-widest"
           >
             <FiSettings size={14} /> Configurações
           </button>
           <button
-            onClick={handleOpenNew}
+            onClick={state.handleOpenNew}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white transition-all font-black text-[10px] shadow-lg shadow-pink-600/20 active:scale-95 uppercase tracking-widest"
           >
             <FiPlus size={14} /> Nova Regra
@@ -404,9 +52,9 @@ export default function InstagramAutomation() {
       {/* Tabs */}
       <div className="flex gap-2 p-1 bg-gray-100 dark:bg-[#1e293b]/40 rounded-2xl w-fit border border-gray-200/50 dark:border-white/5">
         <button
-          onClick={() => setActiveTab('rules')}
+          onClick={() => state.setActiveTab('rules')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-            activeTab === 'rules'
+            state.activeTab === 'rules'
               ? 'bg-white dark:bg-[#0f172a] text-pink-500 shadow-md shadow-black/5'
               : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
           }`}
@@ -414,9 +62,9 @@ export default function InstagramAutomation() {
           <FiList size={14} /> Regras de Automação
         </button>
         <button
-          onClick={() => setActiveTab('logs')}
+          onClick={() => state.setActiveTab('logs')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-            activeTab === 'logs'
+            state.activeTab === 'logs'
               ? 'bg-white dark:bg-[#0f172a] text-pink-500 shadow-md shadow-black/5'
               : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
           }`}
@@ -425,430 +73,139 @@ export default function InstagramAutomation() {
         </button>
       </div>
 
-      {activeTab === 'rules' ? (
-        /* Tabela de Automacões */
+      {state.activeTab === 'rules' ? (
         <div className="bg-white/50 dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 backdrop-blur-xl shadow-xl overflow-hidden">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b border-gray-100 dark:border-gray-800/50">
-              <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Nome</th>
-              <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Post ID</th>
-              <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Trigger</th>
-              <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Ações</th>
-              <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] text-right">Opções</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {loading ? (
-              <tr><td colSpan="5" className="px-6 py-10 text-center text-gray-500 italic">Carregando automações...</td></tr>
-            ) : automations.length === 0 ? (
-              <tr><td colSpan="5" className="px-6 py-10 text-center text-gray-500 italic">Nenhuma automação cadastrada.</td></tr>
-            ) : automations.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition-all">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-950 dark:text-white">{item.name}</span>
-                    {item.is_active ? (
-                      <FiCheckCircle className="text-green-500" title="Ativo" />
-                    ) : (
-                      <FiXCircle className="text-red-500" title="Inativo" />
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-xs font-semibold">
-                  {item.post_id === 'all' 
-                    ? 'Todos os Posts' 
-                    : item.post_id.split(',').length === 1 
-                    ? '1 Post específico' 
-                    : `${item.post_id.split(',').length} Posts específicos`}
-                </td>
-                <td className="px-6 py-4">
-                  {item.trigger_type === 'keyword' ? (
-                    <span className="px-2.5 py-1 rounded-lg bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-400 text-xs font-bold">
-                      Palavra-chave: {item.keywords}
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 text-xs font-bold">
-                      Qualquer Comentário
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-xs font-semibold">
-                  {item.action_type === 'both' && 'Responder e Enviar DM'}
-                  {item.action_type === 'reply_comment' && 'Apenas Responder'}
-                  {item.action_type === 'send_dm' && 'Apenas Enviar DM'}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-gray-400 hover:text-blue-500 transition-all" title="Editar"><FiEdit2 size={15} /></button>
-                    <button onClick={() => confirmDelete(item)} className="p-1.5 text-gray-400 hover:text-red-500 transition-all" title="Excluir"><FiTrash2 size={15} /></button>
-                  </div>
-                </td>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800/50">
+                <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Nome</th>
+                <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Post ID</th>
+                <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Trigger</th>
+                <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Ações</th>
+                <th className="px-6 py-4 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] text-right">Opções</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {state.loading ? (
+                <tr><td colSpan="5" className="px-6 py-10 text-center text-gray-500 italic">Carregando automações...</td></tr>
+              ) : state.automations.length === 0 ? (
+                <tr><td colSpan="5" className="px-6 py-10 text-center text-gray-500 italic">Nenhuma automação cadastrada.</td></tr>
+              ) : state.automations.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition-all">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-950 dark:text-white">{item.name}</span>
+                      {item.is_active ? (
+                        <FiCheckCircle className="text-green-500" title="Ativo" />
+                      ) : (
+                        <FiXCircle className="text-red-500" title="Inativo" />
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-semibold">
+                    {item.post_id === 'all'
+                      ? 'Todos os Posts'
+                      : item.post_id.split(',').length === 1
+                      ? '1 Post específico'
+                      : `${item.post_id.split(',').length} Posts específicos`}
+                  </td>
+                  <td className="px-6 py-4">
+                    {item.trigger_type === 'keyword' ? (
+                      <span className="px-2.5 py-1 rounded-lg bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-400 text-xs font-bold">
+                        Palavra-chave: {item.keywords}
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 text-xs font-bold">
+                        Qualquer Comentário
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-xs font-semibold">
+                    {item.action_type === 'both' && 'Responder e Enviar DM'}
+                    {item.action_type === 'reply_comment' && 'Apenas Responder'}
+                    {item.action_type === 'send_dm' && 'Apenas Enviar DM'}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => state.handleOpenEdit(item)} className="p-1.5 text-gray-400 hover:text-blue-500 transition-all" title="Editar"><FiEdit2 size={15} /></button>
+                      <button onClick={() => state.confirmDelete(item)} className="p-1.5 text-gray-400 hover:text-red-500 transition-all" title="Excluir"><FiTrash2 size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <InstagramLogsTab
-          logsData={logs}
-          loading={logsLoading}
-          onRefresh={fetchLogs}
-          page={logsPage}
-          totalPages={logsTotalPages}
-          totalItems={logsTotalItems}
-          onPageChange={setLogsPage}
-          statusFilter={logsStatusFilter}
+          logsData={state.logs}
+          loading={state.logsLoading}
+          onRefresh={() => {}}
+          page={state.logsPage}
+          totalPages={state.logsTotalPages}
+          totalItems={state.logsTotalItems}
+          onPageChange={state.setLogsPage}
+          statusFilter={state.logsStatusFilter}
           onStatusFilterChange={(val) => {
-            setLogsStatusFilter(val);
-            setLogsPage(1);
+            state.setLogsStatusFilter(val);
+            state.setLogsPage(1);
           }}
         />
       )}
 
-      {/* Modal Criar / Editar - Portal para cobrir 100% da tela */}
-      {isModalOpen && createPortal(
-        <div
-          style={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            zIndex: 99999,
-            width: '100vw',
-            height: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            backgroundColor: 'rgba(0,0,0,0.65)',
-            backdropFilter: 'blur(4px)'
-          }}
-        >
-          <div className="w-full max-w-xl bg-white dark:bg-[#1e293b] rounded-3xl shadow-2xl border border-gray-100 dark:border-white/5 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                {editingId ? 'Editar Regra de Automação' : 'Nova Regra de Automação'}
-              </h3>
-            </div>
-            
-            <form onSubmit={handleSaveAutomation} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Nome da Automação</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Campanha Desconto"
-                  className="w-full px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                />
-              </div>
+      {/* Modal Criar / Editar */}
+      <AutomationFormModal
+        isOpen={state.isModalOpen}
+        onClose={() => state.setIsModalOpen(false)}
+        onSubmit={state.handleSaveAutomation}
+        isSaving={state.isSaving}
+        editingId={state.editingId}
+        name={state.name} setName={state.setName}
+        selectedPostIds={state.selectedPostIds} setSelectedPostIds={state.setSelectedPostIds}
+        triggerType={state.triggerType} setTriggerType={state.setTriggerType}
+        keywords={state.keywords} setKeywords={state.setKeywords}
+        actionType={state.actionType} setActionType={state.setActionType}
+        replyComments={state.replyComments}
+        funnelId={state.funnelId} setFunnelId={state.setFunnelId}
+        isActive={state.isActive} setIsActive={state.setIsActive}
+        onAddReplyVariation={state.handleAddReplyVariation}
+        onRemoveReplyVariation={state.handleRemoveReplyVariation}
+        onReplyChange={state.handleReplyChange}
+        isPostModalOpen={state.isPostModalOpen} setIsPostModalOpen={state.setIsPostModalOpen}
+        instagramPosts={state.instagramPosts} loadingPosts={state.loadingPosts} postsError={state.postsError}
+        funnels={state.funnels}
+      />
 
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Posts do Instagram</label>
-                {postsError && (
-                  <div className="text-xs text-red-500 py-1 mb-1">{postsError}</div>
-                )}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsPostModalOpen(true)}
-                    className="w-full text-left px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white flex justify-between items-center hover:bg-gray-200 dark:hover:bg-gray-700"
-                  >
-                    <span>
-                      {selectedPostIds.includes('all')
-                        ? 'Todos os Posts (Qualquer Post)'
-                        : selectedPostIds.length === 1
-                        ? '1 post selecionado'
-                        : `${selectedPostIds.length} posts selecionados`}
-                    </span>
-                    <span className="px-2.5 py-1 rounded bg-pink-500/10 text-pink-500 text-[10px] font-black uppercase tracking-wider">
-                      Selecionar
-                    </span>
-                  </button>
-                  
-                  <PostSelectorModal
-                    isOpen={isPostModalOpen}
-                    onClose={() => setIsPostModalOpen(false)}
-                    posts={instagramPosts}
-                    selectedIds={selectedPostIds}
-                    onSelect={setSelectedPostIds}
-                    loading={loadingPosts}
-                    error={postsError}
-                  />
-                </div>
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">Clique para ver e selecionar um ou múltiplos posts no grid do Instagram.</span>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Tipo de Gatilho</label>
-                <select
-                  value={triggerType}
-                  onChange={(e) => setTriggerType(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                >
-                  <option value="keyword">Palavra-chave (Keyword)</option>
-                  <option value="any_comment">Qualquer comentário</option>
-                </select>
-              </div>
-
-              {triggerType === 'keyword' && (
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Palavras-chave Gatilho</label>
-                  <input
-                    type="text"
-                    required
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    placeholder="Ex: quero, cupom, desconto"
-                    className="w-full px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                  />
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">Separe múltiplas palavras-chave por vírgula.</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Ação ao Receber Comentário</label>
-                <select
-                  value={actionType}
-                  onChange={(e) => setActionType(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                >
-                  <option value="both">Responder Comentário e Enviar Mensagem Privada (DM)</option>
-                  <option value="reply_comment">Apenas responder comentário com mensagem pública</option>
-                  <option value="send_dm">Apenas enviar mensagem privada no Direct (DM)</option>
-                </select>
-              </div>
-
-              {actionType !== 'send_dm' && (
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider">Variações de Resposta (Comentários)</label>
-                    <button
-                      type="button"
-                      onClick={handleAddReplyVariation}
-                      className="text-[9px] font-bold text-pink-500 hover:underline"
-                    >
-                      + Adicionar Variação
-                    </button>
-                  </div>
-                  {replyComments.map((reply, index) => (
-                    <div key={index} className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        required
-                        value={reply}
-                        onChange={(e) => handleReplyChange(index, e.target.value)}
-                        placeholder={`Resposta #${index + 1}`}
-                        className="flex-1 px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                      />
-                      {replyComments.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveReplyVariation(index)}
-                          className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"
-                        >
-                          <FiTrash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 block">Use várias opções de frases diferentes para diminuir as chances de bloqueio do Instagram.</span>
-                </div>
-              )}
-
-              {actionType !== 'reply_comment' && (
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Funil do ZapVoice (Disparo no Direct)</label>
-                  <select
-                    value={funnelId}
-                    onChange={(e) => setFunnelId(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                  >
-                    <option value="">Nenhum - Enviar mensagem padrão</option>
-                    {funnels.map(f => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">A primeira mensagem de texto deste funil será enviada ao direct do usuário.</span>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="w-4 h-4 text-pink-600 rounded"
-                />
-                <label htmlFor="is_active" className="text-sm font-semibold text-gray-700 dark:text-gray-300">Automação Ativa</label>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-xs font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition-all uppercase tracking-wider"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-5 py-2 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-pink-600/10 uppercase tracking-wider"
-                >
-                  {isSaving ? 'Salvando...' : 'Salvar Automação'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      , document.body)}
-
-      {/* Confirm Delete Modal - Portal */}
-      {deleteModalOpen && createPortal(
+      {/* Confirm Delete Modal */}
+      {state.deleteModalOpen && createPortal(
         <ConfirmModal
-          isOpen={deleteModalOpen}
+          isOpen={state.deleteModalOpen}
           title="Excluir Automação"
-          message={`Deseja realmente apagar a regra de automação "${deleteTarget?.name}"? Esta ação não pode ser desfeita.`}
+          message={`Deseja realmente apagar a regra de automação "${state.deleteTarget?.name}"? Esta ação não pode ser desfeita.`}
           confirmText="Apagar"
           isDangerous={true}
-          onClose={() => setDeleteModalOpen(false)}
-          onConfirm={handleDelete}
-        />
-      , document.body)}
+          onClose={() => state.setDeleteModalOpen(false)}
+          onConfirm={state.handleDelete}
+        />,
+        document.body
+      )}
 
-      {/* Settings Modal (Instagram Params) - Portal para cobrir 100% da tela */}
-      {isSettingsModalOpen && createPortal(
-        <div
-          className="flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 99999,
-            width: '100vw',
-            height: '100vh'
-          }}
-        >
-          <div className="w-full max-w-xl bg-white dark:bg-[#1e293b] rounded-3xl shadow-2xl border border-gray-100 dark:border-white/5 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <FiSettings className="text-pink-500" /> Parâmetros de Integração com o Meta
-              </h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Configure as credenciais manuais da API do Instagram Business. Use o token permanente gerado no Painel de Desenvolvedores do Meta.
-              </p>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">ID da Conta do Instagram Business</label>
-                  <input
-                    type="text"
-                    value={instaAccountID}
-                    onChange={(e) => setInstaAccountID(e.target.value)}
-                    placeholder="Ex: 178414002345678"
-                    className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Token de Acesso da Página (Page Access Token)</label>
-                  <div className="relative">
-                    <input
-                      type={showToken ? 'text' : 'password'}
-                      value={instaAccessToken}
-                      onChange={(e) => { setInstaAccessToken(e.target.value); setTokenRevelado(''); }}
-                      placeholder={tokenJaConfigurado && !instaAccessToken ? '••••••••••••••••••••••••••••••••••••••••' : 'EAAGb...'}
-                      autoComplete="new-password"
-                      className="w-full px-4 py-3 pr-12 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleRevealToken}
-                      disabled={revealingToken}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-pink-400 transition-colors p-1 disabled:opacity-50"
-                      title={showToken ? 'Ocultar token' : 'Clique para revelar o token salvo'}
-                    >
-                      {revealingToken
-                        ? <span className="animate-spin text-xs">...</span>
-                        : showToken ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-                    </button>
-                  </div>
-                  {tokenJaConfigurado && !instaAccessToken && (
-                    <span className="text-[10px] text-green-500 mt-1 block font-bold">✅ Token salvo. Clique no olho para revelar ou digite um novo para atualizar.</span>
-                  )}
-                </div>
-
-                {/* Slug do Webhook do Instagram */}
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Slug do Webhook (final da URL)</label>
-                  <input
-                    type="text"
-                    value={instaWebhookSlug}
-                    onChange={(e) => setInstaWebhookSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
-                    placeholder="Ex: minha_automacao"
-                    className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 border border-transparent focus:border-pink-500 outline-none text-sm font-semibold transition-all text-gray-950 dark:text-white"
-                  />
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">Apenas letras minúsculas, números, underscores (_) e hífens (-).</span>
-                </div>
-
-                {/* Webhook URL do Instagram */}
-                <div className="mt-2">
-                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">URL do Webhook (configurar no Meta)</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      readOnly
-                      value={webhookBaseUrl ? `${webhookBaseUrl}/api/instagram/webhook/${instaWebhookSlug}` : 'Configure WEBHOOK_BASE_URL no servidor'}
-                      className="w-full px-4 py-3 pr-24 rounded-xl bg-gray-100/50 dark:bg-gray-800/50 border border-dashed border-pink-500/30 outline-none text-xs font-mono text-gray-500 dark:text-gray-400 cursor-default"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const url = webhookBaseUrl ? `${webhookBaseUrl}/api/instagram/webhook/${instaWebhookSlug}` : '';
-                        if (url) {
-                          navigator.clipboard.writeText(url);
-                          toast.success('URL copiada!');
-                        } else {
-                          toast.error('WEBHOOK_BASE_URL não configurada no servidor.');
-                        }
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-pink-600/20 hover:bg-pink-600/40 text-pink-400 text-[9px] font-black rounded-lg transition-all uppercase tracking-wider"
-                    >
-                      Copiar
-                    </button>
-                  </div>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">
-                    Cole esta URL no campo "URL de Callback" do webhook do Instagram no painel do Meta Developers.
-                  </span>
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-                <button
-                  onClick={() => setIsSettingsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-xs font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition-all uppercase tracking-wider"
-                >
-                  Fechar
-                </button>
-                <button
-                  onClick={async () => {
-                    await handleSaveSettings();
-                    setIsSettingsModalOpen(false);
-                  }}
-                  disabled={isConfiguringSettings}
-                  className="px-5 py-2 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-pink-600/10 uppercase tracking-wider"
-                >
-                  {isConfiguringSettings ? "Salvando..." : "Salvar Conexão"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      , document.body)}
+      {/* Settings Modal */}
+      <InstagramSettingsModal
+        isOpen={state.isSettingsModalOpen}
+        onClose={() => state.setIsSettingsModalOpen(false)}
+        onSave={async () => { await state.handleSaveSettings(); state.setIsSettingsModalOpen(false); }}
+        isSaving={state.isConfiguringSettings}
+        instaAccountID={state.instaAccountID} setInstaAccountID={state.setInstaAccountID}
+        instaAccessToken={state.instaAccessToken} setInstaAccessToken={state.setInstaAccessToken}
+        setTokenRevelado={state.setTokenRevelado}
+        tokenJaConfigurado={state.tokenJaConfigurado}
+        showToken={state.showToken}
+        revealingToken={state.revealingToken}
+        onRevealToken={state.handleRevealToken}
+        webhookBaseUrl={state.webhookBaseUrl}
+        instaWebhookSlug={state.instaWebhookSlug} setInstaWebhookSlug={state.setInstaWebhookSlug}
+      />
     </div>
   );
 }
