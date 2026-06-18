@@ -3,6 +3,8 @@ import { toast } from 'react-hot-toast';
 import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
 import { useClient } from '../../../contexts/ClientContext';
+import { handleMediaUploadHelper, updateTemplateTagsHelper, deleteTemplateTagGlobalHelper } from '../utils/templateCreatorUtils';
+
 
 export const useTemplateCreator = (onSuccess, refreshKey) => {
     const { activeClient } = useClient();
@@ -182,54 +184,14 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
     };
 
     const handleMediaUpload = async (file) => {
-        if (!file) return;
-        const currentType = formData.header_type;
-        if (!['IMAGE', 'VIDEO', 'DOCUMENT'].includes(currentType)) return;
-
-        setMediaUploading(true);
-        let previewUrl = null;
-        if (file.type.startsWith('image/')) {
-            previewUrl = URL.createObjectURL(file);
-        }
-
-        setMediaCache(prev => ({
-            ...prev,
-            [currentType]: { ...prev[currentType], fileName: file.name, previewUrl }
-        }));
-
-        try {
-            const formPayload = new FormData();
-            formPayload.append('file', file);
-            const res = await fetchWithAuth(
-                `${API_URL}/whatsapp/upload-template-media`,
-                { method: 'POST', body: formPayload },
-                activeClient?.id
-            );
-            if (!res.ok) {
-                const errorData = await res.json();
-                console.error("❌ [TEMPLATE_CREATOR] Erro no upload:", errorData);
-                throw new Error(errorData.detail || "Erro ao fazer upload da mídia");
-            }
-
-            const result = await res.json();
-            console.log("✅ [TEMPLATE_CREATOR] Upload Sucesso:", result);
-
-            setMediaCache(prev => ({
-                ...prev,
-                [currentType]: { ...prev[currentType], url: result.handle }
-            }));
-            setFormData(prev => ({ ...prev, header_media_url: result.handle }));
-            
-            toast.success('Mídia enviada para a Meta com sucesso!');
-        } catch (err) {
-            toast.error(err.message || 'Erro ao fazer upload da mídia');
-            setMediaCache(prev => ({
-                ...prev,
-                [currentType]: { url: '', fileName: '', previewUrl: null }
-            }));
-        } finally {
-            setMediaUploading(false);
-        }
+        await handleMediaUploadHelper(
+            file,
+            formData.header_type,
+            activeClient?.id,
+            setMediaCache,
+            setFormData,
+            setMediaUploading
+        );
     };
 
     const handleSubmit = async (e) => {
@@ -302,63 +264,12 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
 
     const updateTemplateTags = async (templateId, tagsList) => {
         if (!activeClient) return false;
-        try {
-            const res = await fetchWithAuth(
-                `${API_URL}/whatsapp/templates/${templateId}/tags`,
-                {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tags: tagsList })
-                },
-                activeClient.id
-            );
-
-            if (res.ok) {
-                setTemplates(prev => prev.map(t => {
-                    if (String(t.id) === String(templateId)) {
-                        return { ...t, tags: tagsList };
-                    }
-                    return t;
-                }));
-                toast.success("Etiquetas salvas com sucesso!");
-                return true;
-            } else {
-                const err = await res.json();
-                toast.error(err.detail || "Erro ao salvar etiquetas.");
-                return false;
-            }
-        } catch (error) {
-            console.error("Error updating template tags:", error);
-            toast.error("Erro de conexão ao salvar etiquetas.");
-            return false;
-        }
+        return await updateTemplateTagsHelper(templateId, tagsList, activeClient.id, setTemplates);
     };
 
     const deleteTemplateTagGlobal = async (tag) => {
         if (!activeClient) return false;
-        try {
-            const res = await fetchWithAuth(
-                `${API_URL}/whatsapp/templates/tags/${encodeURIComponent(tag)}`,
-                {
-                    method: 'DELETE'
-                },
-                activeClient.id
-            );
-
-            if (res.ok) {
-                toast.success("Etiqueta excluída de todos os templates!");
-                fetchTemplates();
-                return true;
-            } else {
-                const err = await res.json();
-                toast.error(err.detail || "Erro ao excluir etiqueta.");
-                return false;
-            }
-        } catch (error) {
-            console.error("Error deleting template tag globally:", error);
-            toast.error("Erro de conexão ao excluir etiqueta.");
-            return false;
-        }
+        return await deleteTemplateTagGlobalHelper(tag, activeClient.id, fetchTemplates);
     };
 
     const archiveTemplate = async (templateName) => {
