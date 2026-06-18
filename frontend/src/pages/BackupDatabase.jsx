@@ -7,6 +7,8 @@ import { useBackup } from './BackupDatabase/hooks/useBackup';
 import { StatusCard } from './BackupDatabase/components/StatusCard';
 import { BackupModals } from './BackupDatabase/components/BackupModals';
 
+import { formatBytes, formatDate } from './BackupDatabase/utils/backupFormatters';
+
 // ── Componente SVG para Pino ──────────────────────────────────────────────────
 const PinIcon = ({ className, filled }) => (
   <svg
@@ -25,24 +27,6 @@ const PinIcon = ({ className, filled }) => (
     <path d="M5 17h14v-1.76a2 2 0 0 0-.44-1.24l-2.78-3.55A2 2 0 0 1 15 9.2V5H9v4.2a2 2 0 0 1-.78 1.25L5.44 14a2 2 0 0 0-.44 1.24Z" />
   </svg>
 );
-
-// ─── Formatadores ──────────────────────────────────────────────────────────────
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-}
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
-}
 
 export default function BackupDatabase() {
   const {
