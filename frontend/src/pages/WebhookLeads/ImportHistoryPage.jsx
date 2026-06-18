@@ -4,6 +4,7 @@ import { useClient } from '../../contexts/ClientContext';
 import { API_URL } from '../../config';
 import { fetchWithAuth } from '../../AuthContext';
 import { toast } from 'react-hot-toast';
+import { parseDateSafe } from './utils/importHistoryUtils';
 
 export default function ImportHistoryPage() {
   const { activeClient } = useClient();
@@ -250,22 +251,6 @@ export default function ImportHistoryPage() {
               const isFinished = item.status === 'completed' || item.status === 'failed';
               const dateLabel = isFinished ? 'Concluída em' : 'Iniciada em';
               const dateSource = isFinished && item.updated_at ? item.updated_at : item.created_at;
-              // Parse robusto: suporta "2026-06-17T17:15:00Z", "2026-06-17T17:15:00+00:00", "2026-06-17T17:15:00"
-              const parseDateSafe = (raw) => {
-                if (!raw) return 'Data indisponível';
-                try {
-                  // Normaliza: substitui espaço por T, e +00:00 por Z se necessário
-                  const normalized = String(raw).replace(' ', 'T').replace(/\+00:00$/, 'Z');
-                  // Se não tem indicador de timezone, assume UTC adicionando Z
-                  const withTz = /[Z+\-]\d*$/.test(normalized) || normalized.endsWith('Z')
-                    ? normalized
-                    : normalized + 'Z';
-                  const d = new Date(withTz);
-                  return isNaN(d.getTime()) ? 'Data inválida' : d.toLocaleString('pt-BR');
-                } catch {
-                  return 'Data inválida';
-                }
-              };
               const dateStr = parseDateSafe(dateSource);
               const isSelected = selectedIds.includes(item.id);
 
