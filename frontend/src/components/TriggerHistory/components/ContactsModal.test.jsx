@@ -109,74 +109,50 @@ describe('ContactsModal', () => {
 
   it('renderiza o modal e lista de contatos com checkboxes', () => {
     render(<ContactsModal {...defaultProps} />);
-
     expect(screen.getByText('Interações — teste')).toBeInTheDocument();
     expect(screen.getByText('5511999999999')).toBeInTheDocument();
     expect(screen.getByText('5511888888888')).toBeInTheDocument();
-    
-    // Devem existir 3 checkboxes: 1 do "Selecionar Todos" e 2 dos contatos
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes).toHaveLength(3);
   });
 
   it('permite selecionar contatos individualmente e exibe botão de etiquetar', async () => {
     render(<ContactsModal {...defaultProps} />);
-
-    // Botão de etiquetar não deve estar visível antes de selecionar
-    expect(screen.queryByRole('button', { name: /etiquetar/i })).not.toBeInTheDocument();
-
+    expect(screen.getByRole('button', { name: /etiquetar todos/i })).toBeInTheDocument();
     const checkboxes = screen.getAllByRole('checkbox');
-    
-    // Selecionar o primeiro contato
     fireEvent.click(checkboxes[1]);
-
-    // Botão de etiquetar deve aparecer
     const tagButton = screen.getByRole('button', { name: /etiquetar \(1\)/i });
     expect(tagButton).toBeInTheDocument();
   });
 
   it('seleciona todos os contatos ao clicar no checkbox geral', () => {
     render(<ContactsModal {...defaultProps} />);
-
     const checkboxes = screen.getAllByRole('checkbox');
-    
-    // Clicar no "Selecionar Todos" (checkboxes[0])
     fireEvent.click(checkboxes[0]);
-
-    // Botão de etiquetar deve exibir a quantidade total de contatos (2)
     const tagButton = screen.getByRole('button', { name: /etiquetar \(2\)/i });
     expect(tagButton).toBeInTheDocument();
   });
 
   it('abre o modal de etiquetas ao clicar em etiquetar e envia tags para a API com sucesso', async () => {
     render(<ContactsModal {...defaultProps} />);
-
     const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[0]); // Seleciona todos
-
+    fireEvent.click(checkboxes[0]);
     const tagButton = screen.getByRole('button', { name: /etiquetar \(2\)/i });
     fireEvent.click(tagButton);
-
-    // Deve abrir o modal de etiquetas
     expect(screen.getByText('Adicionar Etiquetas')).toBeInTheDocument();
 
-    // Simula foco no input de tags para abrir dropdown
     const dropdownTrigger = screen.getByPlaceholderText('Digite e pressione Enter ou selecione abaixo...');
     fireEvent.focus(dropdownTrigger);
 
-    // Aguardar que as tags carreguem e selecionar a tag 'Cliente Fiel'
     await waitFor(() => {
       expect(screen.getByText('Cliente Fiel')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText('Cliente Fiel'));
-
-    // Clicar em Salvar
     const saveButton = screen.getByRole('button', { name: 'Salvar' });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      // Verifica se a chamada correta para a API foi feita
       expect(fetchWithAuth).toHaveBeenLastCalledWith(
         'http://localhost:8000/leads/bulk',
         expect.objectContaining({
@@ -197,24 +173,17 @@ describe('ContactsModal', () => {
 
   it('permite digitar uma etiqueta personalizada diretamente e salvar', async () => {
     render(<ContactsModal {...defaultProps} />);
-
     const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[0]); // Seleciona todos
-
+    fireEvent.click(checkboxes[0]);
     const tagButton = screen.getByRole('button', { name: /etiquetar \(2\)/i });
     fireEvent.click(tagButton);
 
     const inputTrigger = screen.getByPlaceholderText('Digite e pressione Enter ou selecione abaixo...');
-    
-    // Digitar etiqueta customizada
     fireEvent.change(inputTrigger, { target: { value: 'MinhaTagCustom' } });
-    
-    // Clicar em Salvar
     const saveButton = screen.getByRole('button', { name: 'Salvar' });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      // Verifica se a chamada correta para a API foi feita com a tag personalizada digitada
       expect(fetchWithAuth).toHaveBeenLastCalledWith(
         'http://localhost:8000/leads/bulk',
         expect.objectContaining({
@@ -235,34 +204,25 @@ describe('ContactsModal', () => {
 
   it('permite selecionar múltiplas etiquetas ao mesmo tempo e salvar', async () => {
     render(<ContactsModal {...defaultProps} />);
-
     const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[0]); // Seleciona todos
-
+    fireEvent.click(checkboxes[0]);
     const tagButton = screen.getByRole('button', { name: /etiquetar \(2\)/i });
     fireEvent.click(tagButton);
 
-    // Simula foco no input de tags para abrir dropdown
     const dropdownTrigger = screen.getByPlaceholderText('Digite e pressione Enter ou selecione abaixo...');
     fireEvent.focus(dropdownTrigger);
 
-    // Aguardar que as tags carreguem
     await waitFor(() => {
       expect(screen.getByText('Cliente Fiel')).toBeInTheDocument();
       expect(screen.getByText('Interessado')).toBeInTheDocument();
     });
 
-    // Selecionar 'Cliente Fiel'
     fireEvent.click(screen.getByText('Cliente Fiel'));
-    // Selecionar 'Interessado'
     fireEvent.click(screen.getByText('Interessado'));
-
-    // Clicar em Salvar
     const saveButton = screen.getByRole('button', { name: 'Salvar' });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      // Verifica se a chamada correta para a API foi feita com ambas as tags separadas por vírgula
       expect(fetchWithAuth).toHaveBeenLastCalledWith(
         'http://localhost:8000/leads/bulk',
         expect.objectContaining({
@@ -289,22 +249,15 @@ describe('ContactsModal', () => {
       contactsPerPage: 20,
     };
     render(<ContactsModal {...propsComPaginacao} />);
-
-    // Dropdown de itens por página deve estar presente
     const select = document.getElementById('contacts-per-page');
     expect(select).toBeInTheDocument();
     expect(select.value).toBe('20');
-
-    // Deve ter as opções 20, 50, 100, 500
     expect(screen.getByRole('option', { name: '20' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '50' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '100' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '500' })).toBeInTheDocument();
-
-    // Indicador de página
+    expect(screen.getByRole('option', { name: '1000' })).toBeInTheDocument();
     expect(screen.getByText(/Pág\. 1/i)).toBeInTheDocument();
-
-    // Botões de navegação devem existir
     expect(document.getElementById('contacts-prev-page')).toBeInTheDocument();
     expect(document.getElementById('contacts-next-page')).toBeInTheDocument();
   });
@@ -335,12 +288,8 @@ describe('ContactsModal', () => {
       contactsTotal: 2,
     };
     render(<ContactsModal {...propsComDataNula} />);
-
-    // Deve exibir "–" para datas nulas
     const dashes = screen.getAllByText('–');
     expect(dashes.length).toBeGreaterThanOrEqual(1);
-
-    // A data válida (2026) deve estar presente formatada com dia/mês/ano
     expect(screen.getByText(/27\/05\/2026/)).toBeInTheDocument();
   });
 
@@ -355,10 +304,8 @@ describe('ContactsModal', () => {
       contactsTotal: 0,
     };
     render(<ContactsModal {...propsVazia} />);
-
     const copyButton = screen.getByRole('button', { name: /copiar lista/i });
     fireEvent.click(copyButton);
-
     expect(toast.error).toHaveBeenCalledWith('A lista está vazia. Nenhum contato para copiar.');
   });
 
@@ -370,10 +317,8 @@ describe('ContactsModal', () => {
     });
 
     render(<ContactsModal {...defaultProps} />);
-
     const copyButton = screen.getByRole('button', { name: /copiar lista/i });
     fireEvent.click(copyButton);
-
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('5511999999999\n5511888888888');
     expect(toast.success).toHaveBeenCalledWith('Lista copiada!');
   });
@@ -390,17 +335,13 @@ describe('ContactsModal', () => {
       setContactsErrorFilter: vi.fn(),
     };
     const { rerender } = render(<ContactsModal {...propsComFalhas} />);
-
-    // Dropdown de erros deve estar presente na aba failed
     let select = document.getElementById('contacts-error-filter');
     expect(select).toBeInTheDocument();
     expect(select.value).toBe('all');
 
-    // Clicar no select e mudar valor
     fireEvent.change(select, { target: { value: 'Too Many Requests' } });
     expect(propsComFalhas.setContactsErrorFilter).toHaveBeenCalledWith('Too Many Requests');
 
-    // Se mudarmos para a aba 'blocked', também deve exibir o dropdown
     const propsComBloqueios = {
       ...propsComFalhas,
       contactsFilter: 'blocked'
@@ -409,7 +350,6 @@ describe('ContactsModal', () => {
     select = document.getElementById('contacts-error-filter');
     expect(select).toBeInTheDocument();
 
-    // Se contactsFilter não for nem 'failed' nem 'blocked', não deve exibir o dropdown
     const propsSemFiltro = {
       ...propsComFalhas,
       contactsFilter: 'all'
@@ -418,41 +358,32 @@ describe('ContactsModal', () => {
     expect(document.getElementById('contacts-error-filter')).not.toBeInTheDocument();
   });
 
-  it('exibe o botão Bloquear apenas na listagem de falhas quando há contatos selecionados', async () => {
+  it('exibe o botão Bloquear apenas na listagem de falhas', async () => {
     const propsComFalhas = {
       ...defaultProps,
       contactsFilter: 'failed',
     };
     const { rerender } = render(<ContactsModal {...propsComFalhas} />);
+    expect(screen.getByRole('button', { name: /^Bloquear Todos \(2\)$/ })).toBeInTheDocument();
 
-    // Nenhum contato selecionado inicialmente (deve haver 0 botões com texto 'Bloquear (X)')
-    expect(screen.queryByRole('button', { name: /^Bloquear \(/ })).not.toBeInTheDocument();
-
-    // Selecionar o primeiro contato
     const checkboxes = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[1]);
-
-    // Botão de bloquear deve aparecer
     const blockButton = screen.getByRole('button', { name: /^Bloquear \(1\)$/ });
     expect(blockButton).toBeInTheDocument();
 
-    // Se mudarmos para a aba 'all', o botão de bloquear não deve aparecer mesmo com selecionados
     const propsSemFalhas = {
       ...propsComFalhas,
       contactsFilter: 'all',
     };
     rerender(<ContactsModal {...propsSemFalhas} />);
-    expect(screen.queryByRole('button', { name: /^Bloquear \(/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Bloquear Todos/ })).not.toBeInTheDocument();
   });
 
   it('deve bloquear o scroll do body quando o modal estiver aberto e liberar ao fechar/desmontar', () => {
-    // Garante estado limpo antes do teste
     document.body.classList.remove('no-scroll');
-
     const { unmount, rerender } = render(<ContactsModal {...defaultProps} />);
     expect(document.body.classList.contains('no-scroll')).toBe(true);
 
-    // Mudar para fechado
     const closedProps = {
       ...defaultProps,
       contactsModal: {
@@ -463,11 +394,9 @@ describe('ContactsModal', () => {
     rerender(<ContactsModal {...closedProps} />);
     expect(document.body.classList.contains('no-scroll')).toBe(false);
 
-    // Abrir de novo
     rerender(<ContactsModal {...defaultProps} />);
     expect(document.body.classList.contains('no-scroll')).toBe(true);
 
-    // Desmontar o componente
     unmount();
     expect(document.body.classList.contains('no-scroll')).toBe(false);
   });
@@ -492,10 +421,8 @@ describe('ContactsModal', () => {
 
     const infoButton = screen.getByTitle('Explicar erro');
     expect(infoButton).toBeInTheDocument();
-
     fireEvent.click(infoButton);
 
-    // Deve exibir o título explicativo e o conteúdo
     expect(screen.getByText('Bloqueou o Bot (Ação do Contato)')).toBeInTheDocument();
     expect(screen.getByText(/O contato recebeu a mensagem e voluntariamente clicou/i)).toBeInTheDocument();
 
@@ -504,4 +431,3 @@ describe('ContactsModal', () => {
     expect(screen.queryByText('Bloqueou o Bot (Ação do Contato)')).not.toBeInTheDocument();
   });
 });
-
