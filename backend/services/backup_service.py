@@ -127,7 +127,7 @@ class BackupService:
 
 
 
-    def run_backup(self) -> dict:
+    def run_backup(self, custom_prefix: Optional[str] = None) -> dict:
         """
         Executa o backup completo:
         1. pg_dump → gzip → upload S3
@@ -141,8 +141,9 @@ class BackupService:
             logger.error(f"❌ [BACKUP] Erro ao parsear DATABASE_URL: {e}")
             raise
 
+        prefix = custom_prefix if custom_prefix is not None else self.prefix
         filename = self._generate_filename()
-        s3_key = f"{self.prefix}{filename}"
+        s3_key = f"{prefix}{filename}"
 
         env = os.environ.copy()
         env["PGPASSWORD"] = db["password"]
@@ -215,7 +216,7 @@ class BackupService:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    def apply_retention(self, retention_count: int):
+    def apply_retention(self, retention_count: int, custom_prefix: Optional[str] = None):
         """
         Aplica a política de retenção: mantém apenas os `retention_count` backups mais recentes.
         Remove os mais antigos automaticamente.
@@ -224,7 +225,7 @@ class BackupService:
             logger.warning("[BACKUP] retention_count <= 0, pulando limpeza.")
             return
 
-        backups = self.list_backups()
+        backups = self.list_backups(custom_prefix=custom_prefix)
         if len(backups) <= retention_count:
             logger.info(f"[BACKUP] Retenção OK ({len(backups)}/{retention_count} backups). Nenhum arquivo removido.")
             return
@@ -241,14 +242,15 @@ class BackupService:
             except Exception as e:
                 logger.error(f"❌ [BACKUP] Falha ao remover {bkp['filename']}: {e}")
 
-    def list_backups(self) -> List[dict]:
+    def list_backups(self, custom_prefix: Optional[str] = None) -> List[dict]:
         """
         Lista todos os backups no S3 (dentro do prefixo configurado).
         Retorna ordenado do mais recente para o mais antigo.
         """
         s3 = self._get_s3()
+        prefix = custom_prefix if custom_prefix is not None else self.prefix
         try:
-            response = s3.list_objects_v2(Bucket=self.bucket_name, Prefix=self.prefix)
+            response = s3.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
         except ClientError as e:
             logger.error(f"❌ [BACKUP] Falha ao listar backups no S3: {e}")
             raise RuntimeError(f"Falha ao listar backups no S3: {str(e)}")
@@ -259,7 +261,7 @@ class BackupService:
             key = obj["Key"]
             if not key.endswith(".gz"):
                 continue
-            filename = key.replace(self.prefix, "")
+            filename = key.replace(prefix, "")
             backups.append({
                 "filename": filename,
                 "s3_key": key,
@@ -271,13 +273,14 @@ class BackupService:
         backups.sort(key=lambda x: x["created_at"], reverse=True)
         return backups
 
-    def delete_backup(self, filename: str):
+    def delete_backup(self, filename: str, custom_prefix: Optional[str] = None):
         """Remove um backup específico do S3."""
         # Sanitizar: não permitir path traversal
         if "/" in filename or "\\" in filename:
             raise ValueError("Nome de arquivo inválido.")
 
-        s3_key = f"{self.prefix}{filename}"
+        prefix = custom_prefix if custom_prefix is not None else self.prefix
+        s3_key = f"{prefix}{filename}"
         s3 = self._get_s3()
         try:
             s3.delete_object(Bucket=self.bucket_name, Key=s3_key)
@@ -286,7 +289,7 @@ class BackupService:
             logger.error(f"❌ [BACKUP] Falha ao deletar {s3_key}: {e}")
             raise RuntimeError(f"Falha ao deletar backup: {str(e)}")
 
-    def restore_backup(self, filename: str):
+    def restore_backup(self, filename: str, custom_prefix: Optional[str] = None):
         """
         Restaura o banco de dados PostgreSQL a partir de um backup do S3.
         1. Valida nome.
@@ -300,7 +303,8 @@ class BackupService:
         if "/" in filename or "\\" in filename:
             raise ValueError("Nome de arquivo inválido.")
 
-        s3_key = f"{self.prefix}{filename}"
+        prefix = custom_prefix if custom_prefix is not None else self.prefix
+        s3_key = f"{prefix}{filename}"
         s3 = self._get_s3()
 
         try:
@@ -383,15 +387,15 @@ class BackupService:
                 except Exception:
                     pass
 
-    def upload_backup(self, file_data, original_filename: str) -> dict:
+    def upload_backup(self, file_data, original_filename: str, custom_prefix: Optional[str] = None) -> dict:
         """
-        Recebe um arquivo de backup de outro servidor,
-        compacta com gzip se necessário, e faz upload para o S3.
+        Faz o processamento e upload de um dump externo (comprime com gzip se necessário).
+        Retorna metadados do arquivo enviado.
         """
-        logger.info(f"🗄️ [UPLOAD-BACKUP] Processando upload de backup: {original_filename}")
+        logger.info(f"🗄️ [UPLOAD-BACKUP] Processando arquivo importado '{original_filename}'...")
 
         # Sanitizar nome
-        clean_name = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", original_filename)
+        clean_name = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", original_filename).lower()
         if not clean_name:
             clean_name = "backup_upload.dump"
 
@@ -403,7 +407,8 @@ class BackupService:
         is_gz = clean_name.endswith(".gz")
         base_name = clean_name.replace(".gz", "").replace(".dump", "")
         filename = f"backup_{base_name}_{timestamp}.dump.gz"
-        s3_key = f"{self.prefix}{filename}"
+        prefix = custom_prefix if custom_prefix is not None else self.prefix
+        s3_key = f"{prefix}{filename}"
 
         tmp_path = None
         gz_path = None

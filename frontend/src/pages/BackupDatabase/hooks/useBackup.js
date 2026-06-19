@@ -19,6 +19,7 @@ export function useBackup() {
   const [intervalType, setIntervalType] = useState('manual');
   const [intervalValue, setIntervalValue] = useState(24);
   const [retentionCount, setRetentionCount] = useState(30);
+  const [s3Folder, setS3Folder] = useState('backups/');
 
   // Modais de confirmação
   const [confirmDelete, setConfirmDelete] = useState({ open: false, filename: null });
@@ -100,6 +101,7 @@ export function useBackup() {
       setIntervalType(data.interval_type || 'manual');
       setIntervalValue(data.interval_value || 24);
       setRetentionCount(data.retention_count || 30);
+      setS3Folder(data.s3_folder || 'backups/');
     } catch (e) {
       toast.error(e.message || 'Erro ao carregar configuração de backup.');
     } finally {
@@ -156,6 +158,7 @@ export function useBackup() {
             setIntervalType(configData.interval_type || 'manual');
             setIntervalValue(configData.interval_value || 24);
             setRetentionCount(configData.retention_count || 30);
+            setS3Folder(configData.s3_folder || 'backups/');
             
             const isFinished = configData.last_backup_status === 'error' || 
                                (configData.last_backup_status === 'success' && configData.last_backup_at !== previousBackupAt) ||
@@ -202,6 +205,7 @@ export function useBackup() {
           interval_type: intervalType,
           interval_value: Number(intervalValue),
           retention_count: Number(retentionCount),
+          s3_folder: s3Folder,
         }),
       });
       if (!res.ok) {
@@ -370,6 +374,7 @@ export function useBackup() {
   return {
     config, backups, isLoadingConfig, isLoadingBackups, isRunning, isSaving, isRestoring, isUploading, isManualBackupUpdating,
     enabled, setEnabled, intervalType, setIntervalType, intervalValue, setIntervalValue, retentionCount, setRetentionCount,
+    s3Folder, setS3Folder,
     confirmDelete, setConfirmDelete, confirmRestore, setConfirmRestore, editTagModal, setEditTagModal,
     selectedBackupFilenames, setSelectedBackupFilenames, confirmBulkDelete, setConfirmBulkDelete, isBulkDeleting,
     handleTogglePin, handleSaveTag, fetchConfig, fetchBackups, handleRunNow, handleSaveConfig,

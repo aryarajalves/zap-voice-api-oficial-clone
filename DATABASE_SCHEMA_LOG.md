@@ -28,6 +28,8 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 19/06/2026 | Pasta de Backup customizada no S3 | `backup_config` | `s3_folder` | `backend/migrations/add_s3_folder_to_backup_config.py` |
+| 19/06/2026 | Suporte a agrupamento de múltiplos clientes sob Projetos compartilhado de Leads | `projects`, `clients`, `webhook_leads`, `contact_import_history` | `project_id`, `imported_by_client_id` | `scripts/database/migrate_add_projects.py` |
 | 17/06/2026 | Histórico de Importação de Contatos | `contact_import_history` | Tabela nova completa | `backend/scripts/database/create_import_history_table.py` |
 | 10/06/2026 | Contatos em Repouso | `resting_contacts` | Tabela nova completa | `backend/create_resting_contacts_table.py` |
 | 09/06/2026 | Automação de Comentários no Instagram | `instagram_automations` | Tabela nova completa | `backend/scripts/create_instagram_automations_table.py` |

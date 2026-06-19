@@ -30,6 +30,7 @@ class BackupConfigUpdate(BaseModel):
     interval_type: str = Field(default="manual", pattern="^(manual|hours|days)$")
     interval_value: int = Field(default=24, ge=1, le=9999)
     retention_count: int = Field(default=30, ge=1, le=365)
+    s3_folder: str = Field(default="backups/")
 
 
 class BackupMetadataUpdate(BaseModel):
@@ -47,6 +48,7 @@ class BackupConfigResponse(BaseModel):
     interval_type: str
     interval_value: int
     retention_count: int
+    s3_folder: str
     last_backup_at: Optional[datetime]
     next_backup_at: Optional[datetime]
     last_backup_filename: Optional[str]
@@ -69,10 +71,17 @@ def get_or_create_config(db: Session) -> BackupConfig:
             interval_type="manual",
             interval_value=24,
             retention_count=30,
+            s3_folder="backups/",
         )
         db.add(config)
         db.commit()
         db.refresh(config)
+    else:
+        # Retrocompatibilidade caso s3_folder esteja nulo por algum motivo
+        if not config.s3_folder:
+            config.s3_folder = "backups/"
+            db.commit()
+            db.refresh(config)
     return config
 
 
@@ -91,10 +100,11 @@ def _run_backup_job(db_url_placeholder: str, config_id: int):
             return
 
         logger.info("🗄️ [BACKUP-JOB] Iniciando job de backup...")
-        result = backup_service.run_backup()
+        folder = config.s3_folder or "backups/"
+        result = backup_service.run_backup(custom_prefix=folder)
 
         # Aplica retenção
-        backup_service.apply_retention(config.retention_count)
+        backup_service.apply_retention(config.retention_count, custom_prefix=folder)
 
         # Atualiza tracking
         now = datetime.now(timezone.utc)
@@ -146,6 +156,14 @@ async def update_backup_config(
     """Salva a configuração de backup agendado. Requer Super Admin."""
     config = get_or_create_config(db)
 
+    # Sanitizar o s3_folder: deve terminar com "/" e não ser vazio
+    folder = config_in.s3_folder.strip() if config_in.s3_folder else "backups/"
+    if not folder:
+        folder = "backups/"
+    if not folder.endswith("/"):
+        folder += "/"
+    config.s3_folder = folder
+
     config.enabled = config_in.enabled
     config.interval_type = config_in.interval_type
     config.interval_value = config_in.interval_value
@@ -162,7 +180,7 @@ async def update_backup_config(
     try:
         db.commit()
         db.refresh(config)
-        logger.info(f"✅ [BACKUP] Configuração salva por {current_user.email}: enabled={config.enabled}, tipo={config.interval_type}, valor={config.interval_value}, retenção={config.retention_count}")
+        logger.info(f"✅ [BACKUP] Configuração salva por {current_user.email}: enabled={config.enabled}, tipo={config.interval_type}, valor={config.interval_value}, retenção={config.retention_count}, pasta S3={config.s3_folder}")
         return config
     except Exception as e:
         db.rollback()
@@ -209,7 +227,9 @@ async def list_backups(
 ):
     """Lista todos os backups existentes no bucket S3. Requer Super Admin."""
     try:
-        backups = backup_service.list_backups()
+        config = get_or_create_config(db)
+        folder = config.s3_folder or "backups/"
+        backups = backup_service.list_backups(custom_prefix=folder)
         
         # Enriquecer com os metadados do banco de dados (is_pinned e tag)
         filenames = [b["filename"] for b in backups]
@@ -299,7 +319,9 @@ async def delete_backup(
         )
 
     try:
-        backup_service.delete_backup(filename)
+        config = get_or_create_config(db)
+        folder = config.s3_folder or "backups/"
+        backup_service.delete_backup(filename, custom_prefix=folder)
         logger.info(f"🗑️ [BACKUP] Arquivo '{filename}' deletado por {current_user.email}")
         return {"message": f"Backup '{filename}' removido com sucesso."}
     except ValueError as e:
@@ -314,11 +336,14 @@ async def delete_backup(
 @router.post("/restore/{filename}", summary="Restaurar Banco de Dados")
 async def restore_database(
     filename: str,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_super_admin)
 ):
     """Restaura o banco de dados PostgreSQL a partir de um backup específico no S3. Requer Super Admin."""
     try:
-        backup_service.restore_backup(filename)
+        config = get_or_create_config(db)
+        folder = config.s3_folder or "backups/"
+        backup_service.restore_backup(filename, custom_prefix=folder)
         logger.info(f"✅ [RESTORE] Banco de dados restaurado com sucesso a partir de '{filename}' por {current_user.email}")
         return {"message": f"Banco de dados restaurado com sucesso a partir de '{filename}'."}
     except ValueError as e:
@@ -347,11 +372,12 @@ async def upload_backup(
         )
 
     try:
-        result = backup_service.upload_backup(file.file, file.filename)
+        config = get_or_create_config(db)
+        folder = config.s3_folder or "backups/"
+        result = backup_service.upload_backup(file.file, file.filename, custom_prefix=folder)
         
         # Aplica política de retenção para garantir que o upload não passe do limite
-        config = get_or_create_config(db)
-        backup_service.apply_retention(config.retention_count)
+        backup_service.apply_retention(config.retention_count, custom_prefix=folder)
         
         logger.info(f"✅ [UPLOAD-BACKUP] Novo backup '{result['filename']}' enviado por {current_user.email}")
         return {
@@ -375,8 +401,10 @@ async def download_backup(
         raise HTTPException(status_code=400, detail="Nome de arquivo inválido.")
 
     try:
+        config = get_or_create_config(db)
+        folder = config.s3_folder or "backups/"
         s3 = backup_service._get_s3()
-        s3_key = f"{backup_service.prefix}{filename}"
+        s3_key = f"{folder}{filename}"
         
         try:
             response = s3.get_object(Bucket=backup_service.bucket_name, Key=s3_key)
@@ -421,6 +449,9 @@ async def bulk_delete_backups(
     ).all()
     pinned_filenames = {m.filename for m in meta_records}
 
+    config = get_or_create_config(db)
+    folder = config.s3_folder or "backups/"
+
     for filename in payload.filenames:
         if "/" in filename or "\\" in filename:
             failed.append({"filename": filename, "error": "Nome de arquivo inválido."})
@@ -431,7 +462,7 @@ async def bulk_delete_backups(
             continue
 
         try:
-            backup_service.delete_backup(filename)
+            backup_service.delete_backup(filename, custom_prefix=folder)
             deleted.append(filename)
         except Exception as e:
             logger.error(f"❌ [BACKUP] Erro ao deletar backup {filename} em lote: {e}")

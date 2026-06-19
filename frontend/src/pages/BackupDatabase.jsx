@@ -32,6 +32,7 @@ export default function BackupDatabase() {
   const {
     config, backups, isLoadingConfig, isLoadingBackups, isRunning, isSaving, isRestoring, isUploading, isManualBackupUpdating,
     enabled, setEnabled, intervalType, setIntervalType, intervalValue, setIntervalValue, retentionCount, setRetentionCount,
+    s3Folder, setS3Folder,
     confirmDelete, setConfirmDelete, confirmRestore, setConfirmRestore, editTagModal, setEditTagModal,
     handleTogglePin, handleSaveTag, fetchBackups, handleRunNow, handleSaveConfig,
     handleDeleteBackup, handleRestoreBackup, handleUploadBackup, handleDownloadBackup,
@@ -209,6 +210,24 @@ export default function BackupDatabase() {
                 </p>
               )}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Pasta do Backup no S3
+            </label>
+            <input
+              id="input-s3-folder"
+              type="text"
+              placeholder="Ex: backups/"
+              value={s3Folder}
+              onChange={e => setS3Folder(e.target.value)}
+              disabled={isRestoring || isUploading}
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Subpasta onde os backups serão salvos no bucket do Backblaze S3. Ex: <code>backups/</code> ou <code>backups/cliente1/</code>.
+            </p>
           </div>
 
           <div>

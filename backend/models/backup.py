@@ -18,6 +18,9 @@ class BackupConfig(Base):
     # Retenção
     retention_count = Column(Integer, default=30, nullable=False)  # Máximo de backups a manter
 
+    # Pasta do backup no S3
+    s3_folder = Column(String(255), default="backups/", nullable=False)
+
     # Tracking
     last_backup_at = Column(DateTime(timezone=True), nullable=True)
     next_backup_at = Column(DateTime(timezone=True), nullable=True)
