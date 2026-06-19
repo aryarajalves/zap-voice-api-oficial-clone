@@ -83,124 +83,137 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
-            <div className="bg-[#1e293b] rounded-2xl shadow-2xl w-full max-w-md p-8 border border-gray-700">
-                {/* Logo/Header */}
-                <div className="text-center mb-8">
-                    <div className="flex flex-col items-center gap-4 mb-4">
-                        {branding.logo ? (
-                            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg border border-gray-700">
-                                <img src={resolveUrl(branding.logo)} alt={branding.name} className="w-full h-full object-cover" />
-                            </div>
-                        ) : (
-                            <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg border-t border-blue-400">
-                                <span className="text-white text-5xl font-bold font-sans">
-                                    {(branding.name || 'Z')[0].toUpperCase()}
-                                </span>
+        <div className="h-screen bg-[#0f172a] grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+            {/* Coluna da Esquerda (Formulário) */}
+            <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-8 md:p-10 h-full relative z-10 bg-[#0f172a] shadow-[10px_0_30px_rgba(0,0,0,0.3)]">
+                <div className="my-auto w-full max-w-md mx-auto space-y-5">
+                    {/* Logo/Header */}
+                    <div className="text-left">
+                        <div className="flex flex-col items-start gap-3 mb-2">
+                            {branding.logo ? (
+                                <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-lg border border-gray-700">
+                                    <img src={resolveUrl(branding.logo)} alt={branding.name} className="w-full h-full object-cover" />
+                                </div>
+                            ) : (
+                                <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg border-t border-blue-400">
+                                    <span className="text-white text-3xl font-bold font-sans">
+                                        {(branding.name || 'Z')[0].toUpperCase()}
+                                    </span>
+                                </div>
+                            )}
+                            <h1 className="text-2xl font-extrabold text-white tracking-tight">
+                                {renderAppName()}
+                            </h1>
+                        </div>
+                        <p className="text-gray-400 text-xs">Entre na sua conta para continuar.</p>
+                    </div>
+
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} className="space-y-4">
+
+                        {/* Alerta de Erro */}
+                        {error && (
+                            <div className="bg-red-900/30 border-l-4 border-red-500 p-3 rounded-md">
+                                <div className="flex">
+                                    <div className="flex-shrink-0">
+                                        <svg className="h-4 w-4 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <div className="ml-3">
+                                        <p className="text-xs text-red-300 font-medium">
+                                            {error}
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         )}
-                        <h1 className="text-3xl font-bold text-white">
-                            {renderAppName()}
-                        </h1>
-                    </div>
-                    <p className="text-gray-400">Entre na sua conta</p>
-                </div>
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="space-y-6">
-
-                    {/* Alerta de Erro */}
-                    {error && (
-                        <div className="bg-red-900/30 border-l-4 border-red-500 p-4 rounded-md">
-                            <div className="flex">
-                                <div className="flex-shrink-0">
-                                    <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                                <div className="ml-3">
-                                    <p className="text-sm text-red-300 font-medium">
-                                        {error}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Email
-                        </label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            className="w-full px-4 py-3 bg-[#0f172a] border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition placeholder-gray-500"
-                            placeholder="seu@email.com"
-                            autoComplete="email"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Senha
-                        </label>
-                        <div className="relative">
+                        <div className="space-y-1">
+                            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400">
+                                Email
+                            </label>
                             <input
-                                type={showPassword ? "text" : "password"}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                                 required
-                                className="w-full px-4 py-3 pr-12 bg-[#0f172a] border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition placeholder-gray-500"
-                                placeholder="••••••••"
-                                autoComplete="current-password"
+                                className="w-full px-3.5 py-2.5 bg-[#1e293b] border border-gray-700 focus:border-blue-500 rounded-xl text-white focus:ring-2 focus:ring-blue-500/20 outline-none transition placeholder-gray-500 text-sm"
+                                placeholder="seu@email.com"
+                                autoComplete="email"
                             />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 focus:outline-none"
-                                title={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                            >
-                                {showPassword ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                                        <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                                    </svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                                    </svg>
-                                )}
-                            </button>
                         </div>
-                    </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        {loading ? (
-                            <>
-                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Entrando...
-                            </>
-                        ) : (
-                            'Entrar'
-                        )}
-                    </button>
-                </form>
+                        <div className="space-y-1">
+                            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400">
+                                Senha
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    className="w-full px-3.5 py-2.5 pr-10 bg-[#1e293b] border border-gray-700 focus:border-blue-500 rounded-xl text-white focus:ring-2 focus:ring-blue-500/20 outline-none transition placeholder-gray-500 text-sm"
+                                    placeholder="••••••••"
+                                    autoComplete="current-password"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 focus:outline-none"
+                                    title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                                >
+                                    {showPassword ? (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                                            <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                                        </svg>
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                        </svg>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm shadow-lg shadow-blue-900/20 active:scale-95"
+                        >
+                            {loading ? (
+                                <>
+                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Entrando...
+                                </>
+                            ) : (
+                                'Entrar'
+                            )}
+                        </button>
+                    </form>
+                </div>
 
                 {/* Footer */}
-                <div className="mt-8 pt-6 border-t border-gray-700 text-center text-xs text-gray-500">
+                <div className="pt-4 text-left text-[11px] text-gray-500 border-t border-gray-800/60 mt-4">
                     <p>{branding.name} © {new Date().getFullYear()}</p>
-                    <p className="mt-1">Gerencie suas sequências de mensagens WhatsApp</p>
+                    <p className="mt-0.5">Gerencie suas sequências de mensagens WhatsApp</p>
                 </div>
+            </div>
+
+            {/* Coluna da Direita (Imagem de Fundo/Hero) */}
+            <div className="hidden lg:block lg:col-span-7 relative h-full bg-[#0f172a]">
+                <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a] to-transparent z-10 w-24"></div>
+                <img 
+                    src="/login_hero.png" 
+                    alt="ZapVoice Workspace Hero" 
+                    className="w-full h-full object-cover select-none pointer-events-none"
+                />
             </div>
         </div>
     );
