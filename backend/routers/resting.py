@@ -24,6 +24,7 @@ class RestingContactResponse(BaseModel):
     reason: Optional[str]
     created_at: datetime
     expires_at: datetime
+    resting_by_client_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -47,15 +48,27 @@ def list_resting_contacts(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
     """
-    List all active resting contacts for the active client.
+    List all active resting contacts for the active client (inherited if in a project).
     """
     client_id = x_client_id if x_client_id else current_user.client_id
     now = datetime.utcnow()
     
-    contacts = db.query(RestingContact).filter(
-        RestingContact.client_id == client_id,
-        RestingContact.expires_at > now
-    ).order_by(RestingContact.created_at.desc()).all()
+    # Check if client belongs to a project
+    from models import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    
+    if client and client.project_id:
+        sibling_clients = db.query(Client.id).filter(Client.project_id == client.project_id).all()
+        client_ids = [c.id for c in sibling_clients]
+        contacts = db.query(RestingContact).filter(
+            RestingContact.client_id.in_(client_ids),
+            RestingContact.expires_at > now
+        ).order_by(RestingContact.created_at.desc()).all()
+    else:
+        contacts = db.query(RestingContact).filter(
+            RestingContact.client_id == client_id,
+            RestingContact.expires_at > now
+        ).order_by(RestingContact.created_at.desc()).all()
     return contacts
 
 @router.post("/", response_model=RestingContactResponse, status_code=status.HTTP_201_CREATED)
@@ -78,9 +91,17 @@ def rest_contact(
     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
     now = datetime.utcnow()
 
+    # If in a project, check across all sibling clients too
+    from models import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    client_ids = [client_id]
+    if client and client.project_id:
+        sibling_clients = db.query(Client.id).filter(Client.project_id == client.project_id).all()
+        client_ids = [c.id for c in sibling_clients]
+
     # Check if already resting and not expired
     exists = db.query(RestingContact).filter(
-        RestingContact.client_id == client_id,
+        RestingContact.client_id.in_(client_ids),
         RestingContact.phone.like(f"%{suffix}"),
         RestingContact.expires_at > now
     ).first()
@@ -125,13 +146,20 @@ def check_bulk_resting(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
     """
-    Receives a list of phone numbers and returns which ones are currently resting.
+    Receives a list of phone numbers and returns which ones are currently resting (inherited if in a project).
     """
     client_id = x_client_id if x_client_id else current_user.client_id
     now = datetime.utcnow()
 
+    from models import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    client_ids = [client_id]
+    if client and client.project_id:
+        sibling_clients = db.query(Client.id).filter(Client.project_id == client.project_id).all()
+        client_ids = [c.id for c in sibling_clients]
+
     resting_entries = db.query(RestingContact.phone).filter(
-        RestingContact.client_id == client_id,
+        RestingContact.client_id.in_(client_ids),
         RestingContact.expires_at > now
     ).all()
 

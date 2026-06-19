@@ -43,6 +43,7 @@ export default function ContactTable({
                         </th>
                         <th className="px-6 py-4 font-bold">Telefone</th>
                         <th className="px-6 py-4 font-bold">Nome</th>
+                        <th className="px-6 py-4 font-bold">Origem</th>
                         <th className="px-6 py-4 font-bold">Motivo</th>
                         <th className="px-6 py-4 font-bold">{isResting ? 'Tempo de Repouso' : 'Data/Hora Bloqueio'}</th>
                         <th className="px-6 py-4 font-bold text-right">Ações</th>
@@ -67,6 +68,12 @@ export default function ContactTable({
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
                                 {contact.name || '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium text-amber-500/90 dark:text-amber-400/90">
+                                {isResting 
+                                    ? (contact.resting_by_client_name || '-')
+                                    : (contact.blocked_by_client_name || '-')
+                                }
                             </td>
                             <td className="px-6 py-4 text-sm">
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${

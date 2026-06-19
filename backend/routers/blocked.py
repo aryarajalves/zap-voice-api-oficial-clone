@@ -22,6 +22,7 @@ class BlockedContactResponse(BaseModel):
     name: Optional[str]
     reason: Optional[str]
     created_at: datetime
+    blocked_by_client_name: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -45,13 +46,24 @@ def list_blocked_contacts(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
     """
-    List all blocked contacts for the active client.
+    List all blocked contacts for the active client (inherited if in a project).
     """
     client_id = x_client_id if x_client_id else current_user.client_id
     
-    contacts = db.query(BlockedContact).filter(
-        BlockedContact.client_id == client_id
-    ).order_by(BlockedContact.created_at.desc()).all()
+    # Check if client belongs to a project
+    from models import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    
+    if client and client.project_id:
+        sibling_clients = db.query(Client.id).filter(Client.project_id == client.project_id).all()
+        client_ids = [c.id for c in sibling_clients]
+        contacts = db.query(BlockedContact).filter(
+            BlockedContact.client_id.in_(client_ids)
+        ).order_by(BlockedContact.created_at.desc()).all()
+    else:
+        contacts = db.query(BlockedContact).filter(
+            BlockedContact.client_id == client_id
+        ).order_by(BlockedContact.created_at.desc()).all()
     return contacts
 
 @router.post("/", response_model=BlockedContactResponse, status_code=status.HTTP_201_CREATED)
@@ -76,8 +88,16 @@ def block_contact(
     # This prevents duplicates like 558586817644 and 86817644
     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
     
+    # If in a project, check across all sibling clients too
+    from models import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    client_ids = [client_id]
+    if client and client.project_id:
+        sibling_clients = db.query(Client.id).filter(Client.project_id == client.project_id).all()
+        client_ids = [c.id for c in sibling_clients]
+        
     exists = db.query(BlockedContact).filter(
-        BlockedContact.client_id == client_id,
+        BlockedContact.client_id.in_(client_ids),
         BlockedContact.phone.like(f"%{suffix}")
     ).first()
     
@@ -103,21 +123,28 @@ def check_bulk_blocked(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
 ):
     """
-    Receives a list of phone numbers and returns which ones are blocked.
+    Receives a list of phone numbers and returns which ones are blocked (inherited if in a project).
     Uses 'last 8 digits' comparison logic.
     """
     client_id = x_client_id if x_client_id else current_user.client_id
 
-    # 1. Fetch ALL blocked contacts for this client
+    from models import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    client_ids = [client_id]
+    if client and client.project_id:
+        sibling_clients = db.query(Client.id).filter(Client.project_id == client.project_id).all()
+        client_ids = [c.id for c in sibling_clients]
+
+    # 1. Fetch ALL blocked contacts for this client / project siblings
     blocked_entries = db.query(BlockedContact.phone).filter(
-        BlockedContact.client_id == client_id
+        BlockedContact.client_id.in_(client_ids)
     ).all()
     
     # 2. Fetch active resting contacts
     now = datetime.utcnow()
     from models import RestingContact
     resting_entries = db.query(RestingContact.phone).filter(
-        RestingContact.client_id == client_id,
+        RestingContact.client_id.in_(client_ids),
         RestingContact.expires_at > now
     ).all()
     

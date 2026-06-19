@@ -10,8 +10,16 @@ class Client(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     is_active = Column(Boolean, default=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    project = relationship("Project", back_populates="clients")
+
+    @property
+    def project_name(self):
+        return self.project.name if self.project else None
 
     # Relationships
     funnels = relationship("Funnel", back_populates="client", cascade="all, delete-orphan")
@@ -47,6 +55,10 @@ class BlockedContact(Base):
 
     client = relationship("Client", back_populates="blocked_contacts")
 
+    @property
+    def blocked_by_client_name(self):
+        return self.client.name if self.client else "Sistema"
+
 class ContactWindow(Base):
     __tablename__ = "contact_windows"
 
@@ -77,3 +89,7 @@ class RestingContact(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
     client = relationship("Client", back_populates="resting_contacts")
+
+    @property
+    def resting_by_client_name(self):
+        return self.client.name if self.client else "Sistema"

@@ -50,11 +50,22 @@ async def execute_funnel(
         trigger.updated_at = datetime.now(timezone.utc)
         db.commit()
 
-    # Block Check
+    # Block Check & Resting Cooldown Check (with Project Sharing inheritance)
     clean_phone = ''.join(filter(str.isdigit, contact_phone))
     if not skip_block_check:
         suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-        if db.query(models.BlockedContact).filter(models.BlockedContact.client_id == trigger.client_id, or_(models.BlockedContact.phone == clean_phone, models.BlockedContact.phone.like(f"%{suffix}"))).first():
+        
+        # Resolving sibling clients if client belongs to a project
+        client = db.query(models.Client).filter(models.Client.id == trigger.client_id).first()
+        client_ids = [trigger.client_id]
+        if client and client.project_id:
+            sibling_clients = db.query(models.Client.id).filter(models.Client.project_id == client.project_id).all()
+            client_ids = [c.id for c in sibling_clients]
+
+        if db.query(models.BlockedContact).filter(
+            models.BlockedContact.client_id.in_(client_ids),
+            or_(models.BlockedContact.phone == clean_phone, models.BlockedContact.phone.like(f"%{suffix}"))
+        ).first():
             trigger.status = 'failed'
             trigger.failure_reason = "Bloqueado na Plataforma"
             db.commit()
@@ -63,7 +74,7 @@ async def execute_funnel(
         # Check resting cooldown block
         now = datetime.utcnow()
         if db.query(models.RestingContact).filter(
-            models.RestingContact.client_id == trigger.client_id,
+            models.RestingContact.client_id.in_(client_ids),
             or_(models.RestingContact.phone == clean_phone, models.RestingContact.phone.like(f"%{suffix}")),
             models.RestingContact.expires_at > now
         ).first():
