@@ -156,12 +156,17 @@ async def update_backup_config(
     """Salva a configuração de backup agendado. Requer Super Admin."""
     config = get_or_create_config(db)
 
-    # Sanitizar o s3_folder: deve terminar com "/" e não ser vazio
-    folder = config_in.s3_folder.strip() if config_in.s3_folder else "backups/"
+    # Sanitizar o s3_folder: deve garantir a subpasta /zapvoice/ no final
+    folder = config_in.s3_folder.strip() if config_in.s3_folder else "backups"
+    folder = folder.rstrip("/")
     if not folder:
-        folder = "backups/"
-    if not folder.endswith("/"):
-        folder += "/"
+        folder = "backups"
+    
+    # Se não terminar com "zapvoice", adiciona a subpasta
+    if not folder.endswith("zapvoice"):
+        folder = f"{folder}/zapvoice"
+        
+    folder = f"{folder}/"
     config.s3_folder = folder
 
     config.enabled = config_in.enabled
