@@ -61,11 +61,14 @@ from routers import (
     health,         # Healthcheck da API
     webhooks_public, # Webhooks públicos (WordPress, Hotmart, etc.)
     leads,          # Gestão de leads captados externamente
+    leads_import,   # Importação e integração de leads
     financial,      # Controle financeiro e planos
     backup,         # Backup do banco de dados (Super Admin)
     hot_leads,      # Leads quentes e roteamento interno
     instagram,      # Automação do Instagram
-    resting         # Contatos em repouso
+    resting,        # Contatos em repouso
+    invitations,    # Convites de cadastro de usuário (Super Admin)
+    projects        # Projetos compartilhados
 )
 
 # Webhook de entrada do Chatwoot (recebe eventos em tempo real)
@@ -257,6 +260,7 @@ app.include_router(triggers_router, prefix="/api", tags=["Triggers"])
 app.include_router(uploads.router, prefix="/api", tags=["Uploads"])
 app.include_router(chatwoot.router, prefix="/api", tags=["Chatwoot"])
 app.include_router(auth.router, prefix="/api", tags=["Auth"])
+app.include_router(invitations.router, prefix="/api", tags=["Invitations"])
 app.include_router(clients.router, prefix="/api", tags=["Clients"])
 app.include_router(whatsapp.router, prefix="/api", tags=["WhatsApp"])
 app.include_router(whatsapp_profile.router, prefix="/api", tags=["WhatsApp"])
@@ -266,6 +270,8 @@ app.include_router(resting.router, prefix="/api", tags=["Resting"])
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(global_vars.router, prefix="/api")
 app.include_router(leads.router, prefix="/api", tags=["Leads"])
+app.include_router(leads_import.router, prefix="/api", tags=["Leads Import"])
+app.include_router(projects.router, prefix="/api", tags=["Projects"])
 app.include_router(financial.router, prefix="/api", tags=["Financial"])
 app.include_router(backup.router, prefix="/api", tags=["Backup"])
 app.include_router(hot_leads.router, prefix="/api", tags=["HotLeads"])
@@ -641,6 +647,24 @@ async def serve_env_config():
     from fastapi import HTTPException
     raise HTTPException(status_code=404, detail="Config file not found")
 
+# Mapeamento de extensões para media types
+_STATIC_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".txt": "text/plain",
+    ".json": "application/json",
+    ".webmanifest": "application/manifest+json",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".eot": "font/eot",
+}
+
 # Rota coringa do SPA (deve rodar APÓS todas as outras rotas)
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
@@ -649,6 +673,20 @@ async def serve_react_app(full_path: str):
     if path_lower.startswith("api") or path_lower.startswith("static") or path_lower.startswith("docs") or path_lower.startswith("openapi") or path_lower.startswith("triggers"):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="API route not found via Frontend Catch-all")
+
+    # Verificar se é um arquivo estático que existe na pasta dist/
+    # (imagens, fontes, manifests, etc. que não são servidos pelo mount /assets)
+    import mimetypes
+    _, ext = os.path.splitext(full_path)
+    if ext.lower() in _STATIC_MEDIA_TYPES:
+        static_file = os.path.join(_BASE_DIR, "static", "dist", full_path)
+        if os.path.isfile(static_file):
+            from fastapi.responses import FileResponse
+            media_type = _STATIC_MEDIA_TYPES[ext.lower()]
+            return FileResponse(static_file, media_type=media_type)
+        # Arquivo estático não encontrado - não redirecionar para SPA
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Static file not found: {full_path}")
 
     content = get_index_with_cache_busting()
     if content:
