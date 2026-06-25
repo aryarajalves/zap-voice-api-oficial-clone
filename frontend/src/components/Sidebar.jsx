@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram } from 'react-icons/fi';
+import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram, FiHelpCircle } from 'react-icons/fi';
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
@@ -70,7 +70,8 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'financial', label: 'Financeiro', icon: FiDollarSign, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'admin' },
         { id: 'users', label: 'Gestão de Usuários', icon: FiUsers, roles: ['super_admin'], category: 'admin' },
         { id: 'monitoring', label: 'Monitoramento', icon: FiActivity, roles: ['super_admin'], category: 'admin' },
-        { id: 'backup_db', label: 'Backup Banco', icon: FiDatabase, roles: ['super_admin'], category: 'admin' },
+        {id: 'backup_db', label: 'Backup Banco', icon: FiDatabase, roles: ['super_admin'], category: 'admin'},
+        {id: 'tutorial', label: 'Tutorial API Oficial', icon: FiHelpCircle, roles: ['super_admin'], category: 'admin'},
         ...(SIMULATE_MESSAGING ? [{ id: 'stress_test', label: 'Teste de Escala', icon: FiZap, roles: ['super_admin'], category: 'admin' }] : []),
     ];
 
@@ -129,6 +130,12 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                     const categoryItems = menuItems.filter(item => {
                         if (item.category !== category.id) return false;
                         
+                        // Se for a automação do Instagram e a env estiver desativada, oculta
+                        if (item.id === 'instagram_automation') {
+                            const isInstagramEnabled = window._env_?.ENABLE_INSTAGRAM !== 'false' && window._env_?.ENABLE_INSTAGRAM !== false;
+                            if (!isInstagramEnabled) return false;
+                        }
+
                         const meetsRole = item.roles.includes(user?.role);
                         if (!meetsRole) return false;
                         

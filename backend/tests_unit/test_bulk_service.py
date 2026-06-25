@@ -2,13 +2,16 @@ import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from services.bulk import process_bulk_send, process_bulk_funnel
 from services.utils.bulk_helpers import render_template_body
+import models
 import asyncio
 from datetime import datetime, timezone
 
 @pytest.fixture
 def mock_db():
-    with patch("services.bulk.SessionLocal") as mock:
-        db_inst = mock.return_value
+    with patch("services.bulk.SessionLocal") as mock_bulk, \
+         patch("services.bulk_funnel.SessionLocal") as mock_funnel:
+        db_inst = mock_bulk.return_value
+        mock_funnel.return_value = db_inst
         yield db_inst
 
 @pytest.fixture
@@ -40,13 +43,13 @@ async def test_render_template_body():
 @pytest.mark.asyncio
 async def test_process_bulk_send_empty_contacts(mock_db, mock_rabbitmq):
     # No contacts should mark as completed
-    mock_trigger = MagicMock()
-    mock_db.query.return_value.get.return_value = mock_trigger
-    
     await process_bulk_send(trigger_id=1, template_name="test", contacts=[], delay=0, concurrency=1)
     
-    assert mock_trigger.status == "completed"
-    assert mock_trigger.total_sent == 0
+    mock_db.query.assert_called_with(models.ScheduledTrigger)
+    mock_db.query.return_value.filter_by.assert_called_with(id=1)
+    mock_db.query.return_value.filter_by.return_value.update.assert_called_with({
+        "status": "completed", "total_sent": 0, "total_failed": 0
+    })
 
 @pytest.mark.asyncio
 async def test_process_bulk_send_success(mock_db, mock_chatwoot, mock_rabbitmq):
@@ -95,26 +98,33 @@ async def test_process_bulk_send_blocked(mock_db, mock_chatwoot, mock_rabbitmq):
     mock_db.query.return_value.get.return_value = mock_trigger
     
     # Mock blocked contact
-    mock_blocked = MagicMock()
-    mock_blocked.phone = "5585999999991"
+    mock_blocked = ("5585999999991",)
+    mock_trigger.total_failed = 0
     
-    # Needs to handle multiple queries in sequence
+    # Needs to handle multiple queries in sequence (resting list, blocked list, and interaction check)
     mock_db.query.return_value.filter.return_value.all.side_effect = [
         [mock_blocked], # For blocked list check
-        []              # For interaction check
+        [],             # For resting list check
+        [],             # For interaction check (ContactWindow query)
+        []              # For ContactWindow query result
     ]
     mock_db.query.return_value.filter_by.return_value.first.return_value = None
     mock_db.query.return_value.filter.return_value.first.return_value = None # WhatsAppTemplateCache
 
     contacts = ["5585999999991"]
     
-    await process_bulk_send(
-        trigger_id=1,
-        template_name="hello_world",
-        contacts=contacts,
-        delay=0,
-        concurrency=1
-    )
+    def mock_update_stats(db, trigger_id, sent=0, failed=0, blocked=0, total=None):
+        if failed:
+            mock_trigger.total_failed += failed
+            
+    with patch("services.bulk.update_trigger_stats", side_effect=mock_update_stats):
+        await process_bulk_send(
+            trigger_id=1,
+            template_name="hello_world",
+            contacts=contacts,
+            delay=0,
+            concurrency=1
+        )
     
     # Should NOT call send_template
     assert mock_chatwoot.send_template.call_count == 0
@@ -133,7 +143,7 @@ async def test_process_bulk_funnel_success(mock_db, mock_rabbitmq):
     
     contacts = ["5585999999991"]
     
-    with patch("services.bulk.execute_funnel", new_callable=AsyncMock) as mock_exec:
+    with patch("services.bulk_funnel.execute_funnel", new_callable=AsyncMock) as mock_exec:
         with patch("asyncio.sleep", return_value=None):
             await process_bulk_funnel(
                 trigger_id=1,

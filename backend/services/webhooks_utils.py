@@ -134,10 +134,20 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             get_val(["data", "product", "name"]) or get_val(["form_name"])
         )
         result['event_type'] = (
-            get_val(["event"]) or get_val(["event_type"]) or get_val(["status"]) or "outros"
+            get_val(["event"]) or get_val(["event_type"]) or get_val(["status"]) or 
+            ("form_submission" if platform_lower == "elementor" else "outros")
         )
 
     # Standardize Phone (Generic Fallback)
+    if not result.get('phone'):
+        # Tenta buscar nas chaves do payload de forma case-insensitive se for Elementor ou similar
+        for k, v in payload.items():
+            k_lower = k.lower()
+            if "fields[" in k_lower and "][value]" in k_lower:
+                if any(x in k_lower for x in ["phone", "tel", "cell", "whats", "cel"]):
+                    result['phone'] = v
+                    break
+
     if not result.get('phone'):
         result['phone'] = (
             payload.get("phone") or payload.get("phone_number") or payload.get("celular") or 
@@ -240,7 +250,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
 
     # Final event_type fallback
     if not result.get('event_type'):
-        event_raw = payload.get("event") or payload.get("status") or payload.get("event_type") or "outros"
+        event_raw = payload.get("event") or payload.get("status") or payload.get("event_type") or ("form_submission" if platform_lower == "elementor" else "outros")
         result['event_type'] = str(event_raw).lower().replace(".", "_")
 
     # Map status to a friendly name

@@ -144,7 +144,7 @@ export const useRecipientSelector = ({
 
     const lastOnSelectRef = useRef(null);
     useEffect(() => {
-        const currentTag = mode === 'tag' ? tags.selectedTag : '';
+        const currentTag = mode === 'tag' ? (tags.selectedTags || []).join(', ') : '';
         const tagExclusions = mode === 'tag' 
             ? originalTagPhones.filter(phone => !selectedList.some(c => c.phone === phone))
             : [];
@@ -154,7 +154,7 @@ export const useRecipientSelector = ({
             onSelect(selectedList, { mode, tag: currentTag, tagExclusions, isValidated, variableFilters });
             lastOnSelectRef.current = payloadStr;
         }
-    }, [selectedList, mode, isValidated, onSelect, variableFilters, tags.selectedTag, originalTagPhones]);
+    }, [selectedList, mode, isValidated, onSelect, variableFilters, tags.selectedTags, originalTagPhones]);
 
     // Core Handlers
     const removeContact = (phone) => {

@@ -467,6 +467,8 @@ async def get_recurring_contacts(
                 WebhookLead.tags.ilike(f"%{record.tag}%")
             ).all()
             for lead in leads:
+                if lead.phone in live_phones:
+                    continue
                 live_phones.add(lead.phone)
                 contacts.append({
                     "phone": lead.phone,

@@ -1,4 +1,5 @@
 import React from 'react';
+import SearchableSelect from '../common/SearchableSelect';
 
 const ExclusionListManager = ({
     exclusionList,
@@ -18,6 +19,8 @@ const ExclusionListManager = ({
     confirmExclusionColumn,
     selectedExclusionTag,
     setSelectedExclusionTag,
+    exclusionTagMode = 'OR',
+    setExclusionTagMode,
     isLoadingExclusionTags,
     exclusionAvailableTags,
     loadExclusionContactsByTag,
@@ -117,22 +120,53 @@ const ExclusionListManager = ({
                                     <div className="flex flex-col gap-2">
                                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1 text-center">Selecione a Etiqueta para Excluir</label>
                                         <div className="relative group/tag-select-exclusion">
-                                            <select
-                                                className="w-full p-4 pl-5 bg-black/60 border border-white/10 rounded-2xl focus:border-red-500/50 outline-none transition-all text-white font-bold"
-                                                value={selectedExclusionTag}
-                                                onChange={(e) => setSelectedExclusionTag(e.target.value)}
-                                                disabled={isLoadingExclusionTags}
-                                            >
-                                                <option value="">{isLoadingExclusionTags ? 'Carregando etiquetas...' : '-- Escolha uma etiqueta --'}</option>
-                                                {exclusionAvailableTags.map(tag => (
-                                                    <option key={tag} value={tag} className="bg-slate-900">{tag}</option>
-                                                ))}
-                                            </select>
+                                            <SearchableSelect
+                                                options={exclusionAvailableTags.map(tag => ({ value: tag, label: tag }))}
+                                                value={selectedExclusionTag || []}
+                                                onChange={(val) => setSelectedExclusionTag(val)}
+                                                placeholder={isLoadingExclusionTags ? 'Carregando etiquetas...' : '-- Escolha uma ou mais etiquetas --'}
+                                                isMulti={true}
+                                                colorClass="focus-within:ring-red-500/20"
+                                            />
                                         </div>
                                     </div>
+                                    {selectedExclusionTag && selectedExclusionTag.length > 1 && (
+                                        <div className="flex flex-col gap-2 p-5 bg-black/30 border border-white/5 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1 text-center">Filtro Condicional</label>
+                                            <div className="flex gap-2 p-1 bg-black/40 rounded-xl max-w-[200px] mx-auto">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExclusionTagMode('OR')}
+                                                    className={`flex-1 py-1.5 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                                        exclusionTagMode === 'OR'
+                                                            ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                                                            : 'text-slate-400 hover:text-white'
+                                                    }`}
+                                                >
+                                                    OU
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExclusionTagMode('AND')}
+                                                    className={`flex-1 py-1.5 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                                        exclusionTagMode === 'AND'
+                                                            ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                                                            : 'text-slate-400 hover:text-white'
+                                                    }`}
+                                                >
+                                                    E
+                                                </button>
+                                            </div>
+                                            <p className="text-[8px] text-slate-500 font-bold uppercase mt-1 text-center">
+                                                {exclusionTagMode === 'OR'
+                                                    ? 'OU: Exclui contatos que possuem pelo menos uma das etiquetas.'
+                                                    : 'E: Exclui apenas contatos que possuem todas as etiquetas selecionadas.'}
+                                            </p>
+                                        </div>
+                                    )}
                                     <button
                                         onClick={loadExclusionContactsByTag}
-                                        disabled={!selectedExclusionTag || isWorking}
+                                        disabled={!selectedExclusionTag || selectedExclusionTag.length === 0 || isWorking}
                                         className="w-full py-5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                                     >
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
@@ -145,7 +179,12 @@ const ExclusionListManager = ({
                         {exclusionList.length > 0 && (
                             <div className="pt-8 space-y-4 border-t border-white/5">
                                 <div className="flex items-center justify-between px-2">
-                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Base de Exclusão</h4>
+                                    <div className="flex items-center gap-3">
+                                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Base de Exclusão</h4>
+                                        <span className="px-2.5 py-1 bg-red-500/10 text-red-400 rounded-lg text-[9px] font-black border border-red-500/10">
+                                            {exclusionList.length} contatos
+                                        </span>
+                                    </div>
                                     <button
                                         onClick={add55ToLoadedExclusionList}
                                         className="flex items-center gap-2 px-4 py-2 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/10 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"

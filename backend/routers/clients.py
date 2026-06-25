@@ -21,6 +21,8 @@ class ClientResponse(BaseModel):
     name: str
     is_active: bool
     created_at: datetime
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
     
     class Config:
         from_attributes = True

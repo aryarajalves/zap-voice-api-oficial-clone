@@ -9,7 +9,7 @@ from rabbitmq_client import rabbitmq
 router = APIRouter()
 
 @router.get("/{trigger_id}", response_model=schemas.ScheduledTrigger, summary="Obter detalhes de um disparo específico")
-def get_trigger(
+async def get_trigger(
     trigger_id: int,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
@@ -32,6 +32,15 @@ def get_trigger(
     
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo não encontrado ou sem permissão.")
+
+    # Reconciliar estatísticas dinamicamente antes de retornar os detalhes do disparo
+    from services.triggers_service import reconcile_trigger_stats_logic
+    try:
+        await reconcile_trigger_stats_logic(trigger.id, client_id, db)
+    except Exception:
+        pass
+
+    db.refresh(trigger)
 
     # Sobrescrever ou instanciar o funil a partir do snapshot para manter fidelidade histórica
     if trigger.funnel_snapshot:
@@ -157,7 +166,7 @@ def get_trigger(
     return trigger
 
 @router.get("", response_model=schemas.TriggerListResponse, summary="Listar Disparos e Agendamentos")
-def list_triggers(
+async def list_triggers(
     skip: int = 0, 
     limit: int = 100, 
     funnel_name: Optional[str] = None,
@@ -256,6 +265,18 @@ def list_triggers(
         funnel_names = {f.id: f.name for f in funnels}
 
     for trigger in triggers:
+        # Reconciliar as estatísticas para que os contadores no banco reflitam a realidade de contatos únicos deduplicados (e fila)
+        from services.triggers_service import reconcile_trigger_stats_logic
+        try:
+            # Sendo list_triggers uma função assíncrona (async def), damos await diretamente na corrotina,
+            # eliminando problemas de concorrência ou nest_asyncio
+            await reconcile_trigger_stats_logic(trigger.id, client_id, db)
+        except Exception as e:
+            pass
+        
+        # Recarregar trigger após a transação de reconciliação
+        db.refresh(trigger)
+
         if trigger.sent_as is None and trigger.messages:
             first_msg = min(trigger.messages, key=lambda m: m.id)
             if first_msg.message_type:
@@ -271,6 +292,33 @@ def list_triggers(
             models.ScheduledTrigger.skip_block_check == True
         ).count()
         
+        # Calcular queue_count dinamicamente baseado nos contatos pendentes da fila do WhatsApp (em lote)
+        # de forma deduplicada por telefone idêntica ao modal do frontend
+        try:
+            # Buscar todos os triggers filhos (se aplicável) ou o próprio trigger
+            child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger.id).all()]
+            all_ids = [trigger.id] + child_ids
+            if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted']:
+                trigger.queue_count = 0
+            elif trigger.is_bulk:
+                from sqlalchemy import func as sqlfunc
+                subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(models.MessageStatus.trigger_id.in_(all_ids)).group_by(models.MessageStatus.phone_number).subquery()
+                trigger.queue_count = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.id.in_(subq),
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count()
+            else:
+                trigger.queue_count = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.trigger_id.in_(all_ids),
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count()
+        except Exception as e:
+            trigger.queue_count = 0
+
         # Buscar follow-up filho associado
         followup = db.query(models.ScheduledTrigger).filter(
             models.ScheduledTrigger.parent_id == trigger.id,

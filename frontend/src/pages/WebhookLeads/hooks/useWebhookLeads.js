@@ -70,7 +70,9 @@ export function useWebhookLeads(activeClient) {
   const [search, setSearch] = useState('');
   const [eventType, setEventType] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
-  const [availableFilters, setAvailableFilters] = useState({ event_types: [], product_names: [], tags: [] });
+  const [importedByClientId, setImportedByClientId] = useState('');
+  const [origin, setOrigin] = useState('');
+  const [availableFilters, setAvailableFilters] = useState({ event_types: [], product_names: [], tags: [], imported_by_clients: [] });
 
   // Filtros de data
   const [datePreset, setDatePreset] = useState(''); // 'last7', 'last14', 'last30', 'this_month', 'last_month', 'custom', ou YYYY-MM
@@ -103,6 +105,8 @@ export function useWebhookLeads(activeClient) {
     const currentDatePreset = overrides.datePreset !== undefined ? overrides.datePreset : datePreset;
     const currentCustomFrom = overrides.customDateFrom !== undefined ? overrides.customDateFrom : customDateFrom;
     const currentCustomTo = overrides.customDateTo !== undefined ? overrides.customDateTo : customDateTo;
+    const currentImportedBy = overrides.importedByClientId !== undefined ? overrides.importedByClientId : importedByClientId;
+    const currentOrigin = overrides.origin !== undefined ? overrides.origin : origin;
 
     const { from, to } = resolveDateRange(currentDatePreset, currentCustomFrom, currentCustomTo);
 
@@ -111,6 +115,8 @@ export function useWebhookLeads(activeClient) {
       let url = `${API_URL}/leads?skip=${currentPage * limit}&limit=${limit}`;
       if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
       if (currentEventType) url += `&event_type=${encodeURIComponent(currentEventType)}`;
+      if (currentImportedBy) url += `&imported_by_client_id=${currentImportedBy}`;
+      if (currentOrigin) url += `&origin=${encodeURIComponent(currentOrigin)}`;
       if (currentTags && currentTags.length > 0) {
         currentTags.forEach(t => {
           url += `&tag=${encodeURIComponent(t)}`;
@@ -131,7 +137,7 @@ export function useWebhookLeads(activeClient) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo]);
+  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin]);
 
   const fetchFilters = useCallback(async () => {
     if (!activeClient?.id) return;
@@ -155,7 +161,7 @@ export function useWebhookLeads(activeClient) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo]);
+  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId]);
 
   const lastSearch = useRef('');
 
@@ -323,6 +329,8 @@ export function useWebhookLeads(activeClient) {
   return {
     leads, total, loading, page, setPage, limit, setLimit,
     search, setSearch, eventType, setEventType, selectedTags, setSelectedTags, availableFilters,
+    importedByClientId, setImportedByClientId,
+    origin, setOrigin,
     // Filtros de data
     datePreset, setDatePreset: handleSetDatePreset,
     customDateFrom, setCustomDateFrom: handleSetCustomDateFrom,

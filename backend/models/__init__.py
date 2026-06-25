@@ -1,5 +1,6 @@
 from .base import user_clients, Base
 from .auth import User
+from .project import Project
 from .client import Client, AppConfig, BlockedContact, ContactWindow, RestingContact
 from .funnel import Funnel, WebhookConfig, WebhookEvent
 from .invitation import UserInvitation, invitation_clients
@@ -22,12 +23,14 @@ from .trigger import (
     RoundRobinState,
     HotLead
 )
+from .uploaded_media import UploadedMedia
 
 # This allows importing all models from the models package
 __all__ = [
     "Base",
     "user_clients",
     "User",
+    "Project",
     "Client",
     "AppConfig",
     "BlockedContact",
@@ -56,6 +59,6 @@ __all__ = [
     "HotLead",
     "BackupConfig",
     "BackupMetadata",
-    "ContactImportHistory"
+    "ContactImportHistory",
+    "UploadedMedia"
 ]
-

@@ -1,11 +1,13 @@
-
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { VAR_OPTIONS } from '../utils';
+import { FiSearch, FiTag, FiChevronDown, FiX } from 'react-icons/fi';
 
 const TagSelector = ({
-    selectedTag,
-    setSelectedTag,
-    availableTags,
+    selectedTags = [],
+    setSelectedTags,
+    tagMode = 'OR',
+    setTagMode,
+    availableTags = [],
     isLoadingTags,
     templateVariables,
     tagVariables,
@@ -15,30 +17,173 @@ const TagSelector = ({
     loadContactsByTag,
     isProcessing
 }) => {
+    const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+    const [tagSearch, setTagSearch] = useState('');
+    const tagDropdownRef = useRef(null);
+    const tagSearchRef = useRef(null);
+
+    useEffect(() => {
+        function handleTagClickOutside(e) {
+            if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target)) {
+                setTagDropdownOpen(false);
+                setTagSearch('');
+            }
+        }
+        if (tagDropdownOpen) {
+            document.addEventListener('mousedown', handleTagClickOutside);
+            setTimeout(() => tagSearchRef.current?.focus(), 50);
+        }
+        return () => document.removeEventListener('mousedown', handleTagClickOutside);
+    }, [tagDropdownOpen]);
+
+    const handleToggleTag = (tag) => {
+        setSelectedTags(prev =>
+            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+    };
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="p-8 bg-slate-800/20 border border-white/5 rounded-3xl space-y-6">
                 <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Selecione a Etiqueta Interna</label>
-                    <div className="relative group/tag-select">
-                        <select
-                            className="w-full p-4 pl-5 bg-black/40 border border-white/10 rounded-2xl focus:border-emerald-500/50 outline-none transition-all text-white font-bold"
-                            value={selectedTag}
-                            onChange={(e) => setSelectedTag(e.target.value)}
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Selecione as Etiquetas Internas</label>
+                    <div className="relative" ref={tagDropdownRef}>
+                        <button
+                            type="button"
+                            onClick={() => !isLoadingTags && setTagDropdownOpen(o => !o)}
                             disabled={isLoadingTags}
+                            className={`w-full flex items-center justify-between gap-2 p-4 pl-5 rounded-2xl text-sm font-bold border transition-all outline-none bg-black/40 border-white/10 text-white hover:border-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
-                            <option value="">{isLoadingTags ? 'Carregando etiquetas...' : '-- Escolha uma etiqueta --'}</option>
-                            {availableTags.map(tag => (
-                                <option key={tag} value={tag} className="bg-slate-900">{tag}</option>
-                            ))}
-                        </select>
-                        {isLoadingTags && (
-                            <div className="absolute right-12 top-1/2 -translate-y-1/2">
-                                <div className="w-4 h-4 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+                            <span className="flex items-center gap-2 truncate">
+                                <FiTag size={16} className="text-emerald-400 flex-shrink-0" />
+                                <span className="truncate">
+                                    {selectedTags.length > 0
+                                        ? (selectedTags.length === 1 
+                                            ? selectedTags[0] 
+                                            : `${selectedTags[0]} +${selectedTags.length - 1}`)
+                                        : (isLoadingTags ? 'Carregando etiquetas...' : '-- Escolha as etiquetas --')
+                                    }
+                                </span>
+                            </span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                {isLoadingTags && (
+                                    <div className="w-4 h-4 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+                                )}
+                                <FiChevronDown
+                                    size={16}
+                                    className={`text-slate-400 transition-transform duration-200 ${tagDropdownOpen ? 'rotate-180' : ''}`}
+                                />
+                            </div>
+                        </button>
+
+                        {/* Dropdown de etiquetas com busca e multi-seleção */}
+                        {tagDropdownOpen && (
+                            <div
+                                className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                            >
+                                {/* Header com campo de busca */}
+                                <div className="p-3 border-b border-white/5 bg-slate-900/50">
+                                    <div className="relative">
+                                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                        <input
+                                            ref={tagSearchRef}
+                                            type="text"
+                                            placeholder="Buscar etiqueta..."
+                                            value={tagSearch}
+                                            onChange={(e) => setTagSearch(e.target.value)}
+                                            className="w-full pl-9 pr-8 py-2 bg-black/30 border border-white/5 rounded-xl text-xs text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-bold"
+                                        />
+                                        {tagSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setTagSearch('')}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                                            >
+                                                <FiX size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Lista de etiquetas filtradas */}
+                                <div className="max-h-60 overflow-y-auto p-2 space-y-0.5 premium-scrollbar">
+                                    {availableTags
+                                        ?.filter(tag => !tagSearch || tag.toLowerCase().includes(tagSearch.toLowerCase()))
+                                        .map(tag => {
+                                            const isSelected = selectedTags.includes(tag);
+                                            return (
+                                                <button
+                                                    key={tag}
+                                                    type="button"
+                                                    onClick={() => handleToggleTag(tag)}
+                                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors truncate
+                                                        ${isSelected
+                                                            ? 'bg-emerald-500/10 text-emerald-400'
+                                                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                                        }`}
+                                                    title={tag}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => {}} // Tratado no clique do botão pai
+                                                        className="rounded text-emerald-500 focus:ring-emerald-500 border-white/10 bg-black/20"
+                                                    />
+                                                    <span className="truncate">{tag}</span>
+                                                </button>
+                                            );
+                                        })
+                                    }
+
+                                    {/* Sem resultados */}
+                                    {availableTags?.filter(tag =>
+                                        tag.toLowerCase().includes(tagSearch.toLowerCase())
+                                    ).length === 0 && (
+                                        <p className="text-center text-xs text-slate-500 py-4 font-bold">
+                                            Nenhuma etiqueta encontrada
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* Filtro Condicional (E / OU) */}
+                {selectedTags.length > 1 && (
+                    <div className="flex flex-col gap-2 p-5 bg-black/30 border border-white/5 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Filtro Condicional</label>
+                        <div className="flex gap-2 p-1 bg-black/40 rounded-xl max-w-[200px]">
+                            <button
+                                type="button"
+                                onClick={() => setTagMode('OR')}
+                                className={`flex-1 py-1.5 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                    tagMode === 'OR'
+                                        ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                OU
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setTagMode('AND')}
+                                className={`flex-1 py-1.5 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                    tagMode === 'AND'
+                                        ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                E
+                            </button>
+                        </div>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase mt-1">
+                            {tagMode === 'OR'
+                                ? 'OU: Retorna contatos que possuem pelo menos uma das etiquetas.'
+                                : 'E: Retorna apenas contatos que possuem todas as etiquetas selecionadas.'}
+                        </p>
+                    </div>
+                )}
                 
                 {/* Template Variables for Tags */}
                 {templateVariables && templateVariables.length > 0 && (
@@ -112,7 +257,7 @@ const TagSelector = ({
                 
                 <button
                     onClick={loadContactsByTag}
-                    disabled={!selectedTag || isProcessing}
+                    disabled={selectedTags.length === 0 || isProcessing}
                     className="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-900/20 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
@@ -121,7 +266,7 @@ const TagSelector = ({
                 
                 <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl text-center">
                     <p className="text-[10px] text-blue-300/60 font-bold uppercase tracking-widest leading-relaxed">
-                        💡 Isso buscará todos os contatos capturados via Webhook ou Importação que possuem esta etiqueta interna.
+                        💡 Isso buscará todos os contatos capturados via Webhook ou Importação que possuem as etiquetas selecionadas.
                     </p>
                 </div>
             </div>

@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.0.7)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.1.0)
 
-Este repositório contém as novas regras de validação rígida de parâmetros de templates no Disparo em Massa (Bulk Sender) para evitar envios em branco, suporte e destaque de Testes de Escala (`SCALE_TEST`) com rotulação especial e badge de Simulação, além de novas funcionalidades de fluxo de funil aprimoradas, detalhamento dinâmico do histórico de automações em tempo real com contagem inteligente e reconciliação robusta de interações/cliques de contatos, duplicação de funis para facilitar clonagem de fluxos e visualização granular da Fila da Meta.
+Versão com integração nativa ao **MinIO** (armazenamento de objetos S3-compatível) para gerenciamento de mídias, biblioteca de mídias com paginação, renomeação, thumbnail de vídeos e exclusão, além de melhorias de UX no Bulk Sender (scroll automático ao topo ao avançar entre steps), validação rígida de parâmetros de templates, suporte a Testes de Escala (`SCALE_TEST`) com rotulação especial e badge de Simulação, e duplicação de funis.
 
 O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
 
@@ -99,4 +99,5 @@ O ecossistema subirá os seguintes contêineres:
 *   **Web App (Frontend)**: rodando na porta `5176`.
 *   **RabbitMQ**: rodando na porta `5679` (porta interna `5672`) e painel em `15679`.
 *   **PostgreSQL**: rodando na porta `5435` (porta interna `5432`).
+*   **MinIO**: rodando na porta `9000` (API S3) e painel em `9001`.
 *   **Cloudflare Tunnel**: configurado para expor a API local para a internet de forma segura.

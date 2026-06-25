@@ -74,7 +74,7 @@ const HttpRequestNode = ({ id, data }) => {
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-emerald-500 min-w-[320px]">
             {/* Porta de Entrada */}
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-emerald-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-emerald-500" />
             
             <NodeHeader
                 label="Requisição HTTP (Webhook)"

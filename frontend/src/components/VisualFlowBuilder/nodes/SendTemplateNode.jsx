@@ -130,7 +130,7 @@ const SendTemplateNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-emerald-500 min-w-[290px] max-w-[320px] transition-all hover:shadow-2xl">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-emerald-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-emerald-500" />
             
             <NodeHeader
                 label="Disparo de Template (Meta)"
@@ -289,11 +289,11 @@ const SendTemplateNode = ({ id, data }) => {
             <div className="flex justify-between mt-4 pt-2 border-t border-gray-100 dark:border-gray-700 relative">
                 <div className="flex flex-col items-start relative">
                     <span className="text-[9px] font-black text-emerald-500 uppercase tracking-wider select-none">✔ Sucesso</span>
-                    <Handle type="source" position={Position.Bottom} id="success" className="w-3 h-3 bg-emerald-500 !left-6" />
+                    <Handle type="source" position={Position.Right} id="success" className="w-3 h-3 bg-emerald-500 !left-6" />
                 </div>
                 <div className="flex flex-col items-end relative">
                     <span className="text-[9px] font-black text-rose-500 uppercase tracking-wider select-none">❌ Falha</span>
-                    <Handle type="source" position={Position.Bottom} id="fail" className="w-3 h-3 bg-rose-500 !left-auto !right-6" />
+                    <Handle type="source" position={Position.Right} id="fail" className="w-3 h-3 bg-rose-500 !left-auto !right-6" />
                 </div>
             </div>
         </div>

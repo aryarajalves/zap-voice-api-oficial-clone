@@ -1,8 +1,10 @@
 import React from 'react';
 import { FiEyeOff, FiEye, FiCopy, FiImage, FiUpload, FiShield, FiAlertCircle, FiZap } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
-import { resolveUrl, WEBHOOK_BASE_URL, META_APP_ID, META_CONFIG_ID } from '../../../config';
+import { resolveUrl, WEBHOOK_BASE_URL, META_APP_ID, META_CONFIG_ID, API_URL } from '../../../config';
 import { handleMetaEmbeddedSignupHelper } from '../utils/whatsAppTabUtils';
+import { useClient } from '../../../contexts/ClientContext';
+import { fetchWithAuth } from '../../../AuthContext';
 
 const tierMapping = {
     'TIER_250': '250',
@@ -10,6 +12,36 @@ const tierMapping = {
     'TIER_10K': '10.000',
     'TIER_100K': '100.000',
     'TIER_UNLIMITED': 'Ilimitado'
+};
+
+const getQualityRatingBadge = (rating) => {
+    if (!rating) return null;
+    const r = rating.toUpperCase();
+    
+    let label = 'Desconhecida';
+    let colorClass = 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+    let dotColor = 'bg-gray-400';
+    
+    if (r === 'HIGH' || r === 'GREEN' || r === 'GOOD') {
+        label = 'Alta';
+        colorClass = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-500/20';
+        dotColor = 'bg-green-500';
+    } else if (r === 'MEDIUM' || r === 'YELLOW' || r === 'AVERAGE') {
+        label = 'Média';
+        colorClass = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border border-yellow-500/20';
+        dotColor = 'bg-yellow-500';
+    } else if (r === 'LOW' || r === 'RED' || r === 'BAD') {
+        label = 'Baixa';
+        colorClass = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-500/20';
+        dotColor = 'bg-red-500';
+    }
+    
+    return (
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold ${colorClass}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+            Qualidade: {label}
+        </span>
+    );
 };
 
 const WhatsAppTab = ({
@@ -23,6 +55,50 @@ const WhatsAppTab = ({
     const metaWebhookUrl = isUniqueWebhook && formData.WA_WEBHOOK_SLUG
         ? `${baseWebhookUrl}/api/meta/${formData.WA_WEBHOOK_SLUG}`.replace('http://', 'https://')
         : `${baseWebhookUrl}/api/meta`.replace('http://', 'https://');
+
+    const { activeClient } = useClient();
+    const [testingToken, setTestingToken] = React.useState(false);
+    const [testResult, setTestResult] = React.useState(null);
+
+    const handleTestToken = async () => {
+        const token = formData.WA_ACCESS_TOKEN;
+        const phoneId = formData.WA_PHONE_NUMBER_ID;
+
+        if (!token || !phoneId) {
+            toast.error("Por favor, preencha o Access Token e o Phone Number ID antes de testar.");
+            return;
+        }
+
+        setTestingToken(true);
+        setTestResult(null);
+        const loadingToast = toast.loading("Testando token na Meta...");
+
+        try {
+            const res = await fetchWithAuth(`${API_URL}/whatsapp/test-token`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    access_token: token,
+                    phone_number_id: phoneId
+                })
+            }, activeClient?.id);
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setTestResult({ success: true, message: data.message });
+                toast.success("Conexão com a Meta realizada com sucesso!");
+            } else {
+                setTestResult({ success: false, message: data.detail || "Falha ao testar token." });
+                toast.error("Erro ao validar token com a Meta.");
+            }
+        } catch (err) {
+            console.error(err);
+            setTestResult({ success: false, message: "Erro de conexão ao testar token." });
+            toast.error("Erro de conexão.");
+        } finally {
+            setTestingToken(false);
+            toast.dismiss(loadingToast);
+        }
+    };
 
     React.useEffect(() => {
         if (!META_APP_ID) return;
@@ -151,7 +227,32 @@ const WhatsAppTab = ({
                                     </button>
                                 </div>
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Token gerado no painel de desenvolvedor da Meta.</p>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Token gerado no painel de desenvolvedor da Meta.</p>
+                                <button
+                                    type="button"
+                                    onClick={handleTestToken}
+                                    disabled={testingToken}
+                                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5 nodrag"
+                                >
+                                    {testingToken ? (
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                    ) : (
+                                        <FiZap size={13} />
+                                    )}
+                                    Testar Conexão
+                                </button>
+                            </div>
+                            
+                            {testResult && (
+                                <div className={`mt-2 p-2.5 rounded-lg text-xs border ${
+                                    testResult.success 
+                                        ? 'bg-green-500/5 border-green-500/20 text-green-600 dark:text-green-400' 
+                                        : 'bg-red-500/5 border-red-500/20 text-red-600 dark:text-red-400'
+                                }`}>
+                                    <strong>Resultado:</strong> {testResult.message}
+                                </div>
+                            )}
                         </div>
                         
                         <div className="space-y-1 md:col-span-2 relative">
@@ -289,21 +390,32 @@ const WhatsAppTab = ({
                                         Esta imagem e frase são exibidas para seus clientes no WhatsApp.
                                     </p>
 
-                                    {whatsappProfile?.display_phone_number && (
-                                        <div className="flex items-center gap-2 mb-3 bg-white/50 dark:bg-black/20 w-fit px-2 py-1 rounded-md border border-gray-100 dark:border-gray-800">
-                                            <span className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                                                {whatsappProfile.display_phone_number.startsWith('+') ? whatsappProfile.display_phone_number : `+${whatsappProfile.display_phone_number}`}
+                                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                                        {whatsappProfile?.display_phone_number && (
+                                            <div className="flex items-center gap-2 bg-white/50 dark:bg-black/20 w-fit px-2 py-1 rounded-md border border-gray-100 dark:border-gray-800">
+                                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                                                    {whatsappProfile.display_phone_number.startsWith('+') ? whatsappProfile.display_phone_number : `+${whatsappProfile.display_phone_number}`}
+                                                </span>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => copyToClipboard(whatsappProfile.display_phone_number, "Número")}
+                                                    className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+                                                    title="Copiar Número"
+                                                >
+                                                    <FiCopy size={14} />
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {whatsappProfile?.quality_rating && getQualityRatingBadge(whatsappProfile.quality_rating)}
+
+                                        {whatsappProfile?.messaging_limit_tier && (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-500/20">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                Limite 24h: {tierMapping[whatsappProfile.messaging_limit_tier] || '250'} envios
                                             </span>
-                                            <button 
-                                                type="button"
-                                                onClick={() => copyToClipboard(whatsappProfile.display_phone_number, "Número")}
-                                                className="p-1 text-gray-400 hover:text-green-600 transition-colors"
-                                                title="Copiar Número"
-                                            >
-                                                <FiCopy size={14} />
-                                            </button>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                     
                                     <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm active:scale-95">
                                         <FiUpload size={14} />

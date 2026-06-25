@@ -77,7 +77,7 @@ const BusinessHoursNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-indigo-500 min-w-[340px] backdrop-blur-md">
-            {!data.isStart && <Handle type="target" position={Position.Top} className="w-3 h-3 bg-indigo-500" />}
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />}
             
             <NodeHeader
                 label="Horário Comercial"

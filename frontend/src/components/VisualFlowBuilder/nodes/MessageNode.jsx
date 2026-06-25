@@ -40,7 +40,7 @@ const MessageNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-blue-500 min-w-[300px] transition-all hover:shadow-2xl hover:border-blue-400">
-            {!data.isStart && <Handle type="target" position={Position.Top} className="w-3 h-3 bg-blue-500" />}
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-blue-500" />}
             <NodeHeader
                 label="Mensagem"
                 icon={FiMessageSquare}
@@ -195,7 +195,7 @@ const MessageNode = ({ id, data }) => {
                 </div>
             )}
 
-            <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-blue-500" />
+            <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-blue-500" />
 
             {/* Modal de Texto Expandido */}
             {activeModalKey && (

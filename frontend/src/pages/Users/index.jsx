@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { API_URL, WS_URL } from '../../config';
-import { fetchWithAuth } from '../../AuthContext';
+import { fetchWithAuth, useAuth } from '../../AuthContext';
 import { toast } from 'react-hot-toast';
-import { FiUserPlus, FiUsers, FiLink } from 'react-icons/fi';
+import { FiUserPlus, FiUsers, FiLink, FiFolder } from 'react-icons/fi';
 import ConfirmModal from '../../components/ConfirmModal';
 import UserFilters from './components/UserFilters';
 import UserTable from './components/UserTable';
 import UserModal from './components/UserModal';
 import InvitationTable from './components/InvitationTable';
+import ProjectManager from './components/ProjectManager';
 
 const Users = () => {
+    const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [clients, setClients] = useState([]);
     const [invitations, setInvitations] = useState([]);
@@ -292,12 +294,14 @@ const Users = () => {
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h2 className="text-xl font-bold text-gray-800 dark:text-white">Gestão de Usuários</h2>
-                <button
-                    onClick={handleOpenCreateModal}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium w-full sm:w-auto justify-center"
-                >
-                    <FiUserPlus /> Novo Usuário
-                </button>
+                {activeTab === 'users' && (
+                    <button
+                        onClick={handleOpenCreateModal}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium w-full sm:w-auto justify-center"
+                    >
+                        <FiUserPlus /> Novo Usuário
+                    </button>
+                )}
             </div>
 
             {/* Abas Premium */}
@@ -322,6 +326,18 @@ const Users = () => {
                 >
                     <FiLink size={16} /> Links de Convite
                 </button>
+                {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+                    <button
+                        onClick={() => setActiveTab('projects')}
+                        className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all ${
+                            activeTab === 'projects'
+                                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                        }`}
+                    >
+                        <FiFolder size={16} /> Projetos
+                    </button>
+                )}
             </div>
 
             {activeTab === 'users' ? (
@@ -345,7 +361,7 @@ const Users = () => {
                         />
                     )}
                 </>
-            ) : (
+            ) : activeTab === 'invitations' ? (
                 <>
                     {loading ? (
                         <div className="flex justify-center py-12">
@@ -359,6 +375,12 @@ const Users = () => {
                         />
                     )}
                 </>
+            ) : (
+                <ProjectManager 
+                    currentUser={currentUser} 
+                    clients={clients} 
+                    fetchClients={fetchClients} 
+                />
             )}
 
             <UserModal 

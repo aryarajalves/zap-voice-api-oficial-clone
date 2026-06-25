@@ -5,6 +5,7 @@ import { ClientProvider } from './contexts/ClientContext';
 import ProtectedRoute from './ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import InviteRegister from './pages/InviteRegister';
+import PublicTutorial from './pages/PublicTutorial';
 import { Toaster } from 'react-hot-toast';
 
 /**
@@ -17,6 +18,7 @@ import { Toaster } from 'react-hot-toast';
 function App() {
   const pathname = window.location.pathname;
   const isInvite = pathname.startsWith('/invite/');
+  const isHelp = pathname.startsWith('/help/');
 
   if (isInvite) {
     const token = pathname.replace('/invite/', '').split('/')[0];
@@ -24,6 +26,16 @@ function App() {
       <ThemeProvider>
         <Toaster position="top-right" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
         <InviteRegister token={token} />
+      </ThemeProvider>
+    );
+  }
+
+  if (isHelp) {
+    const slug = pathname.replace('/help/', '').split('/')[0];
+    return (
+      <ThemeProvider>
+        <Toaster position="top-right" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
+        <PublicTutorial slug={slug} />
       </ThemeProvider>
     );
   }

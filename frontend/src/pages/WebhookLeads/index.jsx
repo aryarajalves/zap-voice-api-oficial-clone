@@ -29,12 +29,14 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
       />
 
       <Filters 
-
-
         search={logic.search}
         setSearch={logic.setSearch}
         selectedTags={logic.selectedTags}
         setSelectedTags={logic.setSelectedTags}
+        importedByClientId={logic.importedByClientId}
+        setImportedByClientId={logic.setImportedByClientId}
+        origin={logic.origin}
+        setOrigin={logic.setOrigin}
         availableFilters={logic.availableFilters}
         total={logic.total}
         datePreset={logic.datePreset}

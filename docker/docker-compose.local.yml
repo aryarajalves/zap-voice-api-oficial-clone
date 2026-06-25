@@ -73,7 +73,7 @@ services:
       - /app/node_modules
     ports:
       - "5176:5173" # Alterado para 5176 para evitar conflitos
-    command: ["sh", "-c", "echo \"window._env_ = { API_URL: '$$VITE_API_URL', WS_URL: '$$VITE_WS_URL', META_APP_ID: '$$META_APP_ID', META_CONFIG_ID: '$$META_CONFIG_ID', WEBHOOK_BASE_URL: '$$WEBHOOK_BASE_URL' };\" > public/env-config.js && npm install && npm run dev"]
+    command: ["sh", "-c", "echo \"window._env_ = { API_URL: '$$VITE_API_URL', WS_URL: '$$VITE_WS_URL', META_APP_ID: '$$META_APP_ID', META_CONFIG_ID: '$$META_CONFIG_ID', WEBHOOK_BASE_URL: '$$WEBHOOK_BASE_URL', SIMULATE_MESSAGING: '$$SIMULATE_MESSAGING' };\" > public/env-config.js && npm install && npm run dev"]
     networks:
       - zapvoice_net
     env_file:
@@ -110,6 +110,21 @@ services:
     networks:
       - zapvoice_net
 
+  zapvoice-minio:
+    image: minio/minio:RELEASE.2023-05-18T00-05-36Z
+    container_name: zapvoice-minio
+    ports:
+      - "9005:9000"
+      - "9006:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - zapvoice_minio_data:/data
+    networks:
+      - zapvoice_net
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: zapvoice_cloudflare
@@ -127,8 +142,10 @@ volumes:
   zapvoice_db_data:
     name: docker_zapvoice_db_data
     external: true
-
+  zapvoice_minio_data:
+    name: docker_zapvoice_minio_data_v2
 
 networks:
   zapvoice_net:
     driver: bridge
+

@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import models
 from database import Base
-from routers.leads import bulk_create_leads, BulkCreateLeadsRequest, LeadBatchItem
+from routers.leads_import import bulk_create_leads, BulkCreateLeadsRequest, LeadBatchItem
 
 TEST_DATABASE_URL = "sqlite://"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})

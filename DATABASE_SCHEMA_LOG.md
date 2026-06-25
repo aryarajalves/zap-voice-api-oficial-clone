@@ -68,6 +68,8 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 07/06/2026 | Snapshot de Fidelidade do Funil no Disparo | `scheduled_triggers` | `funnel_snapshot` (JSONB) | `backend/scripts/add_funnel_snapshot_column.py` |
 | 09/06/2026 | Automação de Comentários no Instagram | `instagram_automations` | Tabela nova completa | `backend/scripts/create_instagram_automations_table.py` |
 | 15/06/2026 | Histórico de Execução do Instagram | `instagram_logs` | Tabela nova completa | `backend/scripts/create_instagram_logs_table.py` |
+| 25/06/2026 | Histórico de Mídias Enviadas (MinIO/S3) | `uploaded_medias` | Tabela nova completa | `backend/scripts/database/create_uploaded_medias_table.py` |
+
 
 
 

@@ -117,6 +117,7 @@ export const AuthProvider = ({ children }) => {
 
                 const data = await response.json();
                 localStorage.setItem('token', data.access_token);
+                localStorage.setItem('currentView', 'bulk_sender');
 
                 // Buscar dados do usuário
                 await fetchCurrentUser(data.access_token);
@@ -161,6 +162,7 @@ export const AuthProvider = ({ children }) => {
 
     const logout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('currentView');
         setUser(null);
     };
 

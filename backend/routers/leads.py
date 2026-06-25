@@ -1,409 +1,28 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks, Query
-from sqlalchemy.orm import Session
-from chatwoot_client import ChatwootClient
-from sqlalchemy import or_, desc, cast, String
-from typing import Optional, List, Dict
-from datetime import datetime, timedelta, timezone
-from pydantic import BaseModel
-import models, schemas
-import json
-import pandas as pd
+import re
+import csv
 import io
-from core.deps import get_current_user, get_db
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_, desc, cast, String
+from typing import Optional, List
+from datetime import datetime, timedelta
+from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+
+import models
+import schemas
+from core.deps import get_db
 from core.permissions import require_premium, require_user, require_feature
 from services.leads import upsert_webhook_lead
+from core.logger import setup_logger
+
+logger = setup_logger("LeadsRouter")
 
 class BulkDeleteRequest(BaseModel):
     lead_ids: List[int]
 
-class LeadBatchItem(BaseModel):
-    phone: str
-    name: Optional[str] = None
-    email: Optional[str] = None
-    tags: Optional[str] = None
-
-class BulkCreateLeadsRequest(BaseModel):
-    leads: List[LeadBatchItem]
-    tags: Optional[str] = None
-
-class RenameImportRequest(BaseModel):
-    filename: str
-
 router = APIRouter()
-
-
-
-@router.post("/leads/bulk", summary="Salvar múltiplos leads em massa")
-def bulk_create_leads(
-    request: BulkCreateLeadsRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_premium)
-):
-    """
-    Cria ou atualiza uma lista de leads.
-    """
-    client_id = x_client_id if x_client_id else current_user.client_id
-    success_count = 0
-    
-    for item in request.leads:
-        # Limpeza de telefone
-        import re
-        clean_phone = re.sub(r"\D", "", item.phone)
-        if not clean_phone or len(clean_phone) < 8:
-            continue
-            
-        lead_data = {
-            "phone": clean_phone,
-            "name": item.name,
-            "email": item.email,
-            "event_type": "bulk_manual_import"
-        }
-        
-        # Mesclar tags globais do request com as tags especificas do contato se existirem
-        merged_tags = []
-        if request.tags:
-            merged_tags.extend([t.strip() for t in request.tags.split(",") if t.strip()])
-        if item.tags:
-            merged_tags.extend([t.strip() for t in item.tags.split(",") if t.strip()])
-            
-        final_tags = ", ".join(list(set(merged_tags))) if merged_tags else None
-        
-        upsert_webhook_lead(
-            db=db,
-            client_id=client_id,
-            platform="manual_bulk",
-            parsed_data=lead_data,
-            tag=final_tags
-        )
-        success_count += 1
-        
-    db.commit()
-    return {"status": "success", "imported": success_count}
-
-@router.post("/leads/import/preview", summary="Pré-visualizar arquivo de importação")
-async def preview_import(
-    file: UploadFile = File(...),
-    current_user: models.User = Depends(require_premium)
-):
-    """
-    Lê o arquivo e retorna os nomes das colunas e as primeiras 3 linhas.
-    """
-    try:
-        content = await file.read()
-        file_extension = file.filename.split('.')[-1].lower()
-        
-        # Carregar o DataFrame completo para saber os totais reais
-        if file_extension == 'csv':
-            try:
-                df_full = pd.read_csv(io.BytesIO(content), sep=';')
-                if len(df_full.columns) <= 1:
-                    df_full = pd.read_csv(io.BytesIO(content), sep=',')
-            except:
-                df_full = pd.read_csv(io.BytesIO(content))
-        elif file_extension in ['xls', 'xlsx']:
-            df_full = pd.read_excel(io.BytesIO(content))
-        else:
-            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado. Use CSV ou Excel.")
-
-        # Obter primeiras 3 linhas para a prévia
-        df_preview = df_full.head(3)
-
-        # Converter para strings para o JSON
-        headers = df_full.columns.tolist()
-        preview_rows = df_preview.fillna("").values.tolist()
-        
-        # Tentar detectar coluna de telefone para contagem de únicos
-        total_rows = len(df_full)
-        unique_contacts = total_rows
-        
-        phone_cols = [h for h in headers if any(word in h.lower() for word in ['tel', 'phone', 'zap', 'whats', 'cel'])]
-        if phone_cols:
-            p_col = phone_cols[0]
-            # Limpar e pegar últimos 8 dígitos para contar únicos "reais"
-            def get_last_8(p):
-                clean = "".join(filter(str.isdigit, str(p)))
-                return clean[-8:] if len(clean) >= 8 else clean
-            
-            # Remover duplicatas com base no telefone limpo
-            temp_clean = df_full[p_col].apply(clean_p) if 'clean_p' in locals() else df_full[p_col].apply(lambda p: "".join(filter(str.isdigit, str(p))) if not pd.isna(p) else "")
-            temp_clean = temp_clean[temp_clean.str.len() >= 8]
-            unique_contacts = temp_clean.str[-8:].nunique()
-
-        return {
-            "headers": headers,
-            "preview_rows": preview_rows,
-            "filename": file.filename,
-            "total_rows": total_rows,
-            "unique_rows": unique_contacts
-        }
-    except Exception as e:
-        import traceback
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
-
-def process_import_in_bg(import_id: int, content: bytes, file_extension: str, mapping_dict: dict, client_id: int):
-    # Obtain a fresh database session
-    from database import SessionLocal
-    from datetime import datetime, timezone
-    import models
-    import pandas as pd
-    import io
-    from services.leads import upsert_webhook_lead
-    
-    db = SessionLocal()
-    try:
-        # Get the history record
-        history = db.query(models.ContactImportHistory).filter(models.ContactImportHistory.id == import_id).first()
-        if not history:
-            return
-        
-        history.status = "processing"
-        db.commit()
-
-        # Load dataframe
-        if file_extension == 'csv':
-            try:
-                df = pd.read_csv(io.BytesIO(content), sep=';')
-                if len(df.columns) <= 1:
-                    df = pd.read_csv(io.BytesIO(content), sep=',')
-            except:
-                df = pd.read_csv(io.BytesIO(content))
-        elif file_extension in ['xls', 'xlsx']:
-            df = pd.read_excel(io.BytesIO(content))
-        else:
-            history.status = "failed"
-            history.error_message = "Formato de arquivo não suportado."
-            db.commit()
-            return
-
-        # Normalização: Garantir que as colunas mapeadas existem no DF
-        for key, col_name in mapping_dict.items():
-            if col_name and col_name not in df.columns:
-                history.status = "failed"
-                history.error_message = f"Coluna '{col_name}' não encontrada no arquivo."
-                db.commit()
-                return
-
-        # --- Pré-processamento e Deduplicação ---
-        def clean_p(p):
-            if pd.isna(p): return ""
-            return "".join(filter(str.isdigit, str(p)))
-
-        phone_col = mapping_dict.get('phone')
-        df['temp_clean_phone'] = df[phone_col].apply(clean_p)
-        df = df[df['temp_clean_phone'].str.len() >= 8]
-        df['temp_last_8'] = df['temp_clean_phone'].str[-8:]
-        df = df.drop_duplicates(subset=['temp_last_8'], keep='first')
-
-        total_rows = len(df)
-        history.total_rows = total_rows
-        db.commit()
-
-        success_count = 0
-        error_count = 0
-
-        # Iterar e importar em lotes para atualizar o status de progresso
-        for idx, (_, row) in enumerate(df.iterrows()):
-            try:
-                clean_phone = row['temp_clean_phone']
-                
-                lead_data = {
-                    "phone": clean_phone,
-                    "name": str(row.get(mapping_dict.get('name'))) if mapping_dict.get('name') else None,
-                    "email": str(row.get(mapping_dict.get('email'))) if mapping_dict.get('email') else None,
-                    "event_type": "importado"
-                }
-                
-                for k, v in lead_data.items():
-                    if str(v).strip().lower() == 'nan':
-                        lead_data[k] = None
-
-                tag = str(row.get(mapping_dict.get('tags'))) if mapping_dict.get('tags') else None
-                if str(tag).strip().lower() == 'nan':
-                    tag = None
-
-                tags_to_remove = str(row.get(mapping_dict.get('remove_tags'))) if mapping_dict.get('remove_tags') else None
-                if str(tags_to_remove).strip().lower() == 'nan':
-                    tags_to_remove = None
-
-                upsert_webhook_lead(db, client_id, "importação", lead_data, tag=tag, tags_to_remove=tags_to_remove)
-                success_count += 1
-            except Exception as e:
-                print(f"Erro ao importar linha: {e}")
-                error_count += 1
-            
-            # Periodicamente commitar e salvar progresso
-            if idx % 100 == 0 or idx == total_rows - 1:
-                history.imported_rows = success_count
-                history.error_rows = error_count
-                db.commit()
-
-        history.status = "completed"
-        history.imported_rows = success_count
-        history.error_rows = error_count
-        history.updated_at = datetime.now(timezone.utc)  # Marca exatamente quando a importação terminou
-        db.commit()
-
-    except Exception as e:
-        import traceback
-        print(traceback.format_exc())
-        try:
-            history = db.query(models.ContactImportHistory).filter(models.ContactImportHistory.id == import_id).first()
-            if history:
-                history.status = "failed"
-                history.error_message = str(e)
-                history.updated_at = datetime.now(timezone.utc)  # Marca exatamente quando a falha ocorreu
-                db.commit()
-        except:
-            pass
-    finally:
-        db.close()
-
-@router.post("/leads/import/execute", summary="Executar importação de contatos")
-async def execute_import(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    mapping: str = Form(...), # JSON string do mapeamento
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_premium)
-):
-    """
-    Inicia o processamento do arquivo aplicando o mapeamento de colunas em segundo plano.
-    """
-    try:
-        client_id = x_client_id if x_client_id else current_user.client_id
-        mapping_dict = json.loads(mapping) # {"name": "col_a", "phone": "col_b", ...}
-        
-        content = await file.read()
-        file_extension = file.filename.split('.')[-1].lower()
-        
-        # Criar registro de histórico inicial
-        history = models.ContactImportHistory(
-            client_id=client_id,
-            filename=file.filename,
-            status="pending",
-            total_rows=0,
-            imported_rows=0,
-            error_rows=0
-        )
-        db.add(history)
-        db.commit()
-        db.refresh(history)
-        
-        # Adicionar background task
-        background_tasks.add_task(
-            process_import_in_bg,
-            history.id,
-            content,
-            file_extension,
-            mapping_dict,
-            client_id
-        )
-        
-        return {
-            "status": "success",
-            "import_id": history.id,
-            "message": "Importação iniciada em segundo plano."
-        }
-    except Exception as e:
-        import traceback
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Erro ao iniciar importação: {str(e)}")
-
-@router.get("/leads/import/history", summary="Obter histórico de importações")
-def get_import_history(
-    skip: int = 0,
-    limit: int = 20,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_premium)
-):
-    """
-    Retorna o histórico de importações paginado para o cliente ativo.
-    """
-    client_id = x_client_id if x_client_id else current_user.client_id
-    query = db.query(models.ContactImportHistory).filter(
-        models.ContactImportHistory.client_id == client_id
-    )
-    total = query.count()
-    imports = query.order_by(desc(models.ContactImportHistory.created_at)).offset(skip).limit(limit).all()
-    return {
-        "items": imports,
-        "total": total
-    }
-
-
-@router.put("/leads/import/{import_id}/rename", summary="Renomear lista importada")
-def rename_import(
-    import_id: int,
-    request: RenameImportRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_premium)
-):
-    """
-    Renomeia o arquivo ou lista importada.
-    """
-    client_id = x_client_id if x_client_id else current_user.client_id
-    history = db.query(models.ContactImportHistory).filter(
-        models.ContactImportHistory.id == import_id,
-        models.ContactImportHistory.client_id == client_id
-    ).first()
-    
-    if not history:
-        raise HTTPException(status_code=404, detail="Importação não encontrada.")
-        
-    history.filename = request.filename
-    db.commit()
-    db.refresh(history)
-    return history
-
-
-class DeleteImportsRequest(BaseModel):
-    import_ids: List[int]
-
-
-@router.delete("/leads/import/{import_id}", summary="Deletar uma importação do histórico")
-def delete_import(
-    import_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_premium)
-):
-    client_id = x_client_id if x_client_id else current_user.client_id
-    history = db.query(models.ContactImportHistory).filter(
-        models.ContactImportHistory.id == import_id,
-        models.ContactImportHistory.client_id == client_id
-    ).first()
-    
-    if not history:
-        raise HTTPException(status_code=404, detail="Importação não encontrada.")
-        
-    db.delete(history)
-    db.commit()
-    return {"status": "success", "message": "Importação deletada com sucesso."}
-
-
-@router.post("/leads/import/bulk-delete", summary="Deletar múltiplas importações do histórico")
-def bulk_delete_imports(
-    request: DeleteImportsRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_premium)
-):
-    client_id = x_client_id if x_client_id else current_user.client_id
-    deleted_count = db.query(models.ContactImportHistory).filter(
-        models.ContactImportHistory.id.in_(request.import_ids),
-        models.ContactImportHistory.client_id == client_id
-    ).delete(synchronize_session=False)
-    
-    db.commit()
-    return {"status": "success", "message": f"{deleted_count} importações deletadas com sucesso."}
-
-
 
 @router.post("/leads", response_model=schemas.WebhookLead, summary="Criar ou atualizar lead manualmente")
 def create_manual_lead(
@@ -419,7 +38,6 @@ def create_manual_lead(
     client_id = x_client_id if x_client_id else current_user.client_id
     
     # Limpeza de telefone (apenas números)
-    import re
     clean_phone = re.sub(r"\D", "", lead_in.phone)
     
     if not clean_phone or len(clean_phone) < 8:
@@ -456,7 +74,6 @@ def clean_corrupted_tags(
     Remove tags corrompidas (com barras, aspas escapadas, JSON malformado) de todos os leads do cliente.
     Mantém apenas tags simples compostas por letras, números, hífens e underscores.
     """
-    import re
     client_id = x_client_id if x_client_id else current_user.client_id
 
     leads = db.query(models.WebhookLead).filter(
@@ -487,7 +104,6 @@ def clean_corrupted_tags(
         "message": f"{cleaned_count} tag(s) corrompida(s) removida(s) de {leads_affected} contato(s)."
     }
 
-
 @router.get("/leads", response_model=schemas.WebhookLeadListResponse, summary="Listar Leads de Webhooks")
 def list_leads(
     skip: int = 0,
@@ -496,8 +112,11 @@ def list_leads(
     event_type: Optional[str] = None,
     product_name: Optional[str] = None,
     tag: Optional[List[str]] = Query(None),
+    tag_mode: Optional[str] = "OR",
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    imported_by_client_id: Optional[int] = None,
+    origin: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("leads"))
@@ -507,7 +126,36 @@ def list_leads(
     Filtros de data (date_from, date_to) aceitam formato ISO 8601 (YYYY-MM-DD).
     """
     client_id = x_client_id if x_client_id else current_user.client_id
-    query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
+    
+    # Verificar se o cliente tem um projeto associado
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    if proj_id:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.project_id == proj_id)
+    else:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
+
+    if imported_by_client_id:
+        query = query.filter(
+            or_(
+                models.WebhookLead.imported_by_client_id == imported_by_client_id,
+                # Se imported_by_client_id não estiver preenchido no contato mas o client_id do contato coincidir com o pesquisado
+                and_(models.WebhookLead.imported_by_client_id.is_(None), models.WebhookLead.client_id == imported_by_client_id)
+            )
+        )
+    if origin == "manual":
+        query = query.filter(models.WebhookLead.platform == "manual")
+    elif origin == "manual_bulk":
+        query = query.filter(models.WebhookLead.platform == "manual_bulk")
+    elif origin == "webhook":
+        query = query.filter(
+            and_(
+                models.WebhookLead.platform != "manual",
+                models.WebhookLead.platform != "manual_bulk",
+                models.WebhookLead.platform != "chatwoot_import"
+            )
+        )
 
     if search:
         search_filter = or_(
@@ -532,7 +180,10 @@ def list_leads(
                 parts = [x.strip() for x in t.split(",") if x.strip()]
                 tags_filter.extend(parts)
         if tags_filter:
-            query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+            if tag_mode == "AND":
+                query = query.filter(and_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+            else:
+                query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
 
     # Filtro de data de criação do contato
     if date_from:
@@ -551,9 +202,9 @@ def list_leads(
             raise HTTPException(status_code=400, detail="Formato de date_to inválido. Use YYYY-MM-DD.")
 
     total = query.count()
-    items = query.order_by(desc(models.WebhookLead.last_event_at)).offset(skip).limit(limit).all()
+    items = query.order_by(desc(models.WebhookLead.updated_at)).offset(skip).limit(limit).all()
 
-    # Dynamic Redirection Logic — usando a sessão já existente para não abrir nova conexão com o banco
+    # Dynamic Redirection Logic
     try:
         chatwoot_url_config = db.query(models.AppConfig).filter(
             models.AppConfig.client_id == client_id,
@@ -568,14 +219,21 @@ def list_leads(
         raw_url = os.getenv("CHATWOOT_API_URL", "https://app.chatwoot.com")
 
     # Extrair apenas o host base (remover /api/v1 ou /api se houver)
-    import re as _re
-    base_url = _re.sub(r"/api(/v\d+)?/?$", "", raw_url.strip().rstrip("/"))
+    base_url = re.sub(r"/api(/v\d+)?/?$", "", raw_url.strip().rstrip("/"))
 
     for item in items:
         if item.chatwoot_conversation_id and item.chatwoot_account_id:
             item.chatwoot_url = f"{base_url}/app/accounts/{item.chatwoot_account_id}/conversations/{item.chatwoot_conversation_id}"
         else:
             item.chatwoot_url = None
+        
+        # Enriquecer o nome do cliente criador do lead
+        if item.imported_by_client:
+            item.imported_by_name = item.imported_by_client.name
+        elif item.client:
+            item.imported_by_name = item.client.name
+        else:
+            item.imported_by_name = None
 
     return {
         "items": items,
@@ -594,17 +252,26 @@ def get_lead_filters(
     """
     client_id = x_client_id if x_client_id else current_user.client_id
     
+    # Verificar se o cliente tem um projeto associado
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    if proj_id:
+        filter_clause = models.WebhookLead.project_id == proj_id
+    else:
+        filter_clause = models.WebhookLead.client_id == client_id
+
     event_types = db.query(models.WebhookLead.last_event_type)\
-        .filter(models.WebhookLead.client_id == client_id)\
+        .filter(filter_clause)\
         .distinct().all()
     
     product_names = db.query(models.WebhookLead.product_name)\
-        .filter(models.WebhookLead.client_id == client_id)\
+        .filter(filter_clause)\
         .distinct().all()
     
     # Get all tags, split them and return unique sorted list
     all_tags_raw = db.query(models.WebhookLead.tags)\
-        .filter(models.WebhookLead.client_id == client_id, models.WebhookLead.tags != None)\
+        .filter(filter_clause, models.WebhookLead.tags != None)\
         .distinct().all()
     
     unique_tags = set()
@@ -629,10 +296,35 @@ def get_lead_filters(
         except Exception as e:
             logger.error(f"Erro ao buscar tags mapeadas em get_lead_filters: {e}")
 
+    # Buscar a lista de clientes únicos que importaram ou criaram esses leads para preencher o filtro do frontend
+    imported_by_clients = []
+    try:
+        # Clientes baseados no imported_by_client_id
+        imported_by_ids = db.query(models.WebhookLead.imported_by_client_id)\
+            .filter(filter_clause, models.WebhookLead.imported_by_client_id.isnot(None))\
+            .distinct().all()
+        ids = [c[0] for c in imported_by_ids]
+        
+        # Também buscar o client_id principal dos leads caso imported_by_client_id seja nulo
+        main_client_ids = db.query(models.WebhookLead.client_id)\
+            .filter(filter_clause, models.WebhookLead.imported_by_client_id.is_(None))\
+            .distinct().all()
+        for mc in main_client_ids:
+            if mc[0] not in ids:
+                ids.append(mc[0])
+
+        if ids:
+            clients = db.query(models.Client.id, models.Client.name)\
+                .filter(models.Client.id.in_(ids)).all()
+            imported_by_clients = [{"id": c.id, "name": c.name} for c in clients]
+    except Exception as e:
+        logger.error(f"Erro ao buscar clientes criadores de leads: {e}")
+
     return {
         "event_types": [e[0] for e in event_types if e[0]],
         "product_names": [p[0] for p in product_names if p[0]],
-        "tags": sorted(list(unique_tags))
+        "tags": sorted(list(unique_tags)),
+        "imported_by_clients": imported_by_clients
     }
 
 @router.get("/leads/custom-variables", summary="Obter chaves de variáveis customizadas dos contatos")
@@ -677,6 +369,7 @@ def export_leads_csv(
     ids: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    origin: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
@@ -685,9 +378,6 @@ def export_leads_csv(
     Gera um arquivo CSV com os leads filtrados.
     Se 'ids' for informado (ex: ids=1,2,3), exporta apenas esses leads.
     """
-    import csv, io
-    from fastapi.responses import StreamingResponse
-
     client_id = x_client_id if x_client_id else current_user.client_id
     query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
 
@@ -707,6 +397,19 @@ def export_leads_csv(
 
         if event_type:
             query = query.filter(models.WebhookLead.last_event_type == event_type)
+
+        if origin == "manual":
+            query = query.filter(models.WebhookLead.platform == "manual")
+        elif origin == "manual_bulk":
+            query = query.filter(models.WebhookLead.platform == "manual_bulk")
+        elif origin == "webhook":
+            query = query.filter(
+                and_(
+                    models.WebhookLead.platform != "manual",
+                    models.WebhookLead.platform != "manual_bulk",
+                    models.WebhookLead.platform != "chatwoot_import"
+                )
+            )
 
         if product_name:
             query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
@@ -737,7 +440,7 @@ def export_leads_csv(
             except ValueError:
                 pass
 
-    leads = query.order_by(desc(models.WebhookLead.last_event_at)).all()
+    leads = query.order_by(desc(models.WebhookLead.updated_at)).all()
 
     output = io.StringIO()
     output.write('\ufeff') # Add BOM for Excel compatibility
@@ -843,7 +546,6 @@ def update_lead(
     
     # Limpeza de telefone se fornecido na atualização
     if "phone" in update_data and update_data["phone"]:
-        import re
         update_data["phone"] = re.sub(r"\D", "", update_data["phone"])
         if len(update_data["phone"]) < 8:
              raise HTTPException(status_code=400, detail="Telefone inválido para atualização.")
@@ -907,113 +609,3 @@ def toggle_lead_lock(
     db.refresh(lead)
     status = "bloqueado" if lead.is_locked else "desbloqueado"
     return {"status": "success", "is_locked": lead.is_locked, "message": f"Contato {status} com sucesso."}
-
-from core.logger import setup_logger
-logger = setup_logger("LeadsRouter")
-
-class ChatwootImportRequest(BaseModel):
-    label: str
-    import_all_tags: bool = False
-    custom_tag: Optional[str] = None
-
-async def run_chatwoot_import(
-    client_id: int,
-    label: str,
-    import_all_tags: bool,
-    custom_tag: Optional[str]
-):
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        logger.info(f"🚀 Iniciando importação assíncrona do Chatwoot. Client ID: {client_id}, Label: {label}")
-        chatwoot = ChatwootClient(client_id=client_id)
-        
-        # 1. Fetch contacts from Chatwoot by label
-        contacts = await chatwoot.get_contacts_by_label(label)
-        if not contacts:
-            logger.info(f"ℹ️ Nenhum contato encontrado no Chatwoot com a etiqueta '{label}'")
-            return
-            
-        logger.info(f"📦 Encontrados {len(contacts)} contatos no Chatwoot com a etiqueta '{label}'")
-        
-        imported_count = 0
-        for c in contacts:
-            try:
-                phone_raw = c.get("phone_number") or c.get("custom_attributes", {}).get("phone_number")
-                if not phone_raw:
-                    continue
-                    
-                import re
-                clean_phone = re.sub(r"\D", "", str(phone_raw))
-                if len(clean_phone) < 8:
-                    continue
-                    
-                name = c.get("name")
-                email = c.get("email")
-                
-                # Determine tags to apply
-                tags_list = []
-                
-                # Option 1: Import all existing tags from the Chatwoot contact
-                if import_all_tags:
-                    # Get contact labels from Chatwoot client
-                    c_labels = await chatwoot.get_contact_labels(c.get("id"))
-                    if c_labels:
-                        tags_list.extend(c_labels)
-                        
-                # Option 2: Always add the filter label
-                tags_list.append(label)
-                
-                # Option 3: Add custom tag if provided
-                if custom_tag:
-                    tags_list.append(custom_tag)
-                
-                # Remove duplicates and format
-                unique_tags = list(set([t.strip() for t in tags_list if t and t.strip()]))
-                final_tags = ", ".join(unique_tags) if unique_tags else None
-                
-                lead_data = {
-                    "phone": clean_phone,
-                    "name": name,
-                    "email": email,
-                    "event_type": "importado_chatwoot"
-                }
-                
-                upsert_webhook_lead(
-                    db=db,
-                    client_id=client_id,
-                    platform="chatwoot_import",
-                    parsed_data=lead_data,
-                    tag=final_tags
-                )
-                imported_count += 1
-            except Exception as row_error:
-                logger.error(f"❌ Erro ao importar contato individual do Chatwoot: {row_error}")
-                continue
-                
-        db.commit()
-        logger.info(f"✅ Importação do Chatwoot concluída com sucesso! {imported_count} contatos importados/atualizados.")
-    except Exception as e:
-        logger.error(f"❌ Erro crítico no processo de importação do Chatwoot: {e}")
-    finally:
-        db.close()
-
-@router.post("/leads/import/chatwoot", summary="Importar contatos de uma etiqueta do Chatwoot")
-async def import_leads_from_chatwoot(
-    request: ChatwootImportRequest,
-    background_tasks: BackgroundTasks,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(require_premium)
-):
-    client_id = x_client_id if x_client_id else current_user.client_id
-    background_tasks.add_task(
-        run_chatwoot_import,
-        client_id=client_id,
-        label=request.label,
-        import_all_tags=request.import_all_tags,
-        custom_tag=request.custom_tag
-    )
-    return {
-        "status": "success",
-        "message": f"A importação dos contatos com a etiqueta '{request.label}' foi iniciada em segundo plano."
-    }

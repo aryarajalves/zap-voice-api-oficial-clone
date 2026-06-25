@@ -12,7 +12,22 @@ from core.logger import setup_logger
 
 logger = setup_logger("InstagramRouter")
 
-router = APIRouter(prefix="/instagram", tags=["Instagram Automation"])
+def require_instagram_enabled():
+    """
+    Verifica se a integração com o Instagram está ativa no ambiente (.env).
+    """
+    enabled = os.getenv("ENABLE_INSTAGRAM", "true").lower() == "true"
+    if not enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="O acesso ao Instagram está desabilitado neste servidor."
+        )
+
+router = APIRouter(
+    prefix="/instagram",
+    tags=["Instagram Automation"],
+    dependencies=[Depends(require_instagram_enabled)]
+)
 
 # --- Pydantic Schemas ---
 class InstagramAutomationBase(BaseModel):

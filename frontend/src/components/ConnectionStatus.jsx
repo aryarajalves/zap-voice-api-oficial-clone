@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 import { fetchWithAuth, useAuth } from '../AuthContext';
 import { useClient } from '../contexts/ClientContext';
-import { FiCheckCircle, FiXCircle, FiLoader, FiServer, FiMessageSquare, FiDatabase, FiCloud } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiLoader, FiServer, FiMessageSquare, FiDatabase, FiCloud, FiInstagram } from 'react-icons/fi';
 
 const ConnectionStatus = ({ refreshKey }) => {
     const { activeClient } = useClient();
@@ -64,6 +64,10 @@ const ConnectionStatus = ({ refreshKey }) => {
             <ServiceItem icon={FiMessageSquare} label="WhatsApp" state={status?.whatsapp || (error ? 'offline' : null)} />
             <ServiceItem icon={FiServer} label="Chatwoot" state={status?.chatwoot || (error ? 'offline' : null)} />
             <ServiceItem icon={FiDatabase} label="RabbitMQ" state={status?.rabbitmq || (error ? 'offline' : null)} />
+            {(window._env_?.ENABLE_INSTAGRAM !== 'false' && window._env_?.ENABLE_INSTAGRAM !== false) && (
+                <ServiceItem icon={FiInstagram} label="Instagram" state={status?.instagram || (error ? 'offline' : null)} />
+            )}
+
 
             <button
                 onClick={checkHealth}

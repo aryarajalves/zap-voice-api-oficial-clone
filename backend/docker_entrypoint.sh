@@ -16,18 +16,21 @@ API_URL="${API_URL:-${VITE_API_URL:-http://localhost:8000}}"
 WS_URL="${WS_URL:-${VITE_WS_URL:-ws://localhost:8000}}"
 META_APP_ID="${META_APP_ID:-${VITE_META_APP_ID}}"
 META_CONFIG_ID="${META_CONFIG_ID:-${VITE_META_CONFIG_ID}}"
+ENABLE_INSTAGRAM="${ENABLE_INSTAGRAM:-true}"
 
 # Remove aspas se existirem (comum ao copiar do .env para o Portainer)
 API_URL=$(echo "$API_URL" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
 WS_URL=$(echo "$WS_URL" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
 META_APP_ID=$(echo "$META_APP_ID" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
 META_CONFIG_ID=$(echo "$META_CONFIG_ID" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
+ENABLE_INSTAGRAM=$(echo "$ENABLE_INSTAGRAM" | sed 's/^"//;s/"$//' | sed "s/^'//;s/'$//" )
 
 echo "🔧 Gerando configuração dinâmica para o Frontend..."
 echo "  API_URL: $API_URL"
 echo "  WS_URL: $WS_URL"
 echo "  META_APP_ID: $META_APP_ID"
 echo "  META_CONFIG_ID: $META_CONFIG_ID"
+echo "  ENABLE_INSTAGRAM: $ENABLE_INSTAGRAM"
 
 # Cria o arquivo env-config.js
 cat <<EOF > "$CONFIG_FILE"
@@ -35,7 +38,8 @@ window._env_ = {
   API_URL: "$API_URL",
   WS_URL: "$WS_URL",
   META_APP_ID: "$META_APP_ID",
-  META_CONFIG_ID: "$META_CONFIG_ID"
+  META_CONFIG_ID: "$META_CONFIG_ID",
+  ENABLE_INSTAGRAM: "$ENABLE_INSTAGRAM"
 };
 EOF
 

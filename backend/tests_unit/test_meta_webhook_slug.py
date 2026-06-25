@@ -188,3 +188,62 @@ def test_settings_update_slug_own_slug_allowed(client, db_session):
 
     resp = client.post("/api/settings/", json={"settings": {"WA_WEBHOOK_SLUG": "meu_proprio_slug_own"}}, headers=headers)
     assert resp.status_code == 200
+
+
+def test_meta_webhook_duplicate_lock_per_slug(client, db_session):
+    """Garante que payloads idênticos enviados a slugs diferentes NÃO sejam bloqueados, mas o mesmo slug bloqueia duplicados."""
+    # Criar cliente 1 e config de slug
+    c1 = Client(name="ClientLock1")
+    db_session.add(c1)
+    db_session.commit()
+    db_session.refresh(c1)
+    cfg_slug1 = AppConfig(client_id=c1.id, key="WA_WEBHOOK_SLUG", value="slug_lock_1")
+    db_session.add(cfg_slug1)
+
+    # Criar cliente 2 e config de slug
+    c2 = Client(name="ClientLock2")
+    db_session.add(c2)
+    db_session.commit()
+    db_session.refresh(c2)
+    cfg_slug2 = AppConfig(client_id=c2.id, key="WA_WEBHOOK_SLUG", value="slug_lock_2")
+    db_session.add(cfg_slug2)
+    db_session.commit()
+
+    payload = {
+        "object": "whatsapp_business_account",
+        "entry": [{
+            "id": "123456",
+            "changes": [{
+                "field": "messages",
+                "value": {
+                    "messaging_product": "whatsapp",
+                    "metadata": {"display_phone_number": "5511999999999", "phone_number_id": "100000000"},
+                    "messages": [{
+                        "from": "5511999999999",
+                        "id": "wamid.HBgNNTUxMTk5OTk5OTk5OQ==",
+                        "timestamp": "1672531199",
+                        "text": {"body": "Teste lock"},
+                        "type": "text"
+                    }]
+                }
+            }]
+        }]
+    }
+
+    from rabbitmq_client import rabbitmq
+    with patch.object(rabbitmq, "publish", new_callable=AsyncMock) as mock_publish:
+        # Envio 1 para slug_lock_1 -> deve processar (200 OK)
+        resp1 = client.post("/api/meta/slug_lock_1", json=payload)
+        assert resp1.status_code == 200
+        assert resp1.json() == {"status": "ok"}
+        
+        # Envio 2 (idêntico) para slug_lock_2 -> deve processar também, sem ser bloqueado pela trava do slug 1
+        resp2 = client.post("/api/meta/slug_lock_2", json=payload)
+        assert resp2.status_code == 200
+        assert resp2.json() == {"status": "ok"}
+
+        # Envio 3 (idêntico) para o mesmo slug_lock_1 -> deve ser bloqueado/ignorado pela trava do slug 1
+        resp3 = client.post("/api/meta/slug_lock_1", json=payload)
+        assert resp3.status_code == 200
+        assert resp3.json() == {"status": "ignored", "reason": "duplicate_meta_payload"}
+

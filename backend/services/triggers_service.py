@@ -54,16 +54,26 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         has_interaction = any((ms.is_interaction or ms.interaction_counted) and ms.failure_reason != 'BLOCKED_VIA_BUTTON' for ms in group)
         has_sent = any(ms.status in ['sent', 'delivered', 'read', 'interaction'] or ms.delivered_counted or ms.read_counted for ms in group)
         has_delivered = any(ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction for ms in group)
-        has_read = any(ms.status in ['read', 'interaction'] or ms.read_counted or ms.is_interaction for ms in group)
+        # Mensagens só são lidas (read) se tiverem status 'read' ou 'interaction' (ou sinalização de read_counted), 
+        # sem nunca incluir status 'sent' que ainda está na fila
+        has_read = any(ms.status in ['read', 'interaction'] or ms.read_counted or (ms.is_interaction and not ms.status == 'sent') for ms in group)
         has_blocked = any(ms.failure_reason == 'BLOCKED_VIA_BUTTON' for ms in group)
         
         # Para falha, consideramos se o status final (mais recente) do contato é falha
         latest_ms = max(group, key=lambda x: x.id)
         has_failed = latest_ms.status == 'failed' and latest_ms.failure_reason != 'BLOCKED_VIA_BUTTON'
 
-        if has_sent: sent += 1
-        if has_delivered: delivered += 1
-        if has_read: read += 1
+        # Um contato que está estritamente na fila (status 'sent' sem ter sido entregue nem lido)
+        # deve inflar o total de enviados (sent), mas NÃO de entregues (delivered) ou lidos (read)
+        is_strictly_in_queue = any(ms.status == 'sent' and not ms.delivered_counted and not ms.read_counted for ms in group)
+        
+        if is_strictly_in_queue:
+            if has_sent: sent += 1
+        else:
+            if has_sent: sent += 1
+            if has_delivered: delivered += 1
+            if has_read: read += 1
+        
         if has_blocked: blocked += 1
         elif has_failed: failed += 1
         if has_interaction: interactions += 1
@@ -89,13 +99,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     trigger.total_cost = total_cost
     trigger.total_paid_templates = paid_templates
     
-    # Marcar registros como contados
-    for ms in all_statuses:
-        if ms.status in ['delivered', 'read']:
-            ms.delivered_counted = True
-        if ms.status == 'read' or ms.is_interaction:
-            ms.read_counted = True
-
+    # Não alterar os registros no banco durante o cálculo para evitar efeitos colaterais
     db.commit()
     db.refresh(trigger)
     

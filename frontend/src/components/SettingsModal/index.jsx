@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiX, FiSettings, FiBook, FiLayout, FiMessageSquare, FiSmartphone, FiCpu } from 'react-icons/fi';
+import { FiX, FiSettings, FiBook, FiLayout, FiMessageSquare, FiSmartphone, FiCpu, FiInstagram } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 
 // Hooks
@@ -14,6 +14,7 @@ import DeleteAgentModal from './components/DeleteAgentModal';
 import GeralTab from './tabs/GeralTab';
 import ChatwootTab from './tabs/ChatwootTab';
 import WhatsAppTab from './tabs/WhatsAppTab';
+import InstagramTab from './tabs/InstagramTab';
 import AdvancedTab from './tabs/AdvancedTab';
 
 const SettingsModal = ({ isOpen, onClose, onSaved }) => {
@@ -84,6 +85,13 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                                         onClick={logic.setActiveTab} 
                                         label="WhatsApp" 
                                         icon={FiSmartphone} 
+                                    />
+                                    <TabButton 
+                                        id="instagram" 
+                                        activeTab={logic.activeTab} 
+                                        onClick={logic.setActiveTab} 
+                                        label="Instagram" 
+                                        icon={FiInstagram} 
                                     />
                                     <TabButton 
                                         id="advanced" 
@@ -168,6 +176,16 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                                     isRegisteringWa={logic.isRegisteringWa}
                                     handleWhatsAppLogoUpload={logic.handleWhatsAppLogoUpload}
                                     isUpdatingWaLogo={logic.isUpdatingWaLogo}
+                                />
+                            )}
+
+                            {logic.activeTab === 'instagram' && (
+                                <InstagramTab 
+                                    user={logic.user}
+                                    formData={logic.formData}
+                                    handleChange={logic.handleChange}
+                                    visibleFields={logic.visibleFields}
+                                    handleRevealSetting={logic.handleRevealSetting}
                                 />
                             )}
 

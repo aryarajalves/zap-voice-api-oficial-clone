@@ -11,7 +11,7 @@ from config_loader import get_setting
 router = APIRouter()
 
 @router.get("/{trigger_id}/messages", summary="Listar Mensagens de um Disparo")
-def get_trigger_messages(
+async def get_trigger_messages(
     trigger_id: int,
     status_filter: Optional[str] = None,
     message_type: Optional[str] = None,
@@ -26,6 +26,11 @@ def get_trigger_messages(
     trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id, models.ScheduledTrigger.client_id == client_id).first()
     
     if not trigger: raise HTTPException(status_code=404, detail="Disparo não encontrado")
+    
+    # Reconciliar as estatísticas para garantir que o banco e o modal fiquem sempre idênticos
+    from services.triggers_service import reconcile_trigger_stats_logic
+    await reconcile_trigger_stats_logic(trigger_id, client_id, db)
+    db.refresh(trigger)
         
     child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
     all_trigger_ids = [trigger_id] + child_ids
@@ -36,6 +41,9 @@ def get_trigger_messages(
         base_query = db.query(models.MessageStatus).filter(models.MessageStatus.id.in_(subquery))
     else:
         base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids))
+    
+    # Guardar cópia da query base antes de aplicar filtros específicos para calcular a contagem total correta de cada tab
+    counts_query = base_query
     
     # Extract unique failure reasons from the database for these triggers
     reasons_filter_cond = models.MessageStatus.status == 'failed'
@@ -244,33 +252,58 @@ def get_trigger_messages(
         }
     else:
         # Se for bulk, calcular contadores baseado na query agrupada por telefone para garantir contagens únicas
+        from sqlalchemy import and_
         if trigger.is_bulk:
             counts = {
-                "all": base_query.count(),
-                "sent": base_query.filter(or_(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.read_counted == True)).count(),
-                "delivered": base_query.filter(or_(models.MessageStatus.status.in_(['delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.is_interaction == True)).count(),
-                "read": base_query.filter(or_(models.MessageStatus.status.in_(['read', 'interaction']), models.MessageStatus.is_interaction == True, models.MessageStatus.read_counted == True)).count(),
-                "failed": base_query.filter(models.MessageStatus.status == 'failed', or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON')).count(),
-                "free": base_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
-                "template": base_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
-                "blocked": base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count(),
-                "interaction": base_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True)).count(),
-                "private_note": base_query.filter(models.MessageStatus.private_note_posted == True).count(),
-                "queue": base_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False).count()
+                "all": counts_query.count(),
+                "sent": counts_query.filter(or_(
+                    models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']),
+                    models.MessageStatus.delivered_counted == True,
+                    models.MessageStatus.read_counted == True
+                )).count(),
+                "delivered": counts_query.filter(or_(
+                    models.MessageStatus.status.in_(['delivered', 'read', 'interaction']),
+                    models.MessageStatus.delivered_counted == True,
+                    models.MessageStatus.is_interaction == True
+                )).count(),
+                "read": counts_query.filter(or_(
+                    models.MessageStatus.status.in_(['read', 'interaction']),
+                    models.MessageStatus.read_counted == True,
+                    and_(models.MessageStatus.is_interaction == True, models.MessageStatus.status != 'sent')
+                )).count(),
+                "failed": counts_query.filter(models.MessageStatus.status == 'failed', or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON')).count(),
+                "free": counts_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
+                "template": counts_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
+                "blocked": counts_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count(),
+                "interaction": counts_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True)).count(),
+                "private_note": counts_query.filter(models.MessageStatus.private_note_posted == True).count(),
+                "queue": 0 if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted'] else counts_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False).count()
             }
         else:
             counts = {
                 "all": full_query.count(),
-                "sent": full_query.filter(or_(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.read_counted == True)).count(),
-                "delivered": full_query.filter(or_(models.MessageStatus.status.in_(['delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.is_interaction == True)).count(),
-                "read": full_query.filter(or_(models.MessageStatus.status.in_(['read', 'interaction']), models.MessageStatus.is_interaction == True, models.MessageStatus.read_counted == True)).count(),
+                "sent": full_query.filter(or_(
+                    models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']),
+                    models.MessageStatus.delivered_counted == True,
+                    models.MessageStatus.read_counted == True
+                )).count(),
+                "delivered": full_query.filter(or_(
+                    models.MessageStatus.status.in_(['delivered', 'read', 'interaction']),
+                    models.MessageStatus.delivered_counted == True,
+                    models.MessageStatus.is_interaction == True
+                )).count(),
+                "read": full_query.filter(or_(
+                    models.MessageStatus.status.in_(['read', 'interaction']),
+                    models.MessageStatus.read_counted == True,
+                    and_(models.MessageStatus.is_interaction == True, models.MessageStatus.status != 'sent')
+                )).count(),
                 "failed": full_query.filter(models.MessageStatus.status == 'failed', or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON')).count(),
                 "free": full_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
                 "template": full_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
                 "blocked": full_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count(),
                 "interaction": full_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True)).count(),
                 "private_note": full_query.filter(models.MessageStatus.private_note_posted == True).count(),
-                "queue": full_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False).count()
+                "queue": 0 if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted'] else full_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False).count()
             }
 
     return {"items": serialized_items, "counts": counts, "total": total, "failure_reasons": unique_reasons}

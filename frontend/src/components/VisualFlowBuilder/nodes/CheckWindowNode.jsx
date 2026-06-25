@@ -6,7 +6,7 @@ import NodeHeader from '../components/NodeHeader';
 const CheckWindowNode = ({ id, data }) => {
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-indigo-500 min-w-[280px] max-w-[320px] transition-all hover:shadow-2xl">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-indigo-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
             
             <NodeHeader
                 label="Verificar Janela 24h"
@@ -28,13 +28,13 @@ const CheckWindowNode = ({ id, data }) => {
                     <span className="text-[9px] font-black text-indigo-500 uppercase tracking-wider select-none flex items-center gap-0.5">
                         <FiCheck className="stroke-[3]" /> Aberta
                     </span>
-                    <Handle type="source" position={Position.Bottom} id="open" className="w-3 h-3 bg-indigo-500 !left-6" />
+                    <Handle type="source" position={Position.Right} id="open" className="w-3 h-3 bg-indigo-500 !left-6" />
                 </div>
                 <div className="flex flex-col items-end relative">
                     <span className="text-[9px] font-black text-rose-500 uppercase tracking-wider select-none flex items-center gap-0.5">
                         <FiX className="stroke-[3]" /> Fechada
                     </span>
-                    <Handle type="source" position={Position.Bottom} id="closed" className="w-3 h-3 bg-rose-500 !left-auto !right-6" />
+                    <Handle type="source" position={Position.Right} id="closed" className="w-3 h-3 bg-rose-500 !left-auto !right-6" />
                 </div>
             </div>
         </div>

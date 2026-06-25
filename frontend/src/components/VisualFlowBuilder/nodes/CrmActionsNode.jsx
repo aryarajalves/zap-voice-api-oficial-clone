@@ -98,7 +98,7 @@ const CrmActionsNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-indigo-500 min-w-[280px] transition-all hover:shadow-2xl">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-indigo-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
             
             <NodeHeader
                 label="Ações de CRM"
@@ -285,7 +285,7 @@ const CrmActionsNode = ({ id, data }) => {
                 )}
             </div>
 
-            <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-indigo-500" />
+            <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-indigo-500" />
         </div>
     );
 };

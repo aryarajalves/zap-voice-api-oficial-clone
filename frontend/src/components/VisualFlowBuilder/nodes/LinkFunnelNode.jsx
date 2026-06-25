@@ -20,7 +20,7 @@ const LinkFunnelNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-orange-500 min-w-[240px]">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-orange-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-orange-500" />
             <NodeHeader
                 label="Conectar Funil"
                 icon={FiLink}

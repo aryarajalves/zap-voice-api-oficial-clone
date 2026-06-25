@@ -21,7 +21,11 @@ export const INITIAL_FORM_STATE = {
     AGENT_MEMORY_WEBHOOK_URL: '',
     MANYCHAT_API_KEY: '',
     WA_USE_UNIQUE_WEBHOOK: false,
-    WA_WEBHOOK_SLUG: ''
+    WA_WEBHOOK_SLUG: '',
+    INSTAGRAM_ACCOUNT_ID: '',
+    INSTAGRAM_ACCESS_TOKEN: '',
+    INSTAGRAM_WEBHOOK_SLUG: '',
+    WEBHOOK_BASE_URL: ''
 };
 
 export function useGeneralSettings(activeClient, refreshClients) {

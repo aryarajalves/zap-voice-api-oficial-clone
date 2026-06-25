@@ -38,6 +38,8 @@ const ExecutionStep = ({
     confirmExclusionColumn,
     selectedExclusionTag,
     setSelectedExclusionTag,
+    exclusionTagMode,
+    setExclusionTagMode,
     isLoadingExclusionTags,
     exclusionAvailableTags,
     loadExclusionContactsByTag,
@@ -60,13 +62,66 @@ const ExecutionStep = ({
     setButtonActions,
     funnels,
     selectedTemplate,
-    templates
+    templates,
+    whatsappProfile
 }) => {
+    const [showQualityWarningModal, setShowQualityWarningModal] = React.useState(false);
+
     const categoryInfo = getTemplateCategoryInfo(selectedTemplate, templates || []);
     const estimatedCost = finalContacts.length * categoryInfo.price;
     const formatBRL = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const handleSendWithQualityCheck = () => {
+        // Se a qualidade for MEDIUM ou LOW (ou amarela/vermelha), abrimos o popup
+        const quality = String(whatsappProfile?.quality_rating || '').toUpperCase();
+        if (quality === 'MEDIUM' || quality === 'YELLOW' || quality === 'AVERAGE' || quality === 'LOW' || quality === 'RED' || quality === 'BAD') {
+            setShowQualityWarningModal(true);
+        } else {
+            handleSend();
+        }
+    };
+
+    const confirmSend = () => {
+        setShowQualityWarningModal(false);
+        handleSend();
+    };
+
     return (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-10">
+            {/* Modal de confirmação de qualidade de número */}
+            {showQualityWarningModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-red-500/30 w-full max-w-md rounded-[2rem] p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 text-red-500 mb-4">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                            <h3 className="text-lg font-black uppercase tracking-wider">Aviso de Qualidade Baixa</h3>
+                        </div>
+                        <p className="text-slate-300 text-sm leading-relaxed mb-6">
+                            A qualidade atual deste número no WhatsApp é considerada <b className="text-red-400 uppercase">{whatsappProfile?.quality_rating === 'MEDIUM' ? 'Média' : 'Baixa'}</b>.
+                            Fazer disparos em massa nessas condições aumenta drasticamente os riscos de banimento permanente do seu número pela Meta.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                                onClick={() => setShowQualityWarningModal(false)}
+                                className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all border border-white/5"
+                            >
+                                Cancelar Disparo
+                            </button>
+                            <button
+                                onClick={confirmSend}
+                                className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-950/40"
+                            >
+                                Confirmar e Enviar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Contacts Column */}
             <section className="xl:col-span-3 bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-10 shadow-2xl border border-white/5 h-fit relative group/contacts">
                 <div className="absolute -top-12 -left-12 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full"></div>
@@ -119,6 +174,8 @@ const ExecutionStep = ({
                     confirmExclusionColumn={confirmExclusionColumn}
                     selectedExclusionTag={selectedExclusionTag}
                     setSelectedExclusionTag={setSelectedExclusionTag}
+                    exclusionTagMode={exclusionTagMode}
+                    setExclusionTagMode={setExclusionTagMode}
                     isLoadingExclusionTags={isLoadingExclusionTags}
                     exclusionAvailableTags={exclusionAvailableTags}
                     loadExclusionContactsByTag={loadExclusionContactsByTag}
@@ -138,35 +195,39 @@ const ExecutionStep = ({
 
                 <section className="bg-slate-900/60 backdrop-blur-md rounded-[2.5rem] p-10 shadow-2xl border border-white/5 h-fit relative overflow-hidden group/exec">
                     <div className="absolute -top-12 -right-12 w-32 h-32 bg-emerald-500/5 blur-3xl rounded-full"></div>
+                    <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-teal-500/5 blur-3xl rounded-full"></div>
 
-                    <h2 className="text-2xl font-black text-white flex items-center gap-4 mb-10 relative z-10">
-                        <span className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 shadow-xl shadow-emerald-500/10">04</span>
-                        Configuração de Envio
-                    </h2>
+                    <div className="flex items-center gap-4 mb-10 relative z-10">
+                        <h2 className="text-2xl font-black text-white flex items-center gap-4">
+                            <span className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 shadow-xl shadow-emerald-500/10">03</span>
+                            Opções de Disparo
+                        </h2>
+                    </div>
 
-                    <div className="space-y-8 relative z-10">
-                        <div className="grid grid-cols-2 gap-5">
-                            <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl group/param transition-all hover:bg-slate-800/60">
-                                <label className="block text-[9px] font-black text-slate-600 uppercase mb-3 px-1 tracking-widest group-hover/param:text-emerald-400 transition-colors">Atraso de Envio</label>
-                                <div className="flex items-center gap-3 bg-black/40 p-2.5 rounded-2xl border border-white/5 shadow-inner">
+                    <div className="space-y-6 relative z-10">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Intervalo</label>
+                                <div className="bg-black/40 p-2.5 rounded-2xl border border-white/5 shadow-inner flex items-center gap-2">
                                     <input 
                                         type="number" 
-                                        className="flex-1 bg-transparent outline-none font-black text-xl text-white tabular-nums w-12"
+                                        className="w-full bg-transparent outline-none font-black text-xl text-white tabular-nums"
                                         value={delaySeconds}
                                         onChange={(e) => setDelaySeconds(parseInt(e.target.value))}
                                     />
                                     <select 
-                                        className="bg-slate-700 text-[10px] font-black text-slate-200 outline-none px-3 py-1.5 rounded-xl border border-white/10"
+                                        className="bg-slate-800 text-slate-300 font-bold text-xs rounded-xl px-2 py-1 outline-none border border-white/5"
                                         value={delayUnit}
                                         onChange={(e) => setDelayUnit(e.target.value)}
                                     >
-                                        <option value="seconds">SEG</option>
-                                        <option value="minutes">MIN</option>
+                                        <option value="seconds">Seg</option>
+                                        <option value="minutes">Min</option>
                                     </select>
                                 </div>
                             </div>
-                            <div className="p-5 bg-slate-800/40 border border-white/5 rounded-3xl group/param transition-all hover:bg-slate-800/60">
-                                <label className="block text-[9px] font-black text-slate-600 uppercase mb-3 px-1 tracking-widest group-hover/param:text-emerald-400 transition-colors">Concorrência</label>
+                            
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Concorrência</label>
                                 <div className="bg-black/40 p-2.5 rounded-2xl border border-white/5 shadow-inner flex items-center">
                                     <input 
                                         type="number" 
@@ -196,7 +257,7 @@ const ExecutionStep = ({
 
                         <div className="flex flex-col gap-4 pt-6">
                             <button
-                                onClick={handleSend}
+                                onClick={handleSendWithQualityCheck}
                                 disabled={isSending}
                                 className={`w-full py-7 rounded-[2rem] font-black text-xl uppercase tracking-[0.4em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-6 group relative overflow-hidden ${isSending ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-emerald-900/40'}`}
                             >
@@ -230,7 +291,7 @@ const ExecutionStep = ({
                         Dica de Segurança
                     </h4>
                     <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                        Recomendamos um intervalo de pelo menos <b className="text-white">15 segundos</b> para disparos acima de 500 contatos para evitar o bloqueio preventivo da Meta.
+                        Recomendamos um intervalo de pelo menos <b className="text-white">15 seconds</b> para disparos acima de 500 contatos para evitar o bloqueio preventivo da Meta.
                     </p>
                 </div>
             </div>

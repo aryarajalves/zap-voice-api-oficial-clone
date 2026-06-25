@@ -16,7 +16,10 @@ class ContactImportHistory(Base):
     error_rows = Column(Integer, default=0)
     error_message = Column(String, nullable=True)
     
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     client = relationship("Client")
+    project = relationship("Project")

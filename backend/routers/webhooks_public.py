@@ -99,7 +99,26 @@ async def handle_external_webhook(
     payload = {}
     try:
         if body:
-            payload = json.loads(body)
+            try:
+                payload = json.loads(body)
+            except json.JSONDecodeError:
+                # Se falhar a decodificação de JSON, tenta parsear como query string (application/x-www-form-urlencoded)
+                from urllib.parse import parse_qs
+                body_str = body.decode("utf-8", errors="ignore")
+                parsed_qs = parse_qs(body_str)
+                payload = {}
+                for k, v in parsed_qs.items():
+                    if v:
+                        payload[k] = v[0] if len(v) == 1 else v
+                
+                # Se continuar vazio, tenta ler via formulário (multipart/form-data)
+                if not payload:
+                    try:
+                        form_data = await request.form()
+                        if form_data:
+                            payload = dict(form_data)
+                    except Exception:
+                        pass
         
         # Detect event type from payload
         extracted_data = parse_webhook_payload(integration.platform, payload)
@@ -204,7 +223,8 @@ async def handle_external_webhook(
             "manychat_enabled": getattr(mapping, "manychat_active", False) if mapping else False,
             "private_note_enabled": bool(getattr(mapping, "private_note", None)) if mapping else False,
             "chatwoot_label": getattr(mapping, "chatwoot_label", []) if mapping else [],
-            "free_message_enabled": getattr(mapping, "send_as_free_message", False) if mapping else False
+            "free_message_enabled": getattr(mapping, "send_as_free_message", False) if mapping else False,
+            "internal_tags": getattr(mapping, "internal_tags", "") if mapping else ""
         })
         history.processed_data = processed_dict
         if mapping:
@@ -242,6 +262,10 @@ async def handle_external_webhook(
             logger.warning(f"⚠️ [WEBHOOK] Erro ao montar tags para lead: {tag_err}")
 
         auto_tag = ", ".join(list(dict.fromkeys(auto_tag_list))) if auto_tag_list else None
+
+        # Injeta metadados sobre a integração de webhook que gerou o contato
+        final_vars["created_by_webhook"] = True
+        final_vars["webhook_name"] = integration.name
 
         # Sincroniza Lead com o banco central de leads (com tags do mapeamento)
         background_tasks.add_task(

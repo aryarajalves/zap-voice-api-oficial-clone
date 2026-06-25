@@ -27,6 +27,20 @@ async def check_whatsapp(wa_phone_id, wa_token):
     except:
         return "timeout"
 
+async def check_instagram(insta_account_id, insta_token):
+    if not insta_account_id or not insta_token or insta_token == "123":
+        return "offline"
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"https://graph.facebook.com/v21.0/{insta_account_id}",
+                params={"access_token": insta_token},
+                timeout=3.0
+            )
+            return "online" if res.status_code == 200 else f"error ({res.status_code})"
+    except:
+        return "timeout"
+
 async def check_chatwoot(cw_url, cw_token):
     if not cw_url or not cw_token or cw_token == "123":
         return "offline"
@@ -95,6 +109,7 @@ async def get_health_status(
     # Dispara as verificações em paralelo para performance
     wa_task = check_whatsapp(s.get("WA_PHONE_NUMBER_ID"), s.get("WA_ACCESS_TOKEN"))
     cw_task = check_chatwoot(s.get("CHATWOOT_API_URL"), s.get("CHATWOOT_API_TOKEN"))
+    insta_task = check_instagram(s.get("INSTAGRAM_ACCOUNT_ID"), s.get("INSTAGRAM_ACCESS_TOKEN"))
     storage_task = check_storage(s)
     
     # Status do RabbitMQ (Global do sistema, mas essencial)
@@ -113,18 +128,20 @@ async def get_health_status(
     except:
         pass
 
-    results = await asyncio.gather(wa_task, cw_task, storage_task, return_exceptions=True)
+    results = await asyncio.gather(wa_task, cw_task, insta_task, storage_task, return_exceptions=True)
     
     wa_res = results[0] if not isinstance(results[0], Exception) else f"Exception: {str(results[0])}"
     cw_res = results[1] if not isinstance(results[1], Exception) else f"Exception: {str(results[1])}"
-    st_res = results[2] if not isinstance(results[2], Exception) else f"Exception: {str(results[2])}"
+    insta_res = results[2] if not isinstance(results[2], Exception) else f"Exception: {str(results[2])}"
+    st_res = results[3] if not isinstance(results[3], Exception) else f"Exception: {str(results[3])}"
 
-    print(f"DEBUG Health: WA={wa_res}, CW={cw_res}, S3={st_res}, Rabbit={rabbit_status} (Client={x_client_id})")
+    print(f"DEBUG Health: WA={wa_res}, CW={cw_res}, Insta={insta_res}, S3={st_res}, Rabbit={rabbit_status} (Client={x_client_id})")
     
     return {
         "database": "online",
         "rabbitmq": rabbit_status,
         "whatsapp": wa_res,
         "chatwoot": cw_res,
+        "instagram": insta_res,
         "storage": st_res
     }

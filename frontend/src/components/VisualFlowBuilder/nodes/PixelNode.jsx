@@ -12,7 +12,7 @@ const PixelNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-rose-500 min-w-[280px]">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-rose-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-rose-500" />
             
             <NodeHeader
                 label="Pixel de Conversão (Meta CAPI)"
@@ -94,7 +94,7 @@ const PixelNode = ({ id, data }) => {
                 </div>
             </div>
 
-            <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-rose-500" />
+            <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-rose-500" />
         </div>
     );
 };

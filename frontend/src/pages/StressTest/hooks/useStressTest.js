@@ -5,11 +5,10 @@ import { useAuth } from '../../../AuthContext';
 import { useClient } from '../../../contexts/ClientContext';
 import { toast } from 'react-hot-toast';
 
-export function useStressTest() {
+export function useStressTest(onStartSuccess) {
   const { user } = useAuth();
   const { activeClient } = useClient();
-
-  // Form inputs
+// Form inputs
   const [testType, setTestType] = useState(() => localStorage.getItem('stress_test_type') || 'funnel'); // 'funnel' | 'template'
   const [funnelId, setFunnelId] = useState(() => localStorage.getItem('stress_test_funnel_id') || '');
   const [templateName, setTemplateName] = useState(() => localStorage.getItem('stress_test_template_name') || 'welcome_message');
@@ -212,6 +211,10 @@ export function useStressTest() {
               localStorage.setItem('stress_test_active_trigger_id', data.trigger_id.toString());
               toast.dismiss(loadingToast);
               toast.success("Teste de escala iniciado com sucesso!");
+              
+              if (onStartSuccess) {
+                  onStartSuccess(data.trigger_id);
+              }
           } else {
               const errData = await res.json();
               throw new Error(errData.detail || "Erro ao iniciar stress test");

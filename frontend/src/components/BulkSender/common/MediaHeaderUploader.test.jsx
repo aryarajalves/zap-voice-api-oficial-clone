@@ -32,9 +32,8 @@ describe('MediaHeaderUploader', () => {
         localStorage.setItem('token', 'test-token');
     });
 
-    it('deve renderizar com a aba Upload ativa por padrão', () => {
+    it('deve renderizar a área de upload por padrão', () => {
         render(<MediaHeaderUploader {...defaultProps} />);
-        expect(document.getElementById('media-tab-upload')).toBeTruthy();
         expect(document.getElementById('media-upload-area')).toBeTruthy();
     });
 
@@ -53,13 +52,6 @@ describe('MediaHeaderUploader', () => {
         expect(screen.getByText(/Documento do Cabeçalho — Obrigatório/i)).toBeDefined();
     });
 
-    it('deve alternar para a aba Link Externo ao clicar', () => {
-        render(<MediaHeaderUploader {...defaultProps} />);
-        const urlTab = document.getElementById('media-tab-url');
-        fireEvent.click(urlTab);
-        expect(document.getElementById('media-url-input')).toBeTruthy();
-    });
-
     it('deve exibir aviso vermelho quando HEADER_0 está vazio', () => {
         render(<MediaHeaderUploader {...defaultProps} templateParams={{}} />);
         expect(screen.getByText(/pendente — necessário para avançar/i)).toBeDefined();
@@ -73,21 +65,6 @@ describe('MediaHeaderUploader', () => {
             />
         );
         expect(screen.getByText(/pronto para avançar/i)).toBeDefined();
-    });
-
-    it('deve chamar handleParamChange ao digitar URL externa', () => {
-        const handleParamChange = vi.fn();
-        render(
-            <MediaHeaderUploader
-                {...defaultProps}
-                handleParamChange={handleParamChange}
-            />
-        );
-        // Troca para aba URL
-        fireEvent.click(document.getElementById('media-tab-url'));
-        const input = document.getElementById('media-url-input');
-        fireEvent.change(input, { target: { value: 'https://exemplo.com/video.mp4' } });
-        expect(handleParamChange).toHaveBeenCalledWith('HEADER_0', 'https://exemplo.com/video.mp4');
     });
 
     it('deve rejeitar arquivo acima de 16MB', async () => {

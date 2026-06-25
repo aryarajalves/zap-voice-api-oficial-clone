@@ -42,6 +42,8 @@ function getPresetLabel(datePreset) {
 export default function Filters({
   search, setSearch,
   selectedTags = [], setSelectedTags,
+  importedByClientId, setImportedByClientId,
+  origin, setOrigin,
   availableFilters,
   total,
   datePreset, setDatePreset,
@@ -109,8 +111,8 @@ export default function Filters({
 
   return (
     <div className="mb-6 space-y-3">
-      {/* Linha 1: Busca + Etiquetas + Data */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+      {/* Linha 1: Busca + Criador + Origem + Etiquetas + Data */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
         
         {/* Busca */}
         <div className="relative">
@@ -123,6 +125,38 @@ export default function Filters({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+
+        {/* Filtro por Cliente Criador/Importador */}
+        <div className="relative">
+          <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <select
+            value={importedByClientId}
+            onChange={(e) => setImportedByClientId(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-600 dark:text-gray-300 font-medium"
+          >
+            <option value="">Todos os Criadores</option>
+            {availableFilters.imported_by_clients?.map(c => (
+              <option key={c.id} value={c.id}>
+                👤 {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Filtro por Origem (Manual, Planilha, Webhook) */}
+        <div className="relative">
+          <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <select
+            value={origin}
+            onChange={(e) => setOrigin(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-600 dark:text-gray-300 font-medium"
+          >
+            <option value="">Todas as Origens</option>
+            <option value="manual">👤 Criado Manualmente</option>
+            <option value="manual_bulk">📥 Importado por Planilha (CSV)</option>
+            <option value="webhook">🔗 Criado via Webhook</option>
+          </select>
         </div>
 
         {/* Etiquetas — Dropdown com busca e checkboxes */}

@@ -17,6 +17,7 @@ export function useIntegrations(activeClient) {
   const [integrationToDelete, setIntegrationToDelete] = useState(null);
   const [bulkResendProgress, setBulkResendProgress] = useState(null);
 
+  const [leadTags, setLeadTags] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     platform: 'hotmart',
@@ -81,14 +82,28 @@ export function useIntegrations(activeClient) {
     }
   }, [activeClient]);
 
+  const fetchLeadTags = useCallback(async () => {
+    if (!activeClient) return;
+    try {
+      const res = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
+      if (res.ok) {
+        const data = await res.json();
+        setLeadTags(data.tags || []);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar tags de leads:", err);
+    }
+  }, [activeClient]);
+
   useEffect(() => {
     if (activeClient) {
       fetchIntegrations();
       fetchTemplates();
       fetchChatwootLabels();
       fetchFunnels();
+      fetchLeadTags();
     }
-  }, [activeClient, fetchIntegrations, fetchTemplates, fetchChatwootLabels, fetchFunnels]);
+  }, [activeClient, fetchIntegrations, fetchTemplates, fetchChatwootLabels, fetchFunnels, fetchLeadTags]);
 
   const handleSaveIntegration = async () => {
     if (!formData.name.trim()) return toast.error('Nome é obrigatório');
@@ -257,6 +272,7 @@ export function useIntegrations(activeClient) {
     handleSaveIntegration,
     handleDeleteIntegration,
     openNewModal,
-    openEditModal
+    openEditModal,
+    leadTags
   };
 }

@@ -92,8 +92,10 @@ const RecipientSelector = ({
                     />
                 ) : (
                     <TagSelector 
-                        selectedTag={hook.selectedTag}
-                        setSelectedTag={hook.setSelectedTag}
+                        selectedTags={hook.selectedTags}
+                        setSelectedTags={hook.setSelectedTags}
+                        tagMode={hook.tagMode}
+                        setTagMode={hook.setTagMode}
                         availableTags={hook.availableTags}
                         isLoadingTags={hook.isLoadingTags}
                         templateVariables={templateVariables}

@@ -215,4 +215,41 @@ describe('useBulkSender Hook - handleSend validations', () => {
     });
 });
 
+describe('useBulkSender Hook - loadExclusionContactsByTag', () => {
+    it('deve buscar contatos para múltiplas etiquetas em paralelo e mesclar na lista de exclusão', async () => {
+        const { fetchWithAuth } = await import('../../../AuthContext');
+        const { act } = await import('@testing-library/react');
+        
+        vi.mocked(fetchWithAuth).mockImplementation((url) => {
+            let items = [];
+            if (url.includes('tag=tag1') && url.includes('tag=tag2')) {
+                items = [{ phone: '5511999999991' }, { phone: '5511999999992' }];
+            } else if (url.includes('tag=tag1')) {
+                items = [{ phone: '5511999999991' }];
+            } else if (url.includes('tag=tag2')) {
+                items = [{ phone: '5511999999992' }];
+            }
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ items })
+            });
+        });
+
+        const { result } = renderHook(() => useBulkSender(vi.fn(), vi.fn()));
+
+        await act(async () => {
+            result.current.setSelectedExclusionTag(['tag1', 'tag2']);
+        });
+
+        await act(async () => {
+            await result.current.loadExclusionContactsByTag();
+        });
+
+        expect(result.current.exclusionList).toContain('5511999999991');
+        expect(result.current.exclusionList).toContain('5511999999992');
+        expect(result.current.exclusionList.length).toBe(2);
+        expect(result.current.selectedExclusionTag).toEqual([]);
+    });
+});
+
 

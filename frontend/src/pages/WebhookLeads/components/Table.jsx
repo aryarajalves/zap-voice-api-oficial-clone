@@ -154,6 +154,7 @@ export default function Table({
               {showCustomColumns && customColumnsKeys.map(key => (
                 <th key={key} className="px-6 py-4 text-xs font-bold text-rose-500 uppercase tracking-wider font-mono">{key}</th>
               ))}
+              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Atualizado</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Chegada</th>
               <th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ações</th>
             </tr>
@@ -162,13 +163,13 @@ export default function Table({
             {loading ? (
               Array(5).fill(0).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  <td colSpan="6" className="px-6 py-8">
+                  <td colSpan={7 + (showCustomColumns ? customColumnsKeys.length : 0)} className="px-6 py-8">
                     <div className="h-4 bg-gray-100 dark:bg-gray-700 rounded w-full"></div>
                   </td>
                 </tr>
               ))
             ) : leads.length === 0 ? (
-              <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500 italic">Nenhum lead encontrado com os filtros atuais.</td></tr>
+              <tr><td colSpan={7 + (showCustomColumns ? customColumnsKeys.length : 0)} className="px-6 py-12 text-center text-gray-500 italic">Nenhum lead encontrado com os filtros atuais.</td></tr>
             ) : (
               leads.map(lead => (
                 <LeadTableRow

@@ -62,5 +62,35 @@ describe('AuthContext', () => {
     });
     
     expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('currentView')).toBeNull();
+  });
+
+  it('deve definir currentView como bulk_sender ao fazer login', async () => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'mock-token' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 1, email: 'test@test.com', full_name: 'Test User' }),
+      });
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      screen.getByTestId('login-btn').click();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-status')).toHaveTextContent('logged-in-test@test.com');
+    });
+
+    expect(localStorage.getItem('token')).toBe('mock-token');
+    expect(localStorage.getItem('currentView')).toBe('bulk_sender');
   });
 });

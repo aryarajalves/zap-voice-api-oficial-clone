@@ -32,8 +32,8 @@ def mock_user():
     return models.User(id=1, email="test@example.com", role="admin", client_id=1)
 
 @pytest.mark.asyncio
-@patch("routers.leads.ChatwootClient")
-@patch("routers.leads.upsert_webhook_lead")
+@patch("routers.leads_import.ChatwootClient")
+@patch("routers.leads_import.upsert_webhook_lead")
 async def test_run_chatwoot_import(mock_upsert, mock_chatwoot_client_class, db):
     # Configura os mocks
     mock_cw = AsyncMock()
@@ -59,7 +59,7 @@ async def test_run_chatwoot_import(mock_upsert, mock_chatwoot_client_class, db):
     
     # Substituir SessionLocal por TestingSessionLocal no escopo de run_chatwoot_import
     with patch("database.SessionLocal", return_value=db):
-        from routers.leads import run_chatwoot_import
+        from routers.leads_import import run_chatwoot_import
         # Executa a função do background task
         await run_chatwoot_import(
             client_id=1,
@@ -89,8 +89,8 @@ async def test_run_chatwoot_import(mock_upsert, mock_chatwoot_client_class, db):
     assert "custom-tag" in tags_maria
 
 @pytest.mark.asyncio
-@patch("routers.leads.ChatwootClient")
-@patch("routers.leads.upsert_webhook_lead")
+@patch("routers.leads_import.ChatwootClient")
+@patch("routers.leads_import.upsert_webhook_lead")
 async def test_run_chatwoot_import_without_all_tags(mock_upsert, mock_chatwoot_client_class, db):
     # Configura os mocks
     mock_cw = AsyncMock()
@@ -106,7 +106,7 @@ async def test_run_chatwoot_import_without_all_tags(mock_upsert, mock_chatwoot_c
     ]
     
     with patch("database.SessionLocal", return_value=db):
-        from routers.leads import run_chatwoot_import
+        from routers.leads_import import run_chatwoot_import
         # Executa com import_all_tags=False
         await run_chatwoot_import(
             client_id=1,
@@ -125,7 +125,7 @@ async def test_run_chatwoot_import_without_all_tags(mock_upsert, mock_chatwoot_c
 
 @pytest.mark.asyncio
 async def test_api_route_chatwoot_import(mock_user):
-    from routers.leads import import_leads_from_chatwoot, ChatwootImportRequest
+    from routers.leads_import import import_leads_from_chatwoot, ChatwootImportRequest
     
     bg_tasks = MagicMock(spec=BackgroundTasks)
     request = ChatwootImportRequest(

@@ -52,7 +52,7 @@ const HotLeadsNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-orange-500 min-w-[300px] transition-all hover:shadow-2xl hover:border-orange-400">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-orange-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-orange-500" />
             
             <NodeHeader
                 label="Leads Quentes"
@@ -170,7 +170,7 @@ const HotLeadsNode = ({ id, data }) => {
                 <span className="text-[9px] font-bold text-orange-500 uppercase tracking-wider mr-2">continuar</span>
             </div>
 
-            <Handle id="default" type="source" position={Position.Bottom} className="w-3 h-3 bg-orange-500" />
+            <Handle id="default" type="source" position={Position.Right} className="w-3 h-3 bg-orange-500" />
         </div>
     );
 };

@@ -25,6 +25,7 @@ vi.mock('react-icons/fi', () => ({
   FiLayout: () => <span />,
   FiMessageSquare: () => <span />,
   FiSmartphone: () => <span />,
+  FiInstagram: () => <span />,
 }));
 
 // Mock contexts and hooks

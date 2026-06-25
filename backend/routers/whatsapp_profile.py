@@ -54,7 +54,7 @@ async def get_whatsapp_profile(
         if num_res.status_code == 200:
             num_data = num_res.json()
             profile_data["display_phone_number"] = num_data.get("display_phone_number", "")
-            profile_data["messaging_limit_tier"] = num_data.get("messaging_limit_tier", "TIER_250")
+            profile_data["messaging_limit_tier"] = num_data.get("messaging_limit_tier", None)
             profile_data["quality_rating"] = num_data.get("quality_rating", "UNKNOWN")
             profile_data["verified_name"] = num_data.get("verified_name", "")
             profile_data["name_status"] = num_data.get("name_status", "APPROVED")

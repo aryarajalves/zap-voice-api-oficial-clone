@@ -19,6 +19,8 @@ const defaultProps = {
   customDateTo: '',
   setCustomDateTo: vi.fn(),
   handleClearDateFilters: vi.fn(),
+  origin: '',
+  setOrigin: vi.fn(),
 };
 
 describe('Filters — Dropdown de Etiquetas com Busca', () => {

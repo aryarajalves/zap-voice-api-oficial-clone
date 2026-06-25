@@ -72,7 +72,7 @@ const AudioNode = ({ id, data }) => {
 
     return (
         <div className="px-3 py-2 shadow-md rounded-xl bg-white dark:bg-gray-800 border-2 border-cyan-500 min-w-[240px] max-w-[280px] transition-all hover:shadow-lg hover:border-cyan-400">
-            {!data.isStart && <Handle type="target" position={Position.Top} className="w-3 h-3 bg-cyan-500" />}
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-cyan-500" />}
             <NodeHeader
                 label="Áudio"
                 icon={FiMic}
@@ -155,7 +155,7 @@ const AudioNode = ({ id, data }) => {
                     <input type="file" className="hidden nodrag" onChange={handleUpload} disabled={uploading} accept=".mp3,.ogg,.wav,.aac,.mp4" />
                 </label>
             )}
-            <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-cyan-500" />
+            <Handle type="source" position={Position.Right} className="w-3 h-3 bg-cyan-500" />
 
             <ConfirmModal
                 isOpen={showDeleteConfirm}

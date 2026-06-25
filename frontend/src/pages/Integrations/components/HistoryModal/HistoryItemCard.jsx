@@ -212,6 +212,20 @@ const HistoryItemCard = ({
                   {item.processed_data.raw_status || '-'}
                 </span>
               </div>
+              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
+                <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Etiquetas Internas (ZapVoice):</span>
+                {item.processed_data.internal_tags ? (
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {item.processed_data.internal_tags.split(',').map(tag => tag.trim()).filter(Boolean).map(tag => (
+                      <span key={tag} className="bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-md text-[10px] font-black border border-blue-500/20">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="font-bold text-gray-400 dark:text-gray-400">-</span>
+                )}
+              </div>
 
               {/* --- Status ManyChat Integration --- */}
               {item.processed_data?.manychat_enabled && (

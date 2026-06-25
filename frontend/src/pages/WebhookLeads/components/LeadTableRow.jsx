@@ -83,11 +83,31 @@ export default function LeadTableRow({
             {lead.name ? lead.name[0].toUpperCase() : '?'}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 max-w-[280px] sm:max-w-none">
               <p className="font-semibold text-gray-900 dark:text-white leading-tight">{lead.name || 'Sem Nome'}</p>
               {lead.platform === 'chatwoot_import' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50" title="Importado do Chatwoot">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50 whitespace-nowrap" title="Importado do Chatwoot">
                   <SiChatwoot size={9} /> Chatwoot
+                </span>
+              )}
+              {lead.platform === 'manual' && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 whitespace-nowrap" title="Criado Manualmente">
+                  👤 Criado Manual
+                </span>
+              )}
+              {lead.platform === 'manual_bulk' && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-100 dark:border-amber-800/50 whitespace-nowrap" title="Importado via planilha/CSV">
+                  📥 Importado Manualmente
+                </span>
+              )}
+              {lead.variables?.created_by_webhook && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-100 dark:border-violet-800/50 whitespace-nowrap" title={`Criado via Webhook: ${lead.variables.webhook_name}`}>
+                  🔗 Webhook: {lead.variables.webhook_name || 'Integração'}
+                </span>
+              )}
+              {lead.imported_by_name && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-150 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300 border border-slate-200/65 dark:border-slate-700 whitespace-nowrap" title={`Importado/Criado por: ${lead.imported_by_name}`}>
+                  👤 {lead.imported_by_name}
                 </span>
               )}
             </div>
@@ -118,6 +138,12 @@ export default function LeadTableRow({
           {(lead.variables && lead.variables[key]) || '---'}
         </td>
       ))}
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+          <FiCalendar size={12} className="flex-shrink-0 text-gray-400" />
+          <span className="text-xs font-mono">{formatDateBrasilia(lead.updated_at || lead.created_at)}</span>
+        </div>
+      </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
           <FiCalendar size={12} className="flex-shrink-0 text-gray-400" />

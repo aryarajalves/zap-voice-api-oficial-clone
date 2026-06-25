@@ -42,6 +42,80 @@ async def debug_env():
 
     }
 
+from pydantic import BaseModel
+
+class TestTokenRequest(BaseModel):
+    phone_number_id: str
+    access_token: str
+    business_account_id: Optional[str] = None
+
+@router.post("/test-token")
+async def test_whatsapp_token(
+    request: TestTokenRequest,
+    current_user: models.User = Depends(get_current_user),
+    x_client_id: Optional[int] = Header(None)
+):
+    """
+    Testa a validade do Token de Acesso permanente da Meta contra a Graph API.
+    """
+    token = request.access_token.strip()
+    phone_id = request.phone_number_id.strip()
+    
+    # Se o token vier mascarado (contendo asteriscos), recupera o token real salvo no banco
+    if "*" in token:
+        if not x_client_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Header X-Client-ID necessário para validar o token salvo."
+            )
+        from config_loader import get_setting
+        token = get_setting("WA_ACCESS_TOKEN", client_id=x_client_id)
+        if not token:
+            raise HTTPException(
+                status_code=400,
+                detail="Nenhum token de acesso salvo foi encontrado para este cliente."
+            )
+            
+    if not token or not phone_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Token de acesso e ID do número de telefone são obrigatórios."
+        )
+        
+    url = f"https://graph.facebook.com/v20.0/{phone_id}"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, headers=headers, timeout=10.0)
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "success": True,
+                    "message": "Token e Phone Number ID válidos e conectados com sucesso à Meta!",
+                    "details": data
+                }
+            else:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("error", {}).get("message", "Erro desconhecido na API da Meta.")
+                    error_code = error_data.get("error", {}).get("code", response.status_code)
+                except Exception:
+                    error_msg = response.text or "Erro desconhecido."
+                    error_code = response.status_code
+                    
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Falha na validação (Meta Code {error_code}): {error_msg}"
+                )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro de conexão ao testar token com a Meta: {str(e)}"
+            )
+
 @router.get("/templates")
 async def list_templates(
     include_archived: bool = Query(False),

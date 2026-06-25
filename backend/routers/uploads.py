@@ -6,8 +6,9 @@ import uuid
 from datetime import datetime
 from database import SessionLocal
 import models
-from core.deps import get_current_user
+from core.deps import get_db, get_current_user
 from core.logger import logger
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ def probe():
 async def upload_file(
     file: UploadFile = File(...),
     x_client_id: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
@@ -89,6 +91,26 @@ async def upload_file(
         
         logger.info(f"✅ [UPLOAD_SUCCESS] Arquivo disponível em: {file_url}")
         
+        # Determinar tipo de mídia
+        media_type = "DOCUMENT"
+        if file.content_type.startswith("image/"):
+            media_type = "IMAGE"
+        elif file.content_type.startswith("video/"):
+            media_type = "VIDEO"
+
+        # Registrar no banco de dados
+        db_media = models.UploadedMedia(
+            client_id=x_client_id_int,
+            filename=file.filename,
+            unique_name=unique_name,
+            url=file_url,
+            media_type=media_type,
+            size=file_size
+        )
+        db.add(db_media)
+        db.commit()
+        logger.info(f"💾 [UPLOAD_DB_SAVED] Metadados salvos na tabela uploaded_medias para o cliente {x_client_id_int}")
+        
         return {
             "filename": unique_name,
             "url": file_url,
@@ -101,3 +123,142 @@ async def upload_file(
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Falha ao salvar arquivo: {str(e)}")
+
+
+@router.get("/uploads/list", summary="Listar mídias enviadas pelo cliente")
+def list_uploaded_media(
+    media_type: Optional[str] = None,
+    page: int = 1,
+    limit: Optional[int] = None,
+    x_client_id: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Retorna todas as mídias salvas pertencentes ao cliente, com suporte a paginação."""
+    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
+        raise HTTPException(status_code=400, detail="Client ID não fornecido")
+    
+    try:
+        client_id_int = int(x_client_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Client ID inválido")
+    
+    query = db.query(models.UploadedMedia).filter(models.UploadedMedia.client_id == client_id_int)
+    
+    if media_type:
+        query = query.filter(models.UploadedMedia.media_type == media_type.upper())
+        
+    query = query.order_by(models.UploadedMedia.created_at.desc())
+    
+    total = query.count()
+    
+    if limit is not None:
+        page = max(1, page)
+        limit = max(1, limit)
+        offset = (page - 1) * limit
+        medias = query.offset(offset).limit(limit).all()
+        pages = (total + limit - 1) // limit
+    else:
+        medias = query.all()
+        pages = 1
+        limit = total
+        
+    items = [
+        {
+            "id": m.id,
+            "filename": m.filename,
+            "unique_name": m.unique_name,
+            "url": m.url,
+            "media_type": m.media_type,
+            "size": m.size,
+            "created_at": m.created_at
+        } for m in medias
+    ]
+    
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages
+    }
+
+
+@router.patch("/uploads/{media_id}/rename", summary="Renomear nome do arquivo de uma mídia salva")
+def rename_uploaded_media(
+    media_id: int,
+    payload: dict,
+    x_client_id: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Permite renomear o filename de uma mídia pertencente ao cliente."""
+    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
+        raise HTTPException(status_code=400, detail="Client ID não fornecido")
+    
+    try:
+        client_id_int = int(x_client_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Client ID inválido")
+        
+    new_filename = payload.get("filename")
+    if not new_filename or not isinstance(new_filename, str) or not new_filename.strip():
+        raise HTTPException(status_code=400, detail="Novo nome de arquivo é inválido ou vazio")
+        
+    media = db.query(models.UploadedMedia).filter(
+        models.UploadedMedia.id == media_id,
+        models.UploadedMedia.client_id == client_id_int
+    ).first()
+    
+    if not media:
+        raise HTTPException(status_code=404, detail="Mídia não encontrada ou acesso negado")
+        
+    media.filename = new_filename.strip()
+    db.commit()
+    logger.info(f"✏️ [UPLOAD_RENAME] Mídia {media_id} renomeada para '{media.filename}' pelo cliente {client_id_int}")
+    
+    return {
+        "id": media.id,
+        "filename": media.filename,
+        "url": media.url
+    }
+
+
+@router.delete("/uploads/{media_id}", summary="Excluir uma mídia física e logicamente")
+def delete_uploaded_media(
+    media_id: int,
+    x_client_id: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Exclui fisicamente o arquivo do MinIO/S3 e remove os metadados do banco de dados."""
+    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
+        raise HTTPException(status_code=400, detail="Client ID não fornecido")
+    
+    try:
+        client_id_int = int(x_client_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Client ID inválido")
+        
+    media = db.query(models.UploadedMedia).filter(
+        models.UploadedMedia.id == media_id,
+        models.UploadedMedia.client_id == client_id_int
+    ).first()
+    
+    if not media:
+        raise HTTPException(status_code=404, detail="Mídia não encontrada ou acesso negado")
+        
+    # Exclusão física
+    try:
+        from storage import storage
+        storage.delete_file(media.unique_name)
+    except Exception as e:
+        logger.error(f"⚠️ [UPLOAD_DELETE_WARNING] Falha na exclusão física do arquivo {media.unique_name}: {e}")
+        
+    # Exclusão lógica no banco de dados
+    db.delete(media)
+    db.commit()
+    logger.info(f"🗑️ [UPLOAD_DELETE] Mídia {media_id} removida do banco de dados pelo cliente {client_id_int}")
+    
+    return {"status": "success", "message": "Mídia removida com sucesso"}
+

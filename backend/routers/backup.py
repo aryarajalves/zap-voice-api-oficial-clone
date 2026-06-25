@@ -156,16 +156,11 @@ async def update_backup_config(
     """Salva a configuração de backup agendado. Requer Super Admin."""
     config = get_or_create_config(db)
 
-    # Sanitizar o s3_folder: deve garantir a subpasta /zapvoice/ no final
+    # Sanitizar o s3_folder
     folder = config_in.s3_folder.strip() if config_in.s3_folder else "backups"
     folder = folder.rstrip("/")
     if not folder:
         folder = "backups"
-    
-    # Se não terminar com "zapvoice", adiciona a subpasta
-    if not folder.endswith("zapvoice"):
-        folder = f"{folder}/zapvoice"
-        
     folder = f"{folder}/"
     config.s3_folder = folder
 
@@ -265,7 +260,7 @@ async def list_backups(
         raise HTTPException(status_code=500, detail="Erro ao listar backups.")
 
 
-@router.put("/metadata/{filename}", summary="Atualizar Metadados de um Backup")
+@router.put("/metadata/{filename:path}", summary="Atualizar Metadados de um Backup")
 async def update_backup_metadata(
     filename: str,
     payload: BackupMetadataUpdate,
@@ -308,7 +303,7 @@ async def update_backup_metadata(
         raise HTTPException(status_code=500, detail="Erro ao atualizar metadados do backup.")
 
 
-@router.delete("/file/{filename}", summary="Deletar Backup Específico")
+@router.delete("/file/{filename:path}", summary="Deletar Backup Específico")
 async def delete_backup(
     filename: str,
     db: Session = Depends(get_db),
@@ -338,7 +333,7 @@ async def delete_backup(
         raise HTTPException(status_code=500, detail="Erro ao deletar backup.")
 
 
-@router.post("/restore/{filename}", summary="Restaurar Banco de Dados")
+@router.post("/restore/{filename:path}", summary="Restaurar Banco de Dados")
 async def restore_database(
     filename: str,
     db: Session = Depends(get_db),
@@ -395,14 +390,14 @@ async def upload_backup(
         raise HTTPException(status_code=500, detail=f"Erro no upload de backup: {str(e)}")
 
 
-@router.get("/download/{filename}", summary="Download de Backup Específico")
+@router.get("/download/{filename:path}", summary="Download de Backup Específico")
 async def download_backup(
     filename: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_super_admin)
 ):
     """Gera o download de um backup do S3. Requer Super Admin."""
-    if "/" in filename or "\\" in filename:
+    if ".." in filename:
         raise HTTPException(status_code=400, detail="Nome de arquivo inválido.")
 
     try:
@@ -458,7 +453,7 @@ async def bulk_delete_backups(
     folder = config.s3_folder or "backups/"
 
     for filename in payload.filenames:
-        if "/" in filename or "\\" in filename:
+        if ".." in filename:
             failed.append({"filename": filename, "error": "Nome de arquivo inválido."})
             continue
 

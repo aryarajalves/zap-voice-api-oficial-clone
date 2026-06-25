@@ -122,6 +122,14 @@ export function useAppLogic() {
     }, [currentView]);
 
     useEffect(() => {
+        const handleOpenSettings = () => {
+            setIsSettingsModalOpen(true);
+        };
+        window.addEventListener('open-settings', handleOpenSettings);
+        return () => window.removeEventListener('open-settings', handleOpenSettings);
+    }, []);
+
+    useEffect(() => {
         if (user && user.role === 'vendedor') {
             if (currentView !== 'hot_leads') {
                 setCurrentView('hot_leads');

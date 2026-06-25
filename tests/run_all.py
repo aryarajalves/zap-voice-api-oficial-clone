@@ -31,6 +31,7 @@ def main():
         "test_13_queue_management.py",
         "test_17_rbac_permissions.py",
         "test_18_instagram_automation.py",
+        "test_19_instagram_permission.py",
     ]
             
     success_count = 0

@@ -16,7 +16,8 @@ export const useTagManagement = ({
     setOriginalTagPhones
 }) => {
     const [availableTags, setAvailableTags] = useState([]);
-    const [selectedTag, setSelectedTag] = useState('');
+    const [selectedTags, setSelectedTags] = useState([]);
+    const [tagMode, setTagMode] = useState("OR");
     const [isLoadingTags, setIsLoadingTags] = useState(false);
     const [isSavingLeads, setIsSavingLeads] = useState(false);
     const [saveLeadsTags, setSaveLeadsTags] = useState('');
@@ -55,7 +56,7 @@ export const useTagManagement = ({
     }, [loadFilters]);
 
     const loadContactsByTag = async () => {
-        if (!selectedTag) return toast.error("Selecione uma etiqueta primeiro");
+        if (!selectedTags || selectedTags.length === 0) return toast.error("Selecione pelo menos uma etiqueta primeiro");
         if (!activeClient) return toast.error("Selecione um cliente primeiro");
 
         if (templateVariables && templateVariables.length > 0) {
@@ -71,10 +72,12 @@ export const useTagManagement = ({
             }
         }
 
-        setWorkingMessage(`Buscando contatos com a etiqueta "${selectedTag}"...`);
+        const tagLabel = selectedTags.length === 1 ? `"${selectedTags[0]}"` : `${selectedTags.length} etiquetas`;
+        setWorkingMessage(`Buscando contatos com a(s) etiqueta(s) ${tagLabel}...`);
         setIsProcessing(true);
         try {
-            const res = await fetchWithAuth(`${API_URL}/leads?tag=${encodeURIComponent(selectedTag)}&limit=10000`, {}, activeClient.id);
+            const tagParams = selectedTags.map(t => `tag=${encodeURIComponent(t)}`).join('&');
+            const res = await fetchWithAuth(`${API_URL}/leads?${tagParams}&tag_mode=${tagMode}&limit=10000`, {}, activeClient.id);
             if (res && res.ok) {
                 const data = await res.json();
                 const incoming = (data.items || []).map(lead => {
@@ -102,7 +105,7 @@ export const useTagManagement = ({
                 });
 
                 if (incoming.length === 0) {
-                    toast.error("Nenhum contato encontrado com esta etiqueta");
+                    toast.error("Nenhum contato encontrado com esta(s) etiqueta(s)");
                     setIsProcessing(false);
                     return;
                 }
@@ -132,7 +135,7 @@ export const useTagManagement = ({
                 
                 setShowList(true);
                 setIsValidated(false);
-                toast.success(`${incoming.length} contatos carregados da etiqueta!`);
+                toast.success(`${incoming.length} contatos carregados!`);
 
                 if (hasContactsWithoutName) {
                     setTimeout(() => {
@@ -202,7 +205,8 @@ export const useTagManagement = ({
 
     return {
         availableTags,
-        selectedTag, setSelectedTag,
+        selectedTags, setSelectedTags,
+        tagMode, setTagMode,
         isLoadingTags,
         isSavingLeads,
         saveLeadsTags, setSaveLeadsTags,

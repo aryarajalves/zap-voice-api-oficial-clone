@@ -25,6 +25,7 @@ vi.mock('react-icons/fi', () => ({
   FiMessageSquare: () => <span data-testid="icon-msg" />,
   FiDatabase: () => <span data-testid="icon-db" />,
   FiCloud: () => <span data-testid="icon-cloud" />,
+  FiInstagram: () => <span data-testid="icon-instagram" />,
 }));
 
 describe('ConnectionStatus', () => {
@@ -52,7 +53,7 @@ describe('ConnectionStatus', () => {
   it('renderiza labels dos serviços', async () => {
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
-      json: async () => ({ whatsapp: 'online', chatwoot: 'online', rabbitmq: 'online' }),
+      json: async () => ({ whatsapp: 'online', chatwoot: 'online', rabbitmq: 'online', instagram: 'online' }),
     });
 
     render(<ConnectionStatus />);
@@ -61,6 +62,7 @@ describe('ConnectionStatus', () => {
       expect(screen.getByText(/WhatsApp/i)).toBeInTheDocument();
       expect(screen.getByText(/Chatwoot/i)).toBeInTheDocument();
       expect(screen.getByText(/RabbitMQ/i)).toBeInTheDocument();
+      expect(screen.getByText(/Instagram/i)).toBeInTheDocument();
     });
   });
 

@@ -24,6 +24,16 @@ class StorageClient:
         if self.bucket_name: self.bucket_name = self.bucket_name.split('#')[0].strip().strip('"').strip("'")
         if self.region: self.region = self.region.split('#')[0].strip().strip('"').strip("'")
         
+        # Auto-detectar se o host do MinIO no Docker é resolvível (caso contrário, mapear para localhost:9005)
+        if self.endpoint_url and "zapvoice-minio" in self.endpoint_url:
+            import socket
+            try:
+                socket.gethostbyname("zapvoice-minio")
+            except socket.gaierror:
+                self.endpoint_url = self.endpoint_url.replace("zapvoice-minio:9000", "localhost:9005")
+                self.endpoint_url = self.endpoint_url.replace("zapvoice-minio", "localhost")
+                logger.info(f"🔄 [STORAGE] Rodando fora do Docker. Mapeando endpoint do MinIO para: {self.endpoint_url}")
+
         if self.endpoint_url and self.access_key:
             try:
                 logger.info(f"Conectando ao S3: {self.endpoint_url} (Region: {self.region})")
@@ -193,6 +203,32 @@ class StorageClient:
             import traceback
             logger.error(f"Erro upload S3 (Detalhado): {str(e)}")
             logger.error(traceback.format_exc())
+            raise e
+
+    def delete_file(self, filename: str):
+        """Remove fisicamente o arquivo do S3/MinIO ou do disco local."""
+        logger.info(f"🗑️ [STORAGE] Solicitada remoção do arquivo: {filename}")
+        if not self.s3_client:
+            try:
+                upload_dir = "static/uploads"
+                file_path = os.path.join(upload_dir, filename)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.info(f"🗑️ [STORAGE] Arquivo local removido: {file_path}")
+                else:
+                    logger.warning(f"⚠️ [STORAGE] Arquivo local não encontrado para remoção: {file_path}")
+            except Exception as e:
+                logger.error(f"Erro ao remover arquivo local: {e}")
+            return
+
+        try:
+            self.s3_client.delete_object(
+                Bucket=self.bucket_name,
+                Key=filename
+            )
+            logger.info(f"✅ [STORAGE] Arquivo removido do S3: {filename}")
+        except Exception as e:
+            logger.error(f"Erro ao remover arquivo do S3: {e}")
             raise e
 
 storage = StorageClient()

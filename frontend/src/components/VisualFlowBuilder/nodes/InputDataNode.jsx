@@ -63,7 +63,7 @@ const InputDataNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-rose-500 min-w-[310px] max-w-[340px] transition-all hover:shadow-2xl">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-rose-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-rose-500" />
             
             <NodeHeader
                 label="Entrada de Dados"
@@ -253,19 +253,19 @@ const InputDataNode = ({ id, data }) => {
                     <span className="text-emerald-500 flex items-center gap-0.5">
                         <FiCheck className="stroke-[3]" /> Sucesso
                     </span>
-                    <Handle type="source" position={Position.Bottom} id="success" className="w-3 h-3 bg-emerald-500 !left-6" />
+                    <Handle type="source" position={Position.Right} id="success" className="w-3 h-3 bg-emerald-500 !left-6" />
                 </div>
                 <div className="flex flex-col items-center relative">
                     <span className="text-rose-500 flex items-center gap-0.5">
                         <FiX className="stroke-[3]" /> Falha
                     </span>
-                    <Handle type="source" position={Position.Bottom} id="fail" className="w-3 h-3 bg-rose-500 !left-1/2 !-translate-x-1/2" />
+                    <Handle type="source" position={Position.Right} id="fail" className="w-3 h-3 bg-rose-500 !left-1/2 !-translate-x-1/2" />
                 </div>
                 <div className="flex flex-col items-end relative">
                     <span className="text-amber-500 flex items-center gap-0.5">
                         <FiClock className="stroke-[3]" /> Timeout
                     </span>
-                    <Handle type="source" position={Position.Bottom} id="timeout" className="w-3 h-3 bg-amber-500 !left-auto !right-6" />
+                    <Handle type="source" position={Position.Right} id="timeout" className="w-3 h-3 bg-amber-500 !left-auto !right-6" />
                 </div>
             </div>
 

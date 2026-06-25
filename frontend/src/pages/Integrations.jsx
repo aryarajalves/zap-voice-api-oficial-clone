@@ -47,7 +47,8 @@ export default function Integrations() {
     integrations, loading, templates, chatwootLabels, funnels, isModalOpen, setIsModalOpen,
     isSaving, editingIntegration, formData, setFormData, isDeleteModalOpen, setIsDeleteModalOpen,
     integrationToDelete, setIntegrationToDelete, bulkResendProgress, setBulkResendProgress,
-    fetchIntegrations, handleSaveIntegration, handleDeleteIntegration, openNewModal, openEditModal
+    fetchIntegrations, handleSaveIntegration, handleDeleteIntegration, openNewModal, openEditModal,
+    leadTags
   } = useIntegrations(activeClient);
 
   const {
@@ -229,8 +230,12 @@ export default function Integrations() {
         }
       });
     });
+    (leadTags || []).forEach(t => {
+      const clean = t.trim();
+      if (clean) tagsSet.add(clean);
+    });
     return Array.from(tagsSet);
-  }, [integrations]);
+  }, [integrations, leadTags]);
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-700">

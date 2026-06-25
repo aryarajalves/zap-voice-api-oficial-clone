@@ -1,1 +1,1 @@
-window._env_ = { API_URL: 'http://localhost:8000/api', WS_URL: 'ws://localhost:8000/ws', META_APP_ID: '911469058334354', META_CONFIG_ID: '1031733899184595', WEBHOOK_BASE_URL: 'https://api.aryaraj.shop' };
+window._env_ = { API_URL: 'http://localhost:8000/api', WS_URL: 'ws://localhost:8000/ws', META_APP_ID: '911469058334354', META_CONFIG_ID: '1031733899184595', WEBHOOK_BASE_URL: 'https://api.aryaraj.shop', SIMULATE_MESSAGING: 'false' };

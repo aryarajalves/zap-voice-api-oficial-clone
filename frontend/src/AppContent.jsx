@@ -32,6 +32,7 @@ import StressTest from './pages/StressTest';
 import BackupDatabase from './pages/BackupDatabase';
 import HotLeads from './pages/HotLeads/HotLeads';
 import InstagramAutomation from './pages/InstagramAutomation';
+import TutorialPage from './pages/TutorialPage';
 
 
 export default function AppContent() {
@@ -91,6 +92,7 @@ export default function AppContent() {
                     {logic.currentView === 'backup_db' && 'Backup Banco'}
                     {logic.currentView === 'hot_leads' && 'Leads Quentes'}
                     {logic.currentView === 'instagram_automation' && 'Automação Instagram'}
+                    {logic.currentView === 'tutorial' && 'Tutorial API Oficial'}
                   </h1>
 
                   
@@ -138,6 +140,7 @@ export default function AppContent() {
               {logic.currentView === 'backup_db' && <BackupDatabase />}
               {logic.currentView === 'hot_leads' && <HotLeads />}
               {logic.currentView === 'instagram_automation' && <InstagramAutomation />}
+              {logic.currentView === 'tutorial' && <TutorialPage />}
 
               
               {logic.currentView === 'bulk_sender' && (

@@ -14,7 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import models
 from database import Base
 from services.leads import upsert_webhook_lead
-from routers.leads import execute_import
+from routers.leads_import import execute_import
 
 # Configuração do banco de testes (SQLite em memória)
 TEST_DATABASE_URL = "sqlite://"
@@ -71,7 +71,7 @@ async def test_lead_import_from_csv(db: Session, mock_user: models.User):
     # 4. Call execute_import
     from fastapi import BackgroundTasks
     background_tasks = BackgroundTasks()
-    from routers.leads import execute_import as router_execute_import
+    from routers.leads_import import execute_import as router_execute_import
     result = await router_execute_import(
         background_tasks=background_tasks,
         file=file,
@@ -137,7 +137,7 @@ async def test_lead_import_from_xlsx(db: Session, mock_user: models.User):
     # 4. Execute
     from fastapi import BackgroundTasks
     background_tasks = BackgroundTasks()
-    from routers.leads import execute_import as router_execute_import
+    from routers.leads_import import execute_import as router_execute_import
     result = await router_execute_import(
         background_tasks=background_tasks,
         file=file,

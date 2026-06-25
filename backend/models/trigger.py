@@ -278,10 +278,15 @@ class WebhookLead(Base):
     is_locked = Column(Boolean, default=False, nullable=False, server_default="false")
     variables = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=dict)
 
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
+    imported_by_client_id = Column(Integer, ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
-    client = relationship("Client")
+    client = relationship("Client", foreign_keys=[client_id])
+    imported_by_client = relationship("Client", foreign_keys=[imported_by_client_id])
+    project = relationship("Project")
 
 class RecurringTrigger(Base):
     __tablename__ = "recurring_triggers"

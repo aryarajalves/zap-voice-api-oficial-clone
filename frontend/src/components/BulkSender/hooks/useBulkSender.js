@@ -36,6 +36,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [privateMessageDelayUnit, setPrivateMessageDelayUnit] = useState("seconds");
     const [privateMessageConcurrency, setPrivateMessageConcurrency] = useState(1); // Padrão solicitado: 1 job
     const [selectedChatwootLabels, setSelectedChatwootLabels] = useState([]);
+    const [whatsappProfile, setWhatsappProfile] = useState(null);
 
     // Button Actions (card 04)
     const [buttonActions, setButtonActions] = useState({});
@@ -56,7 +57,8 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [exclusionText, setExclusionText] = useState("");
     const [exclusionAvailableTags, setExclusionAvailableTags] = useState([]);
     const [isLoadingExclusionTags, setIsLoadingExclusionTags] = useState(false);
-    const [selectedExclusionTag, setSelectedExclusionTag] = useState("");
+    const [selectedExclusionTag, setSelectedExclusionTag] = useState([]);
+    const [exclusionTagMode, setExclusionTagMode] = useState("OR");
     const [exclusionCsvData, setExclusionCsvData] = useState(null);
     const [exclusionColSelector, setExclusionColSelector] = useState(false);
     const [exclusionSelectedCol, setExclusionSelectedCol] = useState(null);
@@ -148,12 +150,26 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         }
     };
 
+    const loadWhatsAppProfile = async () => {
+        if (!activeClient) return;
+        try {
+            const res = await fetchWithAuth(`${API_URL}/whatsapp/profile`, {}, activeClient.id);
+            if (res.ok) {
+                const data = await res.json();
+                setWhatsappProfile(data || null);
+            }
+        } catch (error) {
+            console.error("Erro ao carregar perfil do WhatsApp:", error);
+        }
+    };
+
     useEffect(() => {
         if (activeClient) {
             loadTemplates();
             loadChatwootLabels();
             loadExclusionTags();
             loadFunnels();
+            loadWhatsAppProfile();
         }
     }, [activeClient]);
 
@@ -224,16 +240,25 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     };
 
     const loadExclusionContactsByTag = async () => {
-        if (!selectedExclusionTag) return;
+        const tags = Array.isArray(selectedExclusionTag) ? selectedExclusionTag : (selectedExclusionTag ? [selectedExclusionTag] : []);
+        if (tags.length === 0) return;
         setIsWorking(true);
-        setWorkingMessage(`Buscando contatos com a etiqueta: ${selectedExclusionTag}...`);
+        setWorkingMessage(`Buscando contatos com as etiquetas: ${tags.join(', ')}...`);
         try {
-            const res = await fetchWithAuth(`${API_URL}/leads?tag=${encodeURIComponent(selectedExclusionTag)}&limit=1000`, {}, activeClient.id);
-            if (res.ok) {
+            const tagParams = tags.map(t => `tag=${encodeURIComponent(t)}`).join('&');
+            const res = await fetchWithAuth(`${API_URL}/leads?${tagParams}&tag_mode=${exclusionTagMode}&limit=10000`, {}, activeClient.id);
+            if (res && res.ok) {
                 const data = await res.json();
                 const nums = (data.items || []).map(l => String(l.phone || '').replace(/\D/g, '')).filter(n => n.length >= 8);
-                setExclusionList(prev => [...new Set([...prev, ...nums])]);
-                toast.success(`${nums.length} contatos adicionados à exclusão.`);
+                if (nums.length > 0) {
+                    setExclusionList(prev => [...new Set([...prev, ...nums])]);
+                    toast.success(`${[...new Set(nums)].length} contatos únicos adicionados à exclusão.`);
+                    setSelectedExclusionTag([]); // Limpa a seleção após adicionar
+                } else {
+                    toast.success("Nenhum contato encontrado com as etiquetas selecionadas.");
+                }
+            } else {
+                toast.error("Erro ao buscar contatos por etiqueta.");
             }
         } catch (err) {
             toast.error("Erro ao buscar contatos por etiqueta.");
@@ -437,10 +462,12 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         delayUnit, setDelayUnit, concurrency, setConcurrency, scheduledTime, setScheduledTime,
         exclusionList, setExclusionList, exclusionMode, setExclusionMode, exclusionText, setExclusionText,
         exclusionAvailableTags, isLoadingExclusionTags, selectedExclusionTag, setSelectedExclusionTag,
+        exclusionTagMode, setExclusionTagMode,
         exclusionCsvData, exclusionColSelector, setExclusionColSelector, exclusionSelectedCol, setExclusionSelectedCol,
         isRecurring, setIsRecurring, recurrenceFrequency, setRecurrenceFrequency,
         recurrenceDaysOfWeek, setRecurrenceDaysOfWeek, recurrenceDayOfMonth, setRecurrenceDayOfMonth,
         recurrenceTime, setRecurrenceTime, expansionModal, setExpansionModal,
+        whatsappProfile,
         handleTemplateChange, handleRecipientSelect, handleReset, handleSaveExclusion,
         handleExclusionFileUpload, confirmExclusionColumn, loadExclusionContactsByTag, handleSend,
         extractTemplateVariables, extractTemplateButtons,

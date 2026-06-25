@@ -13,7 +13,7 @@ def mock_db():
 
 @pytest.fixture
 def mock_chatwoot():
-    with patch("services.engine.ChatwootClient", new_callable=MagicMock) as mock_class:
+    with patch("core.engine.executor.ChatwootClient", new_callable=MagicMock) as mock_class:
         mock_instance = mock_class.return_value
         # Mock methods that are awaited in engine.py
         mock_instance.ensure_conversation = AsyncMock(return_value=123)
@@ -49,10 +49,12 @@ async def test_execute_funnel_global_block(mock_db, mock_chatwoot):
     def side_effect(model):
         if model == models.Funnel:
             m = MagicMock()
+            m.get.return_value = mock_funnel
             m.filter.return_value.first.return_value = mock_funnel
             return m
         if model == models.ScheduledTrigger:
             m = MagicMock()
+            m.filter.return_value.with_for_update.return_value.first.return_value = mock_trigger
             m.filter.return_value.first.return_value = mock_trigger
             return m
         if model == models.BlockedContact:
@@ -70,12 +72,12 @@ async def test_execute_funnel_global_block(mock_db, mock_chatwoot):
     # To fix the "MagicMock name='mock.BlockedContact...'" error, 
     # we need to make sure 'models' in engine.py is the real module.
     # It seems another test might have patched it.
-    with patch("services.engine.models", models):
+    with patch("core.engine.executor.models", models):
         await execute_funnel(funnel_id, 0, trigger_id, contact_phone, mock_db)
 
     # Verify
     assert mock_trigger.status == 'failed'
-    assert "bloqueado globalmente" in mock_trigger.failure_reason
+    assert "Bloqueado na Plataforma" in mock_trigger.failure_reason
     # Ensure no message was sent
     mock_chatwoot.send_message.assert_not_called()
 

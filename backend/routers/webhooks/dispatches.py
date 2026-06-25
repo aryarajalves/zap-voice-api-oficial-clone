@@ -125,6 +125,19 @@ def list_dispatches(
                 trigger.sent_as = first_msg.message_type
                 backfilled = True
         
+        # Reconciliar as estatísticas para garantir que os ícones de vistos e totais reflitam a realidade de contatos únicos deduplicados
+        from services.triggers_service import reconcile_trigger_stats_logic
+        import asyncio
+        # Como list_dispatches é síncrona, rodamos a lógica assíncrona usando o loop atual
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(reconcile_trigger_stats_logic(trigger.id, x_client_id, db))
+            else:
+                loop.run_until_complete(reconcile_trigger_stats_logic(trigger.id, x_client_id, db))
+        except Exception as e:
+            logger.error(f"Erro ao reconciliar estatísticas do disparo {trigger.id}: {e}")
+
         # Adicionar contagem de funis filhos
         trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
         trigger.interaction_child_count = db.query(models.ScheduledTrigger).filter(
@@ -136,6 +149,32 @@ def list_dispatches(
             models.ScheduledTrigger.skip_block_check == True
         ).count()
         
+        # Calcular queue_count dinamicamente baseado nos contatos pendentes da fila do WhatsApp (em lote)
+        # de forma deduplicada por telefone idêntica ao modal do frontend
+        try:
+            child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger.id).all()]
+            all_ids = [trigger.id] + child_ids
+            if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted']:
+                trigger.queue_count = 0
+            elif trigger.is_bulk:
+                from sqlalchemy import func as sqlfunc
+                subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(models.MessageStatus.trigger_id.in_(all_ids)).group_by(models.MessageStatus.phone_number).subquery()
+                trigger.queue_count = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.id.in_(subq),
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count()
+            else:
+                trigger.queue_count = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.trigger_id.in_(all_ids),
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count()
+        except Exception as e:
+            trigger.queue_count = 0
+
         # Buscar follow-up filho associado
         followup = db.query(models.ScheduledTrigger).filter(
             models.ScheduledTrigger.parent_id == trigger.id,

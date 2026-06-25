@@ -70,7 +70,7 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
     # Evita que a Meta envie o mesmo payload 2x in less than 5s
     import hashlib
     payload_hash = hashlib.sha256(body).hexdigest()
-    lock_key = f"meta_{payload_hash}"
+    lock_key = f"meta_{slug or 'default'}_{payload_hash}"
     now = datetime.now(timezone.utc)
     
     if lock_key in GLOBAL_META_LOCKS:

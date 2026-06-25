@@ -74,7 +74,7 @@ const MediaNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-pink-500 min-w-[280px] transition-all hover:shadow-2xl">
-            {!data.isStart && <Handle type="target" position={Position.Top} className="w-3 h-3 bg-pink-500" />}
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-pink-500" />}
             <NodeHeader
                 label="Mídia"
                 icon={FiImage}
@@ -155,7 +155,7 @@ const MediaNode = ({ id, data }) => {
                 </label>
             </div>
 
-            <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-pink-500" />
+            <Handle type="source" position={Position.Right} className="w-3 h-3 bg-pink-500" />
 
             <ConfirmModal
                 isOpen={showDeleteConfirm}

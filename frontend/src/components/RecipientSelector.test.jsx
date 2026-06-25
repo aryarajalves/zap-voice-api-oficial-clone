@@ -144,14 +144,19 @@ describe('RecipientSelector', () => {
     // Mudar para Etiquetas e selecionar a tag mockada
     fireEvent.click(screen.getByText(/etiquetas/i));
     
-    // Aguardar as etiquetas carregarem
+    // Aguardar as etiquetas carregarem e o botão estar no documento
+    await waitFor(() => {
+      expect(screen.getByText(/Escolha as etiquetas/i)).toBeInTheDocument();
+    });
+    
+    // Abre o dropdown
+    fireEvent.click(screen.getByText(/Escolha as etiquetas/i));
+    
+    // Aguardar a tagMock aparecer e clicar nela
     await waitFor(() => {
       expect(screen.getByText('tag_teste')).toBeInTheDocument();
     });
-    
-    // Precisamos selecionar a etiqueta no dropdown para habilitar o botão
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'tag_teste' } });
+    fireEvent.click(screen.getByText('tag_teste'));
     
     // Preencher variável manualmente com código
     const input = screen.getByPlaceholderText(/Valor para Var 1/i);

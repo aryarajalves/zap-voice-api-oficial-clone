@@ -27,11 +27,11 @@ class BackupService:
     BACKUP_PREFIX = "backups/"
 
     def __init__(self):
-        self.endpoint_url = self._clean(os.getenv("S3_ENDPOINT_URL"))
-        self.access_key = self._clean(os.getenv("S3_ACCESS_KEY"))
-        self.secret_key = self._clean(os.getenv("S3_SECRET_KEY"))
-        self.bucket_name = self._clean(os.getenv("S3_BUCKET_NAME")) or "zapvoice-files"
-        self.region = self._clean(os.getenv("S3_REGION")) or "us-east-1"
+        self.endpoint_url = self._clean(os.getenv("BACKBLAZE_S3_ENDPOINT_URL") or os.getenv("S3_ENDPOINT_URL"))
+        self.access_key = self._clean(os.getenv("BACKBLAZE_S3_ACCESS_KEY") or os.getenv("S3_ACCESS_KEY"))
+        self.secret_key = self._clean(os.getenv("BACKBLAZE_S3_SECRET_KEY") or os.getenv("S3_SECRET_KEY"))
+        self.bucket_name = self._clean(os.getenv("BACKBLAZE_S3_BUCKET_NAME") or os.getenv("S3_BUCKET_NAME")) or "zapvoice-files"
+        self.region = self._clean(os.getenv("BACKBLAZE_S3_REGION") or os.getenv("S3_REGION")) or "us-east-1"
 
         # Pega a variável de ambiente COMPANY_NAME
         company = self._clean(os.getenv("COMPANY_NAME")) or "zapvoice"
@@ -276,7 +276,7 @@ class BackupService:
     def delete_backup(self, filename: str, custom_prefix: Optional[str] = None):
         """Remove um backup específico do S3."""
         # Sanitizar: não permitir path traversal
-        if "/" in filename or "\\" in filename:
+        if ".." in filename:
             raise ValueError("Nome de arquivo inválido.")
 
         prefix = custom_prefix if custom_prefix is not None else self.prefix
@@ -300,7 +300,7 @@ class BackupService:
         """
         logger.info(f"🗄️ [RESTORE] Iniciando restauração do backup: {filename}")
 
-        if "/" in filename or "\\" in filename:
+        if ".." in filename:
             raise ValueError("Nome de arquivo inválido.")
 
         prefix = custom_prefix if custom_prefix is not None else self.prefix

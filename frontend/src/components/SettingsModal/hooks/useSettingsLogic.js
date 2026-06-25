@@ -58,6 +58,16 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
         if (isOpen && activeTab === 'chatwoot') chatwoot.fetchLabels();
     }, [dataMgmt.memoryLogsPage, dataMgmt.memoryLogsLimit, activeTab]);
 
+    useEffect(() => {
+        const handleOpenSettings = (e) => {
+            if (e.detail?.tab) {
+                setActiveTab(e.detail.tab);
+            }
+        };
+        window.addEventListener('open-settings', handleOpenSettings);
+        return () => window.removeEventListener('open-settings', handleOpenSettings);
+    }, []);
+
     // WebSocket Realtime Sync
     useEffect(() => {
         if (!isOpen || !activeClient) return;

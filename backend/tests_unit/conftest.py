@@ -13,12 +13,15 @@ os.environ["DATABASE_URL"] = "sqlite://"
 # para que a lógica real de envio, pós-envio e controle de fluxo seja testada.
 os.environ["SIMULATE_MESSAGING"] = "false"
 os.environ["SIMULATE_CHATWOOT_RATELIMIT"] = "false"
+# Define SECRET_KEY para os testes unitários passarem sem depender do arquivo .env
+os.environ["SECRET_KEY"] = "super-secret-key-for-testing-purposes-only-32-chars-long"
 
 # Adiciona o diretório backend ao path
 backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
+import models.project # IMPORTANTE: Registrar tabela projects antes de instanciar Base
 import pytest
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
@@ -26,6 +29,7 @@ from sqlalchemy.orm import sessionmaker
 import database
 from database import Base
 import models
+import models.project
 from core.deps import get_db
 
 # SQLite in-memory compartilhado entre conexões via StaticPool

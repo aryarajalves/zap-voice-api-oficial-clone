@@ -8,7 +8,7 @@ const DelayNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-yellow-500 min-w-[240px]">
-            {!data.isStart && <Handle type="target" position={Position.Top} className="w-3 h-3 bg-yellow-500" />}
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-yellow-500" />}
             <NodeHeader
                 label="Smart Delay"
                 icon={FiClock}
@@ -222,9 +222,9 @@ const DelayNode = ({ id, data }) => {
             {/* Portas de Saída Inteligentes Dinâmicas */}
             {data.smartHourAdjust ? (
                 <>
-                    <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-yellow-500" style={{ left: '20%', backgroundColor: '#eab308', border: '1px solid white' }} />
-                    <Handle type="source" position={Position.Bottom} id="approach" className="w-3 h-3 bg-yellow-500" style={{ left: '50%', backgroundColor: '#eab308', border: '1px solid white' }} />
-                    <Handle type="source" position={Position.Bottom} id="past" className="w-3 h-3 bg-yellow-500" style={{ left: '80%', backgroundColor: '#eab308', border: '1px solid white' }} />
+                    <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-yellow-500" style={{ left: '20%', backgroundColor: '#eab308', border: '1px solid white' }} />
+                    <Handle type="source" position={Position.Right} id="approach" className="w-3 h-3 bg-yellow-500" style={{ left: '50%', backgroundColor: '#eab308', border: '1px solid white' }} />
+                    <Handle type="source" position={Position.Right} id="past" className="w-3 h-3 bg-yellow-500" style={{ left: '80%', backgroundColor: '#eab308', border: '1px solid white' }} />
                     
                     <div className="flex justify-between text-[7px] font-extrabold uppercase mt-2.5 px-0.5 pt-1 border-t border-gray-100 dark:border-gray-700">
                         <span className="text-yellow-600 dark:text-yellow-400">Padrão</span>
@@ -233,7 +233,7 @@ const DelayNode = ({ id, data }) => {
                     </div>
                 </>
             ) : (
-                <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-yellow-500" />
+                <Handle type="source" position={Position.Right} className="w-3 h-3 bg-yellow-500" />
             )}
         </div>
     );

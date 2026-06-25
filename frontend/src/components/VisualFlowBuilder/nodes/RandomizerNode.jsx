@@ -61,7 +61,7 @@ const RandomizerNode = ({ id, data }) => {
 
     return (
         <div className={`px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 min-w-[260px] transition-colors ${isValid ? 'border-indigo-500' : 'border-red-500'}`}>
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-indigo-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
             <NodeHeader
                 label="Roteamento Dinâmico"
                 icon={FiShuffle}

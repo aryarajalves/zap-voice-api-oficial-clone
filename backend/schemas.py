@@ -194,6 +194,7 @@ class ScheduledTrigger(ScheduledTriggerBase):
     chatwoot_inbox_id: Optional[int] = None
     chatwoot_url: Optional[str] = None
     execution_history: Optional[List[dict]] = []
+    queue_count: Optional[int] = None
 
     @field_validator('integration_id', mode='before')
     @classmethod
@@ -552,6 +553,9 @@ class WebhookLeadBase(BaseModel):
     total_events: int = 1
     is_locked: bool = False
     variables: Optional[Dict[str, Any]] = None
+    imported_by_client_id: Optional[int] = None
+    imported_by_name: Optional[str] = None
+    project_id: Optional[int] = None
 
     @field_validator('variables', mode='before')
     @classmethod

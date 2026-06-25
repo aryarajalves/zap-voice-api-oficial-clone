@@ -61,10 +61,23 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
         # Determine the last 8 digits for matching
         last_8 = clean_phone_lookup[-8:] if len(clean_phone_lookup) >= 8 else clean_phone_lookup
 
-        lead = db.query(models.WebhookLead).filter(
-            models.WebhookLead.client_id == client_id,
-            models.WebhookLead.phone.like(f"%{last_8}")
-        ).first()
+        # Obter projeto associado ao cliente para escopo compartilhado
+        from models import Client
+        active_client = db.query(Client).filter(Client.id == client_id).first()
+        proj_id = active_client.project_id if active_client else None
+
+        if proj_id:
+            # Busca lead compartilhado no projeto
+            lead = db.query(models.WebhookLead).filter(
+                models.WebhookLead.project_id == proj_id,
+                models.WebhookLead.phone.like(f"%{last_8}")
+            ).first()
+        else:
+            # Busca lead isolado por cliente (legado)
+            lead = db.query(models.WebhookLead).filter(
+                models.WebhookLead.client_id == client_id,
+                models.WebhookLead.phone.like(f"%{last_8}")
+            ).first()
         
         # Determine correct event time
         final_event_time = event_time
@@ -107,6 +120,10 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
             lead.email = email or lead.email
             lead.last_event_type = event_type or lead.last_event_type
             
+            # Atualizar project_id se agora o cliente tem projeto mas o lead antigo não tinha
+            if proj_id and not lead.project_id:
+                lead.project_id = proj_id
+
             if lead.last_event_at and lead.last_event_at.tzinfo is None:
                 lead.last_event_at = lead.last_event_at.replace(tzinfo=timezone.utc)
 
@@ -128,6 +145,13 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
             for t in final_tags_to_add:
                 if t not in current_tags:
                     current_tags.append(t)
+            
+            if parsed_data.get("created_by_webhook"):
+                current_vars = dict(lead.variables or {})
+                current_vars["created_by_webhook"] = True
+                if parsed_data.get("webhook_name"):
+                    current_vars["webhook_name"] = parsed_data.get("webhook_name")
+                lead.variables = current_vars
             
             lead.tags = ", ".join(current_tags)
 
@@ -155,8 +179,16 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
             lead.total_events = (lead.total_events or 0) + 1
         else:
             # Create new lead record
+            lead_vars = {}
+            if parsed_data.get("created_by_webhook"):
+                lead_vars["created_by_webhook"] = True
+                if parsed_data.get("webhook_name"):
+                    lead_vars["webhook_name"] = parsed_data.get("webhook_name")
+
             lead = models.WebhookLead(
                 client_id=client_id,
+                project_id=proj_id,
+                imported_by_client_id=client_id,
                 name=name,
                 phone=clean_phone_lookup,
                 email=email,
@@ -167,7 +199,8 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
                 payment_method=payment_method,
                 price=price,
                 tags=", ".join(tags_to_add) if tags_to_add else None,
-                total_events=1
+                total_events=1,
+                variables=lead_vars
             )
             db.add(lead)
         

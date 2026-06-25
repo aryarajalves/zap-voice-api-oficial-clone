@@ -9,7 +9,7 @@ const UpdateContactNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-orange-500 min-w-[280px]">
-            <Handle type="target" position={Position.Top} className="w-3 h-3 bg-orange-500" />
+            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-orange-500" />
             <NodeHeader
                 label="Atualizar Contato no Chatwoot"
                 icon={FiUser}
@@ -56,7 +56,7 @@ const UpdateContactNode = ({ id, data }) => {
                 )}
             </div>
 
-            <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-orange-500" />
+            <Handle type="source" position={Position.Right} className="w-3 h-3 bg-orange-500" />
         </div>
     );
 };

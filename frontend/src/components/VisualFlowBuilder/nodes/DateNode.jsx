@@ -8,7 +8,7 @@ const DateNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-xl bg-white dark:bg-gray-800 border-2 border-violet-500 min-w-[250px] backdrop-blur-md">
-            {!data.isStart && <Handle type="target" position={Position.Top} className="w-3 h-3 bg-violet-500" />}
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-violet-500" />}
             
             <NodeHeader
                 label="Agendamento Data"
@@ -142,7 +142,7 @@ const DateNode = ({ id, data }) => {
                     </div>
                 </div>
             ) : (
-                <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-violet-500" />
+                <Handle type="source" position={Position.Right} className="w-3 h-3 bg-violet-500" />
             )}
         </div>
     );

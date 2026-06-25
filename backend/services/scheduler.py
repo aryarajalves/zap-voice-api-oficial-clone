@@ -181,12 +181,17 @@ async def process_recurring_triggers(db, now_utc):
             logger.info(f"🔍 Filtrando contatos da etiqueta no banco local pela tag: {rt.tag}")
             tag_contacts = []
             try:
-                leads = db.query(models.WebhookLead).filter(
-                    models.WebhookLead.client_id == rt.client_id,
-                    models.WebhookLead.tags.ilike(f"%{rt.tag}%")
-                ).all()
-                tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
-                logger.info(f"📦 Banco local retornou {len(tag_contacts)} contatos com a tag '{rt.tag}'")
+                from sqlalchemy import or_
+                tags_list = [t.strip() for t in rt.tag.split(",") if t.strip()]
+                if tags_list:
+                    leads = db.query(models.WebhookLead).filter(
+                        models.WebhookLead.client_id == rt.client_id,
+                        or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_list))
+                    ).all()
+                    tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
+                    logger.info(f"📦 Banco local retornou {len(tag_contacts)} contatos com as tags '{tags_list}'")
+                else:
+                    logger.info(f"📦 Nenhuma tag válida encontrada em '{rt.tag}'")
             except Exception as e:
                 logger.error(f"❌ Erro ao buscar tag '{rt.tag}' no banco local: {e}")
             

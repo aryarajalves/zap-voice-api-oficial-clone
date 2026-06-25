@@ -7,13 +7,23 @@ export function ViewContactsModal({ viewingContacts, onClose, onSaveExclusions, 
     const [localExclusions, setLocalExclusions] = useState([]);
     const [filterType, setFilterType] = useState('all'); // 'all' | 'active' | 'excluded'
     const [isRefreshing, setIsRefreshing] = useState(false);
+    
+    // Estados de Paginação
+    const [currentPage, setCurrentPage] = useState(0);
+    const [pageSize, setPageSize] = useState(20);
 
     useEffect(() => {
         if (viewingContacts) {
             setLocalExclusions(viewingContacts.exclusion_list || []);
             setFilterType('all');
+            setCurrentPage(0);
         }
     }, [viewingContacts]);
+
+    // Resetar página quando filtrar ou alterar limite
+    useEffect(() => {
+        setCurrentPage(0);
+    }, [filterType, pageSize]);
 
     if (!viewingContacts) return null;
 
@@ -34,12 +44,17 @@ export function ViewContactsModal({ viewingContacts, onClose, onSaveExclusions, 
     const activeContacts = contacts.filter(c => !localExclusions.includes(c.phone));
     const excludedContacts = contacts.filter(c => localExclusions.includes(c.phone));
 
-    const displayedContacts = contacts.filter(c => {
+    const filteredContacts = contacts.filter(c => {
         const isExcluded = localExclusions.includes(c.phone);
         if (filterType === 'active') return !isExcluded;
         if (filterType === 'excluded') return isExcluded;
         return true;
     });
+
+    // Fatiar contatos para a página atual
+    const totalFiltered = filteredContacts.length;
+    const totalPages = Math.ceil(totalFiltered / pageSize);
+    const displayedContacts = filteredContacts.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
 
     const handleSave = async () => {
         if (onSaveExclusions) {
@@ -63,7 +78,7 @@ export function ViewContactsModal({ viewingContacts, onClose, onSaveExclusions, 
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
                 <div className="p-8 border-b border-white/5 flex items-center justify-between">
                     <div>
                         <h3 className="text-2xl font-black text-white flex items-center gap-3">
@@ -94,25 +109,43 @@ export function ViewContactsModal({ viewingContacts, onClose, onSaveExclusions, 
                 </div>
 
                 {/* Filtros rápidos de status */}
-                <div className="px-8 py-4 bg-slate-950/20 border-b border-white/5 flex items-center gap-2">
-                    <button
-                        onClick={() => setFilterType('all')}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
-                    >
-                        Todos ({contacts.length})
-                    </button>
-                    <button
-                        onClick={() => setFilterType('active')}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'active' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
-                    >
-                        Ativos ({activeContacts.length})
-                    </button>
-                    <button
-                        onClick={() => setFilterType('excluded')}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'excluded' ? 'bg-rose-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
-                    >
-                        Removidos ({excludedContacts.length})
-                    </button>
+                <div className="px-8 py-4 bg-slate-950/20 border-b border-white/5 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setFilterType('all')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
+                        >
+                            Todos ({contacts.length})
+                        </button>
+                        <button
+                            onClick={() => setFilterType('active')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'active' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
+                        >
+                            Ativos ({activeContacts.length})
+                        </button>
+                        <button
+                            onClick={() => setFilterType('excluded')}
+                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterType === 'excluded' ? 'bg-rose-600 text-white shadow-lg' : 'bg-white/5 hover:bg-white/10 text-slate-400'}`}
+                        >
+                            Removidos ({excludedContacts.length})
+                        </button>
+                    </div>
+                    
+                    {/* Seletor de Contatos por Página */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Exibir:</span>
+                        <select
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="bg-slate-800 border border-white/10 text-white text-xs font-black rounded-lg px-2.5 py-1.5 outline-none cursor-pointer"
+                        >
+                            <option value={20}>20 contatos</option>
+                            <option value={50}>50 contatos</option>
+                            <option value={100}>100 contatos</option>
+                            <option value={500}>500 contatos</option>
+                            <option value={1000}>1000 contatos</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-6 space-y-2 premium-scrollbar">
@@ -157,9 +190,35 @@ export function ViewContactsModal({ viewingContacts, onClose, onSaveExclusions, 
                     )}
                 </div>
 
-                <div className="p-6 bg-slate-800/40 border-t border-white/5 flex items-center justify-between">
+                {/* Footer com Paginação Local */}
+                <div className="px-8 py-3 bg-slate-950/40 border-t border-white/5 flex items-center justify-between flex-wrap gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                            disabled={currentPage === 0}
+                            className={`px-3 py-1.5 bg-slate-800 text-slate-300 font-bold rounded-lg ${currentPage === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-700'}`}
+                        >
+                            Anterior
+                        </button>
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                            Página {totalPages === 0 ? 0 : currentPage + 1} de {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+                            disabled={currentPage >= totalPages - 1}
+                            className={`px-3 py-1.5 bg-slate-800 text-slate-300 font-bold rounded-lg ${currentPage >= totalPages - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-700'}`}
+                        >
+                            Próxima
+                        </button>
+                    </div>
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                        Total nesta lista: <span className="text-white text-sm">{displayedContacts.length}</span>
+                        Página Atual: <span className="text-white text-sm">{displayedContacts.length}</span> / Total: <span className="text-white text-sm">{totalFiltered}</span>
+                    </span>
+                </div>
+
+                <div className="p-6 bg-slate-850/60 border-t border-white/5 flex items-center justify-between">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        Total Geral: <span className="text-white text-sm">{contacts.length}</span>
                     </span>
                     <div className="flex items-center gap-3">
                         <button 

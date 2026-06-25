@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useClient } from '../contexts/ClientContext';
 import ConfirmModal from '../components/ConfirmModal';
 import InstagramLogsTab from './InstagramAutomation/InstagramLogsTab';
-import InstagramSettingsModal from './InstagramAutomation/InstagramSettingsModal';
 import AutomationFormModal from './InstagramAutomation/AutomationFormModal';
 import useInstagramAutomation from './InstagramAutomation/useInstagramAutomation';
 
@@ -30,16 +29,6 @@ export default function InstagramAutomation() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              state.setInstaAccessToken('');
-              state.fetchSettings();
-              state.setIsSettingsModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-800/50 hover:bg-gray-800 text-gray-300 transition-all font-bold text-[10px] border border-white/5 uppercase tracking-widest"
-          >
-            <FiSettings size={14} /> Configurações
-          </button>
           <button
             onClick={state.handleOpenNew}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white transition-all font-black text-[10px] shadow-lg shadow-pink-600/20 active:scale-95 uppercase tracking-widest"
@@ -190,22 +179,6 @@ export default function InstagramAutomation() {
         document.body
       )}
 
-      {/* Settings Modal */}
-      <InstagramSettingsModal
-        isOpen={state.isSettingsModalOpen}
-        onClose={() => state.setIsSettingsModalOpen(false)}
-        onSave={async () => { await state.handleSaveSettings(); state.setIsSettingsModalOpen(false); }}
-        isSaving={state.isConfiguringSettings}
-        instaAccountID={state.instaAccountID} setInstaAccountID={state.setInstaAccountID}
-        instaAccessToken={state.instaAccessToken} setInstaAccessToken={state.setInstaAccessToken}
-        setTokenRevelado={state.setTokenRevelado}
-        tokenJaConfigurado={state.tokenJaConfigurado}
-        showToken={state.showToken}
-        revealingToken={state.revealingToken}
-        onRevealToken={state.handleRevealToken}
-        webhookBaseUrl={state.webhookBaseUrl}
-        instaWebhookSlug={state.instaWebhookSlug} setInstaWebhookSlug={state.setInstaWebhookSlug}
-      />
     </div>
   );
 }

@@ -265,6 +265,8 @@ async def sync_webhook_history(
                 tag_list.append(history.event_type.replace("_", " ").title())
         
         tag = ", ".join(list(dict.fromkeys(tag_list))) if tag_list else None
+        parsed_data["created_by_webhook"] = True
+        parsed_data["webhook_name"] = integration.name
         upsert_webhook_lead(db, integration.client_id, integration.platform, parsed_data, event_time=history.created_at, force_time=True, tag=tag)
 
         # Atualiza as flags de automação no processed_data para o frontend saber o que exibir
@@ -274,6 +276,7 @@ async def sync_webhook_history(
         updated_data["private_note_enabled"] = bool(getattr(mapping_exists, "private_note", None)) if mapping_exists else False
         updated_data["chatwoot_label"] = getattr(mapping_exists, "chatwoot_label", []) if mapping_exists else []
         updated_data["free_message_enabled"] = getattr(mapping_exists, "send_as_free_message", False) if mapping_exists else False
+        updated_data["internal_tags"] = getattr(mapping_exists, "internal_tags", "") if mapping_exists else ""
         
         history.processed_data = updated_data
 
@@ -383,6 +386,8 @@ async def sync_all_webhook_history(
                 history.error_message = None
 
             if parsed_data.get("phone"):
+                parsed_data["created_by_webhook"] = True
+                parsed_data["webhook_name"] = integration.name
                 # 1. Identifica o mapeamento correspondente (com fallback para outros)
                 m_obj = next((m for m in mappings if m.event_type.lower() == history.event_type), None)
                 if not m_obj and history.event_type != "outros":
@@ -415,6 +420,7 @@ async def sync_all_webhook_history(
                     updated_data["chatwoot_label"] = robust_extract_labels(raw_labels)
                     
                     updated_data["free_message_enabled"] = getattr(m_obj, "send_as_free_message", False)
+                    updated_data["internal_tags"] = getattr(m_obj, "internal_tags", "") if m_obj else ""
                     history.processed_data = updated_data
 
                     if is_mc_active:

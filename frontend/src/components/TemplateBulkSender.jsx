@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
 // Common Components
@@ -15,6 +15,20 @@ import { useBulkSender } from './BulkSender/hooks/useBulkSender';
 
 const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
     const bulk = useBulkSender(onViewChange, onSuccess);
+    const containerRef = useRef(null);
+
+    // Sobe ao topo quando o step muda
+    useEffect(() => {
+        // Tenta scrollar o elemento <main> pai (que tem overflow-y-auto no AppContent)
+        if (containerRef.current) {
+            const mainEl = containerRef.current.closest('main');
+            if (mainEl) {
+                mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+    }, [bulk.step]);
 
     const selectedTemplateObj = bulk.templates.find(t => t.name === bulk.selectedTemplate);
     let templateVariables = bulk.extractTemplateVariables(selectedTemplateObj);
@@ -40,7 +54,7 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
     };
 
     return (
-        <div className="space-y-10 p-2 sm:p-4">
+        <div ref={containerRef} className="space-y-10 p-2 sm:p-4">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-4">
                 <div className="space-y-2">
@@ -100,6 +114,7 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
             ) : (
                 <ExecutionStep
                     {...bulk}
+                    whatsappProfile={bulk.whatsappProfile}
                     templateVariables={templateVariables}
                     templateButtons={templateButtons}
                     selectedInbox={bulk.selectionMetadata?.inbox_id}
