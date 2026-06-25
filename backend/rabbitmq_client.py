@@ -58,7 +58,6 @@ class RabbitMQClient:
                     "zapvoice_bulk_sends",
                     "zapvoice_funnel_executions",
                     "chatwoot_private_messages",
-                    "n8n_delivery_notifications",
                     "ai_memory_queue",
                     "agent_memory_webhook_queue",
                     "whatsapp_events",

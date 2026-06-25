@@ -12,6 +12,7 @@ class StorageClient:
     def __init__(self):
         from config_loader import get_setting
 
+        # === Provider Principal: MinIO (S3_*) ===
         self.endpoint_url = os.getenv("S3_ENDPOINT_URL")
         self.access_key = os.getenv("S3_ACCESS_KEY")
         self.secret_key = os.getenv("S3_SECRET_KEY")
@@ -23,7 +24,33 @@ class StorageClient:
         if self.secret_key: self.secret_key = self.secret_key.split('#')[0].strip().strip('"').strip("'")
         if self.bucket_name: self.bucket_name = self.bucket_name.split('#')[0].strip().strip('"').strip("'")
         if self.region: self.region = self.region.split('#')[0].strip().strip('"').strip("'")
-        
+
+        # === Provider Fallback: Backblaze (BACKBLAZE_*) ===
+        self._bb_endpoint = (os.getenv("BACKBLAZE_S3_ENDPOINT_URL") or "").split('#')[0].strip().strip('"').strip("'")
+        self._bb_access_key = (os.getenv("BACKBLAZE_S3_ACCESS_KEY") or "").split('#')[0].strip().strip('"').strip("'")
+        self._bb_secret_key = (os.getenv("BACKBLAZE_S3_SECRET_KEY") or "").split('#')[0].strip().strip('"').strip("'")
+        self._bb_bucket = (os.getenv("BACKBLAZE_S3_BUCKET_NAME") or "zapvoice-files").split('#')[0].strip().strip('"').strip("'")
+        self._bb_region = (os.getenv("BACKBLAZE_S3_REGION") or "us-west-004").split('#')[0].strip().strip('"').strip("'")
+        self._bb_public_url = (os.getenv("BACKBLAZE_S3_PUBLIC_URL") or "").split('#')[0].strip().strip('"').strip("'")
+        self._bb_client = None
+
+        # Inicializar cliente Backblaze se configurado
+        if self._bb_endpoint and self._bb_access_key:
+            try:
+                from botocore.config import Config
+                self._bb_client = boto3.client(
+                    's3',
+                    endpoint_url=self._bb_endpoint,
+                    aws_access_key_id=self._bb_access_key,
+                    aws_secret_access_key=self._bb_secret_key,
+                    region_name=self._bb_region,
+                    config=Config(signature_version='s3v4')
+                )
+                logger.info(f"✅ [STORAGE] Backblaze configurado como fallback: {self._bb_endpoint}")
+            except Exception as e:
+                logger.error(f"❌ [STORAGE] Falha ao inicializar Backblaze: {e}")
+                self._bb_client = None
+
         # Auto-detectar se o host do MinIO no Docker é resolvível (caso contrário, mapear para localhost:9005)
         if self.endpoint_url and "zapvoice-minio" in self.endpoint_url:
             import socket
@@ -36,9 +63,9 @@ class StorageClient:
 
         if self.endpoint_url and self.access_key:
             try:
-                logger.info(f"Conectando ao S3: {self.endpoint_url} (Region: {self.region})")
+                logger.info(f"Conectando ao S3 (MinIO): {self.endpoint_url} (Region: {self.region})")
                 from botocore.config import Config
-                
+
                 self.s3_client = boto3.client(
                     's3',
                     endpoint_url=self.endpoint_url,
@@ -49,11 +76,11 @@ class StorageClient:
                 )
                 self._ensure_bucket_exists()
             except Exception as e:
-                logger.error(f"Erro CRITICO ao inicializar S3: {str(e)}")
+                logger.error(f"Erro CRITICO ao inicializar MinIO: {str(e)}")
                 self.s3_client = None
-                logger.warning("S3 desativado devido a erro de configuracao. Usando modo Local.")
+                logger.warning("MinIO desativado. Tentando Backblaze como fallback...")
         else:
-            logger.warning("StorageClient: Configuracoes S3 incompletas. Usando armazenamento local.")
+            logger.warning("StorageClient: Configuracoes MinIO incompletas. Usando armazenamento local.")
             self.s3_client = None
 
     def _ensure_bucket_exists(self):
@@ -191,18 +218,49 @@ class StorageClient:
         try:
             if hasattr(file_obj, 'seek'):
                 file_obj.seek(0)
-                
+
             self.s3_client.upload_fileobj(
                 file_obj,
                 self.bucket_name,
                 filename,
                 ExtraArgs={'ContentType': content_type}
             )
+            logger.info(f"✅ [STORAGE] Upload concluído no MinIO: {filename}")
             return self._get_url_for_file(filename)
         except Exception as e:
             import traceback
-            logger.error(f"Erro upload S3 (Detalhado): {str(e)}")
+            logger.error(f"❌ [STORAGE] Erro upload MinIO: {str(e)}")
             logger.error(traceback.format_exc())
+
+            # Fallback: tentar Backblaze
+            if self._bb_client:
+                try:
+                    logger.warning(f"⚠️ [STORAGE] MinIO falhou. Tentando Backblaze como fallback para: {filename}")
+                    if hasattr(file_obj, 'seek'):
+                        file_obj.seek(0)
+                    self._bb_client.upload_fileobj(
+                        file_obj,
+                        self._bb_bucket,
+                        filename,
+                        ExtraArgs={'ContentType': content_type}
+                    )
+                    # Gerar URL pública do Backblaze
+                    bb_public = self._bb_public_url or self._bb_endpoint
+                    if bb_public.endswith("/"): bb_public = bb_public[:-1]
+                    has_bucket = f"{self._bb_bucket}." in bb_public or f"/{self._bb_bucket}" in bb_public
+                    if "backblazeb2.com" in bb_public and not has_bucket:
+                        parts = bb_public.split("://")
+                        url = f"{parts[0]}://{self._bb_bucket}.{parts[1]}/{filename}" if len(parts) == 2 else f"{bb_public}/{filename}"
+                    elif has_bucket:
+                        url = f"{bb_public}/{filename}"
+                    else:
+                        url = f"{bb_public}/{self._bb_bucket}/{filename}"
+                    logger.info(f"✅ [STORAGE] Upload concluído no Backblaze (fallback): {url}")
+                    return url
+                except Exception as e2:
+                    logger.error(f"❌ [STORAGE] Erro upload Backblaze (fallback): {str(e2)}")
+                    raise e2
+
             raise e
 
     def delete_file(self, filename: str):

@@ -118,60 +118,6 @@ async def catch_webhook_deprecated(slug: str, request: Request, payload: dict = 
         logger.error(f"Error processing webhook {slug}: {e}")
         return {"status": "error", "message": str(e)}
 
-@router.post("/n8n/trigger")
-@limiter.limit("2000/minute")
-async def n8n_trigger_webhook(request: Request, payload: dict = Body(...), db: Session = Depends(get_db)):
-    contacts = payload.get("contacts", [])
-    if not contacts: return {"error": "No contacts provided"}
-    
-    forced_funnel_id = payload.get("funnel_id")
-    triggered_count = 0
-    results = []
-    
-    for contact in contacts:
-        phone = contact.get("phone")
-        button_context = contact.get("button_context", "").strip()
-        if not phone:
-            results.append({"phone": "unknown", "status": "skipped", "reason": "no_phone"})
-            continue
-        
-        clean_phone = ''.join(filter(str.isdigit, phone))
-        
-        if forced_funnel_id:
-            funnel = db.query(models.Funnel).filter(models.Funnel.id == forced_funnel_id).first()
-            if funnel:
-                trigger = models.ScheduledTrigger(
-                    contact_phone=clean_phone, client_id=funnel.client_id,
-                    parent_id=payload.get("parent_id"), product_name="HIDDEN_CHILD" if payload.get("parent_id") else payload.get("product_name"),
-                    status='queued', scheduled_time=datetime.now(timezone.utc), is_bulk=False
-                )
-                db.add(trigger)
-                triggered_count += 1
-                results.append({"phone": clean_phone, "status": "triggered", "funnel_id": funnel.id})
-        elif button_context:
-            matched_funnel = db.query(models.Funnel).filter(models.Funnel.trigger_phrase == button_context).first()
-            if matched_funnel:
-                trigger = models.ScheduledTrigger(
-                    funnel_id=matched_funnel.id, contact_phone=clean_phone, client_id=matched_funnel.client_id,
-                    status='queued', scheduled_time=datetime.now(timezone.utc),
-                    parent_id=payload.get("parent_id"), product_name="HIDDEN_CHILD" if payload.get("parent_id") else f"Gatilho: {button_context}",
-                    is_bulk=False
-                )
-                db.add(trigger)
-                triggered_count += 1
-                results.append({"phone": clean_phone, "status": "triggered", "funnel_id": matched_funnel.id, "matched_by": button_context})
-    
-    db.commit()
-    return {"status": "processed", "total_contacts": len(contacts), "triggered": triggered_count, "results": results}
-
-@router.post("/n8n/button-click")
-@limiter.limit("2000/minute")
-async def button_click_webhook(request: Request, payload: dict = Body(...), db: Session = Depends(get_db)):
-    phone = payload.get("phone")
-    button_context = payload.get("button_context")
-    if not phone or not button_context: return {"error": "Phone and button context required"}
-    logger.info(f"📱 Button Click Received: {phone} clicked '{button_context}'")
-    return {"status": "button_click_logged", "phone": phone, "button_context": button_context}
 
 @router.get("/ping")
 async def ping_webhook():
