@@ -8,6 +8,20 @@ logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
 
 
+def _extract_header_media(components: list):
+    """Extrai (media_type, media_url) do componente header de um template, ou None."""
+    for comp in components or []:
+        if str(comp.get("type", "")).lower() == "header":
+            for param in comp.get("parameters", []):
+                for media_type in ["video", "image", "document"]:
+                    if param.get("type") == media_type:
+                        media_data = param.get(media_type, {})
+                        url = media_data.get("link") or media_data.get("url")
+                        if url:
+                            return (media_type, url)
+    return None
+
+
 async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, note_content: str, chatwoot_label, trigger_id: int = None):
     """Após envio bem-sucedido: garante conversa, envia nota privada e aplica etiquetas."""
     try:
@@ -179,6 +193,23 @@ async def send_smart_message(
                         free_text = None
 
                 if free_text:
+                    # Envia mídia do header do template como mensagem de sessão separada (gratuita)
+                    header_media = _extract_header_media(effective_components)
+                    if header_media:
+                        media_type, media_url = header_media
+                        logger.info(f"📤 [Smart Send] Janela aberta — enviando mídia do template ({media_type}) como sessão para {phone}...")
+                        try:
+                            if media_type == "video":
+                                await chatwoot.send_video_official(phone, media_url)
+                            elif media_type == "image":
+                                await chatwoot.send_image_official(phone, media_url)
+                            elif media_type == "document":
+                                await chatwoot.send_document_official(phone, media_url)
+                            logger.info(f"✅ [Smart Send] Mídia ({media_type}) enviada. Aguardando 7s antes do texto para {phone}...")
+                            await asyncio.sleep(7)
+                        except Exception as e_media:
+                            logger.warning(f"⚠️ [Smart Send] Falha ao enviar mídia do header: {e_media}. Continuando com texto...")
+
                     btn_texts = []
                     if direct_message and direct_message_params:
                         buttons = direct_message_params if isinstance(direct_message_params, list) else direct_message_params.get("buttons", [])

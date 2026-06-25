@@ -436,6 +436,26 @@ class WhatsAppClient:
         }
         return await self._meta_request("POST", "messages", json=payload)
 
+    async def send_video_official(self, phone_number: str, video_url: str, caption: str = ""):
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": ''.join(filter(str.isdigit, phone_number)),
+            "type": "video",
+            "video": {"link": video_url, "caption": caption}
+        }
+        return await self._meta_request("POST", "messages", json=payload)
+
+    async def send_document_official(self, phone_number: str, document_url: str, caption: str = "", filename: str = ""):
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": ''.join(filter(str.isdigit, phone_number)),
+            "type": "document",
+            "document": {"link": document_url, "caption": caption, "filename": filename or "documento"}
+        }
+        return await self._meta_request("POST", "messages", json=payload)
+
     async def send_text_direct(self, phone_number: str, content: str):
         return await self.send_text_official(phone_number, content)
 

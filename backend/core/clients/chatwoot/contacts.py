@@ -272,15 +272,46 @@ class ChatwootContactsMixin:
         if not eligible:
             eligible = conversations  # Relaxar filtro se não houver match de inbox
 
-        # Prioridade: open > pending > resolved (por mais recente)
-        conversation_id = None
-        for status_pref in ['open', 'pending', 'resolved']:
-            for conv in eligible:
-                if conv.get("status") == status_pref:
-                    conversation_id = conv["id"]
-                    break
-            if conversation_id:
+        # Ordenar por atividade mais recente para pegar sempre a conversa mais nova
+        def _conv_sort_key(c):
+            ts = c.get("last_activity_at") or c.get("created_at") or 0
+            return ts if isinstance(ts, (int, float)) else 0
+
+        eligible = sorted(eligible, key=_conv_sort_key, reverse=True)
+
+        # Verificar janela de 24h da Meta: conversas com atividade recente têm prioridade máxima
+        from datetime import datetime, timezone, timedelta
+        now_ts = datetime.now(timezone.utc).timestamp()
+        window_24h = now_ts - (24 * 3600)
+
+        def _has_meta_window(c):
+            ts = c.get("last_activity_at") or 0
+            return isinstance(ts, (int, float)) and ts > window_24h
+
+        # 1ª tentativa: open + janela de 24h aberta (conversa mais recente)
+        for conv in eligible:
+            if conv.get("status") == "open" and _has_meta_window(conv):
+                conversation_id = conv["id"]
+                logger.info(f"✅ [FIND_CONV] Conversa {conversation_id} selecionada com janela Meta 24h aberta para {clean_phone}.")
                 break
+
+        # 2ª tentativa: open sem janela (qualquer open, mais recente)
+        if not conversation_id:
+            for conv in eligible:
+                if conv.get("status") == "open":
+                    conversation_id = conv["id"]
+                    logger.info(f"⚠️ [FIND_CONV] Conversa {conversation_id} selecionada (open, sem janela Meta 24h) para {clean_phone}.")
+                    break
+
+        # 3ª tentativa: pending ou resolved mais recente
+        if not conversation_id:
+            for status_pref in ['pending', 'resolved']:
+                for conv in eligible:
+                    if conv.get("status") == status_pref:
+                        conversation_id = conv["id"]
+                        break
+                if conversation_id:
+                    break
 
         if not conversation_id and eligible:
             conversation_id = eligible[0]["id"]

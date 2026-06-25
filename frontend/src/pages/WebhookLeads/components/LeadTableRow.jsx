@@ -67,9 +67,9 @@ export default function LeadTableRow({
 }) {
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
-      <td className="px-6 py-4">
-        <input 
-          type="checkbox" 
+      <td className="px-3 py-2.5">
+        <input
+          type="checkbox"
           className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
           checked={selectedLeads.includes(lead.id)}
           onChange={() => onSelectLead(lead.id)}
@@ -77,13 +77,13 @@ export default function LeadTableRow({
           title={lead.is_locked ? "Contatos bloqueados não podem ser selecionados para exclusão em massa." : ""}
         />
       </td>
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold border border-blue-100 dark:border-blue-800">
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 flex-shrink-0 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm border border-blue-100 dark:border-blue-800">
             {lead.name ? lead.name[0].toUpperCase() : '?'}
           </div>
           <div>
-            <div className="flex flex-wrap items-center gap-1.5 max-w-[280px] sm:max-w-none">
+            <div className="flex flex-wrap items-center gap-1 max-w-[220px]">
               <p className="font-semibold text-gray-900 dark:text-white leading-tight">{lead.name || 'Sem Nome'}</p>
               {lead.platform === 'chatwoot_import' && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50 whitespace-nowrap" title="Importado do Chatwoot">
@@ -125,61 +125,61 @@ export default function LeadTableRow({
           </div>
         </div>
       </td>
-      <td className="px-6 py-4">
-        <span className="text-sm truncate max-w-[200px]" title={lead.email}>{lead.email || '---'}</span>
+      <td className="px-3 py-2.5">
+        <span className="text-xs truncate block max-w-[160px]" title={lead.email}>{lead.email || '---'}</span>
       </td>
-      <td className="px-6 py-4">
-        <div className="flex flex-wrap gap-1.5 items-center max-w-[240px]">
+      <td className="px-3 py-2.5">
+        <div className="flex flex-wrap gap-1 items-center max-w-[180px]">
           <TagsCell lead={lead} onOpenTagsModal={onOpenTagsModal} />
         </div>
       </td>
       {showCustomColumns && customColumnsKeys.map(key => (
-        <td key={key} className="px-6 py-4 text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono">
+        <td key={key} className="px-3 py-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono">
           {(lead.variables && lead.variables[key]) || '---'}
         </td>
       ))}
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-          <FiCalendar size={12} className="flex-shrink-0 text-gray-400" />
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+          <FiCalendar size={11} className="flex-shrink-0 text-gray-400" />
           <span className="text-xs font-mono">{formatDateBrasilia(lead.updated_at || lead.created_at)}</span>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-          <FiCalendar size={12} className="flex-shrink-0 text-gray-400" />
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+          <FiCalendar size={11} className="flex-shrink-0 text-gray-400" />
           <span className="text-xs font-mono">{formatDateBrasilia(lead.created_at)}</span>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div className="flex items-center justify-end gap-2">
+      <td className="px-3 py-2.5 whitespace-nowrap text-right text-sm font-medium">
+        <div className="flex items-center justify-end gap-1">
           {lead.chatwoot_url && (
-            <a href={lead.chatwoot_url} target="_blank" rel="noreferrer" className="p-2 text-purple-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors" title="Ver Conversa no Chatwoot">
-              <FiMessageSquare size={18} />
+            <a href={lead.chatwoot_url} target="_blank" rel="noreferrer" className="p-1.5 text-purple-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors" title="Ver Conversa no Chatwoot">
+              <FiMessageSquare size={15} />
             </a>
           )}
-          <button onClick={() => onOpenVariables(lead)} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" title="Ver Variáveis Extraídas">
-            <FiDatabase size={18} />
+          <button onClick={() => onOpenVariables(lead)} className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" title="Ver Variáveis Extraídas">
+            <FiDatabase size={15} />
           </button>
-          <button onClick={() => onEdit(lead)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" title="Editar Informações">
-            <FiEdit2 size={18} />
+          <button onClick={() => onEdit(lead)} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" title="Editar Informações">
+            <FiEdit2 size={15} />
           </button>
           <button
             onClick={() => onToggleLock(lead)}
             disabled={togglingLock === lead.id}
-            className={`p-2 rounded-lg transition-colors ${lead.is_locked ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'} disabled:opacity-50`}
+            className={`p-1.5 rounded-lg transition-colors ${lead.is_locked ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'} disabled:opacity-50`}
             title={lead.is_locked ? 'Desbloquear contato' : 'Bloquear contato (impede exclusão)'}
           >
-            {lead.is_locked ? <FiLock size={18} /> : <FiUnlock size={18} />}
+            {lead.is_locked ? <FiLock size={15} /> : <FiUnlock size={15} />}
           </button>
           <button
             onClick={() => {
               if (lead.is_locked) toast.error("Não é possível deletar um contato bloqueado.");
               else onDelete(lead);
             }}
-            className={`p-2 rounded-lg transition-colors ${lead.is_locked ? 'text-gray-400/30 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
+            className={`p-1.5 rounded-lg transition-colors ${lead.is_locked ? 'text-gray-400/30 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
             title={lead.is_locked ? 'Contato bloqueado — desbloqueie para excluir' : 'Excluir Contato e Histórico'}
           >
-            <FiTrash2 size={18} />
+            <FiTrash2 size={15} />
           </button>
         </div>
       </td>

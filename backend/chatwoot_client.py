@@ -382,6 +382,18 @@ class ChatwootClient:
             return {"messages": [{"id": f"wamid.simulated_{uuid.uuid4().hex}"}]}
         return await self._wa.send_image_official(*args, **kwargs)
 
+    async def send_video_official(self, *args, **kwargs):
+        if self.simulate:
+            self._maybe_raise_ratelimit()
+            return {"messages": [{"id": f"wamid.simulated_{uuid.uuid4().hex}"}]}
+        return await self._wa.send_video_official(*args, **kwargs)
+
+    async def send_document_official(self, *args, **kwargs):
+        if self.simulate:
+            self._maybe_raise_ratelimit()
+            return {"messages": [{"id": f"wamid.simulated_{uuid.uuid4().hex}"}]}
+        return await self._wa.send_document_official(*args, **kwargs)
+
     async def send_text_direct(self, *args, **kwargs):
         if self.simulate:
             self._maybe_raise_ratelimit()

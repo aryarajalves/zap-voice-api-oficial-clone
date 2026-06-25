@@ -140,23 +140,23 @@ export default function Table({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
-              <th className="w-10 px-6 py-4">
-                <input 
-                  type="checkbox" 
+              <th className="w-8 px-3 py-3">
+                <input
+                  type="checkbox"
                   className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-gray-800"
                   checked={leads.length > 0 && leads.filter(l => !l.is_locked).length > 0 && selectedLeads.length === leads.filter(l => !l.is_locked).length}
                   onChange={handleSelectAll}
                 />
               </th>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Lead</th>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Etiquetas</th>
+              <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Lead</th>
+              <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
+              <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Etiquetas</th>
               {showCustomColumns && customColumnsKeys.map(key => (
-                <th key={key} className="px-6 py-4 text-xs font-bold text-rose-500 uppercase tracking-wider font-mono">{key}</th>
+                <th key={key} className="px-3 py-3 text-xs font-bold text-rose-500 uppercase tracking-wider font-mono">{key}</th>
               ))}
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Atualizado</th>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Chegada</th>
-              <th className="px-6 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ações</th>
+              <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Atualizado</th>
+              <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Chegada</th>
+              <th className="px-3 py-3 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
