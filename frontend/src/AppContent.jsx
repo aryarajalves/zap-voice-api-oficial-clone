@@ -33,7 +33,35 @@ import BackupDatabase from './pages/BackupDatabase';
 import HotLeads from './pages/HotLeads/HotLeads';
 import InstagramAutomation from './pages/InstagramAutomation';
 import TutorialPage from './pages/TutorialPage';
+import PageUnderConstruction from './components/PageUnderConstruction';
+import LogViewer from './pages/LogViewer';
 
+
+// Maps pages_status key → page display name (for under-construction screen)
+const PAGE_NAMES = {
+  bulk_sender:          'Disparo em Massa',
+  recurring_schedules:  'Disparo Recorrente',
+  schedules:            'Agenda de Disparos',
+  history:              'Histórico de Disparos',
+  hot_leads:            'Leads Quentes',
+  whatsapp:             'Templates do WhatsApp',
+  funnels:              'Funis de Vendas',
+  integrations:         'Integrações Webhook',
+  instagram_automation: 'Automação Instagram',
+  leads:                'Contatos',
+  import_history:       'Histórico de Importação',
+  blocked:              'Contatos Bloqueados',
+  financial:            'Financeiro',
+};
+
+// Returns the under-construction screen if the page isn't built yet, otherwise renders children
+const PageGuard = ({ pageKey, pagesStatus, children }) => {
+  const status = (pagesStatus || {})[pageKey];
+  if (status && status.built === false) {
+    return <PageUnderConstruction pageName={PAGE_NAMES[pageKey] || pageKey} percentage={status.percentage ?? 0} />;
+  }
+  return children;
+};
 
 export default function AppContent() {
   const logic = useAppLogic();
@@ -93,6 +121,7 @@ export default function AppContent() {
                     {logic.currentView === 'hot_leads' && 'Leads Quentes'}
                     {logic.currentView === 'instagram_automation' && 'Automação Instagram'}
                     {logic.currentView === 'tutorial' && 'Tutorial API Oficial'}
+                    {logic.currentView === 'log_viewer' && 'Visualizador de Logs'}
                   </h1>
 
                   
@@ -127,33 +156,73 @@ export default function AppContent() {
 
             <div className="p-8 pt-0">
               {/* View Rendering */}
-              {logic.currentView === 'blocked' && <BlockedContacts />}
+              {logic.currentView === 'blocked' && (
+                <PageGuard pageKey="blocked" pagesStatus={logic.user?.pages_status}>
+                  <BlockedContacts />
+                </PageGuard>
+              )}
               {logic.currentView === 'users' && <Users />}
-              {logic.currentView === 'schedules' && <SchedulePage />}
+              {logic.currentView === 'schedules' && (
+                <PageGuard pageKey="schedules" pagesStatus={logic.user?.pages_status}>
+                  <SchedulePage />
+                </PageGuard>
+              )}
               {logic.currentView === 'monitoring' && <Monitoring />}
-              {logic.currentView === 'integrations' && <Integrations />}
-              {logic.currentView === 'leads' && <WebhookLeads onNavigateToImportHistory={() => logic.setCurrentView('import_history')} />}
-              {logic.currentView === 'import_history' && <ImportHistoryPage />}
-              {logic.currentView === 'financial' && <Financial />}
-              {logic.currentView === 'recurring_schedules' && <RecurringSchedules />}
-              {logic.currentView === 'stress_test' && <StressTest onStartSuccess={() => logic.setCurrentView('history')} />}
+              {logic.currentView === 'integrations' && (
+                <PageGuard pageKey="integrations" pagesStatus={logic.user?.pages_status}>
+                  <Integrations />
+                </PageGuard>
+              )}
+              {logic.currentView === 'leads' && (
+                <PageGuard pageKey="leads" pagesStatus={logic.user?.pages_status}>
+                  <WebhookLeads onNavigateToImportHistory={() => logic.setCurrentView('import_history')} />
+                </PageGuard>
+              )}
+              {logic.currentView === 'import_history' && (
+                <PageGuard pageKey="import_history" pagesStatus={logic.user?.pages_status}>
+                  <ImportHistoryPage onNavigateToLeads={() => logic.setCurrentView('leads')} />
+                </PageGuard>
+              )}
+              {logic.currentView === 'financial' && (
+                <PageGuard pageKey="financial" pagesStatus={logic.user?.pages_status}>
+                  <Financial />
+                </PageGuard>
+              )}
+              {logic.currentView === 'recurring_schedules' && (
+                <PageGuard pageKey="schedules" pagesStatus={logic.user?.pages_status}>
+                  <RecurringSchedules />
+                </PageGuard>
+              )}
+              {logic.currentView === 'stress_test' && <StressTest onStartSuccess={() => logic.setCurrentView('history')} onNavigateToHistory={() => logic.setCurrentView('history')} onNavigateToIntegrations={() => logic.setCurrentView('integrations')} />}
               {logic.currentView === 'backup_db' && <BackupDatabase />}
-              {logic.currentView === 'hot_leads' && <HotLeads />}
-              {logic.currentView === 'instagram_automation' && <InstagramAutomation />}
+              {logic.currentView === 'hot_leads' && (
+                <PageGuard pageKey="hot_leads" pagesStatus={logic.user?.pages_status}>
+                  <HotLeads />
+                </PageGuard>
+              )}
+              {logic.currentView === 'instagram_automation' && (
+                <PageGuard pageKey="instagram_automation" pagesStatus={logic.user?.pages_status}>
+                  <InstagramAutomation />
+                </PageGuard>
+              )}
               {logic.currentView === 'tutorial' && <TutorialPage />}
+              {logic.currentView === 'log_viewer' && <LogViewer />}
 
               
               {logic.currentView === 'bulk_sender' && (
-                <div className="space-y-8">
-                  <TemplateBulkSender 
-                    onSuccess={() => logic.setTriggerHistoryRefreshKey(prev => prev + 1)} 
-                    refreshKey={logic.settingsRefreshKey} 
-                    onViewChange={logic.handleViewChange} 
-                  />
-                </div>
+                <PageGuard pageKey="bulk_sender" pagesStatus={logic.user?.pages_status}>
+                  <div className="space-y-8">
+                    <TemplateBulkSender
+                      onSuccess={() => logic.setTriggerHistoryRefreshKey(prev => prev + 1)}
+                      refreshKey={logic.settingsRefreshKey}
+                      onViewChange={logic.handleViewChange}
+                    />
+                  </div>
+                </PageGuard>
               )}
 
               {logic.currentView === 'funnels' && (
+                <PageGuard pageKey="funnels" pagesStatus={logic.user?.pages_status}>
                 <>
                   {logic.showBuilder ? (
                     <div className="h-full">
@@ -221,28 +290,32 @@ export default function AppContent() {
                     </div>
                   )}
                 </>
+                </PageGuard>
               )}
 
               {logic.currentView === 'templates' && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <TemplateCreator 
-                    refreshKey={logic.settingsRefreshKey} 
-                    onSuccess={() => {
-                      logic.setSettingsRefreshKey(prev => prev + 1);
-                      // logic.setCurrentView('bulk_sender'); // Removido para permitir ver o status PENDING do novo template
-                    }} 
-                  />
-                </div>
+                <PageGuard pageKey="whatsapp" pagesStatus={logic.user?.pages_status}>
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <TemplateCreator
+                      refreshKey={logic.settingsRefreshKey}
+                      onSuccess={() => {
+                        logic.setSettingsRefreshKey(prev => prev + 1);
+                      }}
+                    />
+                  </div>
+                </PageGuard>
               )}
 
               {logic.currentView === 'history' && (
-                <div className="space-y-8">
-                  <TriggerHistory 
-                    refreshKey={logic.triggerHistoryRefreshKey} 
-                    onNavigateToBulk={() => logic.setCurrentView('bulk_sender')} 
-                    onNavigateToFunnels={() => logic.setCurrentView('funnels')} 
-                  />
-                </div>
+                <PageGuard pageKey="history" pagesStatus={logic.user?.pages_status}>
+                  <div className="space-y-8">
+                    <TriggerHistory
+                      refreshKey={logic.triggerHistoryRefreshKey}
+                      onNavigateToBulk={() => logic.setCurrentView('bulk_sender')}
+                      onNavigateToFunnels={() => logic.setCurrentView('funnels')}
+                    />
+                  </div>
+                </PageGuard>
               )}
             </div>
           </>

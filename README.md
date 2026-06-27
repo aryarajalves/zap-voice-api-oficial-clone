@@ -46,7 +46,10 @@ Criação gráfica em estilo *drag-and-drop* de fluxos de conversação intelige
 *   **Botões Interativos**: Mensagens com botões de clique rápido que ramificam o fluxo dependendo da escolha do cliente.
 
 ### 4. Integrações de Webhooks
-Integração nativa com **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz) e Elementor**: Mapeie automaticamente as mudanças de status (compra aprovada, pix gerado, carrinho abandonado, evento de aluno) para disparar funis específicos.
+Integração nativa com as principais plataformas de vendas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark e Elementor**.
+*   **Mapeamento Completo de Status**: Mapeamento inteligente de eventos como Compra Aprovada, Pix Gerado, Boleto Impresso, Cartão Recusado, Carrinho Abandonado, Reembolso, Chargeback, Assinatura Ativa/Cancelada e Troca de Plano.
+*   **Inteligência de Vendas Casadas**: Detecção automática de ofertas **Order Bump** e campanhas de **Upsell / Upgrade** baseadas no nome do produto ou tags do payload para evitar duplicação ou segmentar funis específicos.
+*   **Filtros de Interface e Ordenação**: Painel de visualização com dropdown de pesquisa por plataforma, filtros rápidos de integrações "Com Gatilhos" e "Com Histórico", e ordenação decrescente baseada na contagem total de disparos no histórico.
 
 ---
 

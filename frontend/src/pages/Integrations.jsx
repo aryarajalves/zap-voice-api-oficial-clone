@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { FiPlus, FiTrash2, FiEdit2, FiCopy, FiZap, FiSettings, FiPlay, FiRefreshCw, FiEye, FiActivity, FiUsers, FiClock, FiShare2 } from 'react-icons/fi';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { FiPlus, FiTrash2, FiEdit2, FiCopy, FiZap, FiSettings, FiPlay, FiRefreshCw, FiEye, FiActivity, FiUsers, FiClock, FiShare2, FiChevronDown, FiSearch } from 'react-icons/fi';
 import { API_URL, WS_URL, WEBHOOK_BASE_URL } from '../config';
 
 import { useClient } from '../contexts/ClientContext';
@@ -42,6 +42,29 @@ export default function Integrations() {
   const [confirmDeleteHistory, setConfirmDeleteHistory] = useState({ isOpen: false, type: 'clear', id: null, ids: [] });
   const [confirmResendHistory, setConfirmResendHistory] = useState({ isOpen: false, ids: [] });
   const [confirmDeleteDispatch, setConfirmDeleteDispatch] = useState({ isOpen: false, type: 'single', id: null, ids: [] });
+
+  // Paginação + filtro da lista de integrações
+  const [listPageSize, setListPageSize] = useState(5);
+  const [listCurrentPage, setListCurrentPage] = useState(1);
+  const [filterPlatform, setFilterPlatform] = useState('');
+  const [filterHasTriggers, setFilterHasTriggers] = useState(false);
+  const [filterHasHistory, setFilterHasHistory] = useState(false);
+  const [searchPlatformText, setSearchPlatformText] = useState('');
+  const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
+  const platformDropdownRef = useRef(null);
+
+  // Fecha o dropdown de plataformas ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (platformDropdownRef.current && !platformDropdownRef.current.contains(event.target)) {
+        setIsPlatformDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const {
     integrations, loading, templates, chatwootLabels, funnels, isModalOpen, setIsModalOpen,
@@ -272,23 +295,191 @@ export default function Integrations() {
       </div>
       
       {/* Tabela de Integrações */}
-      <div className="bg-white/50 dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 backdrop-blur-xl shadow-xl overflow-x-auto custom-scrollbar">
-        <table className="w-full text-left min-w-[900px]">
+      {(() => {
+        // Plataformas únicas presentes nas integrações (para o filtro)
+        const platformsPresent = [...new Set(integrations.map(i => i.platform).filter(Boolean))].sort();
+
+        let filteredIntegrations = filterPlatform
+          ? integrations.filter(i => i.platform === filterPlatform)
+          : integrations;
+
+        if (filterHasTriggers) {
+          filteredIntegrations = filteredIntegrations.filter(i => (i.mappings || []).length > 0);
+        }
+
+        if (filterHasHistory) {
+          filteredIntegrations = filteredIntegrations.filter(i => (i.history_count || 0) > 0);
+        }
+
+        const sortedIntegrations = [...filteredIntegrations].sort((a, b) => {
+            const countA = a.history_count || 0;
+            const countB = b.history_count || 0;
+            return countB - countA;
+        });
+
+        const totalPages = Math.max(1, Math.ceil(sortedIntegrations.length / listPageSize));
+        const safePage = Math.min(listCurrentPage, Math.max(1, totalPages));
+        const paginatedIntegrations = sortedIntegrations.slice((safePage - 1) * listPageSize, safePage * listPageSize);
+        return (
+      <div className="bg-white/50 dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 backdrop-blur-xl shadow-xl overflow-hidden">
+        {/* Barra de filtro */}
+        {!loading && integrations.length > 0 && (
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100 dark:border-white/5 bg-white/30 dark:bg-white/[0.02]">
+            <FiSettings size={12} className="text-gray-400 shrink-0" />
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Plataforma</span>
+            <div className="relative" ref={platformDropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPlatformDropdownOpen(!isPlatformDropdownOpen);
+                  setSearchPlatformText('');
+                }}
+                className="bg-white dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl px-3 py-1.5 text-[10px] font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 outline-none shadow-inner flex items-center gap-2 select-none min-w-[140px] justify-between cursor-pointer hover:border-gray-300 dark:hover:border-white/10"
+              >
+                <span>
+                  {filterPlatform 
+                    ? `${filterPlatform.charAt(0).toUpperCase() + filterPlatform.slice(1)} (${integrations.filter(i => i.platform === filterPlatform).length})`
+                    : `Todas (${integrations.length})`}
+                </span>
+                <FiChevronDown size={12} className={`text-gray-400 transition-transform ${isPlatformDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isPlatformDropdownOpen && (
+                <div className="absolute top-full left-0 mt-1.5 w-64 bg-white dark:bg-[#0f172a] border border-gray-100 dark:border-white/5 rounded-xl shadow-2xl z-50 p-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-100">
+                  {/* Campo de pesquisa por texto */}
+                  <div className="relative flex items-center">
+                    <FiSearch size={12} className="absolute left-2.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Pesquisar plataforma..."
+                      value={searchPlatformText}
+                      onChange={e => setSearchPlatformText(e.target.value)}
+                      className="w-full bg-gray-50 dark:bg-[#070b13] border border-gray-100 dark:border-white/5 rounded-lg pl-8 pr-3 py-1.5 text-[10px] font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500/30 focus:ring-1 focus:ring-blue-500/20 transition-all shadow-inner"
+                    />
+                  </div>
+
+                  {/* Opções filtradas */}
+                  <div className="max-h-56 overflow-y-auto space-y-0.5 select-none pr-1">
+                    {/* Opção "Todas" */}
+                    {('todas'.includes(searchPlatformText.toLowerCase()) || !searchPlatformText) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilterPlatform('');
+                          setListCurrentPage(1);
+                          setIsPlatformDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-between ${
+                          !filterPlatform
+                            ? 'bg-blue-500/10 text-blue-500'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.02] hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <span>Todas</span>
+                        <span className="text-[9px] opacity-70">({integrations.length})</span>
+                      </button>
+                    )}
+
+                    {/* Plataformas correspondentes */}
+                    {(() => {
+                      const filteredOptions = platformsPresent.filter(p => 
+                        p.toLowerCase().includes(searchPlatformText.toLowerCase())
+                      );
+
+                      if (filteredOptions.length === 0 && searchPlatformText) {
+                        return (
+                          <div className="text-center py-4 text-[9px] text-gray-500 italic">
+                            Nenhuma plataforma encontrada
+                          </div>
+                        );
+                      }
+
+                      return filteredOptions.map(p => {
+                        const cnt = integrations.filter(i => i.platform === p).length;
+                        const isSelected = filterPlatform === p;
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => {
+                              setFilterPlatform(p);
+                              setListCurrentPage(1);
+                              setIsPlatformDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-blue-500/10 text-blue-500'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.02] hover:text-gray-900 dark:hover:text-white'
+                            }`}
+                          >
+                            <span>{p.charAt(0).toUpperCase() + p.slice(1)}</span>
+                            <span className="text-[9px] opacity-70">({cnt})</span>
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setFilterHasTriggers(!filterHasTriggers); setListCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all select-none cursor-pointer flex items-center gap-1.5 ${
+                filterHasTriggers
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                  : 'bg-white dark:bg-[#0b1120] text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10'
+              }`}
+            >
+              <span>Com Gatilhos</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setFilterHasHistory(!filterHasHistory); setListCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all select-none cursor-pointer flex items-center gap-1.5 ${
+                filterHasHistory
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                  : 'bg-white dark:bg-[#0b1120] text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10'
+              }`}
+            >
+              <span>Com Histórico</span>
+            </button>
+
+            {(filterPlatform || filterHasTriggers || filterHasHistory) && (
+              <button
+                onClick={() => {
+                  setFilterPlatform('');
+                  setFilterHasTriggers(false);
+                  setFilterHasHistory(false);
+                  setListCurrentPage(1);
+                }}
+                className="text-[10px] text-gray-400 hover:text-white font-bold transition-all cursor-pointer ml-auto"
+              >
+                ✕ Limpar Filtros
+              </button>
+            )}
+          </div>
+        )}
+
+        <table className="w-full text-left">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-800/50">
               <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Nome</th>
               <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Plataforma</th>
               <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Webhook URL</th>
-              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Mapeamentos</th>
+              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Gatilhos</th>
+              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Histórico</th>
               <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {loading ? (
-              <tr><td colSpan="5" className="px-8 py-20 text-center text-gray-500 italic">Carregando integrações...</td></tr>
-            ) : integrations.length === 0 ? (
-              <tr><td colSpan="5" className="px-8 py-20 text-center text-gray-500 italic">Nenhuma integração encontrada.</td></tr>
-            ) : integrations.map((item) => (
+              <tr><td colSpan="6" className="px-8 py-20 text-center text-gray-500 italic">Carregando integrações...</td></tr>
+            ) : filteredIntegrations.length === 0 ? (
+              <tr><td colSpan="6" className="px-8 py-20 text-center text-gray-500 italic">Nenhuma integração encontrada.</td></tr>
+            ) : paginatedIntegrations.map((item) => (
               <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition-all group">
                 <td className="px-8 py-6">
                   <div className="flex items-center gap-3">
@@ -315,7 +506,17 @@ export default function Integrations() {
                   </div>
                 </td>
                 <td className="px-8 py-6">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{(item.mappings || []).length} eventos</span>
+                  <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{(item.mappings || []).length} gatilhos</span>
+                </td>
+                <td className="px-8 py-6">
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-lg ${
+                    (item.history_count || 0) > 0
+                      ? 'bg-blue-500/10 text-blue-400'
+                      : 'bg-white/5 text-gray-500'
+                  }`}>
+                    <FiActivity size={10} />
+                    {(item.history_count || 0).toLocaleString('pt-BR')}
+                  </span>
                 </td>
                 <td className="px-5 py-2.5">
                   <div className="flex items-center justify-end gap-2">
@@ -345,8 +546,55 @@ export default function Integrations() {
             ))}
           </tbody>
         </table>
+
+        {/* Rodapé de Paginação */}
+        {!loading && integrations.length > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Exibir</span>
+              <select
+                value={listPageSize}
+                onChange={e => { setListPageSize(Number(e.target.value)); setListCurrentPage(1); }}
+                className="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 text-[11px] font-bold rounded-lg px-2 py-1 outline-none cursor-pointer"
+              >
+                {[5, 10, 20].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span className="text-[10px] text-gray-400 font-medium">
+                de {filteredIntegrations.length}{filterPlatform ? ` (${integrations.length} total)` : ''} integrações
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setListCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-black"
+              >‹</button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setListCurrentPage(p)}
+                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-[11px] font-black transition-all ${
+                    p === safePage
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >{p}</button>
+              ))}
+
+              <button
+                onClick={() => setListCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-xs font-black"
+              >›</button>
+            </div>
+          </div>
+        )}
       </div>
- 
+        );
+      })()}
+
       {/* Modals */}
       <IntegrationFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} formData={formData} setFormData={setFormData} isSaving={isSaving} onSave={handleSaveIntegration} editingIntegration={editingIntegration} templates={templates} funnels={funnels} chatwootLabels={chatwootLabels} setIsMappingGuideOpen={setIsMappingGuideOpen} existingInternalTags={existingInternalTags} />
       <HistoryModal 

@@ -25,6 +25,7 @@ export function useIntegrations(activeClient) {
     product_filtering: false,
     product_whitelist: [],
     discovered_products: [],
+    upsell_products: [],
     custom_slug: ''
   });
 
@@ -244,6 +245,7 @@ export function useIntegrations(activeClient) {
       product_filtering: integration.product_filtering || false,
       product_whitelist: integration.product_whitelist || [],
       discovered_products: integration.discovered_products || [],
+      upsell_products: integration.upsell_products || [],
       custom_slug: integration.custom_slug || ''
     });
 

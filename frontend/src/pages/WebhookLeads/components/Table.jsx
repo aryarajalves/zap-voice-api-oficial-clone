@@ -24,6 +24,10 @@ export default function Table({
   limit,
   setLimit,
   fetchLeads,
+  selectAllPages,
+  handleSelectAllPages,
+  handleClearSelectAllPages,
+  updateLeadInPlace,
 }) {
   const { activeClient } = useClient();
   const [togglingLock, setTogglingLock] = useState(null);
@@ -104,7 +108,13 @@ export default function Table({
       if (res.ok) {
         const data = await res.json();
         toast.success(data.message);
-        fetchLeads();
+        // Atualiza o contato no lugar ao invés de recarregar a lista inteira
+        // (evita que o contato "suma" por mudança de updated_at e reordenação)
+        if (updateLeadInPlace) {
+          updateLeadInPlace(lead.id, { is_locked: data.is_locked });
+        } else {
+          fetchLeads();
+        }
       } else {
         toast.error('Erro ao alterar bloqueio do contato.');
       }
@@ -160,6 +170,46 @@ export default function Table({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            {/* Banner de seleção de todas as páginas */}
+            {(() => {
+              const pageUnlocked = leads.filter(l => !l.is_locked);
+              const allPageSelected = pageUnlocked.length > 0 && selectedLeads.length === pageUnlocked.length;
+              const hasMorePages = total > limit;
+              if (!allPageSelected || !hasMorePages) return null;
+              return (
+                <tr>
+                  <td colSpan={7 + (leads.some(l => l.variables && Object.keys(l.variables).length) ? 1 : 0)} className="px-6 py-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/30">
+                    <div className="flex items-center justify-center gap-3 text-sm flex-wrap">
+                      {selectAllPages ? (
+                        <>
+                          <span className="text-blue-700 dark:text-blue-300 font-semibold">
+                            Todos os <strong>{total.toLocaleString('pt-BR')}</strong> contatos estão selecionados.
+                          </span>
+                          <button
+                            onClick={handleClearSelectAllPages}
+                            className="text-blue-600 dark:text-blue-400 underline font-bold hover:text-blue-800 text-xs"
+                          >
+                            Limpar seleção
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-blue-700 dark:text-blue-300 font-semibold">
+                            Os <strong>{pageUnlocked.length}</strong> contatos desta página estão selecionados.
+                          </span>
+                          <button
+                            onClick={handleSelectAllPages}
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all"
+                          >
+                            Selecionar todos os {total.toLocaleString('pt-BR')} contatos
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })()}
             {loading ? (
               Array(5).fill(0).map((_, i) => (
                 <tr key={i} className="animate-pulse">

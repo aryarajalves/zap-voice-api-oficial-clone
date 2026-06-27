@@ -195,6 +195,13 @@ export const getStatusBadge = (trigger) => {
                     {failure_reason && <span className="text-[10px] text-orange-500 font-medium max-w-[150px] truncate" title={translateError(failure_reason)}>{translateError(failure_reason)}</span>}
                 </div>
             );
+        case 'cancelling':
+            return (
+                <div className="flex flex-col items-center gap-1">
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 animate-pulse">Encerrando...</span>
+                    <span className="text-[10px] text-amber-500 font-medium italic">Aguardando batch atual</span>
+                </div>
+            );
         case 'cancelled':
             return (
                 <div className="flex flex-col items-center gap-1">

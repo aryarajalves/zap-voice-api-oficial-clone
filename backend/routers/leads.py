@@ -64,44 +64,75 @@ def create_manual_lead(
         
     return lead
 
-@router.post("/leads/clean-corrupted-tags", summary="Limpar tags corrompidas de todos os leads")
+def _fix_mojibake(text: str) -> str:
+    """Corrige encoding quebrado: UTF-8 lido como Latin-1. Ex: 'RogÃ©rio' → 'Rogério'"""
+    if not text or not isinstance(text, str):
+        return text
+    try:
+        return text.encode("latin-1").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text
+
+
+def _normalize_name(text: str) -> str:
+    """Corrige encoding e aplica Title Case. Ex: 'ALBERTO levi' → 'Alberto Levi'"""
+    if not text or not isinstance(text, str):
+        return text
+    return _fix_mojibake(text).strip().title()
+
+
+@router.post("/leads/clean-corrupted-tags", summary="Sincronizar contatos: corrigir nomes e tags")
 def clean_corrupted_tags(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     """
-    Remove tags corrompidas (com barras, aspas escapadas, JSON malformado) de todos os leads do cliente.
-    Mantém apenas tags simples compostas por letras, números, hífens e underscores.
+    Sincroniza todos os contatos do cliente:
+    - Corrige encoding dos nomes (mojibake) e aplica Title Case
+    - Remove tags corrompidas (barras, aspas, JSON malformado)
     """
     client_id = x_client_id if x_client_id else current_user.client_id
 
     leads = db.query(models.WebhookLead).filter(
-        models.WebhookLead.client_id == client_id,
-        models.WebhookLead.tags.isnot(None)
+        models.WebhookLead.client_id == client_id
     ).all()
 
-    cleaned_count = 0
+    tags_removed = 0
+    names_fixed = 0
     leads_affected = 0
 
     for lead in leads:
-        if not lead.tags:
-            continue
-        raw_tags = [t.strip() for t in lead.tags.split(',') if t.strip()]
-        # Manter apenas tags "limpas": só letras, números, hífen, underscore e espaço simples
-        clean_tags = [t for t in raw_tags if re.match(r'^[\w\s\-]+$', t, re.UNICODE) and len(t) <= 50]
-        removed = len(raw_tags) - len(clean_tags)
-        if removed > 0:
-            lead.tags = ', '.join(clean_tags) if clean_tags else None
-            cleaned_count += removed
+        changed = False
+
+        # --- Corrigir nome ---
+        if lead.name:
+            normalized = _normalize_name(lead.name)
+            if normalized != lead.name:
+                lead.name = normalized
+                names_fixed += 1
+                changed = True
+
+        # --- Limpar tags corrompidas ---
+        if lead.tags:
+            raw_tags = [t.strip() for t in lead.tags.split(',') if t.strip()]
+            clean_tags = [t for t in raw_tags if re.match(r'^[\w\s\-]+$', t, re.UNICODE)]
+            removed = len(raw_tags) - len(clean_tags)
+            if removed > 0:
+                lead.tags = ', '.join(clean_tags) if clean_tags else None
+                tags_removed += removed
+                changed = True
+
+        if changed:
             leads_affected += 1
 
     db.commit()
     return {
         "status": "success",
         "leads_affected": leads_affected,
-        "tags_removed": cleaned_count,
-        "message": f"{cleaned_count} tag(s) corrompida(s) removida(s) de {leads_affected} contato(s)."
+        "names_fixed": names_fixed,
+        "tags_removed": tags_removed,
+        "message": f"Sincronização concluída: {names_fixed} nome(s) corrigido(s), {tags_removed} tag(s) removida(s) em {leads_affected} contato(s)."
     }
 
 @router.get("/leads", response_model=schemas.WebhookLeadListResponse, summary="Listar Leads de Webhooks")
@@ -117,6 +148,7 @@ def list_leads(
     date_to: Optional[str] = None,
     imported_by_client_id: Optional[int] = None,
     origin: Optional[str] = None,
+    is_locked: Optional[str] = None,  # 'true' | 'false' | None (todos)
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("leads"))
@@ -184,6 +216,12 @@ def list_leads(
                 query = query.filter(and_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
             else:
                 query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+
+    # Filtro de bloqueio
+    if is_locked == 'true':
+        query = query.filter(models.WebhookLead.is_locked == True)
+    elif is_locked == 'false':
+        query = query.filter(or_(models.WebhookLead.is_locked == False, models.WebhookLead.is_locked.is_(None)))
 
     # Filtro de data de criação do contato
     if date_from:
@@ -587,6 +625,119 @@ def bulk_delete_leads(
     if skipped_locked:
         msg += f" {skipped_locked} ignorado(s) por estarem bloqueados."
     return {"status": "success", "deleted_count": deleted_count, "skipped_locked": skipped_locked, "message": msg}
+
+class BulkDeleteAllRequest(BaseModel):
+    search: Optional[str] = None
+    event_type: Optional[str] = None
+    tag: Optional[List[str]] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    imported_by_client_id: Optional[int] = None
+    origin: Optional[str] = None
+
+
+@router.post("/leads/bulk-delete-all", summary="Deletar todos os leads dos filtros ativos")
+def bulk_delete_all_leads(
+    request: BulkDeleteAllRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Deleta TODOS os leads que correspondem aos filtros informados (exceto bloqueados).
+    Usado quando o usuário seleciona 'Todos os contatos de todas as páginas'.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    if proj_id:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.project_id == proj_id)
+    else:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
+
+    if request.imported_by_client_id:
+        query = query.filter(
+            or_(
+                models.WebhookLead.imported_by_client_id == request.imported_by_client_id,
+                and_(models.WebhookLead.imported_by_client_id.is_(None), models.WebhookLead.client_id == request.imported_by_client_id)
+            )
+        )
+    if request.origin == "manual":
+        query = query.filter(models.WebhookLead.platform == "manual")
+    elif request.origin == "manual_bulk":
+        query = query.filter(models.WebhookLead.platform == "manual_bulk")
+    elif request.origin == "webhook":
+        query = query.filter(and_(
+            models.WebhookLead.platform != "manual",
+            models.WebhookLead.platform != "manual_bulk",
+            models.WebhookLead.platform != "chatwoot_import"
+        ))
+
+    if request.search:
+        query = query.filter(or_(
+            models.WebhookLead.name.ilike(f"%{request.search}%"),
+            models.WebhookLead.phone.ilike(f"%{request.search}%"),
+            models.WebhookLead.email.ilike(f"%{request.search}%")
+        ))
+
+    if request.event_type:
+        query = query.filter(models.WebhookLead.last_event_type == request.event_type)
+
+    if request.tag:
+        tags_filter = [x.strip() for t in request.tag for x in t.split(",") if x.strip()]
+        if tags_filter:
+            query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+
+    if request.date_from:
+        try:
+            dt_from = datetime.strptime(request.date_from, "%Y-%m-%d")
+            query = query.filter(models.WebhookLead.created_at >= dt_from)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de date_from inválido.")
+
+    if request.date_to:
+        try:
+            dt_to = datetime.strptime(request.date_to, "%Y-%m-%d") + timedelta(days=1, seconds=-1)
+            query = query.filter(models.WebhookLead.created_at <= dt_to)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de date_to inválido.")
+
+    # Separar em deletáveis e bloqueados
+    all_leads = query.all()
+    deletable = [l for l in all_leads if not getattr(l, 'is_locked', False)]
+    skipped_locked = len(all_leads) - len(deletable)
+
+    if not deletable:
+        return {"status": "success", "deleted_count": 0, "skipped_locked": skipped_locked, "message": f"Nenhum contato deletável. {skipped_locked} bloqueado(s)."}
+
+    deletable_ids = [l.id for l in deletable]
+    phones = list({l.phone for l in deletable if l.phone})
+
+    # 1. Deletar ScheduledTriggers em batch (por lote de 500 telefones)
+    BATCH = 500
+    for i in range(0, len(phones), BATCH):
+        batch_phones = phones[i:i + BATCH]
+        db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.client_id == client_id,
+            models.ScheduledTrigger.contact_phone.in_(batch_phones)
+        ).delete(synchronize_session=False)
+
+    # 2. Deletar os leads em batch (por lote de 1000 IDs)
+    for i in range(0, len(deletable_ids), 1000):
+        batch_ids = deletable_ids[i:i + 1000]
+        db.query(models.WebhookLead).filter(
+            models.WebhookLead.id.in_(batch_ids)
+        ).delete(synchronize_session=False)
+
+    db.commit()
+    deleted_count = len(deletable_ids)
+    msg = f"{deleted_count} contato(s) excluído(s)."
+    if skipped_locked:
+        msg += f" {skipped_locked} ignorado(s) por estarem bloqueados."
+    return {"status": "success", "deleted_count": deleted_count, "skipped_locked": skipped_locked, "message": msg}
+
 
 @router.patch("/leads/{lead_id}/lock", summary="Bloquear ou desbloquear um lead")
 def toggle_lead_lock(

@@ -93,12 +93,19 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
         try {
             const res = await fetchWithAuth(url, { method }, activeClient?.id);
             if (res.ok) {
-                toast.success(type === 'delete' ? "Histórico excluído" : "Envio cancelado");
                 if (type === 'delete') {
+                    toast.success("Histórico excluído");
                     setMonitoringTrigger(null);
                     setTriggers(prev => prev.filter(t => t.id !== id));
+                    fetchHistory();
+                } else {
+                    // Cancel: atualiza só o item localmente para evitar piscar
+                    // O WebSocket vai atualizar o status final (cancelled) quando o backend confirmar
+                    toast.success("Cancelamento solicitado");
+                    setTriggers(prev => prev.map(t =>
+                        t.id === id ? { ...t, status: t.status === 'processing' ? 'cancelling' : 'cancelled' } : t
+                    ));
                 }
-                fetchHistory(); 
             } else {
                 const data = await res.json().catch(() => ({}));
                 toast.error(data.detail || "Erro na operação");

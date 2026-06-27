@@ -27,6 +27,10 @@ export function useContactImport(onClose, onImportComplete) {
   const [importAllTags, setImportAllTags] = useState(false);
   const [customTag, setCustomTag] = useState('');
 
+  // Tags fixas digitadas manualmente no passo 2
+  const [fixedTags, setFixedTags] = useState([]);
+  const [fixedRemoveTags, setFixedRemoveTags] = useState([]);
+
   const fetchChatwootLabels = async () => {
     setLoadingLabels(true);
     try {
@@ -121,7 +125,7 @@ export function useContactImport(onClose, onImportComplete) {
       if (response.ok) {
         const data = await response.json();
         setPreviewData(data);
-        
+
         // Auto-mapping suggestion
         const newMapping = { ...mapping };
         const lowerHeaders = data.headers.map(h => h.toLowerCase());
@@ -144,7 +148,9 @@ export function useContactImport(onClose, onImportComplete) {
         setMapping(newMapping);
         setStep(2);
       } else {
-        toast.error('Erro ao ler arquivo.');
+        let detail = 'Erro ao ler arquivo.';
+        try { const errBody = await response.json(); detail = errBody.detail || detail; } catch (_) {}
+        toast.error(detail);
       }
     } catch (err) {
       console.error(err);
@@ -164,6 +170,8 @@ export function useContactImport(onClose, onImportComplete) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('mapping', JSON.stringify(mapping));
+    if (fixedTags.length > 0) formData.append('fixed_tags', fixedTags.join(','));
+    if (fixedRemoveTags.length > 0) formData.append('fixed_remove_tags', fixedRemoveTags.join(','));
 
     try {
       const response = await fetch(`${API_URL}/leads/import/execute`, {
@@ -206,6 +214,8 @@ export function useContactImport(onClose, onImportComplete) {
     setSelectedLabel('');
     setImportAllTags(false);
     setCustomTag('');
+    setFixedTags([]);
+    setFixedRemoveTags([]);
   };
 
   return {
@@ -214,6 +224,7 @@ export function useContactImport(onClose, onImportComplete) {
     fileInputRef, importSource, setImportSource, chatwootLabels, setChatwootLabels,
     loadingLabels, setLoadingLabels, selectedLabel, setSelectedLabel,
     importAllTags, setImportAllTags, customTag, setCustomTag,
-    fetchChatwootLabels, handleChatwootImport, handleFileChange, handleExecuteImport, reset
+    fetchChatwootLabels, handleChatwootImport, handleFileChange, handleExecuteImport, reset,
+    fixedTags, setFixedTags, fixedRemoveTags, setFixedRemoveTags
   };
 }

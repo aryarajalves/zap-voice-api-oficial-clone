@@ -85,13 +85,18 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
         blocked_nodes = json.loads(current_user.blocked_nodes or "[]")
     except:
         blocked_nodes = []
+    try:
+        pages_status = json.loads(current_user.pages_status or "{}")
+    except:
+        pages_status = {}
     return {
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
         "role": current_user.role,
         "blocked_features": blocked,
-        "blocked_nodes": blocked_nodes
+        "blocked_nodes": blocked_nodes,
+        "pages_status": pages_status,
     }
 
 
@@ -316,7 +321,10 @@ async def list_users(
             "is_active": u.is_active,
             "blocked_features": blocked,
             "blocked_nodes": blocked_n,
-            "client_ids": [c.id for c in u.accessible_clients]
+            "client_ids": [c.id for c in u.accessible_clients],
+            "setup_completed": getattr(u, "setup_completed", True),
+            "setup_percentage": getattr(u, "setup_percentage", 100),
+            "pages_status": json.loads(getattr(u, "pages_status", "{}") or "{}"),
         })
     return out
 
@@ -372,6 +380,9 @@ class UserUpdate(BaseModel):
     client_ids: Optional[List[int]] = None
     blocked_features: Optional[List[str]] = None
     blocked_nodes: Optional[List[str]] = None
+    setup_completed: Optional[bool] = None
+    setup_percentage: Optional[int] = None
+    pages_status: Optional[dict] = None
 
 
 
@@ -431,6 +442,15 @@ async def update_user(
         import json
         user.blocked_nodes = json.dumps(user_in.blocked_nodes)
 
+    if user_in.setup_completed is not None:
+        user.setup_completed = user_in.setup_completed
+
+    if user_in.setup_percentage is not None:
+        user.setup_percentage = max(0, min(100, user_in.setup_percentage))
+
+    if user_in.pages_status is not None:
+        import json as _json
+        user.pages_status = _json.dumps(user_in.pages_status)
 
     try:
         db.commit()
@@ -456,7 +476,10 @@ async def update_user(
             "is_active": user.is_active,
             "blocked_features": blocked,
             "blocked_nodes": blocked_n,
-            "client_ids": [c.id for c in user.accessible_clients]
+            "client_ids": [c.id for c in user.accessible_clients],
+            "setup_completed": user.setup_completed,
+            "setup_percentage": user.setup_percentage,
+            "pages_status": json.loads(user.pages_status or "{}"),
         }
         logger.info(f"User {user.id} updated by {current_user.id}")
         await manager.broadcast({

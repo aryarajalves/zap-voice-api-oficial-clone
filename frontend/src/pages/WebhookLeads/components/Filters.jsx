@@ -44,6 +44,7 @@ export default function Filters({
   selectedTags = [], setSelectedTags,
   importedByClientId, setImportedByClientId,
   origin, setOrigin,
+  lockedFilter, setLockedFilter,
   availableFilters,
   total,
   datePreset, setDatePreset,
@@ -156,6 +157,20 @@ export default function Filters({
             <option value="manual">👤 Criado Manualmente</option>
             <option value="manual_bulk">📥 Importado por Planilha (CSV)</option>
             <option value="webhook">🔗 Criado via Webhook</option>
+          </select>
+        </div>
+
+        {/* Filtro por Bloqueio */}
+        <div className="relative">
+          <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <select
+            value={lockedFilter}
+            onChange={(e) => setLockedFilter(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-600 dark:text-gray-300 font-medium"
+          >
+            <option value="">Todos os Contatos</option>
+            <option value="true">🔒 Bloqueados</option>
+            <option value="false">🔓 Não Bloqueados</option>
           </select>
         </div>
 
@@ -307,36 +322,36 @@ export default function Filters({
           {/* Dropdown do filtro de data */}
           {dateDropdownOpen && (
             <div
-              className="absolute top-full left-0 right-0 mt-2 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
-              style={{ minWidth: '280px' }}
+              className="absolute top-full left-0 mt-2 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden"
+              style={{ minWidth: '260px' }}
             >
-              {/* Header do dropdown */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <FiFilter size={11} /> Período de Chegada
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  Período de chegada
                 </span>
                 {hasDateFilter && (
                   <button
                     id="contacts-date-clear-btn"
                     onClick={handleClearAll}
-                    className="text-xs text-red-500 hover:text-red-600 font-semibold flex items-center gap-1 transition-colors"
+                    className="text-[10px] text-red-400 hover:text-red-600 font-semibold flex items-center gap-1 transition-colors"
                   >
-                    <FiX size={12} /> Limpar
+                    <FiX size={11} /> Limpar
                   </button>
                 )}
               </div>
 
-              {/* Presets rápidos */}
-              <div className="p-3 space-y-1">
+              {/* Presets rápidos — grade 2 colunas */}
+              <div className="p-3 grid grid-cols-2 gap-1.5">
                 {QUICK_PRESETS.map(preset => (
                   <button
                     key={preset.value}
                     id={`contacts-date-preset-${preset.value}`}
                     onClick={() => handleSelectPreset(preset.value)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors font-medium
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors text-center
                       ${datePreset === preset.value
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600'
                       }`}
                   >
                     {preset.label}
@@ -345,77 +360,91 @@ export default function Filters({
               </div>
 
               {/* Divisor */}
-              <div className="mx-4 border-t border-dashed border-gray-200 dark:border-gray-700" />
+              <div className="mx-3 border-t border-gray-100 dark:border-gray-700" />
 
-              {/* Mês específico */}
+              {/* Grade de meses por ano */}
               <div className="p-3">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">
-                  Mês específico
-                </p>
-                <div
-                  className="max-h-44 overflow-y-auto space-y-1 scrollbar-none"
-                >
-                  {monthOptions.map(opt => (
-                    <button
-                      key={opt.value}
-                      id={`contacts-date-month-${opt.value}`}
-                      onClick={() => handleSelectPreset(opt.value)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors font-medium
-                        ${datePreset === opt.value
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600'
-                        }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+                {(() => {
+                  const byYear = {};
+                  monthOptions.forEach(opt => {
+                    const year = opt.value.split('-')[0];
+                    if (!byYear[year]) byYear[year] = [];
+                    byYear[year].push(opt);
+                  });
+                  return Object.entries(byYear).map(([year, opts]) => (
+                    <div key={year} className="mb-2 last:mb-0">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{year}</p>
+                      <div className="grid grid-cols-4 gap-1">
+                        {opts.map(opt => {
+                          const monthName = opt.label.split(' ')[0].slice(0, 3);
+                          return (
+                            <button
+                              key={opt.value}
+                              id={`contacts-date-month-${opt.value}`}
+                              onClick={() => handleSelectPreset(opt.value)}
+                              title={opt.label}
+                              className={`py-1 rounded-lg text-[11px] font-semibold transition-colors
+                                ${datePreset === opt.value
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600'
+                                }`}
+                            >
+                              {monthName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
               </div>
 
               {/* Divisor */}
-              <div className="mx-4 border-t border-dashed border-gray-200 dark:border-gray-700" />
+              <div className="mx-3 border-t border-gray-100 dark:border-gray-700" />
 
               {/* Período personalizado */}
               <div className="p-3">
                 <button
                   id="contacts-date-custom-btn"
                   onClick={() => handleSelectPreset('custom')}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors font-medium mb-2
+                  className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors text-center
                     ${datePreset === 'custom'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600'
                     }`}
                 >
                   Período personalizado...
                 </button>
 
                 {hasCustomDates && (
-                  <div className="space-y-2 mt-1 animate-in fade-in duration-150">
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">De</label>
-                      <input
-                        id="contacts-date-from-input"
-                        type="date"
-                        value={customDateFrom}
-                        onChange={(e) => setCustomDateFrom(e.target.value)}
-                        className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Até</label>
-                      <input
-                        id="contacts-date-to-input"
-                        type="date"
-                        value={customDateTo}
-                        onChange={(e) => setCustomDateTo(e.target.value)}
-                        className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      />
+                  <div className="space-y-2 mt-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">De</label>
+                        <input
+                          id="contacts-date-from-input"
+                          type="date"
+                          value={customDateFrom}
+                          onChange={(e) => setCustomDateFrom(e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Até</label>
+                        <input
+                          id="contacts-date-to-input"
+                          type="date"
+                          value={customDateTo}
+                          onChange={(e) => setCustomDateTo(e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        />
+                      </div>
                     </div>
                     <button
                       id="contacts-date-apply-btn"
                       onClick={() => setDateDropdownOpen(false)}
                       disabled={!customDateFrom && !customDateTo}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Aplicar
                     </button>

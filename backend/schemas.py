@@ -509,6 +509,7 @@ class WebhookIntegrationBase(BaseModel):
     product_filtering: Optional[bool] = Field(False, description="Ativar filtragem por produto")
     product_whitelist: Optional[List[str]] = Field(default_factory=list, description="Lista de produtos permitidos")
     discovered_products: Optional[List[str]] = Field(default_factory=list, description="Lista de produtos descobertos no histórico")
+    upsell_products: Optional[List[str]] = Field(default_factory=list, description="Lista de produtos que devem ser tratados como Upsell")
 
 class WebhookIntegrationCreate(WebhookIntegrationBase):
     mappings: Optional[List[WebhookEventMappingCreate]] = []
@@ -518,6 +519,7 @@ class WebhookIntegration(WebhookIntegrationBase):
     client_id: int
     created_at: datetime
     mappings: List[WebhookEventMapping] = []
+    history_count: Optional[int] = 0
 
     class Config:
         from_attributes = True

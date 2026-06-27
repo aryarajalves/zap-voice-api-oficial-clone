@@ -244,43 +244,131 @@ const UserModal = ({
                             </select>
                         </div>
 
-                        {/* Configuração de Restrições/Permissões de Painéis */}
+                        {/* Configuração de Painéis — Acesso + Status de Construção */}
                         {userData.role !== 'super_admin' && (
                             <div>
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Restringir Acesso aos Painéis</label>
-                                <div className="space-y-2.5 p-3.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-900/30">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Painéis e Status de Construção</label>
+                                <div className="space-y-0 p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-900/30 max-h-80 overflow-y-auto custom-scrollbar">
                                     {[
-                                        { id: 'funnels', name: 'Funis de Vendas' },
-                                        { id: 'schedules', name: 'Agendamentos e Campanhas' },
-                                        { id: 'whatsapp', name: 'Templates do WhatsApp / Disparos' },
-                                        { id: 'settings', name: 'Configurações Globais / Integrações' },
-                                        { id: 'leads', name: 'Leads e Importações' },
-                                    ].map(feature => {
-                                        const isBlocked = (userData.blocked_features || []).includes(feature.id);
+                                        { cat: 'Campanhas' },
+                                        { id: 'bulk_sender',          name: 'Disparo em Massa',               blockable: false },
+                                        { id: 'recurring_schedules',  name: 'Disparo Recorrente',             blockable: true,  blockId: 'schedules' },
+                                        { id: 'schedules',            name: 'Agenda de Disparos',             blockable: true,  blockId: 'schedules' },
+                                        { id: 'history',              name: 'Histórico de Disparos',          blockable: false },
+                                        { cat: 'Vendas' },
+                                        { id: 'hot_leads',            name: 'Leads Quentes',                  blockable: false },
+                                        { cat: 'Automação' },
+                                        { id: 'whatsapp',             name: 'Templates do WhatsApp',          blockable: true,  blockId: 'whatsapp' },
+                                        { id: 'funnels',              name: 'Funis de Vendas',                blockable: true,  blockId: 'funnels' },
+                                        { id: 'integrations',         name: 'Integrações Webhook',            blockable: true,  blockId: 'settings' },
+                                        { id: 'instagram_automation', name: 'Automação Instagram',            blockable: false },
+                                        { cat: 'Contatos' },
+                                        { id: 'leads',                name: 'Contatos',                       blockable: true,  blockId: 'leads' },
+                                        { id: 'import_history',       name: 'Histórico de Importação',        blockable: true,  blockId: 'leads' },
+                                        { id: 'blocked',              name: 'Contatos Bloqueados',            blockable: true,  blockId: 'leads' },
+                                        { cat: 'Administração' },
+                                        { id: 'financial',            name: 'Financeiro',                     blockable: false },
+                                    ].map((page, idx) => {
+                                        // Renderiza separador de categoria
+                                        if (page.cat) {
+                                            return (
+                                                <div key={`cat-${page.cat}`} className={`pt-${idx === 0 ? '0' : '2'} pb-0.5`}>
+                                                    <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">{page.cat}</span>
+                                                    <div className="h-px bg-gray-200 dark:bg-gray-700 mt-0.5 mb-1" />
+                                                </div>
+                                            );
+                                        }
+                                        const blockKey = page.blockId || page.id;
+                                        const isBlocked = page.blockable && (userData.blocked_features || []).includes(blockKey);
+                                        const ps = (userData.pages_status || {})[page.id] || {};
+                                        const isBuilt = ps.built !== false; // default: built
+                                        const pct = ps.percentage ?? (isBuilt ? 100 : 0);
+
+                                        const toggleBlock = () => {
+                                            const curr = userData.blocked_features || [];
+                                            const nowBlocked = curr.includes(blockKey);
+                                            setUserData({ ...userData, blocked_features: nowBlocked ? curr.filter(x => x !== blockKey) : [...curr, blockKey] });
+                                        };
+
+                                        const setBuilt = (val) => {
+                                            const curr = userData.pages_status || {};
+                                            setUserData({ ...userData, pages_status: { ...curr, [page.id]: { ...curr[page.id], built: val, percentage: val ? 100 : (curr[page.id]?.percentage ?? 0) } } });
+                                        };
+
+                                        const setPct = (val) => {
+                                            const curr = userData.pages_status || {};
+                                            setUserData({ ...userData, pages_status: { ...curr, [page.id]: { ...curr[page.id], percentage: val } } });
+                                        };
+
                                         return (
-                                            <div key={feature.id} className="flex items-center justify-between">
-                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{feature.name}</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const currentBlocked = userData.blocked_features || [];
-                                                        const isNowBlocked = currentBlocked.includes(feature.id);
-                                                        const newBlocked = isNowBlocked
-                                                            ? currentBlocked.filter(x => x !== feature.id)
-                                                            : [...currentBlocked, feature.id];
-                                                        setUserData({ ...userData, blocked_features: newBlocked });
-                                                    }}
-                                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isBlocked ? 'bg-red-500/80' : 'bg-green-500'}`}
-                                                >
-                                                    <span
-                                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isBlocked ? 'translate-x-5' : 'translate-x-0'}`}
-                                                    />
-                                                </button>
+                                            <div key={page.id} className="rounded-lg overflow-hidden">
+                                                {/* Row principal */}
+                                                <div className="flex items-center justify-between py-2 px-1">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        {/* Indicador de construção */}
+                                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isBlocked ? 'bg-red-400' : isBuilt ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{page.name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                                        {/* Toggle de acesso — só para blockable */}
+                                                        {page.blockable && (
+                                                            <button
+                                                                type="button"
+                                                                title={isBlocked ? 'Bloqueado — clique para liberar' : 'Liberado — clique para bloquear'}
+                                                                onClick={toggleBlock}
+                                                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isBlocked ? 'bg-red-500/80' : 'bg-green-500'}`}
+                                                            >
+                                                                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isBlocked ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                            </button>
+                                                        )}
+                                                        {/* Badge para não-blockable */}
+                                                        {!page.blockable && (
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase">sempre ativo</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Sub-seção de construção — só quando não bloqueado */}
+                                                {!isBlocked && (
+                                                    <div className="ml-4 pl-3 pb-2 border-l-2 border-gray-200 dark:border-gray-600 space-y-1.5">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[11px] text-gray-500 dark:text-gray-400">Já construída?</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setBuilt(!isBuilt)}
+                                                                className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isBuilt ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                                            >
+                                                                <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isBuilt ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {!isBuilt && (
+                                                            <div className="space-y-1 pr-1">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[10px] text-gray-400">Progresso</span>
+                                                                    <span className="text-[10px] font-bold text-blue-600">{pct}%</span>
+                                                                </div>
+                                                                <input
+                                                                    type="range"
+                                                                    min="0" max="100" step="5"
+                                                                    value={pct}
+                                                                    onChange={(e) => setPct(Number(e.target.value))}
+                                                                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                                                />
+                                                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                                                                    <div className="bg-blue-600 h-1 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
                                 </div>
-                                <p className="mt-1.5 text-[10px] text-gray-400 italic">Os painéis com o interruptor vermelho estarão bloqueados para este usuário.</p>
+                                <p className="mt-1.5 text-[10px] text-gray-400 italic">
+                                    🔴 bloqueado &nbsp;·&nbsp; 🟡 em construção &nbsp;·&nbsp; 🟢 ativo e construído
+                                </p>
                             </div>
                         )}
 
@@ -396,6 +484,55 @@ const UserModal = ({
                                     />
                                     <label htmlFor="is_active" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer">Usuário Ativo</label>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Status de Finalização da Página */}
+                        {editingUser && (
+                            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 space-y-3">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                                    Status da Configuração
+                                </label>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Página finalizada</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setUserData({ ...userData, setup_completed: !userData.setup_completed, setup_percentage: !userData.setup_completed ? 100 : userData.setup_percentage })}
+                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${userData.setup_completed ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                    >
+                                        <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${userData.setup_completed ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </button>
+                                </div>
+
+                                {!userData.setup_completed && (
+                                    <div className="space-y-1.5 animate-in fade-in duration-150">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">Percentual concluído</span>
+                                            <span className="text-xs font-bold text-blue-600">{userData.setup_percentage ?? 0}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            step="5"
+                                            value={userData.setup_percentage ?? 0}
+                                            onChange={(e) => setUserData({ ...userData, setup_percentage: Number(e.target.value) })}
+                                            className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                        />
+                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                            <div
+                                                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                                                style={{ width: `${userData.setup_percentage ?? 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {userData.setup_completed && (
+                                    <p className="text-xs text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
+                                        ✓ Configuração 100% concluída
+                                    </p>
+                                )}
                             </div>
                         )}
 

@@ -27,10 +27,12 @@ async def get_trigger_messages(
     
     if not trigger: raise HTTPException(status_code=404, detail="Disparo não encontrado")
     
-    # Reconciliar as estatísticas para garantir que o banco e o modal fiquem sempre idênticos
-    from services.triggers_service import reconcile_trigger_stats_logic
-    await reconcile_trigger_stats_logic(trigger_id, client_id, db)
-    db.refresh(trigger)
+    # Reconciliar estatísticas somente para disparos já finalizados (não recalcular a cada clique durante execução)
+    FINISHED_STATUSES = ('completed', 'failed', 'cancelled', 'aborted')
+    if trigger.status in FINISHED_STATUSES:
+        from services.triggers_service import reconcile_trigger_stats_logic
+        await reconcile_trigger_stats_logic(trigger_id, client_id, db)
+        db.refresh(trigger)
         
     child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
     all_trigger_ids = [trigger_id] + child_ids

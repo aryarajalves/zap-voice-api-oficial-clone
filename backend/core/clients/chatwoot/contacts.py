@@ -242,29 +242,38 @@ class ChatwootContactsMixin:
         if len(clean_phone) >= 8:
             search_queries.append(clean_phone[-8:])
 
-        # Buscar contato existente
+        # Buscar TODOS os contact_ids para este telefone (pode haver duplicatas em inboxes diferentes)
+        all_contact_ids = set()
         for q in search_queries:
             try:
                 search_res = await self.search_contact(q)
                 if search_res and search_res.get("payload"):
-                    contact_id = search_res["payload"][0].get("id")
-                    break
+                    for contact in search_res["payload"]:
+                        cid = contact.get("id")
+                        if cid:
+                            all_contact_ids.add(cid)
             except Exception:
                 continue
 
-        if not contact_id:
+        if not all_contact_ids:
             logger.info(f"🔍 [FIND_CONV] Contato não encontrado para {clean_phone} — sem conversa existente.")
             return None
 
-        # Buscar conversas do contato
-        try:
-            conversations = await self.get_contact_conversations(contact_id=contact_id)
-        except Exception as e:
-            logger.error(f"❌ [FIND_CONV] Erro ao buscar conversas do contato {contact_id}: {e}")
-            return None
+        if len(all_contact_ids) > 1:
+            logger.info(f"🔍 [FIND_CONV] {len(all_contact_ids)} registros de contato encontrados para {clean_phone}: {all_contact_ids}")
+
+        # Buscar conversas de TODOS os registros de contato (evita ignorar contatos duplicados por inbox)
+        conversations = []
+        for cid in all_contact_ids:
+            try:
+                convs = await self.get_contact_conversations(contact_id=cid)
+                if convs:
+                    conversations.extend(convs)
+            except Exception as e:
+                logger.warning(f"⚠️ [FIND_CONV] Erro ao buscar conversas do contato {cid}: {e}")
 
         if not conversations:
-            logger.info(f"🔍 [FIND_CONV] Nenhuma conversa encontrada para contato {contact_id}.")
+            logger.info(f"🔍 [FIND_CONV] Nenhuma conversa encontrada para {clean_phone}.")
             return None
 
         # Filtrar por inbox_id se fornecido

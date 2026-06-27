@@ -17,7 +17,7 @@ export default function LoadingOverlay({ loading }) {
           
           {/* Center icon */}
           <div className="absolute inset-0 flex items-center justify-center">
-                    <p className="mt-4 text-sm font-medium text-gray-500 animate-pulse">ZapVoice v3.2.8</p>
+            <FiDatabase className="text-blue-400" size={22} />
           </div>
         </div>
 
@@ -33,9 +33,6 @@ export default function LoadingOverlay({ loading }) {
           <div className="absolute inset-0 h-full bg-gradient-to-r from-blue-600 to-purple-600 w-full rounded-full animate-loading-bar"></div>
         </div>
 
-        <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
-            ZapVoice Engine v3.2.7
-        </div>
       </div>
     </div>
   );

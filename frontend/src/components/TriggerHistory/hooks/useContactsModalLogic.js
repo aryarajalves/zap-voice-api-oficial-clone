@@ -26,10 +26,12 @@ export const useContactsModalLogic = ({
     const [isTagModalOpen, setIsTagModalOpen] = React.useState(false);
     const [isConfirmBlockOpen, setIsConfirmBlockOpen] = React.useState(false);
     const [isBulkSendModalOpen, setIsBulkSendModalOpen] = React.useState(false);
+    const [isChatwootLabelModalOpen, setIsChatwootLabelModalOpen] = React.useState(false);
     const [loadingBlock, setLoadingBlock] = React.useState(false);
     const [loadingAllTarget, setLoadingAllTarget] = React.useState(false);
     const [taggingAll, setTaggingAll] = React.useState(false);
     const [sendingAll, setSendingAll] = React.useState(false);
+    const [chatwootLabeling, setChatwootLabeling] = React.useState(false);
 
     const getContactPhone = (contact) => contact.phone_number || contact.phone || '';
 
@@ -211,6 +213,56 @@ export const useContactsModalLogic = ({
     const [isConfirmRestOpen, setIsConfirmRestOpen] = React.useState(false);
     const [loadingRest, setLoadingRest] = React.useState(false);
 
+    // labels: string[] — uma ou mais etiquetas selecionadas no modal
+    const handleApplyChatwootLabel = async (labels) => {
+        if (!contactsModal.triggerId) {
+            toast.error('Disparo nao identificado.');
+            return;
+        }
+        if (!labels || labels.length === 0) {
+            toast.error('Selecione ao menos uma etiqueta.');
+            return;
+        }
+        setChatwootLabeling(true);
+        const labelNames = labels.join(', ');
+        const loadToast = toast.loading(`Aplicando ${labels.length} etiqueta(s) no Chatwoot...`);
+        try {
+            const clientId = contactsModal.clientId || activeClient?.id;
+            let totalSuccess = 0;
+            let totalFailed = 0;
+            for (const label of labels) {
+                const res = await fetchWithAuth(
+                    `${API_URL}/triggers/${contactsModal.triggerId}/chatwoot-label`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ label, phones: selectedPhones }),
+                    },
+                    clientId
+                );
+                if (res.ok) {
+                    const data = await res.json();
+                    totalSuccess = Math.max(totalSuccess, data.success || 0);
+                } else {
+                    totalFailed++;
+                }
+            }
+            toast.dismiss(loadToast);
+            if (totalFailed === 0) {
+                toast.success(`${labels.length} etiqueta(s) aplicada(s) em ${totalSuccess} conversa(s).`);
+            } else {
+                toast.error(`${totalFailed} etiqueta(s) falharam. ${labels.length - totalFailed} aplicada(s) com sucesso.`);
+            }
+            setIsChatwootLabelModalOpen(false);
+            setSelectedPhones([]);
+        } catch (e) {
+            toast.dismiss(loadToast);
+            toast.error('Erro de conexao ao aplicar etiquetas.');
+        } finally {
+            setChatwootLabeling(false);
+        }
+    };
+
     const handleRestSelectedContacts = async () => {
         setLoadingRest(true);
         try {
@@ -306,10 +358,13 @@ export const useContactsModalLogic = ({
         setIsConfirmBlockOpen,
         isBulkSendModalOpen,
         setIsBulkSendModalOpen,
+        isChatwootLabelModalOpen,
+        setIsChatwootLabelModalOpen,
         loadingBlock,
         loadingAllTarget,
         taggingAll,
         sendingAll,
+        chatwootLabeling,
         currentPage,
         perPage,
         setPage,
@@ -324,6 +379,7 @@ export const useContactsModalLogic = ({
         handleOpenBulkSendModal,
         handleBlockSelectedContacts,
         handleRestSelectedContacts,
+        handleApplyChatwootLabel,
         isSelected,
         toggleSelectOne,
         toggleSelectAll,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { API_URL, WS_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
@@ -15,6 +15,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     
     const [triggers, setTriggers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const hasLoadedOnce = useRef(false);
     const [monitoringTrigger, setMonitoringTrigger] = useState(null);
     const [triggerType, setTriggerType] = useState(initialTriggerType);
 
@@ -78,7 +79,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
 
     const fetchHistory = useCallback(async () => {
         if (!activeClient) return;
-        setLoading(true);
+        // Só mostra loading visual na primeira carga; refreshes seguintes são silenciosos
+        if (!hasLoadedOnce.current) setLoading(true);
         try {
             const skip = (page - 1) * itemsPerPage;
             let url = `${API_URL}/triggers?limit=${itemsPerPage}&skip=${skip}`;
@@ -129,6 +131,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                 setTotalItems(0);
                 setTotalPages(1);
             }
+            hasLoadedOnce.current = true;
         } catch (error) {
             console.error(error);
             toast.error("Erro ao carregar histórico de disparos");

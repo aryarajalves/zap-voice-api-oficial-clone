@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { VAR_OPTIONS } from '../utils';
-import { FiSearch, FiTag, FiChevronDown, FiX } from 'react-icons/fi';
+import { FiSearch, FiTag, FiChevronDown, FiX, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 
 const TagSelector = ({
     selectedTags = [],
@@ -19,6 +19,7 @@ const TagSelector = ({
 }) => {
     const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
     const [tagSearch, setTagSearch] = useState('');
+    const [expandedVars, setExpandedVars] = useState({});
     const tagDropdownRef = useRef(null);
     const tagSearchRef = useRef(null);
 
@@ -202,23 +203,51 @@ const TagSelector = ({
                                 <div key={v.key} className="space-y-2 group/var relative">
                                     <div className="flex items-center justify-between ml-1">
                                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider group-focus-within/var:text-emerald-400 transition-colors">{v.label}</label>
+                                        <span className="text-[8px] text-slate-600 font-bold">
+                                            {tagVariables[v.key] && !tagVariables[v.key].includes('{{')
+                                                ? <span className="text-amber-400/70">✏️ Valor fixo</span>
+                                                : tagVariables[v.key]
+                                                    ? <span className="text-emerald-400/70">⚡ Dinâmico</span>
+                                                    : null
+                                            }
+                                        </span>
                                     </div>
                                     <div className="relative">
-                                        <input
-                                            type="text"
-                                            className="w-full p-4 pr-12 bg-black/40 border border-white/5 rounded-2xl focus:border-emerald-500/50 outline-none text-white text-xs transition-all shadow-inner placeholder:text-slate-700 font-bold"
-                                            placeholder={`Valor para ${v.label}...`}
-                                            value={tagVariables[v.key] || ''}
-                                            onChange={(e) => setTagVariables(prev => ({ ...prev, [v.key]: e.target.value }))}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === v.key ? null : v.key)}
-                                            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all ${activeDropdown === v.key ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:text-emerald-400 border border-white/5'}`}
-                                            title="Campos Mágicos"
-                                        >
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg>
-                                        </button>
+                                        {expandedVars[v.key] ? (
+                                            <textarea
+                                                rows={6}
+                                                className="w-full p-4 pr-12 bg-black/40 border border-white/5 rounded-2xl focus:border-emerald-500/50 outline-none text-white text-xs transition-all shadow-inner placeholder:text-slate-700 font-bold resize-y"
+                                                placeholder={`Texto fixo ou {{nome}} dinâmico...`}
+                                                value={tagVariables[v.key] || ''}
+                                                onChange={(e) => setTagVariables(prev => ({ ...prev, [v.key]: e.target.value }))}
+                                            />
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                className="w-full p-4 pr-20 bg-black/40 border border-white/5 rounded-2xl focus:border-emerald-500/50 outline-none text-white text-xs transition-all shadow-inner placeholder:text-slate-700 font-bold"
+                                                placeholder={`Texto fixo ou {{nome}} dinâmico...`}
+                                                value={tagVariables[v.key] || ''}
+                                                onChange={(e) => setTagVariables(prev => ({ ...prev, [v.key]: e.target.value }))}
+                                            />
+                                        )}
+                                        <div className={`absolute right-3 flex items-center gap-1 ${expandedVars[v.key] ? 'top-3' : 'top-1/2 -translate-y-1/2'}`}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setExpandedVars(prev => ({ ...prev, [v.key]: !prev[v.key] }))}
+                                                className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-blue-400 border border-white/5 transition-all"
+                                                title={expandedVars[v.key] ? 'Minimizar' : 'Expandir para texto longo'}
+                                            >
+                                                {expandedVars[v.key] ? <FiMinimize2 size={12} /> : <FiMaximize2 size={12} />}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === v.key ? null : v.key)}
+                                                className={`p-2 rounded-xl transition-all ${activeDropdown === v.key ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:text-emerald-400 border border-white/5'}`}
+                                                title="Campos Mágicos"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Magic Dropdown */}

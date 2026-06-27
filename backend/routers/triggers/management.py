@@ -363,12 +363,14 @@ async def delete_trigger(trigger_id: int, db: Session = Depends(get_db), current
     # Capturar o client_id real do registro antes de deletar
     target_client_id = trigger.client_id
     
-    if trigger.status == 'processing':
-        # Se está processando, apenas marcamos para sumir da UI e sinalizar o worker
+    if trigger.status in ('processing', 'cancelling', 'paused'):
+        # Se ainda está ativo/em encerramento, soft-delete: marca para o worker finalizar e limpar
         trigger.status = 'deleted_pending'
     else:
+        # Hard delete em cascata: remove MessageStatus associados primeiro
+        db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id).delete(synchronize_session=False)
         db.delete(trigger)
-        
+
     db.commit()
     
     # Notificar via WebSocket usando o client_id do registro (corrige bug do Super Admin)
@@ -405,12 +407,12 @@ async def bulk_delete_triggers(
         t_id = trigger.id
         t_client_id = trigger.client_id
         
-        if trigger.status == 'processing':
-            # Se está processando, apenas marcamos para sumir da UI e sinalizar o worker
-            # Isso evita o Deadlock brutal com o Worker que está tentando dar lock na mesma linha
+        if trigger.status in ('processing', 'cancelling', 'paused'):
+            # Soft-delete: evita deadlock com worker ativo
             trigger.status = 'deleted_pending'
             db.flush()
         else:
+            db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger.id).delete(synchronize_session=False)
             db.delete(trigger)
             deleted_count += 1
         

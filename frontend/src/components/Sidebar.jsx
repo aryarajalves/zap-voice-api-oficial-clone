@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram, FiHelpCircle } from 'react-icons/fi';
+import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram, FiHelpCircle, FiTerminal } from 'react-icons/fi';
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
@@ -72,6 +72,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'monitoring', label: 'Monitoramento', icon: FiActivity, roles: ['super_admin'], category: 'admin' },
         {id: 'backup_db', label: 'Backup Banco', icon: FiDatabase, roles: ['super_admin'], category: 'admin'},
         {id: 'tutorial', label: 'Tutorial API Oficial', icon: FiHelpCircle, roles: ['super_admin'], category: 'admin'},
+        {id: 'log_viewer', label: 'Visualizador de Logs', icon: FiTerminal, roles: ['super_admin'], category: 'admin'},
         ...(SIMULATE_MESSAGING ? [{ id: 'stress_test', label: 'Teste de Escala', icon: FiZap, roles: ['super_admin'], category: 'admin' }] : []),
     ];
 

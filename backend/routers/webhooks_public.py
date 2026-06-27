@@ -123,7 +123,18 @@ async def handle_external_webhook(
         # Detect event type from payload
         extracted_data = parse_webhook_payload(integration.platform, payload)
         event_type = extracted_data.get("event_type", "outros")
-        
+
+        # Upsell detection: if product_name matches a configured upsell product, override event_type
+        upsell_products = getattr(integration, 'upsell_products', None) or []
+        if upsell_products and event_type == "compra_aprovada":
+            product_name_raw = extracted_data.get("product_name") or ""
+            product_lower = str(product_name_raw).strip().lower()
+            if any(str(u).strip().lower() == product_lower for u in upsell_products):
+                extracted_data["event_type"] = "compra_aprovada_upsell"
+                extracted_data["is_upsell"] = True
+                event_type = "compra_aprovada_upsell"
+                logger.info(f"🔀 [WEBHOOK] Upsell detectado por nome de produto: '{product_name_raw}'")
+
         logger.info(f"📥 [WEBHOOK] {integration.name} ({integration.platform}) | Evento: {event_type}")
 
         # 3. Create History Record EARLIER (to ensure logging)
@@ -268,14 +279,16 @@ async def handle_external_webhook(
         final_vars["webhook_name"] = integration.name
 
         # Sincroniza Lead com o banco central de leads (com tags do mapeamento)
-        background_tasks.add_task(
-            upsert_webhook_lead,
-            SessionLocal(), 
-            client_id=integration.client_id,
-            platform=integration.platform,
-            parsed_data=final_vars,
-            tag=auto_tag
-        )
+        # Só atualiza se update_contact_on_trigger estiver habilitado (default: True)
+        if getattr(mapping, "update_contact_on_trigger", True):
+            background_tasks.add_task(
+                upsert_webhook_lead,
+                SessionLocal(),
+                client_id=integration.client_id,
+                platform=integration.platform,
+                parsed_data=final_vars,
+                tag=auto_tag
+            )
 
 
         # ManyChat Sync (Background)

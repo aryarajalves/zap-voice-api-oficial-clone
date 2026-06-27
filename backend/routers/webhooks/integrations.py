@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List
 import uuid
 import json
@@ -37,7 +38,20 @@ def list_webhook_integrations(
     ).order_by(models.WebhookIntegration.created_at.asc()).offset(skip).limit(limit).all()
     
     logger.info(f"🔍 [WEBHOOKS] Listando integrações para client_id {x_client_id}: {len(integrations)} encontradas.")
-    
+
+    # Attach history_count via efficient subquery
+    if integrations:
+        integration_ids = [i.id for i in integrations]
+        counts = db.query(
+            models.WebhookHistory.integration_id,
+            func.count(models.WebhookHistory.id).label('cnt')
+        ).filter(
+            models.WebhookHistory.integration_id.in_(integration_ids)
+        ).group_by(models.WebhookHistory.integration_id).all()
+        count_map = {row.integration_id: row.cnt for row in counts}
+        for integration in integrations:
+            integration.history_count = count_map.get(integration.id, 0)
+
     import re
     from services.webhooks import parse_webhook_payload
     from sqlalchemy.orm.attributes import flag_modified
@@ -165,6 +179,7 @@ def create_webhook_integration(
             product_filtering=getattr(integration, 'product_filtering', False),
             product_whitelist=getattr(integration, 'product_whitelist', []),
             discovered_products=getattr(integration, 'discovered_products', []),
+            upsell_products=getattr(integration, 'upsell_products', []),
             client_id=x_client_id
         )
         db.add(db_integration)
@@ -319,6 +334,7 @@ def update_webhook_integration(
         db_integration.product_filtering = getattr(integration_update, 'product_filtering', False)
         db_integration.product_whitelist = getattr(integration_update, 'product_whitelist', [])
         db_integration.discovered_products = getattr(integration_update, 'discovered_products', [])
+        db_integration.upsell_products = getattr(integration_update, 'upsell_products', [])
         
         # Limpar mapeamentos antigos
         db.query(models.WebhookEventMapping).filter(

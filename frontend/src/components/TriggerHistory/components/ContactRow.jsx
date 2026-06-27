@@ -1,6 +1,8 @@
-import React from 'react';
-import { FiCpu, FiAlertCircle } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiCpu, FiAlertCircle, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import { formatBRDate, getExplanationKey } from './ContactsModalHelpers';
+
+const MAX_TAGS_VISIBLE = 3;
 
 const ContactRow = ({
     contact,
@@ -11,6 +13,7 @@ const ContactRow = ({
 }) => {
     const phone = contact.phone_number || contact.phone || '';
     const expKey = getExplanationKey(contact.failure_reason);
+    const [tagsExpanded, setTagsExpanded] = useState(false);
 
     return (
         <div className="p-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition flex justify-between items-center group">
@@ -56,15 +59,42 @@ const ContactRow = ({
                         <div className="text-sm font-black text-gray-900 dark:text-white font-mono">
                             {phone || 'Desconhecido'}
                         </div>
-                        {contact.lead_tags && (
-                            <div className="flex flex-wrap gap-1">
-                                {contact.lead_tags.split(',').map(t => t.trim()).filter(Boolean).map((t, tagIdx) => (
-                                    <span key={tagIdx} className="text-[9px] font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded border border-emerald-500/20 font-sans">
-                                        {t}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
+                        {contact.lead_tags && (() => {
+                            const allTags = contact.lead_tags.split(',').map(t => t.trim()).filter(Boolean);
+                            const visibleTags = tagsExpanded ? allTags : allTags.slice(0, MAX_TAGS_VISIBLE);
+                            const hiddenCount = allTags.length - MAX_TAGS_VISIBLE;
+                            return (
+                                <div className="flex flex-wrap gap-1 items-center">
+                                    {visibleTags.map((t, tagIdx) => (
+                                        <span key={tagIdx} className="text-[9px] font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded border border-emerald-500/20 font-sans">
+                                            {t}
+                                        </span>
+                                    ))}
+                                    {!tagsExpanded && hiddenCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setTagsExpanded(true); }}
+                                            className="text-[9px] font-black uppercase tracking-tighter bg-slate-500/10 text-slate-400 hover:text-white hover:bg-slate-500/30 px-1.5 py-0.5 rounded border border-slate-500/20 font-sans flex items-center gap-0.5 transition-colors"
+                                            title="Ver todas as etiquetas"
+                                        >
+                                            <FiMaximize2 size={9} />
+                                            +{hiddenCount}
+                                        </button>
+                                    )}
+                                    {tagsExpanded && allTags.length > MAX_TAGS_VISIBLE && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setTagsExpanded(false); }}
+                                            className="text-[9px] font-black uppercase tracking-tighter bg-slate-500/10 text-slate-400 hover:text-white hover:bg-slate-500/30 px-1.5 py-0.5 rounded border border-slate-500/20 font-sans flex items-center gap-0.5 transition-colors"
+                                            title="Recolher etiquetas"
+                                        >
+                                            <FiMinimize2 size={9} />
+                                            menos
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })()}
                         {isTemplate && (
                             (contact.meta_price_brl !== undefined && contact.meta_price_brl !== null ? contact.meta_price_brl > 0 : !['FREE_MESSAGE', 'DIRECT_MESSAGE'].includes(contact.message_type)) ? (
                                 <span className="text-[9px] font-black uppercase tracking-tighter bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded border border-orange-500/20 font-sans">Template Pago</span>

@@ -1,5 +1,42 @@
 import React from 'react';
 import { FiMousePointer } from 'react-icons/fi';
+
+// Tooltip com explicação — aparece abaixo, alinhado para não sair da tela
+function Tip({ text, children }) {
+    const [show, setShow] = React.useState(false);
+    const ref = React.useRef(null);
+    const [align, setAlign] = React.useState('center'); // 'center' | 'right'
+
+    const handleEnter = () => {
+        if (ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            const spaceRight = window.innerWidth - rect.right;
+            if (spaceRight < 120) setAlign('right');
+            else setAlign('center');
+        }
+        setShow(true);
+    };
+
+    const posClass = align === 'right'
+        ? 'right-0'
+        : 'left-1/2 -translate-x-1/2';
+
+    const arrowClass = align === 'right'
+        ? 'right-3'
+        : 'left-1/2 -translate-x-1/2';
+
+    return (
+        <span ref={ref} className="relative inline-flex" onMouseEnter={handleEnter} onMouseLeave={() => setShow(false)}>
+            {children}
+            {show && (
+                <span className={`absolute top-full ${posClass} mt-2 z-[9999] w-56 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl leading-relaxed pointer-events-none text-center`}>
+                    {text}
+                    <span className={`absolute bottom-full ${arrowClass} border-4 border-transparent border-b-gray-900`} />
+                </span>
+            )}
+        </span>
+    );
+}
 import { 
     formatDate, 
     DurationTimer, 
@@ -37,7 +74,7 @@ const TriggerTableRow = ({
                     </div>
                     {(() => {
                         const started = triggerWithActions.processed_data?.started_at || triggerWithActions.scheduled_time || triggerWithActions.created_at;
-                        const isFinishedStatus = ['completed', 'failed', 'aborted', 'cancelled'].includes(triggerWithActions.status);
+                        const isFinishedStatus = ['completed', 'failed', 'aborted', 'cancelled', 'cancelling'].includes(triggerWithActions.status);
                         const finished = triggerWithActions.processed_data?.finished_at || (isFinishedStatus ? triggerWithActions.updated_at : null);
                         
                         if (!started) return null;
@@ -390,9 +427,13 @@ const TriggerTableRow = ({
                 {/* 1. DISPAROS EM ANDAMENTO */}
                 {triggerWithActions.status === 'processing' && (
                     <>
-                        <button onClick={() => handleCancel(triggerWithActions.id)} className="p-1 text-red-500 hover:bg-red-50 rounded" title="Cancelar"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        <Tip text="Cancelar o disparo. O batch atual será concluído e o envio para antes do próximo grupo de contatos.">
+                            <button onClick={() => handleCancel(triggerWithActions.id)} className="p-1 text-red-500 hover:bg-red-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        </Tip>
                         {triggerWithActions.is_bulk && (
-                            <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-orange-500 hover:bg-orange-50 rounded" title="Forçar Retomada / Reiniciar Slot"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                            <Tip text="Forçar retomada do disparo. Use quando o disparo parece travado — o sistema verifica se o worker ainda está ativo e reinicia o envio a partir dos contatos pendentes.">
+                                <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-orange-500 hover:bg-orange-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                            </Tip>
                         )}
                     </>
                 )}
@@ -400,25 +441,39 @@ const TriggerTableRow = ({
                 {/* 2. DISPAROS PENDENTES */}
                 {triggerWithActions.status === 'pending' && (
                     <>
-                        {triggerWithActions.is_bulk && (<button onClick={() => handleEditParams(triggerWithActions)} className="p-1 text-blue-500 hover:bg-blue-50 rounded" title="Editar"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>)}
-                        <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-green-500 hover:bg-green-50 rounded" title="Iniciar Agora"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
-                        <button onClick={() => handleCancel(triggerWithActions.id)} className="p-1 text-red-500 hover:bg-red-50 rounded" title="Cancelar"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        {triggerWithActions.is_bulk && (
+                            <Tip text="Editar os parâmetros do disparo antes de iniciá-lo (delay, concorrência, template).">
+                                <button onClick={() => handleEditParams(triggerWithActions)} className="p-1 text-blue-500 hover:bg-blue-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                            </Tip>
+                        )}
+                        <Tip text="Iniciar o disparo agora, sem esperar o horário agendado.">
+                            <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-green-500 hover:bg-green-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+                        </Tip>
+                        <Tip text="Cancelar o disparo. Ele será removido da fila e não será enviado.">
+                            <button onClick={() => handleCancel(triggerWithActions.id)} className="p-1 text-red-500 hover:bg-red-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        </Tip>
                     </>
                 )}
 
                 {/* 3. DISPAROS FINALIZADOS OU COM ERRO */}
                 {(triggerWithActions.status === 'failed' || triggerWithActions.status === 'cancelled' || triggerWithActions.status === 'paused') && (
                     <div className="flex items-center gap-2">
-                        <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Retomar de onde parou"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+                        <Tip text="Retomar o disparo a partir dos contatos que ainda não foram enviados.">
+                            <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-green-600 hover:bg-green-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+                        </Tip>
                         {triggerWithActions.status === 'failed' && (
-                            <button onClick={() => handleRetry(triggerWithActions.id)} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Repetir apenas Falhas"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                            <Tip text="Repetir o disparo apenas para os contatos que falharam, sem reenviar para quem já recebeu.">
+                                <button onClick={() => handleRetry(triggerWithActions.id)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                            </Tip>
                         )}
                     </div>
                 )}
 
                 {/* 4. OPÇÕES ADMINISTRATIVAS */}
                 {user?.role === 'super_admin' && (
-                    <button onClick={() => handleDelete(triggerWithActions.id)} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded" title="Excluir Histórico"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                    <Tip text="Excluir este registro do histórico permanentemente. Os dados de envio serão perdidos.">
+                        <button onClick={() => handleDelete(triggerWithActions.id)} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                    </Tip>
                 )}
             </td>
         </tr>

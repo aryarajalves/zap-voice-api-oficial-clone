@@ -71,14 +71,15 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
                         now_utc = datetime.now(timezone.utc)
                         logger.info(f"🕒 [WINDOW] Atualizando janela para {clean_phone} (Client: {client_id}, Inbox: {inbox_id})")
                         window = db.query(models.ContactWindow).filter(models.ContactWindow.phone == clean_phone, models.ContactWindow.client_id == client_id).first()
+                        conv_id = conversation.get("id")
                         if window:
                             window.last_interaction_at = now_utc
-                            window.chatwoot_conversation_id = conversation.get("id")
+                            window.chatwoot_conversation_id = conv_id
                             window.chatwoot_inbox_id = inbox_id
-                            logger.info(f"✅ [WINDOW] Janela existente atualizada para {clean_phone}")
+                            logger.info(f"✅ [WINDOW] Janela existente atualizada para {clean_phone} | Conversa: {conv_id} | Inbox: {inbox_id}")
                         else:
-                            db.add(models.ContactWindow(client_id=client_id, phone=clean_phone, chatwoot_inbox_id=inbox_id, last_interaction_at=now_utc, chatwoot_conversation_id=conversation.get("id")))
-                            logger.info(f"🆕 [WINDOW] Nova janela criada para {clean_phone}")
+                            db.add(models.ContactWindow(client_id=client_id, phone=clean_phone, chatwoot_inbox_id=inbox_id, last_interaction_at=now_utc, chatwoot_conversation_id=conv_id))
+                            logger.info(f"🆕 [WINDOW] Nova janela criada para {clean_phone} | Conversa: {conv_id} | Inbox: {inbox_id}")
                         db.commit()
 
                         # Sincroniza o contato na tabela customizada do cliente (ex: contatos_monitorados)

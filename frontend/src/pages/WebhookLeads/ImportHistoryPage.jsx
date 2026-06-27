@@ -1,18 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { FiClock, FiFileText, FiCheckCircle, FiAlertTriangle, FiLoader, FiEdit2, FiCheck, FiX, FiRefreshCw, FiTrash2, FiTrash } from 'react-icons/fi';
+import React, { useEffect, useState, useRef } from 'react';
+import { FiClock, FiFileText, FiCheckCircle, FiAlertTriangle, FiLoader, FiEdit2, FiCheck, FiX, FiRefreshCw, FiTrash2, FiTrash, FiUsers } from 'react-icons/fi';
 import { useClient } from '../../contexts/ClientContext';
 import { API_URL } from '../../config';
 import { fetchWithAuth } from '../../AuthContext';
 import { toast } from 'react-hot-toast';
 import { parseDateSafe } from './utils/importHistoryUtils';
 
-export default function ImportHistoryPage() {
+/** Formata segundos em "Xm Ys" ou "Xs" */
+function formatDuration(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return null;
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+export default function ImportHistoryPage({ onNavigateToLeads }) {
   const { activeClient } = useClient();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [renaming, setRenaming] = useState(false);
+  const [tick, setTick] = useState(0); // incrementado a cada segundo para atualizar o cronômetro
+
+  // Guarda { importId → { time, rows } } para calcular taxa e ETA.
+  // Inicializa do sessionStorage para sobreviver a navegações.
+  const processingStartRef = useRef((() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('import_start_times') || '{}');
+    } catch {
+      return {};
+    }
+  })());
 
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(20);
@@ -67,6 +87,39 @@ export default function ImportHistoryPage() {
       fetchHistory(false);
     }, 4000);
 
+    return () => clearInterval(interval);
+  }, [history]);
+
+  // Registra o momento em que cada item entrou em "processing" (apenas uma vez)
+  // e persiste no sessionStorage para sobreviver a navegações.
+  useEffect(() => {
+    let changed = false;
+    history.forEach(item => {
+      if (item.status === 'processing' && !processingStartRef.current[item.id]) {
+        processingStartRef.current[item.id] = {
+          time: Date.now(),
+          rows: (item.imported_rows || 0) + (item.error_rows || 0)
+        };
+        changed = true;
+      }
+      // Limpa entradas antigas de importações já finalizadas
+      if ((item.status === 'completed' || item.status === 'failed') && processingStartRef.current[item.id]) {
+        delete processingStartRef.current[item.id];
+        changed = true;
+      }
+    });
+    if (changed) {
+      try {
+        sessionStorage.setItem('import_start_times', JSON.stringify(processingStartRef.current));
+      } catch {}
+    }
+  }, [history]);
+
+  // Tick de 1 segundo para atualizar o cronômetro ao vivo
+  useEffect(() => {
+    const hasProcessing = history.some(item => item.status === 'processing');
+    if (!hasProcessing) return;
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
   }, [history]);
 
@@ -192,7 +245,17 @@ export default function ImportHistoryPage() {
             </select>
           </div>
 
-          <button 
+          {onNavigateToLeads && (
+            <button
+              onClick={onNavigateToLeads}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-blue-500/20"
+            >
+              <FiUsers size={15} />
+              Ver Contatos
+            </button>
+          )}
+
+          <button
             onClick={() => fetchHistory(true)}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm"
@@ -241,11 +304,30 @@ export default function ImportHistoryPage() {
             <span>Selecionar todos</span>
           </div>
 
-          <div className="bg-white/5 dark:bg-gray-800/20 border border-gray-150 dark:border-gray-700/60 rounded-2xl overflow-hidden divide-y divide-gray-100 dark:divide-gray-700/40 shadow-sm backdrop-blur-md">
+          {/* tick usado apenas para forçar re-render do cronômetro a cada segundo */}
+          <div data-tick={tick} className="bg-white/5 dark:bg-gray-800/20 border border-gray-150 dark:border-gray-700/60 rounded-2xl overflow-hidden divide-y divide-gray-100 dark:divide-gray-700/40 shadow-sm backdrop-blur-md">
             {history.map((item) => {
-              const total = item.total_rows || 0;
-              const processed = (item.imported_rows || 0) + (item.error_rows || 0);
-              const percentage = total > 0 ? Math.min(Math.round((processed / total) * 100), 100) : 0;
+              const totalRows = item.total_rows || 0;
+              const importedRows = item.imported_rows || 0;
+              const errorRows = item.error_rows || 0;
+              const processed = importedRows + errorRows;
+              const percentage = totalRows > 0 ? Math.min(Math.round((processed / totalRows) * 100), 100) : 0;
+
+              // Cronômetro e ETA
+              const startInfo = processingStartRef.current[item.id];
+              let elapsedStr = null;
+              let etaStr = null;
+              if (item.status === 'processing' && startInfo) {
+                const elapsedSec = (Date.now() - startInfo.time) / 1000;
+                elapsedStr = formatDuration(elapsedSec);
+                const rowsDone = processed - startInfo.rows;
+                if (rowsDone > 0) {
+                  const rate = rowsDone / elapsedSec; // linhas/s
+                  const remaining = totalRows - processed;
+                  etaStr = formatDuration(remaining / rate);
+                }
+              }
+
               // Para importações concluídas/falhas, exibe quando TERMINOU (updated_at).
               // Para importações em andamento, exibe quando foi INICIADA (created_at).
               const isFinished = item.status === 'completed' || item.status === 'failed';
@@ -254,34 +336,40 @@ export default function ImportHistoryPage() {
               const dateStr = parseDateSafe(dateSource);
               const isSelected = selectedIds.includes(item.id);
 
+              // Duplicatas eliminadas (arquivo tinha mais do que totalRows, mas totalRows já é pós-dedup no backend)
+              // Mostramos só quando completado e há erros ou diferença
+              const duplicatesRemoved = item.status === 'completed' && totalRows > importedRows + errorRows
+                ? totalRows - importedRows - errorRows
+                : 0;
+
               return (
                 <div key={item.id} className="p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-white/10 dark:hover:bg-gray-800/10 transition-all">
                   <div className="flex items-start gap-4 flex-1">
                     <div className="flex items-center h-12">
-                      <input 
+                      <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={(e) => handleSelectItem(item.id, e.target.checked)}
                         className="rounded border-gray-300 dark:border-gray-700 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
                       />
                     </div>
-                    
+
                     <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-800/20 shrink-0">
                       <FiFileText size={24} />
                     </div>
-                    
+
                     <div className="space-y-2 flex-1">
                       <div className="flex flex-wrap items-center gap-3">
                         {editingId === item.id ? (
                           <div className="flex items-center gap-2">
-                            <input 
+                            <input
                               type="text"
                               value={editName}
                               onChange={(e) => setEditName(e.target.value)}
                               className="px-3 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Nome da lista"
                             />
-                            <button 
+                            <button
                               disabled={renaming}
                               onClick={() => handleRename(item.id)}
                               className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
@@ -289,7 +377,7 @@ export default function ImportHistoryPage() {
                             >
                               <FiCheck size={16} />
                             </button>
-                            <button 
+                            <button
                               onClick={() => setEditingId(null)}
                               className="p-1.5 bg-gray-150 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
                               title="Cancelar"
@@ -302,7 +390,7 @@ export default function ImportHistoryPage() {
                             <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">
                               {item.filename}
                             </h3>
-                            <button 
+                            <button
                               onClick={() => {
                                 setEditingId(item.id);
                                 setEditName(item.filename);
@@ -321,29 +409,57 @@ export default function ImportHistoryPage() {
                       </div>
 
                       {/* Progress details */}
-                      {(item.status === 'processing' || item.status === 'pending' || item.status === 'completed') && total > 0 && (
+                      {(item.status === 'processing' || item.status === 'pending' || item.status === 'completed') && totalRows > 0 && (
                         <div className="space-y-2 max-w-xl">
                           <div className="w-full bg-gray-100 dark:bg-gray-700/50 rounded-full h-2 overflow-hidden shadow-inner">
-                            <div 
+                            <div
                               className={`h-full transition-all duration-500 rounded-full ${
                                 item.status === 'completed' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
                               }`}
                               style={{ width: `${percentage}%` }}
                             ></div>
                           </div>
-                          <div className="flex items-center gap-4 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                          <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-500 dark:text-gray-400">
                             <span className={item.status === 'completed' ? 'text-emerald-500' : 'text-blue-500'}>
                               {percentage}% Concluído
                             </span>
                             <span>•</span>
-                            <span>{processed} de {total} contatos</span>
-                            {item.error_rows > 0 && (
+                            <span>{processed.toLocaleString('pt-BR')} de {totalRows.toLocaleString('pt-BR')} contatos</span>
+                            {errorRows > 0 && (
                               <>
                                 <span>•</span>
-                                <span className="text-red-500">{item.error_rows} erros</span>
+                                <span className="text-red-500">{errorRows.toLocaleString('pt-BR')} erros</span>
+                              </>
+                            )}
+                            {/* Cronômetro ao vivo */}
+                            {item.status === 'processing' && elapsedStr && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-1 text-gray-400">
+                                  <FiClock size={11} /> {elapsedStr} decorridos
+                                </span>
                               </>
                             )}
                           </div>
+
+                          {/* Resumo final quando concluído */}
+                          {item.status === 'completed' && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/30 rounded-lg text-[11px] font-bold">
+                                ✓ {importedRows.toLocaleString('pt-BR')} importados com sucesso
+                              </span>
+                              {errorRows > 0 && (
+                                <span className="px-2.5 py-1 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/20 rounded-lg text-[11px] font-bold">
+                                  ✗ {errorRows.toLocaleString('pt-BR')} falharam
+                                </span>
+                              )}
+                              {duplicatesRemoved > 0 && (
+                                <span className="px-2.5 py-1 bg-gray-50 dark:bg-gray-700/30 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700/40 rounded-lg text-[11px] font-bold">
+                                  ⊘ {duplicatesRemoved.toLocaleString('pt-BR')} duplicatas removidas
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -373,7 +489,7 @@ export default function ImportHistoryPage() {
                       )}
                       {item.status === 'completed' && (
                         <span className="px-3 py-1.5 bg-emerald-50/80 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30 rounded-xl text-xs font-bold flex items-center gap-2">
-                          <FiCheckCircle size={14} /> Concluída ({item.imported_rows} contatos)
+                          <FiCheckCircle size={14} /> Concluída
                         </span>
                       )}
                       {item.status === 'failed' && (

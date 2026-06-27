@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiPlay, FiTrash2, FiChevronDown, FiZap, FiSettings, FiRefreshCw } from 'react-icons/fi';
+import { FiPlay, FiTrash2, FiChevronDown, FiZap, FiSettings, FiRefreshCw, FiInfo } from 'react-icons/fi';
 import SearchableSelect from '../SearchableSelect';
 import InternalTagsInput from './InternalTagsInput';
 import { EVENT_TYPES } from '../../constants';
@@ -7,6 +7,16 @@ import ManyChatSection from './ManyChatSection';
 import SmartCancelSection from './SmartCancelSection';
 import VariablesSection from './VariablesSection';
 import FollowUpSection from './FollowUpSection';
+
+const EVENT_HINTS = {
+  compra_aprovada: '✅ Disparado no momento em que o pagamento é confirmado pela plataforma. É o evento mais usado — ideal para enviar boas-vindas, acesso ao produto e próximos passos imediatamente após a compra.',
+  compra_concluida: '⏳ Disparado quando o prazo de garantia encerra e o cliente não pediu reembolso — ou seja, a venda é definitiva. Útil para enviar bônus ou conteúdo exclusivo após a garantia. Atenção: não confundir com "Compra Aprovada", que dispara no momento do pagamento.',
+  compra_aprovada_upsell: '🔀 Disparado quando a compra é identificada como Upsell com base nos produtos configurados na aba "Upsell" desta integração.',
+  compra_aprovada_ob: '📦 Disparado quando o produto vendido é ele próprio um Order Bump (produto adicional comprado junto à oferta principal).',
+  compra_aprovada_com_ob: '📦 Disparado quando a compra principal veio acompanhada de um ou mais Order Bumps.',
+  alteracao_vencimento: '📅 Disparado pela Hotmart quando a data de cobrança de uma assinatura é alterada (evento UPDATE_SUBSCRIPTION_CHARGE_DATE).',
+  troca_de_plano: '🔄 Disparado pela Hotmart quando o assinante muda de plano (evento SWITCH_PLAN).',
+};
 
 const MappingItem = ({ 
   mapping, 
@@ -84,15 +94,18 @@ const MappingItem = ({
               <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
                 <FiZap size={12} /> Evento na Plataforma
               </label>
-              <select
+              <SearchableSelect
+                options={EVENT_TYPES}
                 value={mapping.event_type}
-                onChange={(e) => updateMapping(mIndex, 'event_type', e.target.value)}
-                className="w-full bg-gray-50 dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 transition-all outline-none shadow-inner"
-              >
-                {EVENT_TYPES.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+                onChange={(val) => updateMapping(mIndex, 'event_type', val)}
+                placeholder="Selecione o evento..."
+              />
+              {EVENT_HINTS[mapping.event_type] && (
+                <div className="flex items-start gap-2 mt-2 p-2.5 bg-blue-500/5 border border-blue-500/20 rounded-xl text-[10px] text-blue-300/80 leading-relaxed">
+                  <FiInfo size={12} className="text-blue-400 shrink-0 mt-0.5" />
+                  <span>{EVENT_HINTS[mapping.event_type]}</span>
+                </div>
+              )}
             </div>
 
             {/* Produto do Gatilho */}
@@ -170,8 +183,30 @@ const MappingItem = ({
           />
 
           {/* Configurações Avançadas de Gatilho */}
-          <div className="pt-6 border-t border-gray-50 dark:border-slate-800">
+          <div className="pt-6 border-t border-gray-50 dark:border-slate-800 space-y-4">
+            {/* Toggle: Atualizar contato na aba Contatos */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/[0.03] rounded-xl border border-gray-100 dark:border-white/5">
+              <div>
+                <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest">
+                  Atualizar contato na aba Contatos
+                </p>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Quando ativado, o contato é criado/atualizado na aba Contatos ao disparar este gatilho
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer ml-4 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={mapping.update_contact_on_trigger !== false}
+                  onChange={(e) => updateMapping(mIndex, 'update_contact_on_trigger', e.target.checked)}
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+              {/* Etiquetas Chatwoot — sempre visível */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
                   <FiSettings size={12} /> Etiquetas a aplicar no Chatwoot
@@ -186,17 +221,20 @@ const MappingItem = ({
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
-                  <FiSettings size={12} /> Etiquetas Internas do Contato (ZapVoice)
-                </label>
-                <InternalTagsInput
-                  value={mapping.internal_tags || ''}
-                  onChange={(val) => updateMapping(mIndex, 'internal_tags', val)}
-                  existingTags={existingInternalTags}
-                  placeholder="Digite uma tag e aperte Enter..."
-                />
-              </div>
+              {/* Etiquetas Internas — só aparece quando update_contact está ativo */}
+              {mapping.update_contact_on_trigger !== false && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
+                    <FiSettings size={12} /> Etiquetas Internas do Contato (ZapVoice)
+                  </label>
+                  <InternalTagsInput
+                    value={mapping.internal_tags || ''}
+                    onChange={(val) => updateMapping(mIndex, 'internal_tags', val)}
+                    existingTags={existingInternalTags}
+                    placeholder="Digite uma tag e aperte Enter..."
+                  />
+                </div>
+              )}
             </div>
           </div>
 

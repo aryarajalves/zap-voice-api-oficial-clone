@@ -120,11 +120,32 @@ async def execute_funnel(
                 models.ContactWindow.client_id == trigger.client_id
             ).first()
             if window and window.chatwoot_conversation_id:
-                target_convo_id = window.chatwoot_conversation_id
-                trigger.conversation_id = target_convo_id
-                conversation_id = target_convo_id
-                db.commit()
-                logger.info(f"🎯 [ENGINE] Conversa {target_convo_id} recuperada via ContactWindow para {clean_phone}")
+                from datetime import timedelta
+                now_utc = datetime.now(timezone.utc)
+
+                # Valida inbox: se soubermos o inbox esperado, a conversa deve ser do mesmo inbox
+                inbox_id_str_val = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
+                expected_inbox = int(inbox_id_str_val) if inbox_id_str_val and str(inbox_id_str_val).isdigit() else None
+                inbox_ok = (not expected_inbox) or (window.chatwoot_inbox_id == expected_inbox)
+
+                # Valida janela de 24h: a última interação deve ter sido nas últimas 24h
+                last_ia = window.last_interaction_at
+                if last_ia and last_ia.tzinfo is None:
+                    last_ia = last_ia.replace(tzinfo=timezone.utc)
+                window_ok = last_ia is not None and (now_utc - last_ia) < timedelta(hours=24)
+
+                if inbox_ok and window_ok:
+                    target_convo_id = window.chatwoot_conversation_id
+                    trigger.conversation_id = target_convo_id
+                    conversation_id = target_convo_id
+                    db.commit()
+                    logger.info(f"🎯 [ENGINE] Conversa {target_convo_id} recuperada via ContactWindow para {clean_phone} (inbox={window.chatwoot_inbox_id}, última interação={last_ia})")
+                else:
+                    logger.warning(
+                        f"⚠️ [ENGINE] ContactWindow ignorado para {clean_phone}: "
+                        f"inbox_ok={inbox_ok} (esperado={expected_inbox}, atual={window.chatwoot_inbox_id}), "
+                        f"window_ok={window_ok} (última interação={last_ia}). Buscando via API..."
+                    )
         except Exception as e_win:
             logger.error(f"❌ [ENGINE] Erro ao recuperar conversa via ContactWindow: {e_win}")
 

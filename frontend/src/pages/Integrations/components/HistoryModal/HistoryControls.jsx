@@ -1,5 +1,6 @@
 import React from 'react';
 import { FiSearch, FiRefreshCw } from 'react-icons/fi';
+import { EVENT_TYPES } from '../../constants';
 
 const HistoryControls = ({
   webhookHistoryLength,
@@ -90,9 +91,10 @@ const HistoryControls = ({
             className="bg-[#0b1120] border border-white/5 rounded-xl px-4 py-2 text-xs font-bold text-gray-200 focus:ring-2 focus:ring-blue-500/30 transition-all cursor-pointer outline-none hover:border-white/10"
           >
             <option value="">TODOS OS STATUS</option>
-            {[...new Set((webhookHistory || []).map(item => item?.processed_data?.raw_status).filter(Boolean))].sort().map(status => (
-              <option key={status} value={status}>{String(status).toUpperCase()}</option>
-            ))}
+            {[...new Set((webhookHistory || []).map(item => item?.event_type).filter(Boolean))].sort().map(eventType => {
+              const label = EVENT_TYPES.find(e => e.value === eventType)?.label || eventType;
+              return <option key={eventType} value={eventType}>{label.toUpperCase()}</option>;
+            })}
           </select>
         </div>
       </div>

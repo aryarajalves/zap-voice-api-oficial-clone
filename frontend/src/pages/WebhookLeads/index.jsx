@@ -14,8 +14,10 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
   return (
     <div className="p-8 max-w-7xl mx-auto animate-in fade-in duration-500">
       <LoadingOverlay loading={logic.loading} />
-      <Header 
+      <Header
         selectedLeads={logic.selectedLeads}
+        selectAllPages={logic.selectAllPages}
+        total={logic.total}
         setIsDeleteModalOpen={logic.setIsDeleteModalOpen}
         setLeadToDelete={logic.setLeadToDelete}
         setIsCleanConfirmOpen={logic.setIsCleanConfirmOpen}
@@ -26,6 +28,7 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
         fetchLeads={logic.fetchLeads}
         fetchFilters={logic.fetchFilters}
         loading={logic.loading}
+        onNavigateToImportHistory={onNavigateToImportHistory}
       />
 
       <Filters 
@@ -37,6 +40,8 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
         setImportedByClientId={logic.setImportedByClientId}
         origin={logic.origin}
         setOrigin={logic.setOrigin}
+        lockedFilter={logic.lockedFilter}
+        setLockedFilter={logic.setLockedFilter}
         availableFilters={logic.availableFilters}
         total={logic.total}
         datePreset={logic.datePreset}
@@ -48,7 +53,7 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
         handleClearDateFilters={logic.handleClearDateFilters}
       />
 
-      <Table 
+      <Table
         loading={logic.loading}
         leads={logic.leads}
         selectedLeads={logic.selectedLeads}
@@ -64,6 +69,10 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
         limit={logic.limit}
         setLimit={logic.setLimit}
         fetchLeads={logic.fetchLeads}
+        selectAllPages={logic.selectAllPages}
+        handleSelectAllPages={logic.handleSelectAllPages}
+        handleClearSelectAllPages={logic.handleClearSelectAllPages}
+        updateLeadInPlace={logic.updateLeadInPlace}
       />
 
       <Modals 
@@ -76,6 +85,8 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
         executeDelete={logic.executeDelete}
         leadToDelete={logic.leadToDelete}
         selectedLeads={logic.selectedLeads}
+        selectAllPages={logic.selectAllPages}
+        total={logic.total}
         isDeleting={logic.isDeleting}
         isImportModalOpen={logic.isImportModalOpen}
         setIsImportModalOpen={logic.setIsImportModalOpen}

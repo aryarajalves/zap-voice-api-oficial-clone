@@ -106,10 +106,9 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         db_check = SessionLocal()
         try:
             current_trig = db_check.query(models.ScheduledTrigger).get(trigger_id)
-            if not current_trig or current_trig.status in ['cancelled', 'cancelling', 'deleted_pending', 'aborted', 'failed']:
-                if current_trig:
-                    if current_trig.status == 'deleted_pending': db_check.delete(current_trig)
-                    elif current_trig.status == 'cancelling': current_trig.status = 'cancelled'
+            if not current_trig or current_trig.status in ['cancelled', 'deleted_pending', 'aborted', 'failed']:
+                if current_trig and current_trig.status == 'deleted_pending':
+                    db_check.delete(current_trig)
                     db_check.commit()
                 return
 
@@ -129,7 +128,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 await asyncio.sleep(5)
                 db_check = SessionLocal()
                 current_trig = db_check.query(models.ScheduledTrigger).get(trigger_id)
-                if not current_trig or current_trig.status in ['cancelled', 'cancelling']: return
+                if not current_trig or current_trig.status == 'cancelled': return
 
             batch = contacts[i:i + concurrency]
             batch_phones_norm = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or '')) for c in batch]
@@ -375,7 +374,30 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 })
         finally:
             db_progress.close()
-            
+
+        # Cancelamento gracioso: verificar APÓS o batch terminar, não antes
+        db_cancel_check = SessionLocal()
+        try:
+            trig_cancel = db_cancel_check.query(models.ScheduledTrigger).get(trigger_id)
+            if trig_cancel and trig_cancel.status == 'deleted_pending':
+                db_cancel_check.delete(trig_cancel)
+                db_cancel_check.commit()
+                logger.info(f"🗑️ [BULK] Disparo #{trigger_id} deletado pelo usuário. Encerrando worker.")
+                return
+            if trig_cancel and trig_cancel.status == 'cancelling':
+                from services.engine import log_node_execution
+                trig_cancel.status = 'cancelled'
+                log_node_execution(db_cancel_check, trig_cancel, node_id=trig_cancel.current_node_id or 'DELIVERY',
+                                   status='cancelled', details='Disparo cancelado pelo usuário. Batch atual foi concluído antes de encerrar.')
+                db_cancel_check.commit()
+                logger.info(f"🛑 [BULK] Disparo #{trigger_id} cancelado graciosamente após batch.")
+                await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": c_id})
+                return
+        except Exception as e_cancel:
+            logger.error(f"❌ [BULK] Erro ao verificar cancelamento gracioso: {e_cancel}")
+        finally:
+            db_cancel_check.close()
+
         i += concurrency
         if i < len(contacts): await asyncio.sleep(delay)
 
@@ -383,11 +405,20 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
     db_final = SessionLocal()
     try:
         t = db_final.query(models.ScheduledTrigger).get(trigger_id)
-        if t and t.status != 'cancelled':
+        if t and t.status == 'cancelling':
+            # Cancelamento solicitado mas todos os contatos já foram processados — finaliza como cancelado
+            from services.engine import log_node_execution
+            log_node_execution(db_final, t, node_id=t.current_node_id or 'DELIVERY',
+                               status='cancelled', details='Disparo cancelado pelo usuário. Todos os contatos do último batch foram processados antes do encerramento.')
+            t.status = 'cancelled'
+            db_final.commit()
+            logger.info(f"🛑 [BULK] Disparo #{trigger_id} finalizado como cancelado (todos os batches já tinham sido processados).")
+            await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": c_id})
+        elif t and t.status not in ['cancelled']:
             from services.engine import log_node_execution
             client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=t.client_id)
             log_node_execution(db_final, t, node_id='DELIVERY', status='completed', details=f'{client_name}: Envio finalizado para {t.total_sent} contatos.')
-            
+
             pdata = dict(t.processed_data or {})
             pdata["finished_at"] = datetime.utcnow().isoformat()
             t.processed_data = pdata

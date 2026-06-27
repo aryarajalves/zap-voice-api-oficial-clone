@@ -75,22 +75,28 @@ async def cancel_trigger_with_report(
 async def cancel_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     trigger = db.query(models.ScheduledTrigger).get(trigger_id)
     if not trigger: raise HTTPException(status_code=404, detail="Trigger not found")
-    if trigger.status in ['completed', 'failed', 'cancelled']: return {"message": "Trigger already finished"}
-         
-    trigger.status = "cancelled"
-    db.commit()
-    
-    # Adicionar log de execução do nó como cancelado para que a interface de detalhes de contatos mostre corretamente!
-    try:
-        from core.engine.logging import log_node_execution
-        current_node = trigger.current_node_id or 'DELIVERY'
-        log_node_execution(db, trigger, node_id=current_node, status="cancelled", details="Disparo cancelado pelo usuário.")
-    except Exception as e_log:
-        import logging
-        logging.getLogger("FastAPI.CancelTrigger").error(f"Erro ao registrar log de cancelamento: {e_log}")
+    if trigger.status in ['completed', 'failed', 'cancelled', 'cancelling']: return {"message": "Trigger already finished"}
 
-    await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": current_user.client_id})
-    return {"message": "Trigger cancelled successfully"}
+    # Se o disparo está em processamento (bulk), usa cancelamento gracioso:
+    # termina o batch atual e para no próximo.
+    is_processing = trigger.status == 'processing'
+    new_status = "cancelling" if is_processing else "cancelled"
+
+    trigger.status = new_status
+    db.commit()
+
+    # Log imediato só para cancelamentos diretos (não bulk em andamento)
+    if new_status == "cancelled":
+        try:
+            from core.engine.logging import log_node_execution
+            current_node = trigger.current_node_id or 'DELIVERY'
+            log_node_execution(db, trigger, node_id=current_node, status="cancelled", details="Disparo cancelado pelo usuário.")
+        except Exception as e_log:
+            import logging
+            logging.getLogger("FastAPI.CancelTrigger").error(f"Erro ao registrar log de cancelamento: {e_log}")
+
+    await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": new_status, "client_id": current_user.client_id})
+    return {"message": "Trigger cancelled successfully", "graceful": is_processing}
 
 @router.post("/{trigger_id}/pause", summary="Pausar Disparo")
 async def pause_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -149,8 +155,80 @@ async def start_now_trigger(trigger_id: int, db: Session = Depends(get_db), curr
     if result == "already_processing": raise HTTPException(status_code=400, detail="O disparo já está sendo processado.")
     return result
 
+class ChatwootLabelPayload(BaseModel):
+    label: str = Field(..., description="Nome da etiqueta a aplicar no Chatwoot")
+    phones: List[str] = Field(default=[], description="Telefones selecionados (vazio = todos do disparo)")
+
+@router.post("/{trigger_id}/chatwoot-label", summary="Aplicar etiqueta Chatwoot nas conversas do disparo")
+async def apply_chatwoot_label(
+    trigger_id: int,
+    payload: ChatwootLabelPayload,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    from core.logger import setup_logger
+    logger = setup_logger("chatwoot-label")
+
+    client_id = x_client_id if x_client_id else current_user.client_id
+    trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id, client_id=client_id).first()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo nao encontrado.")
+
+    label = payload.label.strip().lower().replace(" ", "-")
+    if not label:
+        raise HTTPException(status_code=400, detail="Etiqueta invalida.")
+
+    # Buscar MessageStatus com conversation_id preenchido
+    q = db.query(models.MessageStatus).filter(
+        models.MessageStatus.trigger_id == trigger_id,
+        models.MessageStatus.chatwoot_conversation_id != None,
+    )
+    if payload.phones:
+        from services.utils.phone_utils import normalize_phone
+        normalized = [normalize_phone(p) for p in payload.phones if p]
+        normalized = [p for p in normalized if p]
+        if normalized:
+            q = q.filter(models.MessageStatus.phone_number.in_(normalized))
+
+    messages = q.all()
+    if not messages:
+        raise HTTPException(status_code=404, detail="Nenhuma conversa do Chatwoot encontrada para os contatos selecionados.")
+
+    from chatwoot_client import ChatwootClient
+    cw = ChatwootClient(client_id=client_id)
+
+    success = 0
+    failed = 0
+    skipped = 0
+    seen_conv_ids = set()
+
+    for msg in messages:
+        conv_id = msg.chatwoot_conversation_id
+        if conv_id in seen_conv_ids:
+            continue
+        seen_conv_ids.add(conv_id)
+        try:
+            await cw.add_label_to_conversation(conv_id, label)
+            success += 1
+        except Exception as e:
+            logger.warning(f"[chatwoot-label] Falha na conversa {conv_id}: {e}")
+            failed += 1
+
+    skipped = len(messages) - len(seen_conv_ids)
+
+    return {
+        "status": "ok",
+        "label": label,
+        "success": success,
+        "failed": failed,
+        "skipped": skipped,
+        "total": len(seen_conv_ids),
+    }
+
+
 class ManualInteractionPayload(BaseModel):
-    phones: List[str] = Field(..., description="Lista de telefones para ativar a interação")
+    phones: List[str] = Field(..., description="Lista de telefones para ativar a interacao")
 
 @router.post("/{trigger_id}/manual-interaction", summary="Ativar funil de interação manualmente")
 async def trigger_manual_interaction(

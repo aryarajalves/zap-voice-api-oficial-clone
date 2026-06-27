@@ -21,5 +21,8 @@ class User(Base):
     seller_weight = Column(Integer, default=1, nullable=False)
     blocked_features = Column(String, default="[]", nullable=False)
     blocked_nodes = Column(String, default="[]", nullable=False)
+    setup_completed = Column(Boolean, default=True, nullable=False)
+    setup_percentage = Column(Integer, default=100, nullable=False)
+    pages_status = Column(String, default="{}", nullable=False)
 
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Float, Text, BigInteger, event
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Float, Text, BigInteger, event, Index
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import relationship, backref, Session
 from sqlalchemy.sql import func
@@ -129,8 +129,15 @@ class MessageStatus(Base):
     
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     trigger = relationship("ScheduledTrigger", back_populates="messages")
+
+    __table_args__ = (
+        # Índice composto para a subquery de deduplicação bulk (GROUP BY phone_number WHERE trigger_id IN (...))
+        Index('ix_message_status_trigger_phone', 'trigger_id', 'phone_number'),
+        # Índice para filtros por status
+        Index('ix_message_status_trigger_status', 'trigger_id', 'status'),
+    )
 
 class WebhookIntegration(Base):
     __tablename__ = "webhook_integrations"
@@ -146,6 +153,7 @@ class WebhookIntegration(Base):
     product_filtering = Column(Boolean, default=False)
     product_whitelist = Column(JSON().with_variant(JSONB, "postgresql"), default=list)
     discovered_products = Column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    upsell_products = Column(JSON().with_variant(JSONB, "postgresql"), default=list)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -174,6 +182,7 @@ class WebhookEventMapping(Base):
     cancel_event_types = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     chatwoot_label = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     internal_tags = Column(String, nullable=True)
+    update_contact_on_trigger = Column(Boolean, default=True)
     publish_external_event = Column(Boolean, default=False)
     send_as_free_message = Column(Boolean, default=False)
     trigger_once = Column(Boolean, default=False)

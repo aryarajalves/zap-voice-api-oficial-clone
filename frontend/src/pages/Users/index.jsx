@@ -175,7 +175,10 @@ const Users = () => {
             is_active: user.is_active,
             client_ids: user.client_ids || [],
             blocked_features: user.blocked_features || [],
-            blocked_nodes: user.blocked_nodes || []
+            blocked_nodes: user.blocked_nodes || [],
+            setup_completed: user.setup_completed ?? true,
+            setup_percentage: user.setup_percentage ?? 100,
+            pages_status: user.pages_status || {},
         });
         setShowPassword(false);
 

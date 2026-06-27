@@ -43,9 +43,22 @@ async def handle_bulk_send(data: dict):
                 logger.info(f"⏭️ [BULK] Trigger {trigger_id} já finalizado. Pulando.")
                 should_wait = False
                 return
-            
+
+            if trigger.status in ['cancelled', 'cancelling']:
+                # Cancelado antes de o worker processar (ex: server restart com trigger em cancelling)
+                logger.info(f"🛑 [BULK] Trigger {trigger_id} está em '{trigger.status}'. Finalizando sem processar.")
+                trigger.status = 'cancelled'
+                from services.engine import log_node_execution
+                log_node_execution(db_lock, trigger, node_id=trigger.current_node_id or 'DELIVERY',
+                                   status='cancelled', details='Disparo cancelado pelo usuário antes do processamento.')
+                db_lock.commit()
+                from rabbitmq_client import rabbitmq as _rmq
+                await _rmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": trigger.client_id})
+                should_wait = False
+                return
+
             # Se chegamos aqui, temos o lock e o status permite execução.
-            # O status DEVE ser 'queued' ou 'processing'. 
+            # O status DEVE ser 'queued' ou 'processing'.
             # Se for 'processing' vindo do scheduler, tudo bem, vamos re-iniciar ou continuar.
             
         finally:

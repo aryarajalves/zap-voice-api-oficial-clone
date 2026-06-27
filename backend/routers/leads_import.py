@@ -3,6 +3,44 @@ import re
 import json
 import io
 import pandas as pd
+
+IMPORT_FILES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "imports")
+os.makedirs(IMPORT_FILES_DIR, exist_ok=True)
+
+
+def fix_mojibake(text: str) -> str:
+    """Corrige nomes com encoding quebrado (UTF-8 lido como Latin-1).
+    Ex: 'RogÃ©rio' → 'Rogério'
+    """
+    if not text or not isinstance(text, str):
+        return text
+    try:
+        return text.encode("latin-1").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text
+
+
+def normalize_name(text: str) -> str:
+    """Corrige encoding e aplica Title Case no nome.
+    Ex: 'ALBERTO LEVI esquivel acuna' → 'Alberto Levi Esquivel Acuna'
+    """
+    if not text or not isinstance(text, str):
+        return text
+    fixed = fix_mojibake(text)
+    return fixed.strip().title()
+
+
+def read_csv_smart(content: bytes, sep: str = ";") -> pd.DataFrame:
+    """Tenta ler CSV detectando encoding automaticamente."""
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            df = pd.read_csv(io.BytesIO(content), sep=sep, encoding=encoding)
+            if len(df.columns) > 1:
+                return df
+        except Exception:
+            continue
+    # fallback — latin-1 cobre todos os 256 bytes, nunca vai lançar erro de encoding
+    return pd.read_csv(io.BytesIO(content), sep=sep, encoding="latin-1")
 from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -103,12 +141,9 @@ async def preview_import(
         
         # Carregar o DataFrame completo para saber os totais reais
         if file_extension == 'csv':
-            try:
-                df_full = pd.read_csv(io.BytesIO(content), sep=';')
-                if len(df_full.columns) <= 1:
-                    df_full = pd.read_csv(io.BytesIO(content), sep=',')
-            except:
-                df_full = pd.read_csv(io.BytesIO(content))
+            df_full = read_csv_smart(content, sep=';')
+            if len(df_full.columns) <= 1:
+                df_full = read_csv_smart(content, sep=',')
         elif file_extension in ['xls', 'xlsx']:
             df_full = pd.read_excel(io.BytesIO(content))
         else:
@@ -117,9 +152,9 @@ async def preview_import(
         # Obter primeiras 3 linhas para a prévia
         df_preview = df_full.head(3)
 
-        # Converter para strings para o JSON
-        headers = df_full.columns.tolist()
-        preview_rows = df_preview.fillna("").values.tolist()
+        # Converter para strings para o JSON (garante tipos JSON-safe — numpy.int64 quebraria)
+        headers = [str(h) for h in df_full.columns.tolist()]
+        preview_rows = json.loads(df_preview.fillna("").astype(str).replace("nan", "").to_json(orient="values", force_ascii=False))
         
         # Tentar detectar coluna de telefone para contagem de únicos
         total_rows = len(df_full)
@@ -145,7 +180,23 @@ async def preview_import(
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
 
-def process_import_in_bg(import_id: int, content: bytes, file_extension: str, mapping_dict: dict, client_id: int):
+def _split_tags(s):
+    """Divide string de tags em lista, suportando JSON array ou vírgulas."""
+    if not s: return []
+    val = str(s).strip()
+    if val.startswith('[') and val.endswith(']'):
+        try:
+            import json as _j
+            parsed = _j.loads(val)
+            if isinstance(parsed, list):
+                return [str(t).strip() for t in parsed if str(t).strip()]
+        except Exception:
+            pass
+    cleaned = val.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
+    return [t.strip() for t in cleaned.split(",") if t.strip()]
+
+
+def process_import_in_bg(import_id: int, content: bytes, file_extension: str, mapping_dict: dict, client_id: int, fixed_tags: str = "", fixed_remove_tags: str = ""):
     # Obtain a fresh database session
     from database import SessionLocal
     
@@ -159,14 +210,22 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
         history.status = "processing"
         db.commit()
 
+        # Se content for None (retomada após restart), ler do arquivo salvo em disco
+        if content is None:
+            saved_path = history.file_path
+            if not saved_path or not os.path.exists(saved_path):
+                history.status = "failed"
+                history.error_message = "Arquivo não encontrado para retomada. Por favor, reimporte."
+                db.commit()
+                return
+            with open(saved_path, "rb") as f:
+                content = f.read()
+
         # Load dataframe
         if file_extension == 'csv':
-            try:
-                df = pd.read_csv(io.BytesIO(content), sep=';')
-                if len(df.columns) <= 1:
-                    df = pd.read_csv(io.BytesIO(content), sep=',')
-            except:
-                df = pd.read_csv(io.BytesIO(content))
+            df = read_csv_smart(content, sep=';')
+            if len(df.columns) <= 1:
+                df = read_csv_smart(content, sep=',')
         elif file_extension in ['xls', 'xlsx']:
             df = pd.read_excel(io.BytesIO(content))
         else:
@@ -195,53 +254,181 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
         df = df.drop_duplicates(subset=['temp_last_8'], keep='first')
 
         total_rows = len(df)
+
+        # Retomada: pular linhas já processadas em execução anterior
+        already_done = (history.imported_rows or 0) + (history.error_rows or 0)
+        if already_done > 0 and already_done < total_rows:
+            df = df.iloc[already_done:].reset_index(drop=True)
+
         history.total_rows = total_rows
         db.commit()
 
-        success_count = 0
-        error_count = 0
+        success_count = history.imported_rows or 0
+        error_count = history.error_rows or 0
 
-        # Iterar e importar em lotes para atualizar o status de progresso
+        # === OTIMIZAÇÃO BULK ===
+        # 1. Buscar proj_id UMA VEZ (não por linha)
+        active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+        proj_id = active_client.project_id if active_client else None
+
+        # 2. Pré-carregar TODOS os contatos existentes em memória (1 SELECT ao invés de N)
+        if proj_id:
+            existing_rows = db.query(
+                models.WebhookLead.id,
+                models.WebhookLead.phone,
+                models.WebhookLead.tags,
+                models.WebhookLead.name,
+                models.WebhookLead.email,
+                models.WebhookLead.total_events,
+            ).filter(models.WebhookLead.project_id == proj_id).all()
+        else:
+            existing_rows = db.query(
+                models.WebhookLead.id,
+                models.WebhookLead.phone,
+                models.WebhookLead.tags,
+                models.WebhookLead.name,
+                models.WebhookLead.email,
+                models.WebhookLead.total_events,
+            ).filter(models.WebhookLead.client_id == client_id).all()
+
+        # Índice por últimos 8 dígitos do telefone
+        existing_map = {}
+        for lead_id, phone, tags, ex_name, ex_email, total_events in existing_rows:
+            if phone:
+                last_8 = str(phone)[-8:]
+                existing_map[last_8] = {
+                    'id': lead_id,
+                    'tags': tags,
+                    'name': ex_name,
+                    'email': ex_email,
+                    'total_events': total_events or 0,
+                }
+
+        BATCH_SIZE = 500
+        now = datetime.now(timezone.utc)
+
+        # Tags globais desta importação (pré-computadas, não por linha)
+        fixed_tags_list = _split_tags(fixed_tags)
+        fixed_remove_list = _split_tags(fixed_remove_tags)
+        fixed_tags_list = [t for t in fixed_tags_list if t not in fixed_remove_list]
+
+        to_insert = []
+        to_update = []
+
         for idx, (_, row) in enumerate(df.iterrows()):
             try:
                 clean_phone = row['temp_clean_phone']
-                
-                lead_data = {
-                    "phone": clean_phone,
-                    "name": str(row.get(mapping_dict.get('name'))) if mapping_dict.get('name') else None,
-                    "email": str(row.get(mapping_dict.get('email'))) if mapping_dict.get('email') else None,
-                    "event_type": "importado"
-                }
-                
-                for k, v in lead_data.items():
-                    if str(v).strip().lower() == 'nan':
-                        lead_data[k] = None
+                last_8 = clean_phone[-8:]
 
-                tag = str(row.get(mapping_dict.get('tags'))) if mapping_dict.get('tags') else None
-                if str(tag).strip().lower() == 'nan':
-                    tag = None
+                raw_name = str(row.get(mapping_dict.get('name'))) if mapping_dict.get('name') else None
+                name = normalize_name(raw_name)
+                if name and str(name).lower() == 'nan':
+                    name = None
 
-                tags_to_remove = str(row.get(mapping_dict.get('remove_tags'))) if mapping_dict.get('remove_tags') else None
-                if str(tags_to_remove).strip().lower() == 'nan':
-                    tags_to_remove = None
+                email = str(row.get(mapping_dict.get('email'))) if mapping_dict.get('email') else None
+                if email and str(email).strip().lower() == 'nan':
+                    email = None
 
-                upsert_webhook_lead(db, client_id, "importação", lead_data, tag=tag, tags_to_remove=tags_to_remove)
+                _INVALID_TAG_VALUES = {'nan', 'none', '-', '--', '—', '.', 'n/a', 'na', ''}
+
+                csv_tag = str(row.get(mapping_dict.get('tags'))) if mapping_dict.get('tags') else None
+                if csv_tag and csv_tag.strip().lower() in _INVALID_TAG_VALUES:
+                    csv_tag = None
+
+                csv_remove = str(row.get(mapping_dict.get('remove_tags'))) if mapping_dict.get('remove_tags') else None
+                if csv_remove and csv_remove.strip().lower() in _INVALID_TAG_VALUES:
+                    csv_remove = None
+
+                # Tags desta linha: CSV + fixas manuais
+                row_tags_add = list(dict.fromkeys(_split_tags(csv_tag) + fixed_tags_list))
+                row_tags_del = list(dict.fromkeys(_split_tags(csv_remove) + fixed_remove_list))
+                row_tags_add = [t for t in row_tags_add if t not in row_tags_del]
+
+                if last_8 in existing_map:
+                    ex = existing_map[last_8]
+                    current_tags = _split_tags(ex['tags'])
+                    current_tags = [t for t in current_tags if t not in row_tags_del]
+                    for t in row_tags_add:
+                        if t not in current_tags:
+                            current_tags.append(t)
+
+                    update_dict = {
+                        'id': ex['id'],
+                        'tags': ", ".join(current_tags),
+                        'platform': 'manual_bulk',
+                        'total_events': (ex['total_events'] or 0) + 1,
+                        'last_event_at': now,
+                        'updated_at': now,
+                    }
+                    if name:
+                        update_dict['name'] = name
+                    if email:
+                        update_dict['email'] = email
+
+                    to_update.append(update_dict)
+                    existing_map[last_8] = {**ex, 'tags': ", ".join(current_tags), 'total_events': (ex['total_events'] or 0) + 1}
+                else:
+                    insert_dict = {
+                        'client_id': client_id,
+                        'project_id': proj_id,
+                        'imported_by_client_id': client_id,
+                        'name': name,
+                        'phone': clean_phone,
+                        'email': email,
+                        'last_event_type': 'importado',
+                        'last_event_at': now,
+                        'platform': 'manual_bulk',
+                        'tags': ", ".join(row_tags_add) if row_tags_add else None,
+                        'total_events': 1,
+                        'created_at': now,
+                        'updated_at': now,
+                    }
+                    to_insert.append(insert_dict)
+                    existing_map[last_8] = {
+                        'id': None,
+                        'tags': ", ".join(row_tags_add) if row_tags_add else None,
+                        'name': name,
+                        'email': email,
+                        'total_events': 1,
+                    }
+
                 success_count += 1
             except Exception as e:
-                print(f"Erro ao importar linha: {e}")
+                print(f"Erro ao importar linha {idx}: {e}")
                 error_count += 1
-            
-            # Periodicamente commitar e salvar progresso
-            if idx % 100 == 0 or idx == total_rows - 1:
+
+            # Commit em lote a cada BATCH_SIZE linhas
+            if (idx + 1) % BATCH_SIZE == 0:
+                if to_insert:
+                    db.bulk_insert_mappings(models.WebhookLead, to_insert)
+                    to_insert.clear()
+                if to_update:
+                    db.bulk_update_mappings(models.WebhookLead, to_update)
+                    to_update.clear()
                 history.imported_rows = success_count
                 history.error_rows = error_count
                 db.commit()
+
+        # Último lote
+        if to_insert:
+            db.bulk_insert_mappings(models.WebhookLead, to_insert)
+        if to_update:
+            db.bulk_update_mappings(models.WebhookLead, to_update)
 
         history.status = "completed"
         history.imported_rows = success_count
         history.error_rows = error_count
         history.updated_at = datetime.now(timezone.utc)
         db.commit()
+
+        # Apagar arquivo temporário após conclusão bem-sucedida
+        try:
+            if history.file_path and os.path.exists(history.file_path):
+                os.remove(history.file_path)
+                history.file_path = None
+                db.commit()
+        except Exception:
+            pass
 
     except Exception as e:
         import traceback
@@ -263,6 +450,8 @@ async def execute_import(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     mapping: str = Form(...), # JSON string do mapeamento
+    fixed_tags: Optional[str] = Form(None),        # tags fixas digitadas manualmente
+    fixed_remove_tags: Optional[str] = Form(None), # tags a remover digitadas manualmente
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
@@ -273,14 +462,14 @@ async def execute_import(
     try:
         client_id = x_client_id if x_client_id else current_user.client_id
         mapping_dict = json.loads(mapping) # {"name": "col_a", "phone": "col_b", ...}
-        
+
         # Buscar projeto associado ao cliente
         active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
         proj_id = active_client.project_id if active_client else None
 
         content = await file.read()
         file_extension = file.filename.split('.')[-1].lower()
-        
+
         # Criar registro de histórico inicial
         history = models.ContactImportHistory(
             client_id=client_id,
@@ -289,12 +478,23 @@ async def execute_import(
             status="pending",
             total_rows=0,
             imported_rows=0,
-            error_rows=0
+            error_rows=0,
+            mapping_json=json.dumps(mapping_dict),
+            fixed_tags=fixed_tags or "",
+            fixed_remove_tags=fixed_remove_tags or "",
+            file_ext=file_extension,
         )
         db.add(history)
         db.commit()
         db.refresh(history)
-        
+
+        # Salvar arquivo em disco para possível retomada após reinicialização
+        saved_file_path = os.path.join(IMPORT_FILES_DIR, f"import_{history.id}.{file_extension}")
+        with open(saved_file_path, "wb") as f:
+            f.write(content)
+        history.file_path = saved_file_path
+        db.commit()
+
         # Adicionar background task
         background_tasks.add_task(
             process_import_in_bg,
@@ -302,9 +502,11 @@ async def execute_import(
             content,
             file_extension,
             mapping_dict,
-            client_id
+            client_id,
+            fixed_tags or "",
+            fixed_remove_tags or ""
         )
-        
+
         return {
             "status": "success",
             "import_id": history.id,
@@ -440,7 +642,7 @@ async def run_chatwoot_import(
                 if len(clean_phone) < 8:
                     continue
                     
-                name = c.get("name")
+                name = normalize_name(c.get("name"))
                 email = c.get("email")
                 
                 # Determine tags to apply

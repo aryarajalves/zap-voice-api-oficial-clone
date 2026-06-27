@@ -173,6 +173,18 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         payload_str = json.dumps(payload, sort_keys=True)
         idempotency_key = f"webhook_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
 
+        # Extrai conversation_id do payload do webhook (ex: botão do Chatwoot)
+        # Tenta múltiplos caminhos: campo mapeado nas variáveis, payload.conversation.id, payload.conversation_id
+        _raw_conv_id = (
+            variables.get("chatwoot_conversation_id") or
+            variables.get("conversation_id") or
+            payload.get("conversation", {}).get("id") or
+            payload.get("conversation_id")
+        )
+        webhook_conversation_id = int(_raw_conv_id) if _raw_conv_id and str(_raw_conv_id).isdigit() else None
+        if webhook_conversation_id:
+            logger.info(f"🗂️ [WEBHOOK] conversation_id={webhook_conversation_id} extraído do payload para {phone}")
+
         # Cria o Disparo
         st = models.ScheduledTrigger(
             scheduled_time=scheduled_time,
@@ -194,7 +206,8 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             integration_id=mapping.integration_id,
             funnel_id=funnel_id,
             is_bulk=False,
-            idempotency_key=idempotency_key
+            idempotency_key=idempotency_key,
+            conversation_id=webhook_conversation_id
         )
         db.add(st)
         try:
@@ -286,7 +299,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             await rabbitmq.publish("zapvoice_funnel_executions", {
                 "trigger_id": st.id,
                 "funnel_id": funnel_id,
-                "conversation_id": None,
+                "conversation_id": webhook_conversation_id,
                 "contact_phone": phone,
                 "contact_name": variables.get("name")
             })

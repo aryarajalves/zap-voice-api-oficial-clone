@@ -9,13 +9,11 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
   const [coords, setCoords] = useState({ top: 0, bottom: 0, left: 0, width: 0 });
   const [direction, setDirection] = useState('down');
 
-  useEffect(() => {
-    if (isOpen && containerRef.current) {
+  const updateCoords = () => {
+    if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      // Se tiver menos de 250px livres embaixo, abrir para cima
       setDirection(spaceBelow < 250 ? 'up' : 'down');
-      
       setCoords({
         top: rect.top,
         bottom: rect.bottom,
@@ -23,7 +21,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
         width: rect.width
       });
     }
-  }, [isOpen]);
+  };
 
   const [selectedTag, setSelectedTag] = useState(null);
 
@@ -93,7 +91,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
     <div className="relative w-full" ref={containerRef}>
       <div
         className={`flex items-center gap-2 w-full min-h-[38px] py-1.5 px-3 text-sm bg-white dark:bg-[#0b1120] text-gray-900 dark:text-white border border-gray-200 dark:border-white/5 rounded-lg outline-none focus-within:ring-2 ${colorClass || 'focus-within:ring-blue-500/20'} cursor-pointer group/sel flex-wrap shadow-inner`}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (!isOpen) updateCoords(); setIsOpen(!isOpen); }}
       >
         {Icon && <Icon className={colorClass?.includes('purple') ? 'text-purple-500' : 'text-blue-500'} size={14} />}
 
@@ -130,10 +128,12 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
             className="fixed bg-white dark:bg-[#0f172a] border border-gray-100 dark:border-white/5 rounded-xl shadow-2xl z-[100000] overflow-hidden"
             style={{
               left: coords.left,
-              width: coords.width,
+              minWidth: coords.width,
+              width: 'max-content',
+              maxWidth: 'min(420px, calc(100vw - 32px))',
               maxHeight: '300px',
-              ...(direction === 'up' 
-                ? { bottom: window.innerHeight - coords.top + 4 } 
+              ...(direction === 'up'
+                ? { bottom: window.innerHeight - coords.top + 4 }
                 : { top: coords.bottom + 4 })
             }}
           >
@@ -194,7 +194,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
                       }}
                     >
                       <div className="flex items-center justify-between w-full gap-2 min-w-0">
-                        <span className="truncate">
+                        <span className="whitespace-nowrap">
                           {opt.is_pinned && !String(opt.label).includes('📌') && <span className="mr-1">📌</span>}
                           {opt.label}
                         </span>

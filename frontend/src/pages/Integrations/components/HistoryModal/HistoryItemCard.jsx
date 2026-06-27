@@ -1,5 +1,33 @@
 import React from 'react';
 import { FiTrash2, FiPlay, FiCopy, FiEdit2, FiMaximize2, FiZap, FiRefreshCw, FiSettings, FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
+import { toast } from 'react-hot-toast';
+import { EVENT_TYPES } from '../../constants';
+
+const COUNTRY_INFO = {
+  BR: { flag: '🇧🇷', name: 'Brasil' },
+  US: { flag: '🇺🇸', name: 'Estados Unidos' },
+  PT: { flag: '🇵🇹', name: 'Portugal' },
+  AR: { flag: '🇦🇷', name: 'Argentina' },
+  CL: { flag: '🇨🇱', name: 'Chile' },
+  CO: { flag: '🇨🇴', name: 'Colômbia' },
+  MX: { flag: '🇲🇽', name: 'México' },
+  PE: { flag: '🇵🇪', name: 'Peru' },
+  UY: { flag: '🇺🇾', name: 'Uruguai' },
+  PY: { flag: '🇵🇾', name: 'Paraguai' },
+  BO: { flag: '🇧🇴', name: 'Bolívia' },
+  VE: { flag: '🇻🇪', name: 'Venezuela' },
+  EC: { flag: '🇪🇨', name: 'Equador' },
+  GT: { flag: '🇬🇹', name: 'Guatemala' },
+  SV: { flag: '🇸🇻', name: 'El Salvador' },
+  HN: { flag: '🇭🇳', name: 'Honduras' },
+  NI: { flag: '🇳🇮', name: 'Nicarágua' },
+  CR: { flag: '🇨🇷', name: 'Costa Rica' },
+  PA: { flag: '🇵🇦', name: 'Panamá' },
+  GB: { flag: '🇬🇧', name: 'Reino Unido' },
+  AU: { flag: '🇦🇺', name: 'Austrália' },
+  CA: { flag: '🇨🇦', name: 'Canadá' },
+  AD: { flag: '🇦🇩', name: 'Andorra' },
+};
 
 const translateError = (msg) => {
   if (!msg) return "";
@@ -28,7 +56,6 @@ const HistoryItemCard = ({
   handleResendWebhook,
   isResending,
   setConfirmDeleteHistory,
-  toast,
   setEditJsonModal,
   setMaximizedJson,
   handleSyncHistory,
@@ -61,8 +88,7 @@ const HistoryItemCard = ({
             {new Date(item.created_at).toLocaleString()}
           </span>
           <span className="px-3 py-1 bg-blue-50 dark:bg-blue-400/5 rounded-full text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-400/10">
-            {item.event_type || 'Evento não detectado'}
-            {item.processed_data?.raw_status && ` (${item.processed_data.raw_status})`}
+            {EVENT_TYPES.find(e => e.value === item.event_type)?.label || item.event_type || 'Evento não detectado'}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -138,6 +164,41 @@ const HistoryItemCard = ({
                 {isSyncing[item.id] ? 'Sincronizando...' : 'Sincronizar Dados'}
               </button>
             </div>
+            {/* Banner Order Bump */}
+            {(item.event_type === 'compra_aprovada_ob' || item.processed_data?.order_bump) && (
+              <div className="mb-4 relative z-10 rounded-xl overflow-hidden border border-orange-500/30 bg-orange-500/5">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-500/10">
+                  <FiZap size={13} className="text-orange-400 shrink-0" fill="currentColor" />
+                  <span className="text-orange-400 font-black uppercase tracking-widest text-[10px]">Este produto é um Order Bump</span>
+                </div>
+                <div className="px-4 py-2.5 text-[11px] text-orange-300/80">
+                  O produto listado abaixo foi vendido como Order Bump — produto adicional comprado junto à oferta principal.
+                </div>
+              </div>
+            )}
+            {(item.event_type === 'compra_aprovada_com_ob' || (!item.processed_data?.order_bump && item.processed_data?.order_bump_products?.length > 0)) && (
+              <div className="mb-4 relative z-10 rounded-xl overflow-hidden border border-orange-500/30 bg-orange-500/5">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-500/10 border-b border-orange-500/20">
+                  <FiZap size={13} className="text-orange-400 shrink-0" fill="currentColor" />
+                  <span className="text-orange-400 font-black uppercase tracking-widest text-[10px]">Order Bump incluído — produto adicional adquirido</span>
+                </div>
+                {item.processed_data?.order_bump_products?.length > 0 ? (
+                  <div className="px-4 py-3 space-y-1.5">
+                    {item.processed_data.order_bump_products.map((ob, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-[11px]">
+                        <span className="text-orange-200 font-bold">{ob.name || ob.product_name || `Produto OB ${idx + 1}`}</span>
+                        {ob.price && <span className="text-orange-400 font-black">R$ {ob.price}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-2.5 text-[11px] text-orange-300/70 italic">
+                    Produtos do Order Bump não detalhados neste registro.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-[12px] relative z-10">
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
                 <span className="text-gray-400 dark:text-gray-400 font-medium">Plataforma:</span>
@@ -155,6 +216,24 @@ const HistoryItemCard = ({
                 <span className="text-gray-500 dark:text-gray-500 font-medium">E-mail:</span>
                 <span className="font-bold text-gray-800 dark:text-gray-200 lowercase">{item.processed_data.email || '-'}</span>
               </div>
+              {item.processed_data?.custom_fields?.CPF && (
+                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
+                  <span className="text-gray-400 dark:text-gray-400 font-medium">CPF:</span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">{item.processed_data.custom_fields.CPF}</span>
+                </div>
+              )}
+              {item.processed_data?.custom_fields?.CNPJ && (
+                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
+                  <span className="text-gray-400 dark:text-gray-400 font-medium">CNPJ:</span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">{item.processed_data.custom_fields.CNPJ}</span>
+                </div>
+              )}
+              {item.processed_data?.custom_fields?.Documento && (
+                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
+                  <span className="text-gray-400 dark:text-gray-400 font-medium">Documento:</span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">{item.processed_data.custom_fields.Documento}</span>
+                </div>
+              )}
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
                 <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Produtos:</span>
                 <div className="flex flex-col items-end gap-1.5 w-full pl-8">
@@ -195,7 +274,26 @@ const HistoryItemCard = ({
               )}
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
                 <span className="text-gray-400 dark:text-gray-400 font-medium">Método:</span>
-                <span className="font-bold text-white dark:text-white capitalize">{item.processed_data.payment_method || '-'}</span>
+                <span className="font-bold text-white dark:text-white capitalize">
+                  {(() => {
+                    const METHOD_TRANSLATIONS = {
+                      'credit_card': 'Cartão de Crédito',
+                      'credit_cards': 'Cartão de Crédito',
+                      'billet': 'Boleto',
+                      'boleto': 'Boleto',
+                      'pix': 'Pix',
+                      'bank_slip': 'Boleto',
+                      'bank_transfer': 'Transferência',
+                      'debit_card': 'Cartão de Débito',
+                      'paypal': 'PayPal',
+                      'free': 'Gratuito',
+                      'bankslip': 'Boleto',
+                      'hybrid': 'Híbrido'
+                    };
+                    const m = String(item.processed_data.payment_method || '').toLowerCase();
+                    return METHOD_TRANSLATIONS[m] || item.processed_data.payment_method || '-';
+                  })()}
+                </span>
               </div>
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
                 <span className="text-gray-400 dark:text-gray-400 font-medium">Valor:</span>
@@ -203,14 +301,34 @@ const HistoryItemCard = ({
                   {item.processed_data.price ? `R$ ${item.processed_data.price}` : 'R$ -'}
                 </span>
               </div>
+              {item.processed_data.country && (
+                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
+                  <span className="text-gray-400 dark:text-gray-400 font-medium">País de Origem:</span>
+                  <span className="font-bold text-white dark:text-white flex items-center gap-2">
+                    {(() => {
+                      const iso = String(item.processed_data.country).toUpperCase();
+                      const info = COUNTRY_INFO[iso];
+                      return info
+                        ? <><span className="text-lg leading-none">{info.flag}</span><span>{info.name}</span><span className="text-gray-500 text-[10px] font-mono">({iso})</span></>
+                        : <span>{iso}</span>;
+                    })()}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
                 <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Status Principal:</span>
-                <span className={`font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${item.processed_data.raw_status?.includes('Aprovada') ? 'text-green-500 bg-green-500/10' :
-                    item.processed_data.raw_status?.includes('Expirado') ? 'text-orange-500 bg-orange-500/10' :
-                      'text-blue-500 bg-blue-500/10'
-                  }`}>
-                  {item.processed_data.raw_status || '-'}
-                </span>
+                {(() => {
+                  const eventLabel = EVENT_TYPES.find(e => e.value === item.event_type)?.label || item.event_type || '-';
+                  const isApproved = item.event_type?.includes('compra_aprovada');
+                  const isChargeback = item.event_type === 'chargeback';
+                  const isNegative = item.event_type?.includes('expirado') || item.event_type?.includes('cancelad') || item.event_type?.includes('recusado') || item.event_type?.includes('reembolso');
+                  const colorClass = isChargeback ? 'text-red-500 bg-red-500/10' : isApproved ? 'text-green-500 bg-green-500/10' : isNegative ? 'text-orange-500 bg-orange-500/10' : 'text-blue-500 bg-blue-500/10';
+                  return (
+                    <span className={`font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${colorClass}`}>
+                      {eventLabel}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
                 <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Etiquetas Internas (ZapVoice):</span>
@@ -337,22 +455,27 @@ const HistoryItemCard = ({
               )}
 
               {/* --- Campos Extras Extraídos --- */}
-              {item.processed_data?.custom_fields && Object.keys(item.processed_data.custom_fields).length > 0 && (
-                <div className="mt-2 md:col-span-2 bg-purple-500/5 border border-purple-500/10 p-3 rounded-xl relative overflow-hidden">
-                  <div className="text-[10px] text-purple-600 dark:text-purple-400 font-black uppercase mb-3 flex items-center gap-1.5 tracking-widest relative z-10">
-                    <FiSettings size={12} />
-                    Campos Personalizados (Extras)
+              {(() => {
+                const validEntries = Object.entries(item.processed_data?.custom_fields || {})
+                  .filter(([k]) => !k.toLowerCase().startsWith('id ') && k !== 'Status Assinatura');
+                if (validEntries.length === 0) return null;
+                return (
+                  <div className="mt-2 md:col-span-2 bg-purple-500/5 border border-purple-500/10 p-3 rounded-xl relative overflow-hidden">
+                    <div className="text-[10px] text-purple-600 dark:text-purple-400 font-black uppercase mb-3 flex items-center gap-1.5 tracking-widest relative z-10">
+                      <FiSettings size={12} />
+                      Campos Personalizados (Extras)
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 relative z-10 text-[11px]">
+                      {validEntries.map(([k, v]) => (
+                        <div key={k} className="flex justify-between border-b border-purple-200/20 dark:border-purple-700/20 pb-1 break-all">
+                          <span className="text-gray-500 dark:text-gray-400 font-medium pr-2 max-w-[50%] truncate shrink-0" title={k}>{k}:</span>
+                          <span className="font-bold text-gray-800 dark:text-gray-200 text-right shrink min-w-0" title={v}>{String(v) || '-'}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 relative z-10 text-[11px]">
-                    {Object.entries(item.processed_data.custom_fields).map(([k, v]) => (
-                      <div key={k} className="flex justify-between border-b border-purple-200/20 dark:border-purple-700/20 pb-1 break-all">
-                        <span className="text-gray-500 dark:text-gray-400 font-medium pr-2 max-w-[50%] truncate shrink-0" title={k}>{k}:</span>
-                        <span className="font-bold text-gray-800 dark:text-gray-200 text-right shrink min-w-0" title={v}>{String(v) || '-'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {item.processed_data.utm_source && (
                 <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">

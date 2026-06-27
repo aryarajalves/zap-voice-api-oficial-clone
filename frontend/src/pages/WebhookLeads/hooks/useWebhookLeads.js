@@ -72,6 +72,7 @@ export function useWebhookLeads(activeClient) {
   const [selectedTags, setSelectedTags] = useState([]);
   const [importedByClientId, setImportedByClientId] = useState('');
   const [origin, setOrigin] = useState('');
+  const [lockedFilter, setLockedFilter] = useState(''); // '' = todos, 'true' = bloqueados, 'false' = não bloqueados
   const [availableFilters, setAvailableFilters] = useState({ event_types: [], product_names: [], tags: [], imported_by_clients: [] });
 
   // Filtros de data
@@ -95,6 +96,9 @@ export function useWebhookLeads(activeClient) {
   const [isCleaningTags, setIsCleaningTags] = useState(false);
   const [isCleanConfirmOpen, setIsCleanConfirmOpen] = useState(false);
 
+  // Seleção de todas as páginas
+  const [selectAllPages, setSelectAllPages] = useState(false);
+
   const fetchLeads = useCallback(async (overrides = {}) => {
     if (!activeClient?.id) return;
     
@@ -107,6 +111,7 @@ export function useWebhookLeads(activeClient) {
     const currentCustomTo = overrides.customDateTo !== undefined ? overrides.customDateTo : customDateTo;
     const currentImportedBy = overrides.importedByClientId !== undefined ? overrides.importedByClientId : importedByClientId;
     const currentOrigin = overrides.origin !== undefined ? overrides.origin : origin;
+    const currentLocked = overrides.lockedFilter !== undefined ? overrides.lockedFilter : lockedFilter;
 
     const { from, to } = resolveDateRange(currentDatePreset, currentCustomFrom, currentCustomTo);
 
@@ -117,6 +122,7 @@ export function useWebhookLeads(activeClient) {
       if (currentEventType) url += `&event_type=${encodeURIComponent(currentEventType)}`;
       if (currentImportedBy) url += `&imported_by_client_id=${currentImportedBy}`;
       if (currentOrigin) url += `&origin=${encodeURIComponent(currentOrigin)}`;
+      if (currentLocked !== '') url += `&is_locked=${currentLocked}`;
       if (currentTags && currentTags.length > 0) {
         currentTags.forEach(t => {
           url += `&tag=${encodeURIComponent(t)}`;
@@ -137,7 +143,7 @@ export function useWebhookLeads(activeClient) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin]);
+  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter]);
 
   const fetchFilters = useCallback(async () => {
     if (!activeClient?.id) return;
@@ -161,7 +167,7 @@ export function useWebhookLeads(activeClient) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId]);
+  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter]);
 
   const lastSearch = useRef('');
 
@@ -189,11 +195,11 @@ export function useWebhookLeads(activeClient) {
         fetchLeads();
         fetchFilters();
       } else {
-        toast.error('Erro ao limpar etiquetas.');
+        toast.error('Erro ao sincronizar contatos.');
       }
     } catch (err) {
       console.error(err);
-      toast.error('Erro ao limpar etiquetas.');
+      toast.error('Erro ao sincronizar contatos.');
     } finally {
       setIsCleaningTags(false);
       setIsCleanConfirmOpen(false);
@@ -251,18 +257,43 @@ export function useWebhookLeads(activeClient) {
     setIsDeleting(true);
     try {
       if (leadToDelete === 'bulk') {
-        const res = await fetchWithAuth(`${API_URL}/leads/bulk-delete`, {
-          method: 'POST',
-          body: JSON.stringify({ lead_ids: selectedLeads })
-        }, activeClient.id);
-        
-        if (res.ok) {
-          const data = await res.json();
-          toast.success(data.message || `${selectedLeads.length} leads excluídos com sucesso.`);
-          setSelectedLeads([]);
-          fetchLeads();
+        if (selectAllPages) {
+          // Deletar todos os contatos que batem com os filtros ativos
+          const { from, to } = resolveDateRange(datePreset, customDateFrom, customDateTo);
+          const res = await fetchWithAuth(`${API_URL}/leads/bulk-delete-all`, {
+            method: 'POST',
+            body: JSON.stringify({
+              search: search || null,
+              event_type: eventType || null,
+              tag: selectedTags.length > 0 ? selectedTags : null,
+              date_from: from || null,
+              date_to: to || null,
+              imported_by_client_id: importedByClientId || null,
+              origin: origin || null,
+            })
+          }, activeClient.id);
+          if (res.ok) {
+            const data = await res.json();
+            toast.success(data.message);
+            setSelectedLeads([]);
+            setSelectAllPages(false);
+            fetchLeads();
+          } else {
+            toast.error("Erro ao excluir todos os contatos.");
+          }
         } else {
-          toast.error("Erro ao deletar leads selecionados.");
+          const res = await fetchWithAuth(`${API_URL}/leads/bulk-delete`, {
+            method: 'POST',
+            body: JSON.stringify({ lead_ids: selectedLeads })
+          }, activeClient.id);
+          if (res.ok) {
+            const data = await res.json();
+            toast.success(data.message || `${selectedLeads.length} leads excluídos com sucesso.`);
+            setSelectedLeads([]);
+            fetchLeads();
+          } else {
+            toast.error("Erro ao deletar leads selecionados.");
+          }
         }
       } else if (leadToDelete) {
         const res = await fetchWithAuth(`${API_URL}/leads/${leadToDelete.id}`, {
@@ -292,8 +323,12 @@ export function useWebhookLeads(activeClient) {
       setSelectedLeads(leads.filter(lead => !lead.is_locked).map(lead => lead.id));
     } else {
       setSelectedLeads([]);
+      setSelectAllPages(false);
     }
   };
+
+  const handleSelectAllPages = () => setSelectAllPages(true);
+  const handleClearSelectAllPages = () => { setSelectAllPages(false); setSelectedLeads([]); };
 
   const handleSelectLead = (leadId) => {
     const lead = leads.find(l => l.id === leadId);
@@ -326,11 +361,17 @@ export function useWebhookLeads(activeClient) {
     setPage(0);
   };
 
+  // Atualiza um lead no estado local sem recarregar a lista inteira
+  const updateLeadInPlace = useCallback((leadId, updates) => {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
+  }, []);
+
   return {
     leads, total, loading, page, setPage, limit, setLimit,
     search, setSearch, eventType, setEventType, selectedTags, setSelectedTags, availableFilters,
     importedByClientId, setImportedByClientId,
     origin, setOrigin,
+    lockedFilter, setLockedFilter,
     // Filtros de data
     datePreset, setDatePreset: handleSetDatePreset,
     customDateFrom, setCustomDateFrom: handleSetCustomDateFrom,
@@ -341,6 +382,8 @@ export function useWebhookLeads(activeClient) {
     isImportModalOpen, setIsImportModalOpen, isCreateModalOpen, setIsCreateModalOpen,
     isEditModalOpen, setIsEditModalOpen, leadToEdit, setLeadToEdit,
     isCleaningTags, isCleanConfirmOpen, setIsCleanConfirmOpen,
-    fetchLeads, fetchFilters, handleCleanTags, handleExport, executeDelete, handleSelectAll, handleSelectLead
+    selectAllPages, handleSelectAllPages, handleClearSelectAllPages,
+    fetchLeads, fetchFilters, handleCleanTags, handleExport, executeDelete, handleSelectAll, handleSelectLead,
+    updateLeadInPlace
   };
 }

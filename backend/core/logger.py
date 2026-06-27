@@ -2,6 +2,7 @@ import logging
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from logging.handlers import TimedRotatingFileHandler
 
 def br_time_converter(*args):
     """Converte o timestamp para o fuso horário de Brasília (GMT-3)"""
@@ -67,8 +68,16 @@ def setup_logger(name: str = "zapvoice", level: str = "INFO") -> logging.Logger:
     console_handler.setFormatter(ColoredFormatter())
     logger.addHandler(console_handler)
     
-    # Handler para arquivo (Novo)
-    file_handler = logging.FileHandler("zapvoice_debug.log", encoding="utf-8")
+    # Handler para arquivo com rotação diária — mantém os últimos 7 dias
+    # Roda à meia-noite e apaga automaticamente arquivos com mais de 7 dias
+    file_handler = TimedRotatingFileHandler(
+        "zapvoice_debug.log",
+        when="midnight",       # Rotaciona todo dia à meia-noite
+        interval=1,
+        backupCount=7,         # Mantém apenas os últimos 7 arquivos (7 dias)
+        encoding="utf-8",
+        atTime=None,
+    )
     file_handler.setLevel(log_level)
     file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt='%d/%m/%y %H:%M:%S'))
     logger.addHandler(file_handler)

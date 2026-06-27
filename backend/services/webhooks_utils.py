@@ -64,6 +64,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "country": None,
         "product_name": None,
         "order_bump": False,
+        "order_bump_products": [],
         "payment_method": None,
         "raw_status": None,
         "price": None,
@@ -111,6 +112,39 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
     elif platform_lower == 'pagtrust':
         from services.utils.webhook_platform_parsers import parse_pagtrust
         parse_pagtrust(payload, result)
+    elif platform_lower == 'ticto':
+        from services.utils.webhook_platform_parsers import parse_ticto
+        parse_ticto(payload, result)
+    elif platform_lower == 'pepper':
+        from services.utils.webhook_platform_parsers import parse_pepper
+        parse_pepper(payload, result)
+    elif platform_lower == 'braip':
+        from services.utils.webhook_platform_parsers import parse_braip
+        parse_braip(payload, result)
+    elif platform_lower == 'monetizze':
+        from services.utils.webhook_platform_parsers import parse_monetizze
+        parse_monetizze(payload, result)
+    elif platform_lower == 'cakto':
+        from services.utils.webhook_platform_parsers import parse_cakto
+        parse_cakto(payload, result)
+    elif platform_lower == 'guru':
+        from services.utils.webhook_platform_parsers import parse_guru
+        parse_guru(payload, result)
+    elif platform_lower == 'lastlink':
+        from services.utils.webhook_platform_parsers import parse_lastlink
+        parse_lastlink(payload, result)
+    elif platform_lower == 'hubla':
+        from services.utils.webhook_platform_parsers import parse_hubla
+        parse_hubla(payload, result)
+    elif platform_lower == 'greenn':
+        from services.utils.webhook_platform_parsers import parse_greenn
+        parse_greenn(payload, result)
+    elif platform_lower == 'herospark':
+        from services.utils.webhook_platform_parsers import parse_herospark
+        parse_herospark(payload, result)
+    elif platform_lower == 'appmax':
+        from services.utils.webhook_platform_parsers import parse_appmax
+        parse_appmax(payload, result)
     elif platform_lower in ['elementor', 'generic', 'outra', 'outros']:
         # Tenta capturar campos comuns em payloads desconhecidos
         result['name'] = (
@@ -198,6 +232,11 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         if isinstance(products, list) and len(products) > 0:
             main_product = next((p for p in products if not p.get("is_order_bump")), products[0])
             result['product_name'] = main_product.get("name")
+            ob_products = [p for p in products if p.get("is_order_bump")]
+            if ob_products:
+                result['order_bump_products'] = [
+                    {'name': p.get('name'), 'price': p.get('price')} for p in ob_products
+                ]
         
         if not result.get('product_name'):
             result['product_name'] = (
@@ -205,6 +244,10 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
                 get_val(["product", "name"]) or get_val(["Product", "product_name"]) or
                 get_val(["form", "form_name"])
             )
+
+    # Kirvano / Eduzz: mesmo payload com OB embutido → event_type diferente
+    if result.get('order_bump_products') and result.get('event_type') == 'compra_aprovada':
+        result['event_type'] = 'compra_aprovada_com_ob'
 
     # Price Normalization
     if not result.get('price'):
@@ -275,6 +318,20 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "CLUB_MODULE_COMPLETED": "Módulo Concluído",
         "PURCHASE_OUT_OF_SHOPPING_CART": "Carrinho Abandonado",
         "SUBSCRIPTION_CANCELLATION": "Assinatura Cancelada",
+        "SUBSCRIPTION_CANCELED": "Assinatura Cancelada",
+        "ASSINATURA_CANCELADA": "Assinatura Cancelada",
+        "SUBSCRIPTION_EXPIRED": "Assinatura Atrasada",
+        "ASSINATURA_ATRASADA": "Assinatura Atrasada",
+        "SUBSCRIPTION_RENEWED":  "Assinatura Renovada",
+        "ASSINATURA_RENOVADA":   "Assinatura Renovada",
+        "BANK_SLIP_GENERATED": "Boleto Gerado",
+        "BANK_SLIP_EXPIRED": "Boleto Expirado",
+        "BOLETO_EXPIRADO": "Boleto Expirado",
+        "PIX_GENERATED": "PIX Gerado",
+        "PIX_EXPIRED": "PIX Expirado",
+        "SALE_REFUSED": "Cartão Recusado",
+        "SALE_CHARGEBACK": "Chargeback",
+        "SALE_REFUNDED": "Reembolso",
         "SWITCH_PLAN": "Troca de Plano",
         "UPDATE_SUBSCRIPTION_CHARGE_DATE": "Alteração de Vencimento"
     }
@@ -290,6 +347,56 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             number = cleaned[4:]
             cleaned = f"55{ddd}9{number}"
         result["phone"] = cleaned
+
+    # Country Detection (fallback after platform parser)
+    if not result.get("country"):
+        # 1. Try currency-based detection
+        currency = str(result.get("currency") or "").upper()
+        currency_country_map = {
+            "BRL": "BR", "USD": "US", "EUR": "PT", "ARS": "AR",
+            "CLP": "CL", "COP": "CO", "MXN": "MX", "PEN": "PE",
+            "UYU": "UY", "PYG": "PY", "BOB": "BO", "VEF": "VE",
+            "GBP": "GB", "CAD": "CA", "AUD": "AU",
+        }
+        if currency and currency in currency_country_map:
+            result["country"] = currency_country_map[currency]
+
+        # 2. If currency was BRL or still missing, try phone prefix
+        if not result.get("country") or result.get("country") == "BR":
+            phone_digits = ''.join(filter(str.isdigit, str(result.get("phone") or "")))
+            if phone_digits:
+                # Common country codes to ISO mapping (longest prefix first)
+                phone_prefix_map = [
+                    ("351", "PT"),  # Portugal
+                    ("376", "AD"),  # Andorra
+                    ("598", "UY"),  # Uruguay
+                    ("595", "PY"),  # Paraguay
+                    ("591", "BO"),  # Bolivia
+                    ("593", "EC"),  # Ecuador
+                    ("502", "GT"),  # Guatemala
+                    ("503", "SV"),  # El Salvador
+                    ("504", "HN"),  # Honduras
+                    ("505", "NI"),  # Nicaragua
+                    ("506", "CR"),  # Costa Rica
+                    ("507", "PA"),  # Panama
+                    ("569", "CL"),  # Chile (alt)
+                    ("549", "AR"),  # Argentina (alt)
+                    ("521", "MX"),  # Mexico (mobile)
+                    ("44", "GB"),   # UK
+                    ("61", "AU"),   # Australia
+                    ("55", "BR"),   # Brazil
+                    ("54", "AR"),   # Argentina
+                    ("56", "CL"),   # Chile
+                    ("57", "CO"),   # Colombia
+                    ("58", "VE"),   # Venezuela
+                    ("51", "PE"),   # Peru
+                    ("52", "MX"),   # Mexico
+                    ("1", "US"),    # USA/Canada
+                ]
+                for prefix, iso in phone_prefix_map:
+                    if phone_digits.startswith(prefix):
+                        result["country"] = iso
+                        break
 
     # Name Validation
     if result.get("name"):

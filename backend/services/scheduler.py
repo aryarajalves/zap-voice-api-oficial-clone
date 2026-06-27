@@ -15,6 +15,7 @@ logger = setup_logger(__name__)
 _last_cleanup_log: str | None = None
 _last_cleanup_history: str | None = None
 _last_cleanup_stale: str | None = None
+_last_bulk_crash_check: str | None = None  # controle por minuto
 
 async def run_log_file_cleanup():
     """Remove linhas antigas do zapvoice_debug.log com mais de LOG_RETENTION_DAYS dias."""
@@ -89,6 +90,147 @@ async def run_history_cleanup():
         db.close()
         _last_cleanup_history = today
 
+async def run_bulk_crash_detection(db_session=None):
+    """
+    Detecta disparos em massa cujo worker morreu (last_heartbeat > 10 min atras).
+    Cria MessageStatus 'failed' para cada contato pendente e marca o trigger como 'failed'.
+    Roda a cada minuto (controle por _last_bulk_crash_check).
+    """
+    global _last_bulk_crash_check
+    now_utc = datetime.now(timezone.utc)
+    minute_key = now_utc.strftime("%Y-%m-%d %H:%M")
+    if _last_bulk_crash_check == minute_key:
+        return
+
+    db = db_session if db_session is not None else SessionLocal()
+    try:
+        # Triggers em 'cancelling' há mais de 30 segundos sem worker ativo = forçar cancelled
+        cutoff_cancelling = now_utc - timedelta(seconds=30)
+        stuck_cancelling = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.is_bulk == True,
+            models.ScheduledTrigger.status == 'cancelling',
+            models.ScheduledTrigger.updated_at < cutoff_cancelling,
+        ).all()
+        for tr in stuck_cancelling:
+            logger.warning(f"🛑 [CRASH-REAPER] Trigger #{tr.id} preso em 'cancelling' por mais de 2min. Forçando 'cancelled'.")
+            tr.status = 'cancelled'
+            from services.engine import log_node_execution
+            log_node_execution(db, tr, node_id=tr.current_node_id or 'DELIVERY',
+                               status='cancelled', details='Cancelamento forçado pelo reaper: trigger preso em cancelling sem heartbeat.')
+        if stuck_cancelling:
+            db.commit()
+            for tr in stuck_cancelling:
+                from rabbitmq_client import rabbitmq as _rmq
+                await _rmq.publish_event("trigger_updated", {"trigger_id": tr.id, "status": "cancelled", "client_id": tr.client_id})
+
+        # Busca todos os disparos bulk em 'processing' — filtramos heartbeat em Python
+        # pois last_heartbeat fica dentro do JSON processed_data
+        cutoff_processing = now_utc - timedelta(minutes=1)  # TODO: voltar para 15min em produção
+        candidates = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.is_bulk == True,
+            models.ScheduledTrigger.status == 'processing',
+            models.ScheduledTrigger.updated_at < cutoff_processing,
+        ).all()
+
+        HEARTBEAT_TIMEOUT = 1 * 60  # TODO: voltar para 10 minutos em produção (10 * 60)
+        FAILURE_REASON = (
+            "Servidor reiniciado durante o disparo. "
+            "Este contato nao foi processado pois o sistema caiu enquanto o disparo estava em andamento."
+        )
+        crashed = []
+        for tr in candidates:
+            pdata = tr.processed_data or {}
+            hb_str = pdata.get("last_heartbeat")
+            if not hb_str:
+                # sem heartbeat + processing por 15 min = crash
+                crashed.append(tr)
+                continue
+            try:
+                hb = datetime.fromisoformat(hb_str)
+                if hb.tzinfo is not None:
+                    hb = hb.astimezone(timezone.utc).replace(tzinfo=None)
+                diff = (now_utc.replace(tzinfo=None) - hb).total_seconds()
+                if diff >= HEARTBEAT_TIMEOUT:
+                    crashed.append(tr)
+            except Exception:
+                crashed.append(tr)
+
+        if not crashed:
+            return  # finally ainda roda e atualiza _last_bulk_crash_check
+
+        from services.engine import log_node_execution
+        from services.utils.phone_utils import normalize_phone
+
+        for tr in crashed:
+            logger.warning(
+                f"💀 [CRASH-REAPER] Bulk trigger #{tr.id} sem heartbeat por >10min. "
+                f"Pendentes: {len(tr.pending_contacts or [])} contatos."
+            )
+
+            # Quais phones ainda nao foram enviados
+            pending = list(tr.pending_contacts or [])
+
+            # Pegar phones ja com MessageStatus para nao duplicar
+            from sqlalchemy import func
+            existing_phones = set(
+                p for (p,) in db.query(models.MessageStatus.phone_number)
+                .filter(models.MessageStatus.trigger_id == tr.id)
+                .all()
+            )
+
+            new_failures = 0
+            import uuid as _uuid
+            for phone_raw in pending:
+                phone = normalize_phone(phone_raw) or phone_raw
+                # Normaliza para comparar com sufixo
+                match = any(
+                    phone == ep or (len(phone) >= 8 and phone[-10:] in ep)
+                    for ep in existing_phones
+                )
+                if match:
+                    continue
+                msg = models.MessageStatus(
+                    trigger_id=tr.id,
+                    message_id=f"crash_{tr.id}_{phone}_{_uuid.uuid4().hex[:8]}",
+                    phone_number=phone,
+                    contact_name=phone,
+                    status="failed",
+                    failure_reason=FAILURE_REASON,
+                    message_type=tr.template_name and "TEMPLATE" or "FREE_MESSAGE",
+                )
+                db.add(msg)
+                new_failures += 1
+
+            # Atualizar contadores e status do trigger
+            tr.total_failed = (tr.total_failed or 0) + new_failures
+            tr.status = "failed"
+            tr.failure_reason = (
+                f"Queda do servidor durante o disparo. "
+                f"{new_failures} contato(s) nao processado(s) registrado(s) como falha."
+            )
+            tr.pending_contacts = []
+
+            log_node_execution(
+                db, tr,
+                node_id=tr.current_node_id or "DELIVERY",
+                status="failed",
+                details=tr.failure_reason,
+            )
+
+        db.commit()
+        logger.info(
+            f"💀 [CRASH-REAPER] {len(crashed)} disparo(s) de crash detectado(s) e encerrado(s)."
+        )
+
+    except Exception as e:
+        logger.error(f"❌ [CRASH-REAPER] Erro na deteccao de crash: {e}")
+        db.rollback()
+    finally:
+        if db_session is None:
+            db.close()
+        _last_bulk_crash_check = minute_key
+
+
 async def run_stale_triggers_cleanup(db_session=None):
     """Cancela Gatilhos travados ou aguardando entrega por muito tempo."""
     global _last_cleanup_stale
@@ -125,7 +267,7 @@ async def run_stale_triggers_cleanup(db_session=None):
                     models.ScheduledTrigger.scheduled_time < cutoff_2h
                 ),
                 and_(
-                    models.ScheduledTrigger.status == 'processing',
+                    models.ScheduledTrigger.status.in_(['processing', 'cancelling']),
                     models.ScheduledTrigger.updated_at < cutoff_2h
                 )
             )
@@ -336,6 +478,7 @@ async def scheduler_task():
             
             # Rodar limpezas de forma protegida
             try:
+                await run_bulk_crash_detection()   # a cada minuto — detecta bulk travado por queda do servidor
                 await run_history_cleanup()
                 await run_stale_triggers_cleanup()
                 await run_log_file_cleanup()

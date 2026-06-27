@@ -7,6 +7,149 @@ import ExplainErrorDialog from './ExplainErrorDialog';
 import ContactRow from './ContactRow';
 import { useContactsModalLogic } from '../hooks/useContactsModalLogic';
 
+// Mini modal multi-select de etiquetas do Chatwoot
+function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, clientId }) {
+    const [selected, setSelected] = React.useState([]);
+    const [labels, setLabels] = React.useState([]);
+    const [fetchingLabels, setFetchingLabels] = React.useState(false);
+    const [search, setSearch] = React.useState('');
+
+    React.useEffect(() => {
+        if (!isOpen) { setSelected([]); setSearch(''); return; }
+        setFetchingLabels(true);
+        import('../../../config').then(({ API_URL }) => {
+            import('../../../AuthContext').then(({ fetchWithAuth }) => {
+                fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, clientId)
+                    .then(r => r.ok ? r.json() : { payload: [] })
+                    .then(data => {
+                        const items = Array.isArray(data) ? data : (data.payload || []);
+                        setLabels(items);
+                    })
+                    .catch(() => setLabels([]))
+                    .finally(() => setFetchingLabels(false));
+            });
+        });
+    }, [isOpen, clientId]);
+
+    if (!isOpen) return null;
+
+    const filtered = labels.filter(l => {
+        const title = l.title || l.name || '';
+        return title.toLowerCase().includes(search.toLowerCase());
+    });
+
+    const toggle = (title) => {
+        setSelected(prev => prev.includes(title) ? prev.filter(t => t !== title) : [...prev, title]);
+    };
+
+    const handleConfirm = () => {
+        if (selected.length > 0) onConfirm(selected);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black bg-opacity-60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh]">
+                {/* Header */}
+                <div className="p-5 border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">🏷️</span>
+                        <div>
+                            <h3 className="font-bold text-gray-800 dark:text-white text-base">Etiquetar no Chatwoot</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                {count > 0 ? `${count} contato(s) selecionado(s)` : 'Todos os contatos com conversa no Chatwoot'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Search */}
+                <div className="px-5 pt-4 pb-2">
+                    <input
+                        autoFocus
+                        type="text"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Buscar etiqueta..."
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
+                    />
+                </div>
+
+                {/* Selected chips */}
+                {selected.length > 0 && (
+                    <div className="px-5 pb-2 flex flex-wrap gap-1.5">
+                        {selected.map(s => (
+                            <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-full text-[11px] font-bold">
+                                {s}
+                                <button type="button" onClick={() => toggle(s)} className="hover:text-indigo-900 dark:hover:text-white ml-0.5 leading-none">×</button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+
+                {/* Label list */}
+                <div className="overflow-y-auto flex-1 px-5 pb-2" style={{ minHeight: 80, maxHeight: 260 }}>
+                    {fetchingLabels ? (
+                        <div className="flex items-center justify-center py-8">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">
+                            {labels.length === 0 ? 'Nenhuma etiqueta encontrada no Chatwoot.' : 'Nenhuma etiqueta corresponde a busca.'}
+                        </p>
+                    ) : (
+                        <div className="space-y-1">
+                            {filtered.map(l => {
+                                const title = l.title || l.name || '';
+                                const color = l.color || '#6366f1';
+                                const isChecked = selected.includes(title);
+                                return (
+                                    <button
+                                        key={title}
+                                        type="button"
+                                        onClick={() => toggle(title)}
+                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                                            isChecked
+                                                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                                        }`}
+                                    >
+                                        <span className="w-3 h-3 rounded-full shrink-0 border-2" style={{ backgroundColor: isChecked ? color : 'transparent', borderColor: color }}></span>
+                                        <span className="flex-1 text-left font-medium truncate">{title}</span>
+                                        {isChecked && (
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-indigo-600 dark:text-indigo-400 shrink-0">
+                                                <polyline points="20 6 9 17 4 12"/>
+                                            </svg>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-5 border-t border-gray-100 dark:border-gray-700 flex gap-2 justify-between items-center">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                        {selected.length > 0 ? `${selected.length} selecionada(s)` : 'Nenhuma selecionada'}
+                    </span>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => { setSelected([]); onClose(); }}
+                            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                            Cancelar
+                        </button>
+                        <button type="button" onClick={handleConfirm} disabled={selected.length === 0 || loading}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black uppercase tracking-wider transition disabled:opacity-50 flex items-center gap-1.5">
+                            {loading
+                                ? <><div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div> Aplicando...</>
+                                : 'Aplicar Etiquetas'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 const ContactsModal = ({
     contactsModal, setContactsModal, contactsFilter, setContactsFilter,
     contactsTypeFilter, setContactsTypeFilter, contactsErrorFilter, setContactsErrorFilter,
@@ -24,10 +167,14 @@ const ContactsModal = ({
         setIsConfirmBlockOpen,
         isBulkSendModalOpen,
         setIsBulkSendModalOpen,
+        isChatwootLabelModalOpen,
+        setIsChatwootLabelModalOpen,
         loadingBlock,
         loadingAllTarget,
         taggingAll,
         sendingAll,
+        chatwootLabeling,
+        handleApplyChatwootLabel,
         currentPage,
         perPage,
         setPage,
@@ -175,24 +322,53 @@ const ContactsModal = ({
                                         </span>
                                     </label>
                                     {contactsModal.contacts.length > 0 && (
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={handleOpenTagModal}
-                                                disabled={taggingAll || loadingAllTarget}
-                                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
-                                            >
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                                                    <line x1="7" y1="7" x2="7.01" y2="7"/>
-                                                </svg>
-                                                {selectedPhones.length > 0 ? `Etiquetar (${selectedPhones.length})` : `Etiquetar Todos (${totalCount})`}
-                                            </button>
+                                        <div className="flex flex-col gap-1.5">
+                                            {/* Linha 1: Chatwoot + Etiquetar + Disparar */}
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setIsChatwootLabelModalOpen(true)}
+                                                    disabled={chatwootLabeling || loadingAllTarget}
+                                                    className="flex-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-indigo-950/20 disabled:opacity-50"
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                                                        <line x1="7" y1="7" x2="7.01" y2="7"/>
+                                                    </svg>
+                                                    {selectedPhones.length > 0 ? `Chatwoot (${selectedPhones.length})` : 'Chatwoot'}
+                                                </button>
+                                                <button
+                                                    onClick={handleOpenTagModal}
+                                                    disabled={taggingAll || loadingAllTarget}
+                                                    className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                                                        <line x1="7" y1="7" x2="7.01" y2="7"/>
+                                                    </svg>
+                                                    {selectedPhones.length > 0 ? `Etiquetar (${selectedPhones.length})` : `Etiquetar Todos (${totalCount})`}
+                                                </button>
+                                                {contactsFilter === 'failed' && (
+                                                    <button
+                                                        onClick={handleOpenBulkSendModal}
+                                                        disabled={sendingAll || loadingAllTarget}
+                                                        className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/20 disabled:opacity-50"
+                                                        id="contacts-bulk-send-button"
+                                                    >
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                            <polyline points="22 2 15 22 11 13 2 9 22 2" />
+                                                            <line x1="22" y1="2" x2="11" y2="13" />
+                                                        </svg>
+                                                        {selectedPhones.length > 0 ? `Disparar (${selectedPhones.length})` : `Disparar Todos (${totalCount})`}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {/* Linha 2: Repousar + Bloquear (só em falhas) */}
                                             {contactsFilter === 'failed' && (
-                                                <>
+                                                <div className="flex gap-2">
                                                     <button
                                                         onClick={() => setIsConfirmRestOpen(true)}
                                                         disabled={loadingRest || loadingAllTarget}
-                                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-amber-950/20 disabled:opacity-50"
+                                                        className="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/20 disabled:opacity-50"
                                                         id="contacts-bulk-rest-button"
                                                     >
                                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -204,7 +380,7 @@ const ContactsModal = ({
                                                     <button
                                                         onClick={() => setIsConfirmBlockOpen(true)}
                                                         disabled={loadingBlock || loadingAllTarget}
-                                                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-rose-950/20 disabled:opacity-50"
+                                                        className="flex-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-rose-950/20 disabled:opacity-50"
                                                     >
                                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                                                             <circle cx="12" cy="12" r="10" />
@@ -212,19 +388,7 @@ const ContactsModal = ({
                                                         </svg>
                                                         {selectedPhones.length > 0 ? `Bloquear (${selectedPhones.length})` : `Bloquear Todos (${totalCount})`}
                                                     </button>
-                                                    <button
-                                                        onClick={handleOpenBulkSendModal}
-                                                        disabled={sendingAll || loadingAllTarget}
-                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-blue-950/20 disabled:opacity-50"
-                                                        id="contacts-bulk-send-button"
-                                                    >
-                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                            <polyline points="22 2 15 22 11 13 2 9 22 2" />
-                                                            <line x1="22" y1="2" x2="11" y2="13" />
-                                                        </svg>
-                                                        {selectedPhones.length > 0 ? `Disparar (${selectedPhones.length})` : `Disparar Todos (${totalCount})`}
-                                                    </button>
-                                                </>
+                                                </div>
                                             )}
                                         </div>
                                     )}
@@ -348,6 +512,15 @@ const ContactsModal = ({
                 confirmColorClass="bg-rose-600 hover:bg-rose-500 focus:ring-rose-500/20"
                 icon="⚠️"
                 loading={loadingBlock}
+            />
+
+            <ChatwootLabelModal
+                isOpen={isChatwootLabelModalOpen}
+                onClose={() => setIsChatwootLabelModalOpen(false)}
+                onConfirm={handleApplyChatwootLabel}
+                loading={chatwootLabeling}
+                count={selectedPhones.length}
+                clientId={contactsModal.clientId || activeClient?.id}
             />
 
             <TagContactsModal

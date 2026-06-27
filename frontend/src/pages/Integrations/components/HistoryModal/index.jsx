@@ -41,14 +41,13 @@ const HistoryModal = ({
   fetchHistory,
   bulkResendProgress,
   setBulkResendProgress,
-  toast
 }) => {
   if (!isOpen || !integration) return null;
 
   const historyArray = Array.isArray(webhookHistory) ? webhookHistory : [];
   const filtered = historyArray.filter(item => {
-    // 1. Filtro por status
-    if (webhookHistoryStatusFilter && item?.processed_data?.raw_status !== webhookHistoryStatusFilter) {
+    // 1. Filtro por status (compara event_type)
+    if (webhookHistoryStatusFilter && item?.event_type !== webhookHistoryStatusFilter) {
       return false;
     }
     // 2. Filtro por mapeamento
@@ -159,7 +158,6 @@ const HistoryModal = ({
                   handleResendWebhook={handleResendWebhook}
                   isResending={isResending}
                   setConfirmDeleteHistory={setConfirmDeleteHistory}
-                  toast={toast}
                   setEditJsonModal={setEditJsonModal}
                   setMaximizedJson={setMaximizedJson}
                   handleSyncHistory={handleSyncHistory}

@@ -1,8 +1,9 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiCheckCircle, FiCopy, FiRefreshCw } from 'react-icons/fi';
+import { toast } from 'react-hot-toast';
 
-export const MaximizedJsonModal = ({ isOpen, data, onClose, toast }) => {
+export const MaximizedJsonModal = ({ isOpen, data, onClose }) => {
   if (!isOpen || !data) return null;
 
   return createPortal(

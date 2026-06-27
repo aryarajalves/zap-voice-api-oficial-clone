@@ -68,7 +68,8 @@ from routers import (
     instagram,      # Automação do Instagram
     resting,        # Contatos em repouso
     invitations,    # Convites de cadastro de usuário (Super Admin)
-    projects        # Projetos compartilhados
+    projects,       # Projetos compartilhados
+    logs            # Visualizador de logs (Super Admin)
 )
 
 # Webhook de entrada do Chatwoot (recebe eventos em tempo real)
@@ -218,25 +219,21 @@ async def add_security_headers(request: Request, call_next):
 @app.get("/api/meta")
 @limiter.exempt
 async def meta_webhook_verification(request: Request, db: Session = Depends(get_db)):
-    logger.info("📥 [DEBUG] GET /api/meta recebido (Verificação)")
     return await meta_webhook_handler(request, db)
 
 @app.post("/api/meta")
 @limiter.exempt
 async def meta_webhook_events(request: Request, db: Session = Depends(get_db)):
-    logger.info("📥 [DEBUG] POST /api/meta recebido (Evento)")
     return await meta_webhook_handler(request, db)
 
 @app.get("/api/meta/{slug}")
 @limiter.exempt
 async def meta_webhook_verification_slug(slug: str, request: Request, db: Session = Depends(get_db)):
-    logger.info(f"📥 [DEBUG] GET /api/meta/{slug} recebido (Verificação)")
     return await meta_webhook_handler(request, db, slug=slug)
 
 @app.post("/api/meta/{slug}")
 @limiter.exempt
 async def meta_webhook_events_slug(slug: str, request: Request, db: Session = Depends(get_db)):
-    logger.info(f"📥 [DEBUG] POST /api/meta/{slug} recebido (Evento)")
     return await meta_webhook_handler(request, db, slug=slug)
 
 
@@ -274,6 +271,7 @@ app.include_router(leads_import.router, prefix="/api", tags=["Leads Import"])
 app.include_router(projects.router, prefix="/api", tags=["Projects"])
 app.include_router(financial.router, prefix="/api", tags=["Financial"])
 app.include_router(backup.router, prefix="/api", tags=["Backup"])
+app.include_router(logs.router, prefix="/api", tags=["Logs"])
 app.include_router(hot_leads.router, prefix="/api", tags=["HotLeads"])
 app.include_router(instagram.router, prefix="/api")
 
@@ -282,26 +280,76 @@ app.include_router(instagram.router, prefix="/api")
 # Eventos de Inicialização
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Ignora caminhos de assets estáticos e docs para não poluir
-    if not any(x in request.url.path for x in ["/static", "/assets", "/docs", "/openapi.json", "/favicon.ico"]):
-        logger.info(f"🔍 [REQUEST] {request.method} {request.url.path}")
-            
     response = await call_next(request)
-    if not any(x in request.url.path for x in ["/static", "/assets", "/docs", "/openapi.json", "/favicon.ico"]):
-        logger.info(f"✅ [RESPONSE] {request.method} {request.url.path} - Status: {response.status_code}")
+    # Loga apenas erros HTTP (4xx e 5xx) para não poluir o log com requisições normais
+    if response.status_code >= 400:
+        logger.warning(f"⚠️ [HTTP {response.status_code}] {request.method} {request.url.path}")
     return response
+
+def resume_stuck_imports():
+    """
+    Ao iniciar, retoma importações que estavam em 'processing' ou 'pending'
+    quando o servidor foi reiniciado — desde que o arquivo ainda exista em disco.
+    Importações sem arquivo salvo são marcadas como falha.
+    """
+    from database import SessionLocal
+    from routers.leads_import import process_import_in_bg
+    import json as _json
+
+    db = SessionLocal()
+    try:
+        stuck = db.query(models.ContactImportHistory).filter(
+            models.ContactImportHistory.status.in_(["processing", "pending"])
+        ).all()
+
+        for h in stuck:
+            if h.file_path and os.path.exists(h.file_path):
+                logger.info(f"🔄 Retomando importação #{h.id} ({h.filename}) a partir de {(h.imported_rows or 0) + (h.error_rows or 0)} linhas...")
+                try:
+                    mapping_dict = _json.loads(h.mapping_json) if h.mapping_json else {}
+                except Exception:
+                    mapping_dict = {}
+                import threading
+                t = threading.Thread(
+                    target=process_import_in_bg,
+                    args=(h.id, None, h.file_ext or "csv", mapping_dict, h.client_id, h.fixed_tags or "", h.fixed_remove_tags or ""),
+                    daemon=True
+                )
+                t.start()
+            else:
+                logger.warning(f"⚠️ Importação #{h.id} ({h.filename}) interrompida sem arquivo salvo — marcando como falha.")
+                h.status = "failed"
+                h.error_message = "Processamento interrompido (servidor reiniciado). Por favor, reimporte o arquivo."
+                db.commit()
+    except Exception as e:
+        logger.error(f"❌ Erro ao retomar importações: {e}")
+    finally:
+        db.close()
 
 @app.on_event("startup")
 async def startup_event():
     logger.info("🚀 Iniciando ZapVoice API...")
-    
+
+    # Garantir que o schema do banco está atualizado (adiciona colunas novas se necessário)
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, lambda: auto_migrate(engine))
+        logger.info("✅ Schema do banco verificado/atualizado.")
+    except Exception as e:
+        logger.error(f"❌ Erro ao verificar schema: {e}")
+
     # Seed Super Admin (Com Retry para aguardar o banco se necessário)
     try:
         # Usamos wait_for para garantir que o seed não trave o boot da API indefinidamente
         await asyncio.wait_for(seed_super_admin(), timeout=30.0)
     except Exception as e:
         logger.error(f"❌ Falha crítica ao realizar seed do admin: {e}")
-        
+
+    # Retoma importações que foram interrompidas por reinicialização do servidor
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, resume_stuck_imports)
+    except Exception as e:
+        logger.error(f"❌ Erro ao retomar importações: {e}")
+
     # Inicia Tarefas de Background (Totalmente desacoplado do Boot)
     async def start_all_background_tasks():
         await asyncio.sleep(2)
@@ -343,11 +391,9 @@ async def startup_event():
     # except Exception as e:
     #     logger.error(f"❌ Falha ao iniciar workers internos: {e}")
 
-    # Diagnóstico de Rotas
-    logger.info("🔍 [DIAGNOSTIC] Listando todas as rotas registradas:")
-    for route in app.routes:
-        methods = getattr(route, "methods", None)
-        logger.info(f"📍 Rota: {route.path} | Métodos: {methods}")
+    # Diagnóstico de Rotas (apenas conta, não lista cada uma)
+    route_count = len([r for r in app.routes if getattr(r, "methods", None)])
+    logger.info(f"🔍 {route_count} rotas registradas.")
 
     # Fim do startup
     logger.info("✅ Startup finalizado. Servidor pronto!")

@@ -38,6 +38,9 @@ services:
       # Dias para manter as linhas do arquivo de log do container (0 = desabilitado)
       - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-7}
       # S3 Configs will be loaded from .env automatically via env_file
+      # === Simulação de Disparos ===
+      - SIMULATE_MESSAGING=true
+      - SIMULATE_CHATWOOT_RATELIMIT=true
 
   zapvoice_worker:
     build:
@@ -63,6 +66,9 @@ services:
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      # === Simulação de Disparos ===
+      - SIMULATE_MESSAGING=true
+      - SIMULATE_CHATWOOT_RATELIMIT=true
 
   zapvoice_frontend:
     image: node:20-alpine
@@ -82,6 +88,8 @@ services:
       - VITE_API_URL=${VITE_API_URL:-http://localhost:8000/api}
       - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:8000/ws}
       - TZ=America/Sao_Paulo
+      # === Simulação de Disparos ===
+      - SIMULATE_MESSAGING=true
 
   # === INFRASTRUCTURE SERVICES ===
   zapvoice-postgres:

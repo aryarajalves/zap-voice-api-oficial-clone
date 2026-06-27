@@ -1,18 +1,21 @@
 import React from 'react';
-import { FiUser, FiTrash2, FiSlash, FiPlus, FiUpload, FiDownload, FiRefreshCw } from 'react-icons/fi';
+import { FiUser, FiTrash2, FiSlash, FiPlus, FiUpload, FiDownload, FiRefreshCw, FiClock } from 'react-icons/fi';
 
-export default function Header({ 
-  selectedLeads, 
-  setIsDeleteModalOpen, 
-  setLeadToDelete, 
-  setIsCleanConfirmOpen, 
-  isCleaningTags, 
-  setIsCreateModalOpen, 
-  setIsImportModalOpen, 
-  handleExport, 
-  fetchLeads, 
-  fetchFilters, 
-  loading 
+export default function Header({
+  selectedLeads,
+  selectAllPages,
+  total,
+  setIsDeleteModalOpen,
+  setLeadToDelete,
+  setIsCleanConfirmOpen,
+  isCleaningTags,
+  setIsCreateModalOpen,
+  setIsImportModalOpen,
+  handleExport,
+  fetchLeads,
+  fetchFilters,
+  loading,
+  onNavigateToImportHistory
 }) {
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -30,23 +33,23 @@ export default function Header({
       
       <div className="flex items-center gap-3">
         {selectedLeads.length > 0 && (
-          <button 
+          <button
             onClick={() => { setLeadToDelete('bulk'); setIsDeleteModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-xl text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/50 transition-all border border-red-200 dark:border-red-800/30"
           >
             <FiTrash2 />
-            Excluir ({selectedLeads.length})
+            Excluir ({selectAllPages ? total.toLocaleString('pt-BR') : selectedLeads.length})
           </button>
         )}
 
         <button
           onClick={() => setIsCleanConfirmOpen(true)}
           disabled={isCleaningTags}
-          title="Remover etiquetas corrompidas de todos os contatos"
+          title="Sincronizar contatos: corrigir nomes e remover tags corrompidas"
           className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-xl text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all border border-amber-200 dark:border-amber-800/30 disabled:opacity-50"
         >
-          <FiSlash className={isCleaningTags ? 'animate-spin' : ''} />
-          {isCleaningTags ? 'Limpando...' : 'Limpar Tags'}
+          <FiRefreshCw className={isCleaningTags ? 'animate-spin' : ''} />
+          {isCleaningTags ? 'Sincronizando...' : 'Sincronizar'}
         </button>
 
         <button
@@ -57,13 +60,24 @@ export default function Header({
           Novo Contato
         </button>
 
-        <button 
+        <button
           onClick={() => setIsImportModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
         >
           <FiUpload />
           Importar
         </button>
+
+        {onNavigateToImportHistory && (
+          <button
+            onClick={onNavigateToImportHistory}
+            title="Ver histórico de importações"
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm text-gray-700 dark:text-gray-300"
+          >
+            <FiClock size={15} />
+            Histórico
+          </button>
+        )}
 
         <button 
           onClick={handleExport}

@@ -2,15 +2,81 @@ import React from 'react';
 import { FiX, FiUpload, FiCheckCircle, FiAlertCircle, FiSettings, FiArrowRight, FiArrowLeft, FiLoader } from 'react-icons/fi';
 import { useContactImport } from './ContactImportModal/hooks/useContactImport';
 
+function TagChipInput({ tags, setTags, placeholder }) {
+  const [input, setInput] = React.useState('');
+
+  const addTag = (val) => {
+    const trimmed = val.trim().toLowerCase().replace(/\s+/g, '-');
+    if (trimmed && !tags.includes(trimmed)) {
+      setTags([...tags, trimmed]);
+    }
+    setInput('');
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === 'Backspace' && !input && tags.length > 0) {
+      setTags(tags.slice(0, -1));
+    }
+  };
+
+  const handleBlur = () => {
+    if (input.trim()) addTag(input);
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap gap-1 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg min-h-[34px] focus-within:ring-2 focus-within:ring-blue-500 transition-all cursor-text">
+        {tags.map((tag, i) => (
+          <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded text-[10px] font-medium">
+            {tag}
+            <button
+              type="button"
+              onClick={() => setTags(tags.filter((_, idx) => idx !== i))}
+              className="ml-0.5 hover:text-red-500 transition-colors leading-none text-[11px] font-bold"
+            >
+              &times;
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          placeholder={tags.length === 0 ? placeholder : ''}
+          className="flex-1 min-w-[80px] text-xs bg-transparent outline-none text-gray-800 dark:text-white placeholder:text-gray-400"
+        />
+      </div>
+      <p className="text-[9px] text-gray-400">Enter ou vírgula para adicionar · Backspace para remover</p>
+    </div>
+  );
+}
+
 export default function ContactImportModal({ isOpen, onClose, onImportComplete }) {
   const {
     activeClient, step, setStep, loading, previewData, mapping, setMapping, importResult,
     fileInputRef, importSource, setImportSource, chatwootLabels, loadingLabels, selectedLabel, setSelectedLabel,
     importAllTags, setImportAllTags, customTag, setCustomTag,
+    fixedTags, setFixedTags, fixedRemoveTags, setFixedRemoveTags,
     handleChatwootImport, handleFileChange, handleExecuteImport, reset
   } = useContactImport(onClose, onImportComplete);
 
   const [selectedTagsForModal, setSelectedTagsForModal] = React.useState(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer?.files?.[0];
+    if (!droppedFile) return;
+    // Simulate a synthetic event that handleFileChange expects
+    handleFileChange({ target: { files: [droppedFile] } });
+  };
 
   const isTagsColumn = (header) => {
     if (!header) return false;
@@ -66,7 +132,7 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(100vh-180px)]">
           {step === 1 && !importSource && (
             <div className="space-y-4 py-4">
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
@@ -104,9 +170,17 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
 
           {step === 1 && importSource === 'file' && (
             <div className="space-y-6">
-              <div 
+              <div
                 onClick={() => fileInputRef.current.click()}
-                className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-10 flex flex-col items-center justify-center gap-4 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-pointer transition-all group"
+                onDrop={handleDrop}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all group ${
+                  isDragging
+                    ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 scale-[1.01]'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/30 dark:hover:bg-blue-900/10'
+                }`}
               >
                 <input 
                   type="file" 
@@ -207,14 +281,12 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
                       { key: 'name', label: 'Nome', required: false },
                       { key: 'phone', label: 'Telefone', required: true },
                       { key: 'email', label: 'Email', required: false },
-                      { key: 'tags', label: 'Etiquetas a Adicionar', required: false },
-                      { key: 'remove_tags', label: 'Etiquetas a Remover', required: false },
                     ].map(field => (
                       <div key={field.key} className="flex flex-col gap-1">
                         <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
                           {field.label} {field.required && <span className="text-red-500">*</span>}
                         </label>
-                        <select 
+                        <select
                           className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                           value={mapping[field.key]}
                           onChange={(e) => setMapping({ ...mapping, [field.key]: e.target.value })}
@@ -226,6 +298,58 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
                         </select>
                       </div>
                     ))}
+
+                    {/* Etiquetas a Adicionar */}
+                    <div className="flex flex-col gap-1.5 pt-1 border-t border-gray-100 dark:border-gray-700">
+                      <label className="text-xs font-semibold text-gray-600 dark:text-gray-400">Etiquetas a Adicionar</label>
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Via coluna CSV</p>
+                        <select
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                          value={mapping.tags}
+                          onChange={(e) => setMapping({ ...mapping, tags: e.target.value })}
+                        >
+                          <option value="">-- Ignorar --</option>
+                          {previewData.headers.map(h => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Ou digitar manualmente (para todos)</p>
+                        <TagChipInput
+                          tags={fixedTags}
+                          setTags={setFixedTags}
+                          placeholder="ex: lead, cliente-vip..."
+                        />
+                      </div>
+                    </div>
+
+                    {/* Etiquetas a Remover */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-gray-600 dark:text-gray-400">Etiquetas a Remover</label>
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Via coluna CSV</p>
+                        <select
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                          value={mapping.remove_tags}
+                          onChange={(e) => setMapping({ ...mapping, remove_tags: e.target.value })}
+                        >
+                          <option value="">-- Ignorar --</option>
+                          {previewData.headers.map(h => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Ou digitar manualmente (para todos)</p>
+                        <TagChipInput
+                          tags={fixedRemoveTags}
+                          setTags={setFixedRemoveTags}
+                          placeholder="ex: prospecto, lista-fria..."
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 

@@ -92,17 +92,22 @@ export default function LeadTableRow({
               )}
               {lead.platform === 'manual' && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 whitespace-nowrap" title="Criado Manualmente">
-                  👤 Criado Manual
+                  👤 Manual
                 </span>
               )}
               {lead.platform === 'manual_bulk' && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-100 dark:border-amber-800/50 whitespace-nowrap" title="Importado via planilha/CSV">
-                  📥 Importado Manualmente
+                  📥 Planilha
                 </span>
               )}
               {lead.variables?.created_by_webhook && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-100 dark:border-violet-800/50 whitespace-nowrap" title={`Criado via Webhook: ${lead.variables.webhook_name}`}>
-                  🔗 Webhook: {lead.variables.webhook_name || 'Integração'}
+                  🔗 {lead.variables.webhook_name || 'Webhook'}
+                </span>
+              )}
+              {!['manual', 'manual_bulk', 'chatwoot_import'].includes(lead.platform) && !lead.variables?.created_by_webhook && lead.platform && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-100 dark:border-violet-800/50 whitespace-nowrap" title={`Webhook: ${lead.platform}`}>
+                  🔗 Webhook
                 </span>
               )}
               {lead.imported_by_name && (

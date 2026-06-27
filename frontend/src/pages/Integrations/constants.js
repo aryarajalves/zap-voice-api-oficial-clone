@@ -1,14 +1,27 @@
 // Constantes e Helpers para a página de Integrações
 
 export const EVENT_TYPES = [
-  { value: 'pix_gerado', label: 'Pix Gerado / Boleto' },
-  { value: 'pix_expirado', label: 'Pix Expirado' },
   { value: 'compra_aprovada', label: 'Compra Aprovada' },
-  { value: 'carrinho_abandonado', label: 'Carrinho Abandonado' },
+  { value: 'compra_aprovada_ob', label: 'Compra Aprovada (Order Bump)' },
+  { value: 'compra_aprovada_com_ob', label: 'Compra Aprovada + Order Bump' },
+  { value: 'compra_aprovada_upsell', label: 'Compra Aprovada (Upsell)' },
+  { value: 'compra_concluida', label: 'Compra Concluída (Pós-Garantia)' },
   { value: 'cartao_recusado', label: 'Cartão Recusado' },
+  { value: 'compra_cancelada', label: 'Compra Cancelada' },
   { value: 'reembolso', label: 'Reembolso' },
+  { value: 'chargeback', label: 'Chargeback' },
+  { value: 'carrinho_abandonado', label: 'Carrinho Abandonado' },
+  { value: 'pix_gerado', label: 'Pix Gerado' },
+  { value: 'pix_expirado', label: 'Pix Expirado' },
+  { value: 'boleto_impresso', label: 'Boleto Gerado / Impresso' },
+  { value: 'boleto_expirado', label: 'Boleto Expirado' },
+  { value: 'assinatura_cancelada', label: 'Assinatura Cancelada' },
+  { value: 'assinatura_atrasada', label: 'Assinatura Atrasada' },
+  { value: 'assinatura_renovada', label: 'Assinatura Renovada' },
   { value: 'form_submission', label: 'Formulário / Elementor' },
   { value: 'evento_aluno', label: 'Evento de Aluno' },
+  { value: 'alteracao_vencimento', label: 'Alteração de Vencimento' },
+  { value: 'troca_de_plano', label: 'Troca de Plano' },
   { value: 'outros', label: 'Qualquer / Outro' }
 ];
 
