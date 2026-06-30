@@ -43,7 +43,7 @@ async def notify_ai_memory(client_id: int, phone: str, content: str, msg_type: s
         logger.error(f"❌ [AI Memory] Erro ao enviar para o RabbitMQ: {e}")
         # Falha silenciosa para não quebrar o fluxo principal
 
-async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = None, template_name: str = None, content: str = None, trigger_id: int = None, node_id: str = None, internal_contact_id: int = None, dono: str = "agente"):
+async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = None, template_name: str = None, content: str = None, trigger_id: int = None, node_id: str = None, internal_contact_id: int = None, dono: str = "agente", is_button_click: bool = False):
     """
     Envia os dados do template ou nó de funil para um webhook externo configurado.
     Focado na integração com n8n/agentes de memória.
@@ -75,6 +75,7 @@ async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = No
             "template_name": template_name or "Mensagem",
             "template_content": content or "",
             "Dono": dono, # Identifica se a mensagem é do agente ou do usuário
+            "is_button_click": is_button_click, # Identifica se a mensagem veio de um clique de botão
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "client_id": client_id,
             "conta_id": resolved_conta_id,

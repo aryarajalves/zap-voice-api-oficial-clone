@@ -266,15 +266,17 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                             pass
 
                         # Disparar notificação na fila para processamento assíncrono
-                        logger.info(f"🧠 [MEMORIA-INBOUND] Agendando envio de memória do usuário: '{user_input}' ({from_phone})")
+                        is_btn = msg.get("type") in ["button", "interactive"]
+                        logger.info(f"🧠 [MEMORIA-INBOUND] Agendando envio de memória do usuário: '{user_input}' (botão: {is_btn}) ({from_phone})")
                         asyncio.create_task(notify_agent_memory_webhook(
                             client_id=target_cid,
                             phone=from_phone,
                             name=contacts_map.get(raw_from, "Contato"),
-                            template_name="Mensagem do Usuário",
+                            template_name="Clique de Botão" if is_btn else "Mensagem do Usuário",
                             content=user_input,
                             internal_contact_id=lead_id,
-                            dono="usuario"
+                            dono="usuario",
+                            is_button_click=is_btn
                         ))
                 except Exception as e_mem_inbound:
                     logger.error(f"❌ Erro ao enviar memória de entrada (inbound): {e_mem_inbound}")
