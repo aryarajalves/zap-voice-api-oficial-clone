@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -13,25 +13,56 @@ def get_db():
 from models import User
 from core.security import SECRET_KEY, ALGORITHM
 
-# Aponta para o endpoint de login. Como vamos montar o router de auth com prefixo /auth, 
-# a URL relativa será "token" se o endpoint for /auth/token, ou /auth/token absoluto.
-# Vamos assumir que a rota de login será POST /auth/token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
     from core.logger import logger
-    # logger.debug(f"Authenticating token: {token[:10]}...")
     
+    # 1. Tentar extrair do Authorization Header
+    auth_header = request.headers.get("Authorization")
+    token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    
+    # 2. Tentar extrair do X-API-Key Header
+    if not token:
+        token = request.headers.get("X-API-Key")
+        
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="Credenciais inválidas ou ausentes.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    if not token:
+        raise credentials_exception
+        
+    # Verificar se é uma API Key (zv_live_...)
+    if token.startswith("zv_live_"):
+        import hashlib
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        
+        from models import ApiKey
+        api_key_entry = db.query(ApiKey).filter(
+            ApiKey.token_hash == token_hash,
+            ApiKey.is_active == True
+        ).first()
+        
+        if not api_key_entry:
+            logger.error("Chave de API inválida ou inativa")
+            raise credentials_exception
+            
+        user = db.query(User).filter(User.id == api_key_entry.user_id).first()
+        if not user or not user.is_active:
+            logger.error(f"Usuário criador da chave {api_key_entry.id} está inativo ou inexistente")
+            raise credentials_exception
+            
+        return user
+
+    # Caso contrário, trata como Token JWT padrão
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            logger.error("Token payload missing 'sub'")
+            logger.error("Token JWT missing 'sub'")
             raise credentials_exception
     except JWTError as e:
         logger.error(f"JWT Decode Error: {e}")

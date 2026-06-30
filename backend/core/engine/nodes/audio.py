@@ -71,6 +71,22 @@ async def handle_audio_node(db, trigger, node, chatwoot, conversation_id, contac
         db.add(new_ms)
         db.commit()
 
+        # --- SINCRONIZAR COM O CHAT LOCAL ---
+        try:
+            from core.engine.sync_utils import sync_message_to_local_chat
+            await sync_message_to_local_chat(
+                db=db,
+                client_id=trigger.client_id,
+                phone=contact_phone,
+                contact_name=trigger.contact_name,
+                content="",
+                message_type="audio",
+                media_url=file_url,
+                wa_message_id=msg_id_clean
+            )
+        except Exception as e_local:
+            logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar áudio localmente: {e_local}")
+
         # --- Sincronizar o envio com o Chatwoot ---
         try:
             logger.info(f"🔄 [SYNC_CHATWOOT] Sincronizando áudio enviado via Meta Direto para {contact_phone}")

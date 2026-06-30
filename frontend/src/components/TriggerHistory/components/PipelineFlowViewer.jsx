@@ -8,9 +8,39 @@ import 'reactflow/dist/style.css';
 import { FiPlus, FiMinus, FiMaximize } from 'react-icons/fi';
 import PipelineNode from './PipelineNode';
 
+// Nó balão: exibe IDs extraídos do Chatwoot acima do nó inicial
+const BalloonNode = ({ data }) => {
+    if (!data.chatwootIds) return null;
+    return (
+        <div style={{ pointerEvents: 'none' }} className="nodrag nopan flex flex-col items-center">
+            <div className="bg-slate-900/95 backdrop-blur-sm border border-blue-500/30 rounded-xl px-3 py-2 shadow-2xl" style={{ minWidth: '180px' }}>
+                <p className="text-[9px] font-black text-blue-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    🔗 IDs extraídos do Chatwoot
+                </p>
+                <div className="space-y-0.5">
+                    {Object.entries(data.chatwootIds).map(([key, val]) => (
+                        <div key={key} className="flex items-center gap-1.5 text-[10px] font-mono">
+                            <span className="text-slate-400 font-bold" style={{ minWidth: '42px' }}>{key}:</span>
+                            <span className="text-green-400 font-black">{val}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {/* Seta apontando para baixo */}
+            <div style={{
+                width: 0, height: 0,
+                borderLeft: '7px solid transparent',
+                borderRight: '7px solid transparent',
+                borderTop: '7px solid rgba(59,130,246,0.4)'
+            }} />
+        </div>
+    );
+};
+
 // Registramos nosso nó de exibição personalizado
 const nodeTypes = {
-    pipelineNode: PipelineNode
+    pipelineNode: PipelineNode,
+    balloonNode: BalloonNode,
 };
 
 // Sub-componente interno que tem acesso ao contexto useReactFlow para câmera inteligente
@@ -109,6 +139,17 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
     const rawHistory = useMemo(() => {
         return Array.isArray(trigger.execution_history) ? trigger.execution_history : [];
     }, [trigger.execution_history]);
+
+    // Extrair IDs do Chatwoot armazenados no trigger para exibir no balão do nó inicial
+    const chatwootIds = useMemo(() => {
+        if (trigger.is_bulk) return null;
+        const ids = {};
+        if (trigger.conversation_id)     ids['CONV']  = trigger.conversation_id;
+        if (trigger.chatwoot_contact_id) ids['CONT']  = trigger.chatwoot_contact_id;
+        if (trigger.chatwoot_inbox_id)   ids['INBOX'] = trigger.chatwoot_inbox_id;
+        if (trigger.chatwoot_account_id) ids['ACC']   = trigger.chatwoot_account_id;
+        return Object.keys(ids).length > 0 ? ids : null;
+    }, [trigger.conversation_id, trigger.chatwoot_contact_id, trigger.chatwoot_inbox_id, trigger.chatwoot_account_id, trigger.is_bulk]);
 
     // 1. Extrair os passos do funil (nodes e edges)
     const funnelSteps = useMemo(() => {
@@ -256,9 +297,22 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
         return { nodeStatuses: statuses, nodeStats: stats };
     }, [rawHistory, nodeOrderMap]);
 
+    // Encontrar o ID do nó inicial (tipo 'start', isStart, ou menor ordem topológica)
+    const startNodeId = useMemo(() => {
+        const explicit = rawNodes.find(n => n.type === 'start' || n.data?.isStart === true);
+        if (explicit) return explicit.id;
+        let minOrder = Infinity;
+        let minId = null;
+        rawNodes.forEach(n => {
+            const o = nodeOrderMap[n.id] ?? Infinity;
+            if (o < minOrder) { minOrder = o; minId = n.id; }
+        });
+        return minId;
+    }, [rawNodes, nodeOrderMap]);
+
     // 3. Processar os nós para exibição no React Flow
     const flowNodes = useMemo(() => {
-        return rawNodes.map(node => {
+        const mappedNodes = rawNodes.map(node => {
             const nodeId = node.id;
             const status = nodeStatuses[nodeId] || 'pending';
             const isActive = nodeId === trigger.current_node_id;
@@ -289,7 +343,25 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
                 }
             };
         });
-    }, [rawNodes, nodeStatuses, nodeStats, trigger.current_node_id, trigger.is_bulk, onNodeStatClick, rawHistory]);
+        // Adicionar nó balão acima do nó inicial (somente em disparos individuais com IDs extraídos)
+        if (chatwootIds && startNodeId) {
+            const startRawNode = rawNodes.find(n => n.id === startNodeId);
+            if (startRawNode?.position) {
+                const { x, y } = startRawNode.position;
+                // Largura do nó start ≈ 256px, largura do balloon ≈ 200px → centralizar
+                mappedNodes.push({
+                    id: '__chatwoot_balloon__',
+                    type: 'balloonNode',
+                    position: { x: x + (256 / 2) - 100, y: y - 110 },
+                    draggable: false,
+                    selectable: false,
+                    data: { chatwootIds }
+                });
+            }
+        }
+
+        return mappedNodes;
+    }, [rawNodes, nodeStatuses, nodeStats, trigger.current_node_id, trigger.is_bulk, onNodeStatClick, rawHistory, startNodeId, chatwootIds]);
 
     // 4. Processar e colorir as conexões (edges) de forma estática e discreta
     const flowEdges = useMemo(() => {

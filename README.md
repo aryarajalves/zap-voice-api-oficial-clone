@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.1.0)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.2.0)
 
-Versão com integração nativa ao **MinIO** (armazenamento de objetos S3-compatível) para gerenciamento de mídias, biblioteca de mídias com paginação, renomeação, thumbnail de vídeos e exclusão, além de melhorias de UX no Bulk Sender (scroll automático ao topo ao avançar entre steps), validação rígida de parâmetros de templates, suporte a Testes de Escala (`SCALE_TEST`) com rotulação especial e badge de Simulação, e duplicação de funis.
+Versão com suporte a **Chat Local** integrado com Chatwoot (conversas, mensagens, notas e envio de templates), gestão de **Marcadores/Labels**, **Chaves de API (API Keys)** para controle de acesso seguro a webhooks, e **Mapeamento de Campos de Contato** dinâmico nas integrações.
 
 O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
 
@@ -18,6 +18,7 @@ graph TD
     D -->|Envio de Mensagem| E[Meta WhatsApp API]
     D -->|Registros e Sincronização| F[Chatwoot API]
     F -->|Webhook de Interação| B
+    B -->|Sincronização de Conversas| G[Chat Local & Notas]
 ```
 
 ### O Fluxo Geral:
@@ -25,6 +26,7 @@ graph TD
 2. **Fila de Mensageria**: Para garantir estabilidade e evitar perdas de envios em picos de tráfego, todas as ações são enfileiradas através do **RabbitMQ**.
 3. **Worker**: O Worker consome as mensagens da fila, processa as substituições de variáveis, valida as regras de compliance (janela de 24h e lista de bloqueados) e faz os envios através da API Oficial da Meta.
 4. **Chatwoot**: Cada disparo cria ou atualiza uma conversa correspondente no Chatwoot do cliente, inserindo notas privadas de depuração de forma transparente.
+5. **Chat Local**: Armazenamento e listagem local das conversas sincronizadas, permitindo visualizar o histórico de mensagens, enviar templates de forma ativa e visualizar notas privadas diretamente no ZapVoice.
 
 ---
 
@@ -45,9 +47,18 @@ Criação gráfica em estilo *drag-and-drop* de fluxos de conversação intelige
 *   **Condições Inteligentes (IA)**: Análise de resposta usando inteligência artificial da OpenAI (`gpt-4o-mini`) para ramificar o fluxo baseado na resposta livre do cliente.
 *   **Botões Interativos**: Mensagens com botões de clique rápido que ramificam o fluxo dependendo da escolha do cliente.
 
-### 4. Integrações de Webhooks
+### 4. Chat Local & Sincronização Chatwoot
+Visualização e controle de conversas diretamente no painel do ZapVoice:
+*   **Mensagens e Templates**: Histórico de interações do cliente, notas de contexto do sistema e disparo manual de templates.
+*   **Marcadores/Labels**: Gerenciamento de tags e rótulos aplicados a cada conversa para segmentação ágil.
+
+### 5. API Keys e Segurança
+*   Geração e revogação de tokens de autenticação (`API Keys`) para garantir que apenas sistemas autorizados possam acionar webhooks públicos e rotas sensíveis do backend.
+
+### 6. Integrações de Webhooks & Mapeamento de Contatos
 Integração nativa com as principais plataformas de vendas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark e Elementor**.
 *   **Mapeamento Completo de Status**: Mapeamento inteligente de eventos como Compra Aprovada, Pix Gerado, Boleto Impresso, Cartão Recusado, Carrinho Abandonado, Reembolso, Chargeback, Assinatura Ativa/Cancelada e Troca de Plano.
+*   **Campos Customizados de Contato**: Permite configurar regras para extrair informações do payload do webhook (como e-mail, telefone, CPF, etc.) e salvá-los no contato local do lead.
 *   **Inteligência de Vendas Casadas**: Detecção automática de ofertas **Order Bump** e campanhas de **Upsell / Upgrade** baseadas no nome do produto ou tags do payload para evitar duplicação ou segmentar funis específicos.
 *   **Filtros de Interface e Ordenação**: Painel de visualização com dropdown de pesquisa por plataforma, filtros rápidos de integrações "Com Gatilhos" e "Com Histórico", e ordenação decrescente baseada na contagem total de disparos no histórico.
 

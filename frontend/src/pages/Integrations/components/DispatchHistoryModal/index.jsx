@@ -49,7 +49,8 @@ const DispatchHistoryModal = ({
   dispatchStats,
   dispatchTemplateFilter,
   setDispatchTemplateFilter,
-  distinctTemplates
+  distinctTemplates,
+  onNavigateToChat
 }) => {
   useEffect(() => {
     if (isOpen && integration?.id) {
@@ -260,6 +261,7 @@ const DispatchHistoryModal = ({
                           setConfirmDeleteDispatch={setConfirmDeleteDispatch}
                           isCancelling={isCancelling}
                           fetchChildren={fetchChildren}
+                          onNavigateToChat={onNavigateToChat}
                         />
                       ))}
                     </tbody>

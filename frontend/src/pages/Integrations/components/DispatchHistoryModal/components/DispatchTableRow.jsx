@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiPlay, FiTrash2, FiCheck, FiInbox, FiEye, FiMousePointer, FiActivity, FiRefreshCw } from 'react-icons/fi';
+import { FiPlay, FiTrash2, FiCheck, FiInbox, FiEye, FiMousePointer, FiActivity, FiRefreshCw, FiMessageSquare } from 'react-icons/fi';
 import { getStatusBadge } from '../../../helpers';
 
 const getFollowupConfig = (status, scheduledTime) => {
@@ -65,7 +65,8 @@ const DispatchTableRow = ({
   isPlaying = {},
   setConfirmDeleteDispatch,
   isCancelling = {},
-  fetchChildren
+  fetchChildren,
+  onNavigateToChat
 }) => {
   const isSelected = selectedDispatchIds.includes(item.id);
 
@@ -201,6 +202,18 @@ const DispatchTableRow = ({
                     </button>
                   );
                 })()}
+                {/* Botão de Chat - navega para a tela de Atendimento */}
+                {item.contact_phone && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToChat && onNavigateToChat(item.contact_phone, item.contact_name)}
+                    className="flex items-center gap-1 hover:bg-blue-500/20 px-1.5 py-0.5 rounded transition cursor-pointer text-blue-400"
+                    title="Ver conversa no Atendimento"
+                  >
+                    <FiMessageSquare size={12} />
+                    <span className="text-[9px] font-black uppercase tracking-tighter">Chat</span>
+                  </button>
+                )}
               </>
             )}
           </div>

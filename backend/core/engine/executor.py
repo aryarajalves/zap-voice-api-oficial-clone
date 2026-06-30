@@ -177,30 +177,57 @@ async def execute_funnel(
         if inbox_id_str and str(inbox_id_str).isdigit():
             effective_inbox_id = int(inbox_id_str)
             
+    # 1. Aplicar Etiquetas na conversa local (Chat Local)
     if trigger.chatwoot_label:
         try:
+            from phone_normalizer import normalize_phone
             from core.utils import robust_extract_labels
+            clean_phone = normalize_phone(contact_phone)
             clean_labels = robust_extract_labels(trigger.chatwoot_label)
             if clean_labels:
-                async def do_sync_labels(c_id):
-                    logger.info(f"🏷️ [ENGINE] Aplicando etiquetas {clean_labels} na conversa {c_id}")
-                    await chatwoot.add_label_to_conversation(c_id, clean_labels)
+                chat_convo = db.query(models.ChatConversation).filter(
+                    models.ChatConversation.client_id == trigger.client_id,
+                    models.ChatConversation.phone == clean_phone
+                ).first()
                 
-                await safe_chatwoot_sync(
-                    db=db,
-                    trigger=trigger,
-                    contact_phone=contact_phone,
-                    client_id=trigger.client_id,
-                    effective_inbox_id=effective_inbox_id,
-                    chatwoot_client=chatwoot,
-                    sync_fn=do_sync_labels
-                )
-                target_convo_id = trigger.conversation_id
-                conversation_id = target_convo_id
+                if not chat_convo:
+                    chat_convo = models.ChatConversation(
+                        client_id=trigger.client_id,
+                        phone=clean_phone,
+                        contact_name=trigger.contact_name or clean_phone,
+                        status="open",
+                        unread_count=0
+                    )
+                    db.add(chat_convo)
+                    db.flush()
+                
+                current_labels = list(chat_convo.labels) if chat_convo.labels else []
+                for label in clean_labels:
+                    if label not in current_labels:
+                        current_labels.append(label)
+                
+                from sqlalchemy.orm.attributes import flag_modified
+                chat_convo.labels = current_labels
+                flag_modified(chat_convo, "labels")
+                db.commit()
+                
+                try:
+                    from rabbitmq_client import rabbitmq
+                    payload_ws = {
+                        "conversation_id": chat_convo.id,
+                        "client_id": trigger.client_id,
+                        "labels": current_labels
+                    }
+                    asyncio.create_task(rabbitmq.publish_event("conversation_updated", payload_ws))
+                except Exception as e_ws:
+                    logger.error(f"Erro no WebSocket ao atualizar labels: {e_ws}")
+                
+                trigger.conversation_id = chat_convo.id
+                conversation_id = chat_convo.id
         except Exception as e_lbl:
-            logger.error(f"❌ [ENGINE] Erro ao aplicar etiquetas: {e_lbl}")
+            logger.error(f"❌ [ENGINE] Erro ao aplicar etiquetas localmente: {e_lbl}")
 
-    # Apply Private Note (Sync with delay if needed)
+    # 2. Enviar Nota Privada na conversa local (Chat Local)
     if trigger.private_message:
         try:
             delay = trigger.private_message_delay or 0
@@ -210,24 +237,55 @@ async def execute_funnel(
             
             final_note = apply_vars_func(trigger.private_message)
             
-            async def do_sync_note(c_id):
-                logger.info(f"📝 [ENGINE] Enviando nota privada para conversa {c_id}")
-                await chatwoot.create_private_note(c_id, final_note)
-                logger.info(f"✅ [ENGINE] Nota privada enviada com sucesso!")
-                
-            await safe_chatwoot_sync(
-                db=db,
-                trigger=trigger,
-                contact_phone=contact_phone,
-                client_id=trigger.client_id,
-                effective_inbox_id=effective_inbox_id,
-                chatwoot_client=chatwoot,
-                sync_fn=do_sync_note
+            from phone_normalizer import normalize_phone
+            clean_phone = normalize_phone(contact_phone)
+            chat_convo = db.query(models.ChatConversation).filter(
+                models.ChatConversation.client_id == trigger.client_id,
+                models.ChatConversation.phone == clean_phone
+            ).first()
+            
+            if not chat_convo:
+                chat_convo = models.ChatConversation(
+                    client_id=trigger.client_id,
+                    phone=clean_phone,
+                    contact_name=trigger.contact_name or clean_phone,
+                    status="open",
+                    unread_count=0
+                )
+                db.add(chat_convo)
+                db.flush()
+
+            chat_convo.private_note = final_note
+            db.commit()
+
+            chat_msg = models.ChatMessage(
+                conversation_id=chat_convo.id,
+                sender_type="system",
+                message_type="text",
+                content=f"📌 [Nota Privada]: {final_note}"
             )
-            target_convo_id = trigger.conversation_id
-            conversation_id = target_convo_id
+            db.add(chat_msg)
+            db.commit()
+
+            try:
+                from rabbitmq_client import rabbitmq
+                payload_ws = {
+                    "id": chat_msg.id,
+                    "conversation_id": chat_msg.conversation_id,
+                    "sender_type": chat_msg.sender_type,
+                    "message_type": chat_msg.message_type,
+                    "content": chat_msg.content,
+                    "timestamp": chat_msg.timestamp.isoformat() if chat_msg.timestamp else datetime.now(timezone.utc).isoformat(),
+                    "client_id": trigger.client_id
+                }
+                asyncio.create_task(rabbitmq.publish_event("new_message", payload_ws))
+            except Exception as e_ws:
+                logger.error(f"Erro no WebSocket ao enviar nota privada: {e_ws}")
+                
+            trigger.conversation_id = chat_convo.id
+            conversation_id = chat_convo.id
         except Exception as e_note:
-            logger.error(f"❌ [ENGINE] Erro ao enviar nota privada: {e_note}")
+            logger.error(f"❌ [ENGINE] Erro ao enviar nota privada localmente: {e_note}")
 
     try:
         if isinstance(funnel.steps, list):

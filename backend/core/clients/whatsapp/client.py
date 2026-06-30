@@ -19,7 +19,7 @@ class WhatsAppClient:
         if not wa_phone_id or not wa_token:
             return {"error": True, "detail": "Configuração do WhatsApp ausente"}
             
-        clean_phone = ''.join(filter(str.isdigit, phone_number))
+        clean_phone = phone_number.strip() if re.search(r'[a-zA-Z]', phone_number) else ''.join(filter(str.isdigit, phone_number))
         url = f"https://graph.facebook.com/v25.0/{wa_phone_id}/messages"
         headers = {"Authorization": f"Bearer {wa_token}", "Content-Type": "application/json"}
         
@@ -145,6 +145,26 @@ class WhatsAppClient:
             except Exception as e:
                 return {"error": str(e)}
 
+    async def delete_message(self, wa_message_id: str) -> dict:
+        """Deleta uma mensagem do WhatsApp para todos os participantes."""
+        wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=self.client_id)
+        wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
+
+        if not wa_phone_id or not wa_token:
+            return {"error": True, "detail": "Configuração do WhatsApp ausente"}
+
+        url = f"https://graph.facebook.com/v25.0/{wa_phone_id}/messages/{wa_message_id}"
+        headers = {"Authorization": f"Bearer {wa_token}"}
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                resp = await client.delete(url, headers=headers)
+                if resp.status_code in (200, 204):
+                    return {"success": True}
+                return {"error": True, "detail": resp.text}
+            except Exception as e:
+                return {"error": True, "detail": str(e)}
+
     async def delete_whatsapp_template(self, name: str):
         wa_account_id = get_setting("WA_BUSINESS_ACCOUNT_ID", "", client_id=self.client_id)
         wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)
@@ -161,7 +181,7 @@ class WhatsAppClient:
         # Implementation using button/list fallback as in original
         valid_options = options[:10]
         if not valid_options: return None
-        clean_phone = ''.join(filter(str.isdigit, phone_number))
+        clean_phone = phone_number.strip() if re.search(r'[a-zA-Z]', phone_number) else ''.join(filter(str.isdigit, phone_number))
         
         payload = {
             "messaging_product": "whatsapp",
@@ -181,10 +201,11 @@ class WhatsAppClient:
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_text_official(self, phone_number: str, text: str):
+        clean_phone = phone_number.strip() if re.search(r'[a-zA-Z]', phone_number) else ''.join(filter(str.isdigit, phone_number))
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
-            "to": ''.join(filter(str.isdigit, phone_number)),
+            "to": clean_phone,
             "type": "text",
             "text": {"body": text}
         }
@@ -417,8 +438,13 @@ class WhatsAppClient:
         if not file_path or not os.path.exists(file_path):
             return {"error": "Arquivo não encontrado"}
 
+        # Detectar a extensão e mime_type corretos
+        mime_type = "audio/ogg"
+        if ".webm" in url.lower():
+            mime_type = "audio/webm"
+
         try:
-            media_id = await self.upload_media_to_meta(file_path, "audio/ogg")
+            media_id = await self.upload_media_to_meta(file_path, mime_type)
             if not media_id: return {"error": "Falha no upload para Meta"}
             return await self.send_official_audio(phone_number, media_id)
         finally:
@@ -427,33 +453,46 @@ class WhatsAppClient:
                 except: pass
 
     async def send_image_official(self, phone_number: str, image_url: str, caption: str = ""):
+        """Envia imagem pelo WhatsApp Oficial. Faz upload para a Meta se for URL local."""
+        image_data = {"link": image_url, "caption": caption}
+        # Upload para Meta quando URL local (a Meta não consegue acessar IPs privados)
+        await self._resolve_and_upload_media_param("image", image_data)
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": ''.join(filter(str.isdigit, phone_number)),
             "type": "image",
-            "image": {"link": image_url, "caption": caption}
+            "image": image_data
         }
+        logger.info(f"📤 Enviando imagem via API Oficial para {phone_number} | URL/ID: {image_data}")
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_video_official(self, phone_number: str, video_url: str, caption: str = ""):
+        """Envia vídeo pelo WhatsApp Oficial. Faz upload para a Meta se for URL local."""
+        video_data = {"link": video_url, "caption": caption}
+        await self._resolve_and_upload_media_param("video", video_data)
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": ''.join(filter(str.isdigit, phone_number)),
             "type": "video",
-            "video": {"link": video_url, "caption": caption}
+            "video": video_data
         }
+        logger.info(f"📤 Enviando vídeo via API Oficial para {phone_number} | URL/ID: {video_data}")
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_document_official(self, phone_number: str, document_url: str, caption: str = "", filename: str = ""):
+        """Envia documento pelo WhatsApp Oficial. Faz upload para a Meta se for URL local."""
+        document_data = {"link": document_url, "caption": caption, "filename": filename or "documento"}
+        await self._resolve_and_upload_media_param("document", document_data)
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": ''.join(filter(str.isdigit, phone_number)),
             "type": "document",
-            "document": {"link": document_url, "caption": caption, "filename": filename or "documento"}
+            "document": document_data
         }
+        logger.info(f"📤 Enviando documento via API Oficial para {phone_number} | URL/ID: {document_data}")
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_text_direct(self, phone_number: str, content: str):
@@ -542,14 +581,30 @@ class WhatsAppClient:
 
     async def _download_file(self, url):
         import tempfile
+        import os
+        
+        # Resolver URL interna do MinIO se necessário
+        internal_url = url
+        s3_public_url = os.getenv("S3_PUBLIC_URL", "")
+        s3_endpoint_url = os.getenv("S3_ENDPOINT_URL", "")
+        
+        if s3_public_url and s3_endpoint_url and s3_public_url in url:
+            internal_url = url.replace(s3_public_url, s3_endpoint_url)
+            logger.info(f"🔄 [_download_file] Resolvendo URL interna do MinIO para download de áudio: {s3_public_url} -> {s3_endpoint_url}")
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as dl:
-                r = await dl.get(url)
+                r = await dl.get(internal_url)
                 if r.status_code == 200:
                     t_dir = tempfile.gettempdir()
-                    fname = f"wa_audio_{int(datetime.now(timezone.utc).timestamp())}.ogg"
+                    # Detectar extensão correta do arquivo
+                    ext = ".webm" if ".webm" in url.lower() else ".ogg"
+                    fname = f"wa_audio_{int(datetime.now(timezone.utc).timestamp())}{ext}"
                     path = os.path.join(t_dir, fname)
                     with open(path, "wb") as f: f.write(r.content)
                     return path, path
-        except: pass
+                else:
+                    logger.error(f"❌ [_download_file] Erro ao baixar áudio ({r.status_code}): {internal_url}")
+        except Exception as e:
+            logger.error(f"❌ [_download_file] Erro ao baixar áudio {internal_url}: {e}")
         return None, None

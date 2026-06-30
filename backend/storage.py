@@ -127,6 +127,25 @@ class StorageClient:
 
     def _get_url_for_file(self, filename):
         """Helper para gerar a URL pública baseada nas configurações atuais."""
+        # Se for MinIO local, usar o proxy de mídia do backend
+        if self.endpoint_url and ("minio" in self.endpoint_url or "localhost" in self.endpoint_url or "127.0.0.1" in self.endpoint_url):
+            api_url = os.getenv("VITE_API_URL", "").strip('"').strip("'")
+            base_url = ""
+            if api_url:
+                if api_url.endswith("/api"):
+                    base_url = api_url[:-4]
+                elif api_url.endswith("/api/"):
+                    base_url = api_url[:-5]
+                else:
+                    base_url = api_url
+            if not base_url:
+                domain = os.getenv("DOMAIN", "")
+                if domain:
+                    base_url = f"https://{domain}"
+            if base_url:
+                if base_url.endswith("/"): base_url = base_url[:-1]
+                return f"{base_url}/api/media/proxy/{filename}"
+
         public_url_base = os.getenv("S3_PUBLIC_URL")
         if public_url_base:
             if public_url_base.endswith("/"): public_url_base = public_url_base[:-1]
@@ -176,19 +195,23 @@ class StorageClient:
             return filename_or_path
             
         filename = os.path.basename(filename_or_path)
-        if not self.s3_client:
-            # Fallback local com URL absoluta para Meta/WhatsApp
+        if self.endpoint_url and ("minio" in self.endpoint_url or "localhost" in self.endpoint_url or "127.0.0.1" in self.endpoint_url):
             api_url = os.getenv("VITE_API_URL", "")
-            base_url = api_url.replace("/api", "") if api_url else ""
-            
+            base_url = ""
+            if api_url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(api_url.strip('"').strip("'"))
+                    base_url = f"{parsed.scheme}://{parsed.netloc}"
+                except Exception:
+                    base_url = ""
             if not base_url:
                 domain = os.getenv("DOMAIN", "")
                 if domain:
                     base_url = f"https://{domain}"
-            
             if base_url:
                 if base_url.endswith("/"): base_url = base_url[:-1]
-                return f"{base_url}/static/uploads/{filename}"
+                return f"{base_url}/api/media/proxy/{filename}"
                 
             return f"/static/uploads/{filename}"
             
@@ -262,6 +285,33 @@ class StorageClient:
                     raise e2
 
             raise e
+
+    def get_file(self, filename: str):
+        """Busca o arquivo e retorna um stream/bytes ou File-like Object do S3/MinIO ou local."""
+        if not self.s3_client:
+            upload_dir = "static/uploads"
+            file_path = os.path.join(upload_dir, filename)
+            if os.path.exists(file_path):
+                return open(file_path, "rb")
+            return None
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=filename
+            )
+            return response['Body']
+        except Exception as e:
+            logger.error(f"Erro ao buscar arquivo do S3/MinIO: {e}")
+            if self._bb_client:
+                try:
+                    response = self._bb_client.get_object(
+                        Bucket=self._bb_bucket,
+                        Key=filename
+                    )
+                    return response['Body']
+                except Exception as e2:
+                    logger.error(f"Erro ao buscar arquivo do Backblaze (fallback): {e2}")
+            return None
 
     def delete_file(self, filename: str):
         """Remove fisicamente o arquivo do S3/MinIO ou do disco local."""

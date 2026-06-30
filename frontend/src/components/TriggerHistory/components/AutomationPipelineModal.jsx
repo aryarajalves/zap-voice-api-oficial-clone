@@ -218,36 +218,6 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
                                         <span className="text-[10px] font-black uppercase tracking-widest">Janela 24h Ativa</span>
                                     </div>
                                 )}
-
-                                {(activeClient?.chatwoot_url || trigger.chatwoot_url) && (
-                                    (() => {
-                                        const accountId = trigger.chatwoot_account_id || activeClient?.chatwoot_account_id || history.find(h => h.extra?.account_id)?.extra?.account_id;
-                                        const convoId = trigger.conversation_id || history.find(h => h.extra?.conversation_id)?.extra?.conversation_id;
-                                        
-                                        if (accountId && convoId) {
-                                            let baseUrl = activeClient?.chatwoot_url || '';
-                                            if (!baseUrl && trigger.chatwoot_url) {
-                                                const idx = trigger.chatwoot_url.indexOf('/app/accounts/');
-                                                if (idx !== -1) {
-                                                    baseUrl = trigger.chatwoot_url.substring(0, idx);
-                                                }
-                                            }
-                                            if (baseUrl) {
-                                                return (
-                                                    <a 
-                                                        href={`${baseUrl}/app/accounts/${accountId}/conversations/${convoId}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 active:scale-95"
-                                                    >
-                                                        <FiMessageSquare size={16} /> Ver no Chatwoot
-                                                    </a>
-                                                );
-                                            }
-                                        }
-                                        return null;
-                                    })()
-                                )}
                             </div>
 
                             <button 

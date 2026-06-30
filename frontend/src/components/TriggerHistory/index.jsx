@@ -11,7 +11,7 @@ import ChildrenFunnelsModal from './components/ChildrenFunnelsModal';
 import BulkSummaryBar from './components/BulkSummaryBar';
 import ManualInteractionModal from './components/ManualInteractionModal';
 
-const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateToFunnels, triggerType: initialTriggerTypeProp = 'all' }) => {
+const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateToFunnels, onNavigateToChat, triggerType: initialTriggerTypeProp = 'all' }) => {
     const {
         user, activeClient, triggers, loading, monitoringTrigger, setMonitoringTrigger,
         modalConfig, setModalConfig, contactsModal, setContactsModal, contactsFilter, setContactsFilter,
@@ -21,7 +21,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
         triggerType: currentTriggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
         itemsPerPage, setItemsPerPage, page, setPage, totalPages, totalItems, fetchHistory,
         handleDelete, handleCancel, handleAction, handleBulkDeleteAction, handleStartNow,
-        handleRetry, fetchErrors, fetchChildren, handleViewPipeline, handleSelectAll, handleSelectOne,
+        handleRetry, handleSyncStats, fetchErrors, fetchChildren, handleViewPipeline, handleSelectAll, handleSelectOne,
         handleViewContacts, handleEditParams,
         contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal
     } = useTriggerHistory(refreshKey, initialTriggerTypeProp);
@@ -135,6 +135,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage}
                 fetchHistory={fetchHistory} onNavigateToBulk={onNavigateToBulk}
                 onNavigateToFunnels={onNavigateToFunnels}
+                onNavigateToChat={onNavigateToChat}
                 setPage={setPage}
             />
 
@@ -146,6 +147,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 handleViewPipeline={handleViewPipeline} handleEditParams={handleEditParams}
                 handleStartNow={handleStartNow} handleCancel={handleCancel}
                 handleRetry={handleRetry} handleDelete={handleDelete}
+                handleSyncStats={handleSyncStats}
                 user={user} confirmBulkDelete={confirmBulkDelete}
                 onManualInteraction={(id) => setManualInteractionTriggerId(id)}
             />

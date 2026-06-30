@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { API_URL } from '../../config';
 import { fetchWithAuth } from '../../AuthContext';
 import TransactionsTable from './components/TransactionsTable';
@@ -12,19 +12,27 @@ const PERIOD_OPTIONS = [
 ];
 
 const STATUS_FILTER_OPTIONS = [
-  { value: 'all', label: 'Todos os Status' },
-  { value: 'approved', label: 'Aprovadas / Pagas' },
-  { value: 'pending', label: 'Aguardando Pagamento' },
-  { value: 'refunded', label: 'Reembolsadas / Devolvidas' },
-  { value: 'canceled', label: 'Canceladas / Recusadas' },
+  { value: 'approved', label: 'Compra Aprovada' },
+  { value: 'refunded', label: 'Reembolso' },
 ];
 
 const PLATFORM_FILTER_OPTIONS = [
-  { value: 'all', label: 'Todas as Plataformas' },
-  { value: 'hotmart', label: 'Hotmart' },
-  { value: 'kiwify', label: 'Kiwify' },
-  { value: 'eduzz', label: 'Eduzz' },
-  { value: 'pagtrust', label: 'PagTrust' },
+  { value: 'all',       label: 'Todas as Plataformas' },
+  { value: 'braip',     label: 'Braip' },
+  { value: 'cakto',     label: 'Cakto' },
+  { value: 'eduzz',     label: 'Eduzz' },
+  { value: 'greenn',    label: 'Greenn' },
+  { value: 'guru',      label: 'Digital Manager Guru' },
+  { value: 'herospark', label: 'HeroSpark' },
+  { value: 'hotmart',   label: 'Hotmart' },
+  { value: 'hubla',     label: 'Hubla' },
+  { value: 'kirvano',   label: 'Kirvano' },
+  { value: 'kiwify',    label: 'Kiwify' },
+  { value: 'lastlink',  label: 'Lastlink' },
+  { value: 'monetizze', label: 'Monetizze' },
+  { value: 'pagtrust',  label: 'PagTrust' },
+  { value: 'pepper',    label: 'Pepper' },
+  { value: 'ticto',     label: 'Ticto' },
 ];
 
 const PAYMENT_METHOD_OPTIONS = [
@@ -73,8 +81,25 @@ function formatPeriodLabel(period, periodType) {
 
 export default function SalesFinancial({ activeClient }) {
   const [period, setPeriod] = useState('monthly');
-  const [status, setStatus] = useState('all');
-  const [platform, setPlatform] = useState('all');
+  const [statuses, setStatuses] = useState([]);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef(null);
+  useEffect(() => {
+    if (!statusDropdownOpen) return;
+    const handler = (e) => { if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) setStatusDropdownOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [statusDropdownOpen]);
+
+  const [platforms, setPlatforms] = useState([]);
+  const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false);
+  const platformDropdownRef = useRef(null);
+  useEffect(() => {
+    if (!platformDropdownOpen) return;
+    const handler = (e) => { if (platformDropdownRef.current && !platformDropdownRef.current.contains(e.target)) setPlatformDropdownOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [platformDropdownOpen]);
   const [paymentMethod, setPaymentMethod] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -93,7 +118,9 @@ export default function SalesFinancial({ activeClient }) {
     setLoading(true);
     setError(null);
     try {
-      const url = `${API_URL}/financial/sales?period=${period}&status=${status}&platform=${platform}&start_date=${startDate}&end_date=${endDate}`;
+      const platformParam = platforms.length > 0 ? platforms.join(',') : 'all';
+      const statusParam = statuses.length > 0 ? statuses.join(',') : 'all';
+      const url = `${API_URL}/financial/sales?period=${period}&status=${statusParam}&platform=${platformParam}&start_date=${startDate}&end_date=${endDate}`;
       const res = await fetchWithAuth(url, {}, activeClient.id);
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const json = await res.json();
@@ -103,7 +130,7 @@ export default function SalesFinancial({ activeClient }) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient, period, status, platform, startDate, endDate]);
+  }, [activeClient, period, statuses, platforms, startDate, endDate]);
 
   useEffect(() => {
     fetchData();
@@ -189,40 +216,132 @@ export default function SalesFinancial({ activeClient }) {
           </div>
         </div>
 
-        {/* Platform filter */}
-        <div className="flex gap-2 flex-wrap items-center">
-          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Plataforma:</span>
-          {PLATFORM_FILTER_OPTIONS.map(opt => (
+        {/* Platform filter - multi-select dropdown */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Plataforma:</span>
+          <div className="relative" ref={platformDropdownRef}>
             <button
-              key={opt.value}
-              onClick={() => setPlatform(opt.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                platform === opt.value
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              onClick={() => setPlatformDropdownOpen(o => !o)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all min-w-[180px] justify-between"
             >
-              {opt.label}
+              <span>
+                {platforms.length === 0
+                  ? 'Todas as Plataformas'
+                  : platforms.length === 1
+                    ? PLATFORM_FILTER_OPTIONS.find(o => o.value === platforms[0])?.label
+                    : `${platforms.length} plataformas`}
+              </span>
+              <svg className={`w-3 h-3 transition-transform ${platformDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </button>
-          ))}
+            {platformDropdownOpen && (
+              <div className="absolute z-50 top-full mt-1 left-0 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden">
+                <div className="p-1 max-h-64 overflow-y-auto overflow-x-hidden">
+                  {PLATFORM_FILTER_OPTIONS.filter(o => o.value !== 'all').map(opt => {
+                    const checked = platforms.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          setPlatforms(prev =>
+                            prev.includes(opt.value)
+                              ? prev.filter(p => p !== opt.value)
+                              : [...prev, opt.value]
+                          );
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all text-left"
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                          {checked && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                        </span>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {platforms.length > 0 && (
+                  <div className="border-t border-gray-100 dark:border-gray-700 p-1">
+                    <button
+                      onClick={() => { setPlatforms([]); setPlatformDropdownOpen(false); }}
+                      className="w-full px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all text-left"
+                    >
+                      Limpar seleção
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {platforms.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {platforms.map(p => (
+                <span key={p} className="flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded-md text-[10px] font-semibold">
+                  {PLATFORM_FILTER_OPTIONS.find(o => o.value === p)?.label}
+                  <button onClick={() => setPlatforms(prev => prev.filter(x => x !== p))} className="hover:text-blue-200">×</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Status filter */}
-        <div className="flex gap-2 flex-wrap items-center">
-          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Status:</span>
-          {STATUS_FILTER_OPTIONS.map(opt => (
+        {/* Status filter - multi-select dropdown */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Status:</span>
+          <div className="relative" ref={statusDropdownRef}>
             <button
-              key={opt.value}
-              onClick={() => setStatus(opt.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                status === opt.value
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+              onClick={() => setStatusDropdownOpen(o => !o)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all min-w-[160px] justify-between"
             >
-              {opt.label}
+              <span>
+                {statuses.length === 0
+                  ? 'Todos os Status'
+                  : statuses.length === 1
+                    ? STATUS_FILTER_OPTIONS.find(o => o.value === statuses[0])?.label
+                    : `${statuses.length} status`}
+              </span>
+              <svg className={`w-3 h-3 transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </button>
-          ))}
+            {statusDropdownOpen && (
+              <div className="absolute z-50 top-full mt-1 left-0 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl">
+                <div className="p-1">
+                  {STATUS_FILTER_OPTIONS.map(opt => {
+                    const checked = statuses.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => setStatuses(prev => prev.includes(opt.value) ? prev.filter(s => s !== opt.value) : [...prev, opt.value])}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all text-left"
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 dark:border-gray-600'}`}>
+                          {checked && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                        </span>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {statuses.length > 0 && (
+                  <div className="border-t border-gray-100 dark:border-gray-700 p-1">
+                    <button
+                      onClick={() => { setStatuses([]); setStatusDropdownOpen(false); }}
+                      className="w-full px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all text-left"
+                    >
+                      Limpar seleção
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {statuses.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {statuses.map(s => (
+                <span key={s} className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/10 text-indigo-400 rounded-md text-[10px] font-semibold">
+                  {STATUS_FILTER_OPTIONS.find(o => o.value === s)?.label}
+                  <button onClick={() => setStatuses(prev => prev.filter(x => x !== s))} className="hover:text-indigo-200">×</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Payment Method filter */}
@@ -296,13 +415,7 @@ export default function SalesFinancial({ activeClient }) {
               color="purple"
               icon="🔄"
             />
-            <StatCard
-              title="Transações Pendentes"
-              value={totals.total_pending.toLocaleString('pt-BR')}
-              sub="Aguardando Pix ou Boleto"
-              color="amber"
-              icon="⏳"
-            />
+
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

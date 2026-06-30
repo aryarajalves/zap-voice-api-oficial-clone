@@ -70,6 +70,22 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
             ))
             db.commit()
 
+            # --- SINCRONIZAR COM O CHAT LOCAL ---
+            try:
+                from core.engine.sync_utils import sync_message_to_local_chat
+                await sync_message_to_local_chat(
+                    db=db,
+                    client_id=trigger.client_id,
+                    phone=contact_phone,
+                    contact_name=trigger.contact_name,
+                    content=caption_processed,
+                    message_type=media_type,
+                    media_url=file_url,
+                    wa_message_id=msg_id_clean
+                )
+            except Exception as e_local:
+                logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mídia localmente (Chatwoot path): {e_local}")
+
             if not trigger.is_bulk:
                 log_node_execution(db, trigger, current_node_id, "processing", "Aguardando confirmação do WhatsApp...")
                 state, detail = await wait_for_delivery_sync(db, msg_id, trigger, current_node_id)
@@ -100,6 +116,22 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
                     publish_external_event=data.get("publishExternalEvent", False)
                 ))
                 db.commit()
+
+                # --- SINCRONIZAR COM O CHAT LOCAL ---
+                try:
+                    from core.engine.sync_utils import sync_message_to_local_chat
+                    await sync_message_to_local_chat(
+                        db=db,
+                        client_id=trigger.client_id,
+                        phone=contact_phone,
+                        contact_name=trigger.contact_name,
+                        content=caption_processed,
+                        message_type=media_type,
+                        media_url=file_url,
+                        wa_message_id=msg_id_clean
+                    )
+                except Exception as e_local:
+                    logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mídia localmente (Meta path): {e_local}")
 
                 # --- NOVO: Sincronizar o envio com o Chatwoot ---
                 try:

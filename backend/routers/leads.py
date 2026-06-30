@@ -4,7 +4,7 @@ import csv
 import io
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc, cast, String
+from sqlalchemy import or_, and_, desc, cast, String, Text
 from typing import Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -519,11 +519,20 @@ def _delete_lead_and_relations(db: Session, lead: models.WebhookLead, client_id:
     Deleta o lead e todo o seu histórico/agendamentos atrelados.
     """
     if lead.phone:
-        # 1. Deletar Scheduled Triggers com esse telefone
-        db.query(models.ScheduledTrigger).filter(
+        # 1. Deletar Scheduled Triggers com esse telefone (e seus registros dependentes de message_status)
+        trigger_ids = [t[0] for t in db.query(models.ScheduledTrigger.id).filter(
             models.ScheduledTrigger.client_id == client_id,
             models.ScheduledTrigger.contact_phone == lead.phone
-        ).delete(synchronize_session=False)
+        ).all()]
+        
+        if trigger_ids:
+            db.query(models.MessageStatus).filter(
+                models.MessageStatus.trigger_id.in_(trigger_ids)
+            ).delete(synchronize_session=False)
+
+            db.query(models.ScheduledTrigger).filter(
+                models.ScheduledTrigger.id.in_(trigger_ids)
+            ).delete(synchronize_session=False)
 
         # 2. Deletar Histórico que contenha esse telefone
         integrations_subquery = db.query(models.WebhookIntegration.id).filter(
@@ -532,7 +541,7 @@ def _delete_lead_and_relations(db: Session, lead: models.WebhookLead, client_id:
 
         histories = db.query(models.WebhookHistory).filter(
             models.WebhookHistory.integration_id.in_(integrations_subquery),
-            cast(models.WebhookHistory.processed_data, String).like(f"%{lead.phone}%")
+            cast(models.WebhookHistory.processed_data, Text).like(f"%{lead.phone}%")
         ).all()
         for h in histories:
             db.delete(h)

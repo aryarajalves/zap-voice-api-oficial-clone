@@ -69,6 +69,12 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 09/06/2026 | Automação de Comentários no Instagram | `instagram_automations` | Tabela nova completa | `backend/scripts/create_instagram_automations_table.py` |
 | 15/06/2026 | Histórico de Execução do Instagram | `instagram_logs` | Tabela nova completa | `backend/scripts/create_instagram_logs_table.py` |
 | 25/06/2026 | Histórico de Mídias Enviadas (MinIO/S3) | `uploaded_medias` | Tabela nova completa | `backend/scripts/database/create_uploaded_medias_table.py` |
+| 27/06/2026 | Custom Fields de contato em mapeamentos de webhooks | `webhook_event_mappings` | `contact_save_fields` | `backend/scripts/database/migrate_contact_save_fields.py` |
+| 29/06/2026 | Sistema de Chat e Atendimento Local | `chat_conversations`, `chat_messages` | Tabelas novas completas | `backend/create_chat_tables.py` |
+| 29/06/2026 | Janela de 24 horas no Chat Local | `chat_conversations` | `last_contact_message_at` | `backend/add_last_contact_message_at.py` |
+| 29/06/2026 | Chaves de API (Tokens de API) | `api_keys` | Tabela nova completa | `backend/scripts/create_api_keys_table.py` |
+| 30/06/2026 | Gestão de Etiquetas/Marcadores de Chat | `chat_labels` | Tabela nova completa | `backend/scripts/create_chat_labels_table.py` |
+
 
 
 

@@ -170,7 +170,7 @@ class TestHerospark_OrderBump:
 
     def test_event_type_order_bump(self):
         r = run_parser(self.BASE)
-        assert r['event_type'] == "compra_aprovada_order_bump"
+        assert r['event_type'] == "compra_aprovada_com_ob"
 
     def test_flag_order_bump_true(self):
         r = run_parser(self.BASE)
@@ -192,7 +192,7 @@ class TestHerospark_OrderBump:
             "bump": [{"id": "ob_1", "name": "OB Produto", "price": {"gross": 5000, "value": 5000}}],
         }
         r = run_parser(payload)
-        assert r['event_type'] == "compra_aprovada_order_bump"
+        assert r['event_type'] == "compra_aprovada_com_ob"
 
 
 class TestHerospark_Upsell:

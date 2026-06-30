@@ -1,12 +1,13 @@
 import React from 'react';
-import { FiPlay, FiTrash2, FiChevronDown, FiZap, FiSettings, FiRefreshCw, FiInfo } from 'react-icons/fi';
+import { FiPlay, FiTrash2, FiChevronDown, FiZap, FiSettings, FiRefreshCw, FiInfo, FiDatabase } from 'react-icons/fi';
 import SearchableSelect from '../SearchableSelect';
 import InternalTagsInput from './InternalTagsInput';
-import { EVENT_TYPES } from '../../constants';
+import { EVENT_TYPES, PLATFORM_EVENT_TYPES } from '../../constants';
 import ManyChatSection from './ManyChatSection';
 import SmartCancelSection from './SmartCancelSection';
 import VariablesSection from './VariablesSection';
 import FollowUpSection from './FollowUpSection';
+import ContactSaveFieldsSection from './ContactSaveFieldsSection';
 
 const EVENT_HINTS = {
   compra_aprovada: '✅ Disparado no momento em que o pagamento é confirmado pela plataforma. É o evento mais usado — ideal para enviar boas-vindas, acesso ao produto e próximos passos imediatamente após a compra.',
@@ -38,8 +39,12 @@ const MappingItem = ({
   removeFollowupVariable,
   updateFollowupVariable,
   discoveredProducts,
-  existingInternalTags
+  existingInternalTags,
+  platform
 }) => {
+  const allowedEvents = platform && PLATFORM_EVENT_TYPES[platform]
+    ? EVENT_TYPES.filter(e => PLATFORM_EVENT_TYPES[platform].includes(e.value))
+    : null;
   return (
     <div className="group bg-white dark:bg-[#1e293b]/40 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden hover:border-blue-500/30 transition-all duration-300">
       {/* Header do Gatilho */}
@@ -94,12 +99,18 @@ const MappingItem = ({
               <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
                 <FiZap size={12} /> Evento na Plataforma
               </label>
-              <SearchableSelect
-                options={EVENT_TYPES}
-                value={mapping.event_type}
-                onChange={(val) => updateMapping(mIndex, 'event_type', val)}
-                placeholder="Selecione o evento..."
-              />
+              {!platform ? (
+                <div className="w-full bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 text-xs font-bold text-yellow-400 text-center">
+                  ⚠️ Selecione uma plataforma primeiro
+                </div>
+              ) : (
+                <SearchableSelect
+                  options={allowedEvents}
+                  value={mapping.event_type}
+                  onChange={(val) => updateMapping(mIndex, 'event_type', val)}
+                  placeholder="Selecione o evento..."
+                />
+              )}
               {EVENT_HINTS[mapping.event_type] && (
                 <div className="flex items-start gap-2 mt-2 p-2.5 bg-blue-500/5 border border-blue-500/20 rounded-xl text-[10px] text-blue-300/80 leading-relaxed">
                   <FiInfo size={12} className="text-blue-400 shrink-0 mt-0.5" />
@@ -209,7 +220,7 @@ const MappingItem = ({
               {/* Etiquetas Chatwoot — sempre visível */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center gap-1.5 px-1">
-                  <FiSettings size={12} /> Etiquetas a aplicar no Chatwoot
+                  <FiSettings size={12} /> Etiquetas a aplicar na conversa (Chat Local)
                 </label>
                 <SearchableSelect
                   isMulti={true}
@@ -236,6 +247,11 @@ const MappingItem = ({
                 </div>
               )}
             </div>
+
+            {/* Campos para salvar no contato — só quando update_contact está ativo */}
+            {mapping.update_contact_on_trigger !== false && (
+              <ContactSaveFieldsSection mapping={mapping} mIndex={mIndex} updateMapping={updateMapping} />
+            )}
           </div>
 
           {/* ManyChat Integration Section */}

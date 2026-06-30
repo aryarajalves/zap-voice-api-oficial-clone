@@ -1057,7 +1057,7 @@ export function generateWebhookPayload(platform, eventType, index) {
                         amount: 197,
                         installments: 1,
                         type: 'SUBSCRIPTION',
-                        client_id: i,
+                                 client_id: i,
                         seller_id: 1,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
@@ -1258,6 +1258,18 @@ export function useStressTest(onStartSuccess) {
       }
   });
 
+  // ─── Contacts import test state ─────────────────────────────────────────────
+  const [contactsCount, setContactsCount] = useState(() => {
+      const s = localStorage.getItem('stress_test_contacts_count');
+      return s ? parseInt(s) : 500;
+  });
+  const [contactsTagCount, setContactsTagCount] = useState(() => {
+      const s = localStorage.getItem('stress_test_contacts_tag_count');
+      return s ? parseInt(s) : 3;
+  });
+  const [contactsImportResult, setContactsImportResult] = useState(null); // { imported, test_tag }
+  const [isContactsRunning, setIsContactsRunning] = useState(false);
+
   // ─── Webhook test state ──────────────────────────────────────────────────────
   const [webhookIntegrations, setWebhookIntegrations] = useState([]);
   const [loadingWebhookIntegrations, setLoadingWebhookIntegrations] = useState(false);
@@ -1311,6 +1323,11 @@ export function useStressTest(onStartSuccess) {
       localStorage.setItem('stress_test_block_funnel_id', blockFunnelId);
       localStorage.setItem('stress_test_selected_errors', JSON.stringify(selectedErrors));
   }, [testType, funnelId, templateName, numberOfContacts, delaySeconds, concurrencyLimit, simulateRateLimit, pricingCategory, interactionFunnelId, blockFunnelId, selectedErrors]);
+
+  useEffect(() => {
+      localStorage.setItem('stress_test_contacts_count', contactsCount.toString());
+      localStorage.setItem('stress_test_contacts_tag_count', contactsTagCount.toString());
+  }, [contactsCount, contactsTagCount]);
 
   // Fetch webhook integrations
   useEffect(() => {
@@ -1394,6 +1411,7 @@ export function useStressTest(onStartSuccess) {
           for (let j = i; j < Math.min(i + BATCH, total); j++) {
               const chosenEvent = eventQueue[j];
               const payload = generateWebhookPayload(platform, chosenEvent, j);
+              payload._zapvoice_stress_test = true;
               batchPromises.push(
                   fetch(webhookUrl, {
                       method: 'POST',
@@ -1544,6 +1562,7 @@ export function useStressTest(onStartSuccess) {
 
           if (res.ok) {
               const data = await res.json();
+              toast.success("Teste iniciado!", { id: loadingToast, duration: 3000 });
 
               setTriggerDetails(null);
               setMessageStats(null);
@@ -1555,10 +1574,46 @@ export function useStressTest(onStartSuccess) {
               setActiveTriggerId(data.trigger_id);
               localStorage.setItem('stress_test_active_trigger_id', data.trigger_id);
           } else {
-              toast.error("Erro ao iniciar teste.");
+              toast.error("Erro ao iniciar teste.", { id: loadingToast });
           }
       } catch (err) {
-          toast.error("Erro ao conectar no servidor.");
+          toast.error("Erro ao conectar no servidor.", { id: loadingToast });
+      }
+  };
+
+  // Import fake contacts into contacts DB
+  const handleStartContactsTest = async (e) => {
+      e.preventDefault();
+      if (!activeClient) return;
+      if (contactsCount <= 0 || contactsCount > 50000) {
+          toast.error("Informe entre 1 e 50.000 contatos.");
+          return;
+      }
+      setIsContactsRunning(true);
+      setContactsImportResult(null);
+      const loadingToast = toast.loading(`Importando ${contactsCount.toLocaleString('pt-BR')} contatos fictícios...`);
+      try {
+          const res = await fetchWithAuth(`${API_URL}/stress-test/contacts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  number_of_contacts: parseInt(contactsCount),
+                  number_of_random_tags: parseInt(contactsTagCount),
+              }),
+          }, activeClient.id);
+          if (res.ok) {
+              const data = await res.json();
+              setContactsImportResult({ imported: data.imported, test_tag: data.test_tag });
+              toast.success(`${data.imported.toLocaleString('pt-BR')} contatos importados!`, { id: loadingToast, duration: 4000 });
+              // Não chama onStartSuccess aqui — a navegação para contatos é feita via onNavigateToContacts no componente
+          } else {
+              const err = await res.json().catch(() => ({}));
+              toast.error(err.detail || 'Erro ao importar contatos.', { id: loadingToast });
+          }
+      } catch (err) {
+          toast.error('Erro de conexão.', { id: loadingToast });
+      } finally {
+          setIsContactsRunning(false);
       }
   };
 
@@ -1593,6 +1648,12 @@ export function useStressTest(onStartSuccess) {
     blockFunnelId, setBlockFunnelId, funnels, loadingFunnels,
     activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning,
     handleStartTest, handleCancelTest, selectedErrors, setSelectedErrors, ALL_ERRORS,
+    // Contacts import test
+    contactsCount, setContactsCount,
+    contactsTagCount, setContactsTagCount,
+    contactsImportResult, setContactsImportResult,
+    isContactsRunning,
+    handleStartContactsTest,
     // Webhook
     webhookIntegrations, loadingWebhookIntegrations,
     selectedIntegrationId, setSelectedIntegrationId,

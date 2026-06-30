@@ -1,11 +1,11 @@
 import React from 'react';
 import TriggerTableRow from './TriggerTableRow';
 
-const TriggerTable = ({ 
-    triggers, loading, triggerType, selectedIds, handleSelectAll, 
-    handleSelectOne, handleViewContacts, fetchChildren, fetchErrors, 
-    handleViewPipeline, handleEditParams, handleStartNow, handleCancel, 
-    handleRetry, handleDelete, user, confirmBulkDelete, onManualInteraction
+const TriggerTable = ({
+    triggers, loading, triggerType, selectedIds, handleSelectAll,
+    handleSelectOne, handleViewContacts, fetchChildren, fetchErrors,
+    handleViewPipeline, handleEditParams, handleStartNow, handleCancel,
+    handleRetry, handleDelete, handleSyncStats, user, confirmBulkDelete, onManualInteraction
 }) => {
     const displayTriggers = Array.isArray(triggers) ? triggers : [];
 
@@ -63,6 +63,7 @@ const TriggerTable = ({
                             handleCancel={handleCancel}
                             handleRetry={handleRetry}
                             handleDelete={handleDelete}
+                            handleSyncStats={handleSyncStats}
                             user={user}
                             onManualInteraction={onManualInteraction}
                         />

@@ -256,30 +256,23 @@ async def get_trigger_messages(
         # Se for bulk, calcular contadores baseado na query agrupada por telefone para garantir contagens únicas
         from sqlalchemy import and_
         if trigger.is_bulk:
+            # Para bulk: usar os valores já salvos pelo reconcile no trigger.
+            # Isso garante que os números nos tabs do modal são IDÊNTICOS aos dos ícones
+            # da linha, sem recalcular com lógica SQL diferente que pode divergir.
+            # Campos não armazenados no trigger (free, template, private_note) ainda são
+            # calculados via SQL.
             counts = {
-                "all": counts_query.count(),
-                "sent": counts_query.filter(or_(
-                    models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']),
-                    models.MessageStatus.delivered_counted == True,
-                    models.MessageStatus.read_counted == True
-                )).count(),
-                "delivered": counts_query.filter(or_(
-                    models.MessageStatus.status.in_(['delivered', 'read', 'interaction']),
-                    models.MessageStatus.delivered_counted == True,
-                    models.MessageStatus.is_interaction == True
-                )).count(),
-                "read": counts_query.filter(or_(
-                    models.MessageStatus.status.in_(['read', 'interaction']),
-                    models.MessageStatus.read_counted == True,
-                    and_(models.MessageStatus.is_interaction == True, models.MessageStatus.status != 'sent')
-                )).count(),
-                "failed": counts_query.filter(models.MessageStatus.status == 'failed', or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON')).count(),
+                "all": trigger.total_contacts or counts_query.count(),
+                "sent": trigger.total_sent or 0,
+                "delivered": trigger.total_delivered or 0,
+                "read": trigger.total_read or 0,
+                "failed": trigger.total_failed or 0,
+                "blocked": trigger.total_blocked or 0,
+                "interaction": trigger.total_interactions or 0,
+                "queue": trigger.queue_count or 0,
                 "free": counts_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
                 "template": counts_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
-                "blocked": counts_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count(),
-                "interaction": counts_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True)).count(),
-                "private_note": counts_query.filter(models.MessageStatus.private_note_posted == True).count(),
-                "queue": 0 if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted'] else counts_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False).count()
+                "private_note": trigger.total_private_notes or 0,
             }
         else:
             counts = {

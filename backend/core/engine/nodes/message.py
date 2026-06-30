@@ -301,6 +301,26 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
             trigger.total_sent = (trigger.total_sent or 0) + 1
             db.commit()
 
+        # --- SINCRONIZAR COM O CHAT LOCAL ---
+        try:
+            from core.engine.sync_utils import sync_message_to_local_chat
+            buttons = [b.strip() for b in data.get("buttons", []) if b.strip()]
+            formatted_text = final_content
+            if buttons:
+                formatted_text += "\n\n🔘 [Botões]: " + ", ".join([f"[{b}]" for b in buttons])
+            
+            await sync_message_to_local_chat(
+                db=db,
+                client_id=trigger.client_id,
+                phone=contact_phone,
+                contact_name=trigger.contact_name,
+                content=formatted_text,
+                message_type="text",
+                wa_message_id=msg_id_clean
+            )
+        except Exception as e_local:
+            logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mensagem local no final do nó: {e_local}")
+
     await publish_node_external_event(db, trigger, data, final_content, contact_phone, node_id=current_node_id)
     log_node_execution(db, trigger, current_node_id, "completed", "Mensagem enviada e sincronizada.", {"content": final_content})
     return {"status": "continue", "conversation_id": conversation_id}

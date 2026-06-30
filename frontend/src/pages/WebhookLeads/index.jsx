@@ -7,7 +7,7 @@ import Table from './components/Table';
 import Modals from './components/Modals';
 import LoadingOverlay from './components/LoadingOverlay';
 
-export default function WebhookLeads({ onNavigateToImportHistory }) {
+export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIntegrations, onNavigateToBulk, onNavigateToDispatchHistory }) {
   const { activeClient } = useClient();
   const logic = useWebhookLeads(activeClient);
 
@@ -29,9 +29,12 @@ export default function WebhookLeads({ onNavigateToImportHistory }) {
         fetchFilters={logic.fetchFilters}
         loading={logic.loading}
         onNavigateToImportHistory={onNavigateToImportHistory}
+        onNavigateToIntegrations={onNavigateToIntegrations}
+        onNavigateToBulk={onNavigateToBulk}
+        onNavigateToDispatchHistory={onNavigateToDispatchHistory}
       />
 
-      <Filters 
+      <Filters
         search={logic.search}
         setSearch={logic.setSearch}
         selectedTags={logic.selectedTags}

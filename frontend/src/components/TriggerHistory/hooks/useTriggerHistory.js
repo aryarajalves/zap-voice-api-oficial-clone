@@ -146,7 +146,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         handleAction,
         handleBulkDeleteAction,
         handleStartNow,
-        handleRetry
+        handleRetry,
+        handleSyncStats
     } = useTriggerActions({
         activeClient,
         setTriggers,
@@ -264,6 +265,32 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                     counts: data.counts || {},
                     failureReasons: data.failure_reasons || []
                 }));
+
+                // O backend faz reconcile ao buscar contatos de triggers finalizados.
+                // Atualiza a linha na lista para refletir os contadores corrigidos.
+                const FINISHED_STATUSES = ['completed', 'failed', 'cancelled', 'aborted'];
+                const currentTrigger = triggers.find(t => t.id === contactsModal.triggerId);
+                if (currentTrigger && FINISHED_STATUSES.includes(currentTrigger.status)) {
+                    try {
+                        const resT = await fetchWithAuth(`${API_URL}/triggers/${contactsModal.triggerId}`, {}, activeClient?.id);
+                        if (resT.ok) {
+                            const updated = await resT.json();
+                            const STAT_FIELDS = [
+                                'total_sent', 'total_delivered', 'total_read', 'total_interactions',
+                                'total_failed', 'total_blocked', 'queue_count', 'total_contacts',
+                                'total_paid_templates', 'total_cost', 'cost_per_unit',
+                                'status', 'updated_at'
+                            ];
+                            const patch = {};
+                            for (const f of STAT_FIELDS) {
+                                if (updated[f] !== undefined) patch[f] = updated[f];
+                            }
+                            setTriggers(prev => prev.map(t => t.id === contactsModal.triggerId ? { ...t, ...patch } : t));
+                        }
+                    } catch (_) {
+                        // silencioso — não interrompe a UI
+                    }
+                }
             }
         } catch (e) {
             console.error("Erro ao carregar lista de contatos:", e);
@@ -343,7 +370,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         triggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
         showTechnical, setShowTechnical, itemsPerPage, setItemsPerPage, page, setPage,
         totalPages, totalItems, fetchHistory, handleDelete, handleCancel, handleAction,
-        handleBulkDeleteAction, handleStartNow, handleRetry, fetchErrors, fetchChildren,
+        handleBulkDeleteAction, handleStartNow, handleRetry, handleSyncStats, fetchErrors, fetchChildren,
         handleViewPipeline, fetchTriggerContacts, handleSelectAll, handleSelectOne,
         handleViewContacts, handleEditParams,
         contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal

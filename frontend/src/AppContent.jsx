@@ -35,6 +35,7 @@ import InstagramAutomation from './pages/InstagramAutomation';
 import TutorialPage from './pages/TutorialPage';
 import PageUnderConstruction from './components/PageUnderConstruction';
 import LogViewer from './pages/LogViewer';
+import ChatConversations from './pages/ChatConversations';
 
 
 // Maps pages_status key → page display name (for under-construction screen)
@@ -122,6 +123,7 @@ export default function AppContent() {
                     {logic.currentView === 'instagram_automation' && 'Automação Instagram'}
                     {logic.currentView === 'tutorial' && 'Tutorial API Oficial'}
                     {logic.currentView === 'log_viewer' && 'Visualizador de Logs'}
+                    {logic.currentView === 'chat_conversations' && 'Atendimento'}
                   </h1>
 
                   
@@ -170,12 +172,23 @@ export default function AppContent() {
               {logic.currentView === 'monitoring' && <Monitoring />}
               {logic.currentView === 'integrations' && (
                 <PageGuard pageKey="integrations" pagesStatus={logic.user?.pages_status}>
-                  <Integrations />
+                  <Integrations
+                    onNavigateToLeads={() => logic.setCurrentView('leads')}
+                    onNavigateToBulk={() => logic.setCurrentView('bulk_sender')}
+                    onNavigateToDispatchHistory={() => logic.setCurrentView('history')}
+                    onNavigateToFunnels={() => logic.setCurrentView('funnels')}
+                    onNavigateToChat={() => logic.setCurrentView('chat_conversations')}
+                  />
                 </PageGuard>
               )}
               {logic.currentView === 'leads' && (
                 <PageGuard pageKey="leads" pagesStatus={logic.user?.pages_status}>
-                  <WebhookLeads onNavigateToImportHistory={() => logic.setCurrentView('import_history')} />
+                  <WebhookLeads
+                    onNavigateToImportHistory={() => logic.setCurrentView('import_history')}
+                    onNavigateToIntegrations={() => logic.setCurrentView('integrations')}
+                    onNavigateToBulk={() => logic.setCurrentView('bulk_sender')}
+                    onNavigateToDispatchHistory={() => logic.setCurrentView('history')}
+                  />
                 </PageGuard>
               )}
               {logic.currentView === 'import_history' && (
@@ -193,7 +206,7 @@ export default function AppContent() {
                   <RecurringSchedules />
                 </PageGuard>
               )}
-              {logic.currentView === 'stress_test' && <StressTest onStartSuccess={() => logic.setCurrentView('history')} onNavigateToHistory={() => logic.setCurrentView('history')} onNavigateToIntegrations={() => logic.setCurrentView('integrations')} />}
+              {logic.currentView === 'stress_test' && <StressTest onStartSuccess={() => logic.setCurrentView('history')} onNavigateToHistory={() => logic.setCurrentView('history')} onNavigateToIntegrations={() => logic.setCurrentView('integrations')} onNavigateToContacts={() => logic.setCurrentView('leads')} />}
               {logic.currentView === 'backup_db' && <BackupDatabase />}
               {logic.currentView === 'hot_leads' && (
                 <PageGuard pageKey="hot_leads" pagesStatus={logic.user?.pages_status}>
@@ -313,6 +326,7 @@ export default function AppContent() {
                       refreshKey={logic.triggerHistoryRefreshKey}
                       onNavigateToBulk={() => logic.setCurrentView('bulk_sender')}
                       onNavigateToFunnels={() => logic.setCurrentView('funnels')}
+                      onNavigateToChat={() => logic.setCurrentView('chat_conversations')}
                     />
                   </div>
                 </PageGuard>
@@ -321,6 +335,13 @@ export default function AppContent() {
           </>
         )}
       </main>
+
+      {/* Atendimento em Popup de Tela Cheia */}
+      {logic.currentView === 'chat_conversations' && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-[#0f172a] animate-in fade-in duration-300">
+          <ChatConversations onClose={() => logic.handleViewChange('bulk_sender')} />
+        </div>
+      )}
     </div>
   );
 }

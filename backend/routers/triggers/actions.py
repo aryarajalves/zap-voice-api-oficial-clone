@@ -156,10 +156,10 @@ async def start_now_trigger(trigger_id: int, db: Session = Depends(get_db), curr
     return result
 
 class ChatwootLabelPayload(BaseModel):
-    label: str = Field(..., description="Nome da etiqueta a aplicar no Chatwoot")
+    label: str = Field(..., description="Nome da etiqueta a aplicar nas conversas locais do atendimento")
     phones: List[str] = Field(default=[], description="Telefones selecionados (vazio = todos do disparo)")
 
-@router.post("/{trigger_id}/chatwoot-label", summary="Aplicar etiqueta Chatwoot nas conversas do disparo")
+@router.post("/{trigger_id}/chatwoot-label", summary="Aplicar etiqueta local nas conversas do disparo")
 async def apply_chatwoot_label(
     trigger_id: int,
     payload: ChatwootLabelPayload,
@@ -168,21 +168,21 @@ async def apply_chatwoot_label(
     current_user: models.User = Depends(get_current_user)
 ):
     from core.logger import setup_logger
-    logger = setup_logger("chatwoot-label")
+    logger = setup_logger("local-chat-label")
 
     client_id = x_client_id if x_client_id else current_user.client_id
     trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id, client_id=client_id).first()
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo nao encontrado.")
 
-    label = payload.label.strip().lower().replace(" ", "-")
-    if not label:
+    # Permitir espaços e caracteres naturais nas etiquetas locais do atendimento
+    label_clean = payload.label.strip()
+    if not label_clean:
         raise HTTPException(status_code=400, detail="Etiqueta invalida.")
 
-    # Buscar MessageStatus com conversation_id preenchido
+    # Obter os telefones participantes a partir do MessageStatus do disparo
     q = db.query(models.MessageStatus).filter(
-        models.MessageStatus.trigger_id == trigger_id,
-        models.MessageStatus.chatwoot_conversation_id != None,
+        models.MessageStatus.trigger_id == trigger_id
     )
     if payload.phones:
         from services.utils.phone_utils import normalize_phone
@@ -193,37 +193,69 @@ async def apply_chatwoot_label(
 
     messages = q.all()
     if not messages:
-        raise HTTPException(status_code=404, detail="Nenhuma conversa do Chatwoot encontrada para os contatos selecionados.")
-
-    from chatwoot_client import ChatwootClient
-    cw = ChatwootClient(client_id=client_id)
+        raise HTTPException(status_code=404, detail="Nenhum contato encontrado para os contatos selecionados.")
 
     success = 0
     failed = 0
-    skipped = 0
-    seen_conv_ids = set()
+    seen_phones = set()
 
     for msg in messages:
-        conv_id = msg.chatwoot_conversation_id
-        if conv_id in seen_conv_ids:
+        phone_raw = msg.phone_number
+        if not phone_raw:
             continue
-        seen_conv_ids.add(conv_id)
+        
+        clean_phone = "".join(filter(str.isdigit, str(phone_raw)))
+        if not clean_phone:
+            continue
+            
+        if clean_phone in seen_phones:
+            continue
+        seen_phones.add(clean_phone)
+        
         try:
-            await cw.add_label_to_conversation(conv_id, label)
+            suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+            
+            # Buscar conversa local pelo client_id e sufixo de 8 dígitos
+            convo = db.query(models.ChatConversation).filter(
+                models.ChatConversation.client_id == client_id,
+                models.ChatConversation.phone.like(f"%{suffix}")
+            ).first()
+            
+            if not convo:
+                # Criar a conversa proativamente para que apareça no painel de atendimento local
+                convo = models.ChatConversation(
+                    client_id=client_id,
+                    phone=clean_phone,
+                    contact_name=msg.contact_name or clean_phone,
+                    status="open",
+                    unread_count=0,
+                    labels=[]
+                )
+                db.add(convo)
+                db.flush()
+                logger.info(f"🆕 [CHAT-LOCAL-LABEL] Criada conversa local proativa para aplicar etiqueta para {clean_phone}")
+            
+            # Inicializa ou carrega a lista de etiquetas
+            current_labels = list(convo.labels) if isinstance(convo.labels, list) else []
+            
+            # Adiciona a etiqueta apenas se ela não existir
+            if label_clean not in current_labels:
+                current_labels.append(label_clean)
+                convo.labels = current_labels
+                
             success += 1
         except Exception as e:
-            logger.warning(f"[chatwoot-label] Falha na conversa {conv_id}: {e}")
+            logger.error(f"❌ [CHAT-LOCAL-LABEL] Falha ao aplicar etiqueta no telefone {clean_phone}: {e}")
             failed += 1
 
-    skipped = len(messages) - len(seen_conv_ids)
+    db.commit()
 
     return {
         "status": "ok",
-        "label": label,
+        "label": label_clean,
         "success": success,
         "failed": failed,
-        "skipped": skipped,
-        "total": len(seen_conv_ids),
+        "total": len(seen_phones),
     }
 
 

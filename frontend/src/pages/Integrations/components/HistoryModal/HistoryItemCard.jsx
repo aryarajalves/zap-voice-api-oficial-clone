@@ -84,6 +84,11 @@ const HistoryItemCard = ({
              item.status === 'received' ? 'Recebido' :
              item.status}
           </span>
+          {item.processed_data?.is_stress_test && (
+            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1">
+              <FiZap size={10} fill="currentColor" /> Teste de Escala
+            </span>
+          )}
           <span className="text-xs text-gray-500 font-mono font-medium">
             {new Date(item.created_at).toLocaleString()}
           </span>

@@ -11,7 +11,28 @@ import { PortalContext } from '../index';
 
 const resolveUrl = (url) => {
     if (!url) return '';
-    if (url.startsWith('http')) return url;
+    let finalUrl = url;
+    if (url.startsWith('http')) {
+        try {
+            const mediaUrlObj = new URL(url);
+            if (mediaUrlObj.hostname === 'localhost' || mediaUrlObj.hostname === '127.0.0.1') {
+                // Forçar a porta pública do MinIO 9005 se for localhost:9000
+                if (mediaUrlObj.port === '9000') {
+                    mediaUrlObj.port = '9005';
+                }
+                const apiHost = new URL(API_URL).hostname;
+                if (apiHost !== 'localhost' && apiHost !== '127.0.0.1') {
+                    mediaUrlObj.hostname = apiHost;
+                } else {
+                    mediaUrlObj.hostname = '127.0.0.1';
+                }
+            }
+            finalUrl = mediaUrlObj.toString();
+        } catch (e) {
+            console.error("Erro ao resolver URL da mídia:", e);
+        }
+        return finalUrl;
+    }
     const baseUrl = API_URL.replace(/\/api\/*$/, '');
     return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 };
@@ -41,6 +62,7 @@ const AudioNode = ({ id, data }) => {
         const formData = new FormData();
         formData.append('file', file);
         setUploading(true);
+        const toastId = toast.loading("Enviando áudio para o servidor...");
 
         try {
             const token = localStorage.getItem('token');
@@ -58,13 +80,13 @@ const AudioNode = ({ id, data }) => {
             if (res.ok) {
                 const result = await res.json();
                 data.onChange(id, { mediaUrl: result.url, fileName: result.filename, mediaType: 'audio' });
-                toast.success("Upload de áudio concluído!");
+                toast.success("Upload de áudio concluído com sucesso!", { id: toastId });
             } else {
-                toast.error(`Erro ${res.status}: ${res.statusText}`);
+                toast.error(`Erro ${res.status}: ${res.statusText}`, { id: toastId });
             }
         } catch (error) {
             console.error("Upload error:", error);
-            toast.error("Erro de conexão ao enviar arquivo");
+            toast.error("Erro de conexão ao enviar áudio", { id: toastId });
         } finally {
             setUploading(false);
         }

@@ -42,6 +42,8 @@ const HistoryModal = ({
   bulkResendProgress,
   setBulkResendProgress,
 }) => {
+  const [stressTestFilter, setStressTestFilter] = React.useState(false);
+
   if (!isOpen || !integration) return null;
 
   const historyArray = Array.isArray(webhookHistory) ? webhookHistory : [];
@@ -59,6 +61,8 @@ const HistoryModal = ({
       if (webhookHistoryMappingFilter === 'mapped' && isUnmapped) return false;
       if (webhookHistoryMappingFilter === 'unmapped' && !isUnmapped) return false;
     }
+    // 3. Filtro Teste de Escala
+    if (stressTestFilter && !item?.processed_data?.is_stress_test) return false;
     return true;
   });
   const totalPages = Math.ceil(filtered.length / (historyPageSize || 20));
@@ -68,7 +72,7 @@ const HistoryModal = ({
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-10 animate-in fade-in duration-500">
       <div className="bg-white dark:bg-[#1e293b] rounded-[2.5rem] w-full max-w-6xl max-h-[90vh] flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden border border-gray-100 dark:border-white/5 animate-in zoom-in-95 duration-300">
         
-        <HistoryHeader 
+        <HistoryHeader
           integration={integration}
           webhookHistoryLength={webhookHistory.length}
           selectedHistoryIds={selectedHistoryIds}
@@ -76,6 +80,7 @@ const HistoryModal = ({
           setConfirmResendHistory={setConfirmResendHistory}
           handleExportHistory={handleExportHistory}
           handleImportHistory={handleImportHistory}
+          onClose={onClose}
         />
 
         <HistoryControls 
@@ -94,6 +99,8 @@ const HistoryModal = ({
           webhookHistoryMappingFilter={webhookHistoryMappingFilter}
           setWebhookHistoryMappingFilter={setWebhookHistoryMappingFilter}
           webhookHistory={webhookHistory}
+          stressTestFilter={stressTestFilter}
+          setStressTestFilter={setStressTestFilter}
         />
 
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30 dark:bg-[#0b1120]/20">
@@ -186,14 +193,6 @@ const HistoryModal = ({
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-[#0f172a]/50 flex justify-end">
-          <button
-            onClick={onClose}
-            className="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/5 text-gray-700 dark:text-gray-300 px-10 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-gray-200 dark:shadow-none"
-          >
-            Fechar Painel
-          </button>
-        </div>
       </div>
     </div>,
     document.body

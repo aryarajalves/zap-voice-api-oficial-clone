@@ -62,7 +62,6 @@ const ConnectionStatus = ({ refreshKey }) => {
             {loading && <FiLoader className="animate-spin text-blue-500 mr-2" size={16} />}
             {error && <span className="text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded border border-red-500/20 mr-2">{error}</span>}
             <ServiceItem icon={FiMessageSquare} label="WhatsApp" state={status?.whatsapp || (error ? 'offline' : null)} />
-            <ServiceItem icon={FiServer} label="Chatwoot" state={status?.chatwoot || (error ? 'offline' : null)} />
             <ServiceItem icon={FiDatabase} label="RabbitMQ" state={status?.rabbitmq || (error ? 'offline' : null)} />
             {(window._env_?.ENABLE_INSTAGRAM !== 'false' && window._env_?.ENABLE_INSTAGRAM !== false) && (
                 <ServiceItem icon={FiInstagram} label="Instagram" state={status?.instagram || (error ? 'offline' : null)} />

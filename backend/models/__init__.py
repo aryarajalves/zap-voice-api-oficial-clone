@@ -7,6 +7,7 @@ from .invitation import UserInvitation, invitation_clients
 from .backup import BackupConfig, BackupMetadata
 from .instagram_automation import InstagramAutomation, InstagramLog
 from .import_history import ContactImportHistory
+from .chat import ChatConversation, ChatMessage
 from .trigger import (
     ScheduledTrigger, 
     MessageStatus, 
@@ -24,6 +25,8 @@ from .trigger import (
     HotLead
 )
 from .uploaded_media import UploadedMedia
+from .api_key import ApiKey
+from .chat_label import ChatLabel
 
 # This allows importing all models from the models package
 __all__ = [
@@ -60,5 +63,8 @@ __all__ = [
     "BackupConfig",
     "BackupMetadata",
     "ContactImportHistory",
-    "UploadedMedia"
+    "UploadedMedia",
+    "ChatConversation",
+    "ChatMessage",
+    "ApiKey"
 ]

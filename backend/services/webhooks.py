@@ -130,8 +130,8 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                     db.commit()
                     logger.info(f"✅ SMART_CANCEL | {len(pending_triggers)} disparos cancelados com sucesso.")
 
-        if not template_name and not funnel_id and not mapping.private_note:
-            logger.info(f"AUTO_SKIP | Mapeamento #{mapping.id} sem conteúdo de disparo.")
+        if not template_name and not funnel_id:
+            logger.info(f"AUTO_SKIP | Mapeamento #{mapping.id} sem template nem funil definido — disparo não criado.")
             return
 
         # Extrai variáveis para o template
@@ -185,6 +185,29 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         if webhook_conversation_id:
             logger.info(f"🗂️ [WEBHOOK] conversation_id={webhook_conversation_id} extraído do payload para {phone}")
 
+        # Extrai contact_id, inbox_id e account_id do payload do Chatwoot
+        _raw_contact_id = (
+            variables.get("chatwoot_contact_id") or
+            payload.get("contact", {}).get("id") or
+            payload.get("contact_id")
+        )
+        webhook_contact_id = int(_raw_contact_id) if _raw_contact_id and str(_raw_contact_id).isdigit() else None
+
+        _raw_inbox_id = (
+            variables.get("chatwoot_inbox_id") or
+            payload.get("inbox", {}).get("id") or
+            payload.get("conversation", {}).get("inbox_id") or
+            payload.get("inbox_id")
+        )
+        webhook_inbox_id = int(_raw_inbox_id) if _raw_inbox_id and str(_raw_inbox_id).isdigit() else None
+
+        _raw_account_id = (
+            variables.get("chatwoot_account_id") or
+            payload.get("account", {}).get("id") or
+            payload.get("account_id")
+        )
+        webhook_account_id = int(_raw_account_id) if _raw_account_id and str(_raw_account_id).isdigit() else None
+
         # Cria o Disparo
         st = models.ScheduledTrigger(
             scheduled_time=scheduled_time,
@@ -207,7 +230,11 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             funnel_id=funnel_id,
             is_bulk=False,
             idempotency_key=idempotency_key,
-            conversation_id=webhook_conversation_id
+            conversation_id=webhook_conversation_id,
+            chatwoot_contact_id=webhook_contact_id,
+            chatwoot_inbox_id=webhook_inbox_id,
+            chatwoot_account_id=webhook_account_id,
+            is_stress_test=bool((history.processed_data or {}).get("is_stress_test"))
         )
         db.add(st)
         try:

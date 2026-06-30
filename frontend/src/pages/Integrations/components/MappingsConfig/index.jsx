@@ -6,6 +6,7 @@ import { EVENT_TYPES } from '../../constants';
 const PAGE_SIZE_OPTIONS = [5, 10, 20];
 
 const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLabels, setIsMappingGuideOpen, discoveredProducts, existingInternalTags }) => {
+  const platform = formData.platform || null;
   const [expandedMappings, setExpandedMappings] = React.useState({});
   const [pageSize, setPageSize]   = React.useState(5);
   const [page, setPage]           = React.useState(0);
@@ -288,6 +289,7 @@ const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLab
               updateFollowupVariable={updateFollowupVariable}
               discoveredProducts={discoveredProducts || []}
               existingInternalTags={existingInternalTags}
+              platform={platform}
             />
           ))
         )}

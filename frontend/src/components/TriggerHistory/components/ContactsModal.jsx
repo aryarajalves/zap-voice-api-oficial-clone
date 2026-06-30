@@ -8,6 +8,7 @@ import ContactRow from './ContactRow';
 import { useContactsModalLogic } from '../hooks/useContactsModalLogic';
 
 // Mini modal multi-select de etiquetas do Chatwoot
+// Mini modal multi-select de etiquetas do Atendimento Local (Chat)
 function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, clientId }) {
     const [selected, setSelected] = React.useState([]);
     const [labels, setLabels] = React.useState([]);
@@ -19,10 +20,11 @@ function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, client
         setFetchingLabels(true);
         import('../../../config').then(({ API_URL }) => {
             import('../../../AuthContext').then(({ fetchWithAuth }) => {
-                fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, clientId)
-                    .then(r => r.ok ? r.json() : { payload: [] })
+                fetchWithAuth(`${API_URL}/chat/labels`, {}, clientId)
+                    .then(r => r.ok ? r.json() : [])
                     .then(data => {
-                        const items = Array.isArray(data) ? data : (data.payload || []);
+                        // O backend retorna uma lista de strings. Mapeamos para o formato esperado.
+                        const items = Array.isArray(data) ? data.map(str => ({ title: str, name: str, color: '#6366f1' })) : [];
                         setLabels(items);
                     })
                     .catch(() => setLabels([]))
@@ -46,17 +48,19 @@ function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, client
         if (selected.length > 0) onConfirm(selected);
     };
 
+    const hasExactMatch = labels.some(l => (l.title || '').toLowerCase() === search.trim().toLowerCase());
+
     return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black bg-opacity-60 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black bg-opacity-60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh] border border-gray-100 dark:border-white/5 animate-in zoom-in-95 duration-200 overflow-hidden">
                 {/* Header */}
-                <div className="p-5 border-b border-gray-100 dark:border-gray-700">
+                <div className="p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                     <div className="flex items-center gap-3">
                         <span className="text-2xl">🏷️</span>
                         <div>
-                            <h3 className="font-bold text-gray-800 dark:text-white text-base">Etiquetar no Chatwoot</h3>
+                            <h3 className="font-bold text-gray-800 dark:text-white text-base">Etiquetar Atendimento</h3>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                {count > 0 ? `${count} contato(s) selecionado(s)` : 'Todos os contatos com conversa no Chatwoot'}
+                                {count > 0 ? `${count} contato(s) selecionado(s)` : 'Todos os contatos do disparo'}
                             </p>
                         </div>
                     </div>
@@ -69,32 +73,48 @@ function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, client
                         type="text"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        placeholder="Buscar etiqueta..."
-                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition"
+                        placeholder="Buscar ou criar etiqueta..."
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all"
                     />
                 </div>
 
                 {/* Selected chips */}
                 {selected.length > 0 && (
-                    <div className="px-5 pb-2 flex flex-wrap gap-1.5">
+                    <div className="px-5 pb-2 flex flex-wrap gap-1.5 max-h-20 overflow-y-auto custom-scrollbar">
                         {selected.map(s => (
-                            <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-full text-[11px] font-bold">
+                            <span key={s} className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-full text-[10px] font-extrabold uppercase tracking-wider">
                                 {s}
-                                <button type="button" onClick={() => toggle(s)} className="hover:text-indigo-900 dark:hover:text-white ml-0.5 leading-none">×</button>
+                                <button type="button" onClick={() => toggle(s)} className="hover:text-indigo-900 dark:hover:text-white ml-1 leading-none text-xs">×</button>
                             </span>
                         ))}
                     </div>
                 )}
 
                 {/* Label list */}
-                <div className="overflow-y-auto flex-1 px-5 pb-2" style={{ minHeight: 80, maxHeight: 260 }}>
+                <div className="overflow-y-auto flex-1 px-5 pb-2 custom-scrollbar" style={{ minHeight: 80, maxHeight: 260 }}>
+                    {/* Botão de Criar nova etiqueta */}
+                    {search.trim() !== '' && !hasExactMatch && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const newLabelStr = search.trim();
+                                setLabels(prev => [{ title: newLabelStr, name: newLabelStr, color: '#6366f1' }, ...prev]);
+                                toggle(newLabelStr);
+                                setSearch('');
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-dashed border-indigo-300/50 dark:border-indigo-500/20 font-bold mb-2 transition-all justify-center"
+                        >
+                            <span>➕ Criar etiqueta "{search.trim()}"</span>
+                        </button>
+                    )}
+
                     {fetchingLabels ? (
                         <div className="flex items-center justify-center py-8">
                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
                         </div>
-                    ) : filtered.length === 0 ? (
+                    ) : filtered.length === 0 && search.trim() === '' ? (
                         <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">
-                            {labels.length === 0 ? 'Nenhuma etiqueta encontrada no Chatwoot.' : 'Nenhuma etiqueta corresponde a busca.'}
+                            Nenhuma etiqueta cadastrada. Digite acima para criar.
                         </p>
                     ) : (
                         <div className="space-y-1">
@@ -107,13 +127,13 @@ function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, client
                                         key={title}
                                         type="button"
                                         onClick={() => toggle(title)}
-                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
                                             isChecked
                                                 ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
                                                 : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
                                         }`}
                                     >
-                                        <span className="w-3 h-3 rounded-full shrink-0 border-2" style={{ backgroundColor: isChecked ? color : 'transparent', borderColor: color }}></span>
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0 border-2" style={{ backgroundColor: isChecked ? color : 'transparent', borderColor: color }}></span>
                                         <span className="flex-1 text-left font-medium truncate">{title}</span>
                                         {isChecked && (
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-indigo-600 dark:text-indigo-400 shrink-0">
@@ -128,20 +148,20 @@ function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, client
                 </div>
 
                 {/* Footer */}
-                <div className="p-5 border-t border-gray-100 dark:border-gray-700 flex gap-2 justify-between items-center">
+                <div className="p-5 border-t border-gray-100 dark:border-gray-700 flex gap-2 justify-between items-center bg-gray-50/30 dark:bg-gray-800/30">
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                         {selected.length > 0 ? `${selected.length} selecionada(s)` : 'Nenhuma selecionada'}
                     </span>
                     <div className="flex gap-2">
                         <button type="button" onClick={() => { setSelected([]); onClose(); }}
-                            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-600 transition-all">
                             Cancelar
                         </button>
                         <button type="button" onClick={handleConfirm} disabled={selected.length === 0 || loading}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black uppercase tracking-wider transition disabled:opacity-50 flex items-center gap-1.5">
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-indigo-950/20 active:scale-95">
                             {loading
                                 ? <><div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div> Aplicando...</>
-                                : 'Aplicar Etiquetas'}
+                                : 'Aplicar'}
                         </button>
                     </div>
                 </div>
@@ -323,7 +343,7 @@ const ContactsModal = ({
                                     </label>
                                     {contactsModal.contacts.length > 0 && (
                                         <div className="flex flex-col gap-1.5">
-                                            {/* Linha 1: Chatwoot + Etiquetar + Disparar */}
+                                            {/* Linha 1: Etiqueta Chat + Etiquetar + Disparar */}
                                             <div className="flex gap-2">
                                                 <button
                                                     onClick={() => setIsChatwootLabelModalOpen(true)}
@@ -334,7 +354,7 @@ const ContactsModal = ({
                                                         <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
                                                         <line x1="7" y1="7" x2="7.01" y2="7"/>
                                                     </svg>
-                                                    {selectedPhones.length > 0 ? `Chatwoot (${selectedPhones.length})` : 'Chatwoot'}
+                                                    {selectedPhones.length > 0 ? `Etiqueta Chat (${selectedPhones.length})` : `Etiqueta Chat (${totalCount})`}
                                                 </button>
                                                 <button
                                                     onClick={handleOpenTagModal}

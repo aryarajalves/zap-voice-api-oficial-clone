@@ -121,7 +121,7 @@ class TestGreenn_OrderBump:
             ]
         }
         r = run_parser(payload)
-        assert r['event_type'] == "compra_aprovada_order_bump"
+        assert r['event_type'] == "compra_aprovada_com_ob"
         assert r['order_bump'] is True
         assert r['custom_fields']['Produto(s) Order Bump'] == "Produto OB"
 

@@ -76,7 +76,8 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "platform": platform_lower,
         "event_time": None,
         "currency": "BRL",
-        "items": []
+        "items": [],
+        "is_stress_test": bool(payload.get("_zapvoice_stress_test"))
     }
     
     def get_val(keys, default=None):
@@ -304,7 +305,8 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "COMPRA_APROVADA": "Compra Aprovada", "PIX_GERADO": "Pix Gerado", "BOLETO_IMPRESSO": "Boleto Impresso",
         "REEMBOLSO": "Reembolso", "CARTAO_RECUSADO": "Cartão Recusado", "CARRINHO_ABANDONADO": "Carrinho Abandonado",
         "PIX_EXPIRADO": "Pix Expirado", "EVENTO_ALUNO": "Evento do Aluno", "OUTROS": "Outros",
-        "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso", 
+        "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso",
+        "PURCHASE_REFUNDED": "Reembolso", "PURCHASE_CANCELED": "Compra Cancelada",
         "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado", "ABANDONED": "Carrinho Abandonado",
         "WAITING": "Aguardando", "CANCELED": "Cancelado", "EXPIRED": "Expirado",
         "COMMISSION_PROCESSED": "Comissão Processada",

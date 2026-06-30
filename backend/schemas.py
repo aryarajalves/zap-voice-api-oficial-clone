@@ -126,6 +126,10 @@ class ScheduledTrigger(ScheduledTriggerBase):
     button_actions: Optional[Dict[str, Any]] = None
     funnel_snapshot: Optional[Union[dict, list]] = None
     processed_data: Optional[Dict[str, Any]] = None
+    is_stress_test: bool = Field(False, description="Indica se é um disparo de teste de escala (dry-run)")
+    chatwoot_contact_id: Optional[int] = Field(None, description="ID do contato no Chatwoot")
+    chatwoot_account_id: Optional[int] = Field(None, description="ID da conta no Chatwoot")
+    chatwoot_inbox_id: Optional[int] = Field(None, description="ID do inbox no Chatwoot")
 
     @field_validator('button_actions', mode='before')
     @classmethod
@@ -437,6 +441,9 @@ class WebhookEventMappingBase(BaseModel):
     followup_business_hours_end: Optional[str] = Field("18:00", description="Horário final comercial do follow-up")
     followup_business_hours_days: Optional[List[int]] = Field(default_factory=lambda: [0, 1, 2, 3, 4], description="Dias da semana permitidos para o follow-up")
     
+    update_contact_on_trigger: Optional[bool] = Field(True, description="Atualizar/criar contato na aba Contatos quando o gatilho disparar")
+    contact_save_fields: Optional[List[str]] = Field(None, description="Campos a salvar no contato (None = padrão)")
+
     is_active: Optional[bool] = Field(True, description="Indica se o mapeamento está ativo")
 
     @field_validator('funnel_id', 'template_id', 'followup_template_id', mode='before')
@@ -544,6 +551,7 @@ class WebhookHistory(WebhookHistoryBase):
 class WebhookLeadBase(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    bsud: Optional[str] = None
     email: Optional[str] = None
     last_event_type: Optional[str] = None
     last_event_at: Optional[datetime] = None

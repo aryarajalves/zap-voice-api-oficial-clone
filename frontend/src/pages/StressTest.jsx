@@ -143,7 +143,7 @@ const CountdownBadge = ({ temp_paused_until }) => {
 
 import { ERROR_EXPLANATIONS } from './StressTest/utils/errorExplanations';
 
-const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrations }) => {
+const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrations, onNavigateToContacts }) => {
     const {
         user, activeClient,
         testType, setTestType, funnelId, setFunnelId, templateName, setTemplateName,
@@ -153,6 +153,12 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
         funnels, loadingFunnels,
         activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning,
         handleStartTest, handleCancelTest, selectedErrors, setSelectedErrors, ALL_ERRORS,
+        // Contacts import test
+        contactsCount, setContactsCount,
+        contactsTagCount, setContactsTagCount,
+        contactsImportResult, setContactsImportResult,
+        isContactsRunning,
+        handleStartContactsTest,
         // Webhook test
         webhookIntegrations, loadingWebhookIntegrations,
         selectedIntegrationId, setSelectedIntegrationId,
@@ -186,6 +192,13 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
     const [explainError, setExplainError] = React.useState(null);
     const [previewEvent, setPreviewEvent] = React.useState(null); // { platform, eventType, label }
     const [jsonMaximized, setJsonMaximized] = React.useState(false);
+
+    // Redirecionar para aba de contatos após importação completar
+    React.useEffect(() => {
+        if (contactsImportResult && onNavigateToContacts) {
+            onNavigateToContacts();
+        }
+    }, [contactsImportResult]);
 
     React.useEffect(() => {
         const mainEl = document.querySelector('main');
@@ -235,14 +248,14 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                     <form onSubmit={handleStartTest} className="space-y-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Tipo de Teste</label>
-                            <div className="flex gap-1.5 bg-gray-100 dark:bg-gray-800/50 p-1 rounded-xl">
+                            <div className="grid grid-cols-2 gap-1.5 bg-gray-100 dark:bg-gray-800/50 p-1.5 rounded-xl">
                                 <button
                                     type="button"
                                     onClick={() => setTestType('funnel')}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
                                         testType === 'funnel'
                                             ? 'bg-blue-600 text-white shadow-md'
-                                             : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'
+                                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'
                                     }`}
                                 >
                                     Funil
@@ -250,7 +263,7 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                                 <button
                                     type="button"
                                     onClick={() => setTestType('template')}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
                                         testType === 'template'
                                             ? 'bg-blue-600 text-white shadow-md'
                                             : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'
@@ -261,13 +274,24 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                                 <button
                                     type="button"
                                     onClick={() => setTestType('webhook')}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
                                         testType === 'webhook'
                                             ? 'bg-violet-600 text-white shadow-md'
                                             : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'
                                     }`}
                                 >
-                                    <FiZap className="shrink-0" /> Webhook
+                                    <FiZap size={11} className="shrink-0" /> Webhook
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTestType('contacts')}
+                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                                        testType === 'contacts'
+                                            ? 'bg-emerald-600 text-white shadow-md'
+                                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-200'
+                                    }`}
+                                >
+                                    &#128101; Contatos
                                 </button>
                             </div>
                         </div>
@@ -412,6 +436,39 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                                     </div>
                                 )}
                             </div>
+                        ) : testType === 'contacts' ? (
+                            /* ── Contacts Import Form ── */
+                            <div className="space-y-4">
+                                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                                    <p className="text-xs text-emerald-300 leading-relaxed">
+                                        Gera contatos fictícios com nomes, e-mails e etiquetas aleatórias e os insere diretamente no banco de contatos.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Quantidade de Contatos</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="50000"
+                                        value={contactsCount}
+                                        onChange={(e) => setContactsCount(parseInt(e.target.value) || 1)}
+                                        className="w-full bg-gray-900/50 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all outline-none"
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1">Máximo 50.000 por vez</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Etiquetas Aleatórias por Contato</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="15"
+                                        value={contactsTagCount}
+                                        onChange={(e) => setContactsTagCount(parseInt(e.target.value) || 1)}
+                                        className="w-full bg-gray-900/50 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all outline-none"
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1">Cada contato recebe esse número de etiquetas aleatórias + <span className="text-emerald-400 font-mono">stress-test-YYYYMMDD</span></p>
+                                </div>
+                            </div>
                         ) : testType === 'funnel' ? (
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Funil de Teste</label>
@@ -494,7 +551,7 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                             </div>
                         )}
 
-                        {testType !== 'webhook' && (
+                        {testType !== 'webhook' && testType !== 'contacts' && (
                         <>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Quantidade de Contatos</label>
@@ -534,7 +591,7 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                         </>
                         )}
 
-                        {testType !== 'webhook' && (
+                        {testType !== 'webhook' && testType !== 'contacts' && (
                         <div className="bg-amber-500/10 dark:bg-yellow-500/5 border border-amber-500/20 rounded-2xl p-4 mt-2 space-y-2">
                             <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                                 <FiAlertCircle className="shrink-0" /> Erros Simulados (Taxa de 10%)
@@ -599,6 +656,18 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                                         <FiZap /> Iniciar Teste de Webhook
                                     </button>
                                 )
+                            ) : testType === 'contacts' ? (
+                                <button
+                                    type="button"
+                                    onClick={handleStartContactsTest}
+                                    disabled={isContactsRunning}
+                                    className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl font-bold shadow-lg hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isContactsRunning
+                                        ? <><span className="animate-spin inline-block">&#8987;</span>&nbsp;Importando {Number(contactsCount).toLocaleString('pt-BR')} contatos...</>
+                                        : <>&#128101; Importar {Number(contactsCount).toLocaleString('pt-BR')} Contatos Fictícios</>
+                                    }
+                                </button>
                             ) : (
                                 <button
                                     type="submit"
@@ -641,6 +710,16 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                                         <FiSettings size={12} /> Integração
                                     </button>
                                 )}
+                                {onNavigateToContacts && (
+                                    <button
+                                        type="button"
+                                        onClick={onNavigateToContacts}
+                                        className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-xl font-bold transition-all text-xs flex items-center gap-1.5 border border-emerald-500/20"
+                                        title="Ir para Contatos"
+                                    >
+                                        &#128101; Contatos
+                                    </button>
+                                )}
                                 {isRunning && (
                                     <button
                                         onClick={() => setShowConfirmCancel(true)}
@@ -652,7 +731,59 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                             </div>
                         </div>
 
-                        {testType === 'webhook' ? (
+                        {testType === 'contacts' ? (
+                            /* ── Contacts Import Results ── */
+                            <div className="flex flex-col items-center justify-center min-h-[220px] gap-4">
+                                {isContactsRunning ? (
+                                    <div className="flex flex-col items-center gap-3 text-center">
+                                        <span className="text-5xl animate-bounce">&#128101;</span>
+                                        <p className="text-white font-bold text-lg">Importando contatos...</p>
+                                        <p className="text-gray-400 text-sm">Inserindo {Number(contactsCount).toLocaleString('pt-BR')} registros no banco de contatos.</p>
+                                    </div>
+                                ) : contactsImportResult ? (
+                                    <div className="w-full space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-5 flex flex-col gap-1">
+                                                <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Importados</span>
+                                                <span className="text-3xl font-black text-white">{contactsImportResult.imported.toLocaleString('pt-BR')}</span>
+                                            </div>
+                                            <div className="bg-gray-800/40 border border-white/10 rounded-2xl p-5 flex flex-col gap-1">
+                                                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Etiqueta ID</span>
+                                                <span className="text-sm font-mono font-bold text-emerald-300 break-all">{contactsImportResult.test_tag}</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-gray-800/30 border border-white/5 rounded-2xl p-4">
+                                            <p className="text-xs text-gray-400 leading-relaxed">
+                                                Contatos inseridos com {contactsTagCount} etiqueta{contactsTagCount !== 1 ? 's' : ''} aleatória{contactsTagCount !== 1 ? 's' : ''} cada + identificador <span className="font-mono text-emerald-300">{contactsImportResult.test_tag}</span>.
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            {onNavigateToContacts && (
+                                                <button
+                                                    type="button"
+                                                    onClick={onNavigateToContacts}
+                                                    className="flex-1 py-2.5 text-xs font-bold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 border border-emerald-500/30 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                                                >
+                                                    &#128101; Ver Contatos
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setContactsImportResult(null)}
+                                                className="flex-1 py-2.5 text-xs font-bold text-gray-400 hover:text-white border border-white/10 hover:border-white/20 rounded-xl transition-all"
+                                            >
+                                                Limpar resultado
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-3 text-center opacity-50">
+                                        <span className="text-5xl">&#128101;</span>
+                                        <p className="text-gray-400 text-sm">Configure a quantidade e clique em <strong className="text-white">Importar</strong> para popular o banco de contatos com dados fictícios.</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : testType === 'webhook' ? (
                             /* ── Webhook Test Results ── */
                             webhookTestResults ? (
                                 <div className="space-y-6">
@@ -1139,6 +1270,23 @@ const StressTest = ({ onStartSuccess, onNavigateToHistory, onNavigateToIntegrati
                     if (p.upsell) {
                         ext['🚀 Upsell'] = 'Sim — compra pós-venda';
                     }
+                } else if (previewEvent.platform === 'lastlink') {
+                    const d = p.Data || {};
+                    const buyer = d.Buyer || {};
+                    const purchase = d.Purchase || {};
+                    ext.Nome = buyer.Name;
+                    ext.Email = buyer.Email;
+                    ext.Telefone = buyer.PhoneNumber ? String(buyer.PhoneNumber).replace(/\D/g, '') : null;
+                    ext.Produto = d.Products?.[0]?.Name || d.Offer?.Name;
+                    ext.Status = statusPT;
+                    ext['Método'] = METHOD_PT[purchase.Payment?.PaymentMethod] || purchase.Payment?.PaymentMethod;
+                    ext['Preço'] = formatPrice(purchase.Price?.Value ?? d.Products?.[0]?.Price);
+                    if (buyer.Document) {
+                        const digits = String(buyer.Document).replace(/\D/g, '');
+                        const docLabel = digits.length <= 11 ? 'CPF' : 'CNPJ';
+                        ext[docLabel] = buyer.Document;
+                    }
+                    if (purchase.IsUpsell) ext['🚀 Upsell'] = 'Sim — compra pós-venda';
                 } else {
                     ext.Nome = 'Contato Teste 1'; ext.Email = 'teste.contato1@example.com';
                     ext.Status = statusPT;

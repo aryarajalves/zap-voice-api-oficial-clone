@@ -310,22 +310,29 @@ def get_financial_sales(
 
         # Determine transaction category for status filter
         tx_status_category = "other"
-        if evt == "compra_aprovada":
+        if evt in ["compra_aprovada", "compra_aprovada_ob", "compra_aprovada_com_ob", "compra_aprovada_upsell"]:
             tx_status_category = "approved"
         elif evt in ["pix_gerado", "boleto_impresso"]:
             tx_status_category = "pending"
         elif evt == "reembolso":
             tx_status_category = "refunded"
-        elif evt in ["cartao_recusado", "pix_expirado"]:
+        elif evt in ["cartao_recusado", "pix_expirado", "chargeback"]:
             tx_status_category = "canceled"
 
-        # Apply platform filter
-        if platform != "all" and tx_platform != platform.lower().strip():
+        # Apply platform filter (suporta múltiplas plataformas separadas por vírgula)
+        platform_list = [p.strip().lower() for p in platform.split(',') if p.strip() and p.strip() != 'all']
+        if platform_list and tx_platform not in platform_list:
             continue
 
         # Apply status filter
-        if status != "all" and tx_status_category != status:
-            continue
+        status_list = [s.strip() for s in status.split(',') if s.strip() and s.strip() != 'all']
+        if status_list:
+            if tx_status_category not in status_list:
+                continue
+        else:
+            # Sem filtro específico: histórico de transações exibe apenas compra_aprovada e reembolso
+            if evt not in ['compra_aprovada', 'compra_aprovada_ob', 'compra_aprovada_com_ob', 'compra_aprovada_upsell', 'reembolso']:
+                continue
 
         # Classify totals
         # Adjust UTC to Brasilia Timezone for period grouping
@@ -335,7 +342,8 @@ def get_financial_sales(
         dt_br = dt_utc.astimezone(tz_br)
 
         # Classify totals
-        if evt == "compra_aprovada":
+        APPROVED_EVENTS = {"compra_aprovada", "compra_aprovada_ob", "compra_aprovada_com_ob", "compra_aprovada_upsell"}
+        if evt in APPROVED_EVENTS:
             totals["total_revenue"] += price_val
             totals["total_sales"] += 1
             product_stats[p_name]["sales_count"] += 1
@@ -347,8 +355,6 @@ def get_financial_sales(
         elif evt == "reembolso":
             totals["total_refunds"] += 1
             totals["total_revenue"] -= price_val
-            totals["total_sales"] -= 1
-            product_stats[p_name]["sales_count"] -= 1
             product_stats[p_name]["total_revenue"] -= price_val
             
             day_key = dt_br.strftime("%Y-%m-%d")
@@ -356,6 +362,31 @@ def get_financial_sales(
             buckets[day_key]["sales_count"] -= 1
         elif evt in ["pix_gerado", "boleto_impresso"]:
             totals["total_pending"] += 1
+
+        EVENT_TYPE_LABELS = {
+            "compra_aprovada": "Compra Aprovada",
+            "compra_aprovada_ob": "Compra Aprovada (OB)",
+            "compra_aprovada_com_ob": "Compra Aprovada + OB",
+            "compra_aprovada_upsell": "Compra Aprovada (Upsell)",
+            "compra_concluida": "Compra Concluída",
+            "compra_cancelada": "Compra Cancelada",
+            "cartao_recusado": "Cartão Recusado",
+            "reembolso": "Reembolso",
+            "chargeback": "Chargeback",
+            "carrinho_abandonado": "Carrinho Abandonado",
+            "pix_gerado": "Pix Gerado",
+            "pix_expirado": "Pix Expirado",
+            "boleto_impresso": "Boleto Gerado",
+            "boleto_expirado": "Boleto Expirado",
+            "assinatura_cancelada": "Assinatura Cancelada",
+            "assinatura_atrasada": "Assinatura Atrasada",
+            "assinatura_vencida": "Assinatura Vencida",
+            "assinatura_renovada": "Assinatura Renovada",
+            "form_submission": "Formulário",
+            "evento_aluno": "Evento de Aluno",
+            "outros": "Outro",
+        }
+        status_label = EVENT_TYPE_LABELS.get(evt, raw_status or evt)
 
         transactions.append({
             "id": h.id,
@@ -365,7 +396,7 @@ def get_financial_sales(
             "price": price_val,
             "platform": tx_platform.upper(),
             "payment_method": payment_method,
-            "status": raw_status,
+            "status": status_label,
             "event_type": evt,
             "category": tx_status_category
         })

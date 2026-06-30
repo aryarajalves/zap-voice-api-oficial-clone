@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiSettings, FiTrash2, FiPlay, FiDownload, FiUpload } from 'react-icons/fi';
+import { FiSettings, FiTrash2, FiPlay, FiDownload, FiUpload, FiX } from 'react-icons/fi';
 
 const HistoryHeader = ({
   integration,
@@ -8,7 +8,8 @@ const HistoryHeader = ({
   setConfirmDeleteHistory,
   setConfirmResendHistory,
   handleExportHistory,
-  handleImportHistory
+  handleImportHistory,
+  onClose,
 }) => {
   return (
     <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-white/90 dark:bg-[#0f172a]/90 backdrop-blur shadow-sm sticky top-0 z-20">
@@ -58,6 +59,13 @@ const HistoryHeader = ({
           <FiUpload size={13} /> Importar
           <input type="file" accept=".json" className="hidden" onChange={(e) => { handleImportHistory(e.target.files[0]); e.target.value = ''; }} />
         </label>
+        <button
+          onClick={onClose}
+          title="Fechar"
+          className="ml-1 text-gray-400 hover:text-white hover:bg-white/10 transition-all p-2 rounded-lg active:scale-95"
+        >
+          <FiX size={18} />
+        </button>
       </div>
     </div>
   );

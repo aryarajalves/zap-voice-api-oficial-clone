@@ -72,3 +72,69 @@ async def safe_chatwoot_sync(db, trigger, contact_phone, client_id, effective_in
             logger.error(f"❌ [SYNC_RECOVERY] Não foi possível criar/encontrar uma conversa para {contact_phone}")
     except Exception as re_err:
         logger.error(f"❌ [SYNC_RECOVERY] Falha na tentativa de recuperação automática de conversa/sincronização: {re_err}")
+
+
+async def sync_message_to_local_chat(db, client_id: int, phone: str, contact_name: str, content: str, message_type: str = "text", media_url: str = None, wa_message_id: str = None):
+    """
+    Sincroniza uma mensagem enviada pela automação/funil com o chat de atendimento local do cliente.
+    """
+    try:
+        from rabbitmq_client import rabbitmq
+        import models
+        from datetime import datetime, timezone
+        
+        clean_phone = "".join(filter(str.isdigit, str(phone)))
+        if not clean_phone:
+            return
+        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+        
+        # Buscar conversa local pelo client_id e sufixo de 8 dígitos
+        chat_convo = db.query(models.ChatConversation).filter(
+            models.ChatConversation.client_id == client_id,
+            models.ChatConversation.phone.like(f"%{suffix}")
+        ).first()
+        
+        if not chat_convo:
+            chat_convo = models.ChatConversation(
+                client_id=client_id,
+                phone=clean_phone,
+                contact_name=contact_name or clean_phone,
+                status="open",
+                unread_count=0
+            )
+            db.add(chat_convo)
+            db.flush()
+            
+        # Registrar a mensagem disparada
+        chat_message = models.ChatMessage(
+            conversation_id=chat_convo.id,
+            sender_type="user", # user = enviado pelo agente / sistema
+            message_type=message_type,
+            content=content,
+            media_url=media_url,
+            wa_message_id=wa_message_id
+        )
+        db.add(chat_message)
+        
+        # Atualiza a conversa
+        chat_convo.last_message_content = content or f"[{message_type.upper()} enviado]"
+        chat_convo.unread_count = 0
+        chat_convo.last_message_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        # Broadcast via WebSocket em tempo real para o frontend
+        payload_ws = {
+            "id": chat_message.id,
+            "conversation_id": chat_message.conversation_id,
+            "sender_type": chat_message.sender_type,
+            "message_type": chat_message.message_type,
+            "content": chat_message.content,
+            "media_url": chat_message.media_url,
+            "timestamp": chat_message.timestamp.isoformat() if chat_message.timestamp else datetime.now(timezone.utc).isoformat(),
+            "wa_message_id": chat_message.wa_message_id,
+            "client_id": client_id
+        }
+        await rabbitmq.publish_event("new_message", payload_ws)
+    except Exception as e:
+        import logging
+        logging.getLogger("LocalChatSync").error(f"❌ [CHAT-LOCAL-SYNC] Erro ao sincronizar mensagem do funil localmente: {e}")

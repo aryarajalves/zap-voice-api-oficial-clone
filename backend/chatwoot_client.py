@@ -294,6 +294,29 @@ class ChatwootClient:
     # --- WhatsApp Methods (Delegated to _wa) ---
     
     async def send_template(self, contact_phone, template_name, template_language="pt_BR", template_components=None, *args, **kwargs):
+        # Se houver BSUD mapeado no lead correspondente ao contact_phone, envia utilizando o BSUD
+        if self.client_id and contact_phone:
+            try:
+                from database import SessionLocal
+                import models
+                from sqlalchemy import or_
+                db = SessionLocal()
+                clean_phone = ''.join(filter(str.isdigit, str(contact_phone)))
+                suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                lead = db.query(models.WebhookLead).filter(
+                    models.WebhookLead.client_id == self.client_id,
+                    or_(
+                        models.WebhookLead.phone == clean_phone,
+                        models.WebhookLead.phone.like(f"%{suffix}")
+                    )
+                ).first()
+                if lead and lead.bsud:
+                    logger.info(f"✨ [BSUD-ROUTING] Roteando envio para o BSUD '{lead.bsud}' do contato '{contact_phone}'")
+                    contact_phone = lead.bsud
+                db.close()
+            except Exception as e_bsud:
+                logger.error(f"❌ Erro ao rotear envio usando BSUD: {e_bsud}")
+
         # Evita conflito se for passado 'components' via kwargs (ex: em disparos em massa)
         components = template_components
         if "components" in kwargs:

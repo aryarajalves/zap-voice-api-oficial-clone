@@ -183,9 +183,9 @@ async def execute_webhook_resend_logic(
             else:
                 asyncio.create_task(sync_to_manychat_and_update_history(integration.client_id, mc_name, mc_phone, mc_tag, parsed_data.get("email"), history.id))
 
-        # 2. Ignorar se não houver conteúdo para disparo
-        if not template_name and not funnel_id and not private_msg_text:
-            logger.info(f"RESEND_SKIP | Sem conteúdo para disparo no mapeamento {mapping.id}.")
+        # 2. Ignorar se não houver template nem funil definido
+        if not template_name and not funnel_id:
+            logger.info(f"RESEND_SKIP | Mapeamento #{mapping.id} sem template nem funil — disparo não criado.")
             continue
 
         st = models.ScheduledTrigger(

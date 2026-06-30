@@ -135,6 +135,33 @@ async def bulk_resend_webhook(
         "message": f"Processamento de {len(history_ids)} registros iniciado em segundo plano."
     }
 
+@router.delete("/{integration_id}/history/clear", summary="Limpar todo o histórico de uma integração")
+async def clear_webhook_history(
+    integration_id: str,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+
+    integration = db.query(models.WebhookIntegration).filter(
+        models.WebhookIntegration.id == uuid_obj,
+        models.WebhookIntegration.client_id == x_client_id
+    ).first()
+
+    if not integration:
+        raise HTTPException(status_code=404, detail="Integração não encontrada")
+
+    db.query(models.WebhookHistory).filter(
+        models.WebhookHistory.integration_id == integration.id
+    ).delete(synchronize_session=False)
+
+    db.commit()
+    return {"status": "success"}
+
 @router.delete("/{integration_id}/history/{history_id}", summary="Excluir um registro de histórico")
 async def delete_webhook_history(
     integration_id: str,
@@ -144,16 +171,16 @@ async def delete_webhook_history(
     current_user: models.User = Depends(get_current_user)
 ):
     history = db.query(models.WebhookHistory).join(
-        models.WebhookIntegration, 
+        models.WebhookIntegration,
         models.WebhookHistory.integration_id == models.WebhookIntegration.id
     ).filter(
         models.WebhookHistory.id == history_id,
         models.WebhookIntegration.client_id == x_client_id
     ).first()
-    
+
     if not history:
         raise HTTPException(status_code=404, detail="Registro não encontrado")
-        
+
     db.delete(history)
     db.commit()
     return {"status": "success"}
@@ -178,34 +205,7 @@ async def bulk_delete_webhook_history(
             db.query(models.WebhookIntegration.id).filter(models.WebhookIntegration.client_id == x_client_id)
         )
     ).delete(synchronize_session=False)
-    
-    db.commit()
-    return {"status": "success"}
 
-@router.delete("/{integration_id}/history/clear", summary="Limpar todo o histórico de uma integração")
-async def clear_webhook_history(
-    integration_id: str,
-    x_client_id: int = Depends(get_validated_client_id),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    try:
-        uuid_obj = uuid.UUID(integration_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID")
-
-    integration = db.query(models.WebhookIntegration).filter(
-        models.WebhookIntegration.id == uuid_obj,
-        models.WebhookIntegration.client_id == x_client_id
-    ).first()
-    
-    if not integration:
-        raise HTTPException(status_code=404, detail="Integração não encontrada")
-        
-    db.query(models.WebhookHistory).filter(
-        models.WebhookHistory.integration_id == integration.id
-    ).delete(synchronize_session=False)
-    
     db.commit()
     return {"status": "success"}
 
@@ -267,7 +267,16 @@ async def sync_webhook_history(
         tag = ", ".join(list(dict.fromkeys(tag_list))) if tag_list else None
         parsed_data["created_by_webhook"] = True
         parsed_data["webhook_name"] = integration.name
-        upsert_webhook_lead(db, integration.client_id, integration.platform, parsed_data, event_time=history.created_at, force_time=True, tag=tag)
+
+        # Respeita update_contact_on_trigger do mapeamento (default True quando não há mapeamento)
+        should_update_contact = getattr(mapping_exists, "update_contact_on_trigger", True) if mapping_exists else True
+        if should_update_contact:
+            contact_save_fields = getattr(mapping_exists, "contact_save_fields", None) if mapping_exists else None
+            upsert_webhook_lead(
+                db, integration.client_id, integration.platform, parsed_data,
+                event_time=history.created_at, force_time=True, tag=tag,
+                contact_save_fields=contact_save_fields
+            )
 
         # Atualiza as flags de automação no processed_data para o frontend saber o que exibir
         updated_data = dict(history.processed_data or {})
@@ -356,7 +365,13 @@ async def sync_all_webhook_history(
             parsed_data = parse_webhook_payload(integration.platform, history.payload)
             history.processed_data = parsed_data
             history.event_type = parsed_data.get("event_type", "").lower()
-            
+
+            # Atualiza error_message se ela referencia um event_type desatualizado
+            if (history.error_message
+                    and "Nenhum mapeamento encontrado para o evento:" in history.error_message
+                    and history.error_message != f"Nenhum mapeamento encontrado para o evento: {history.event_type}"):
+                history.error_message = f"Nenhum mapeamento encontrado para o evento: {history.event_type}"
+
             if history.event_type in mapping_event_types and history.status == "ignored":
                 history.status = "processed"
             elif history.event_type not in mapping_event_types and history.status == "processed":
@@ -396,7 +411,7 @@ async def sync_all_webhook_history(
                 if m_obj:
                     is_mc_active = getattr(m_obj, "manychat_active", False)
                     tag_list = []
-                    
+
                     if m_obj.chatwoot_label:
                         current_raw = robust_extract_labels(m_obj.chatwoot_label)
                         if current_raw:
@@ -406,9 +421,16 @@ async def sync_all_webhook_history(
                     # Fallback para o Status Principal (event_type) se não houver tags configuradas
                     if not tag_list and history.event_type:
                         tag_list.append(history.event_type.replace("_", " ").title())
-                    
+
                     tag = ", ".join(list(dict.fromkeys(tag_list))) if tag_list else None
-                    upsert_webhook_lead(db, integration.client_id, integration.platform, parsed_data, event_time=history.created_at, force_time=True, tag=tag)
+
+                    # Respeita update_contact_on_trigger do mapeamento
+                    if getattr(m_obj, "update_contact_on_trigger", True):
+                        upsert_webhook_lead(
+                            db, integration.client_id, integration.platform, parsed_data,
+                            event_time=history.created_at, force_time=True, tag=tag,
+                            contact_save_fields=getattr(m_obj, "contact_save_fields", None)
+                        )
 
                     # Garante que as flags de automação sejam salvas
                     updated_data = dict(history.processed_data or {})
@@ -430,8 +452,8 @@ async def sync_all_webhook_history(
                         mc_tag = compute_dynamic_manychat_tag(m_obj) if getattr(m_obj, "manychat_tag_automation", False) else m_obj.manychat_tag
                         background_tasks.add_task(sync_to_manychat_and_update_history, integration.client_id, mc_name, mc_phone, mc_tag, parsed_data.get("email"), history.id)
                 else:
-                    # Se não houver mapeamento, apenas atualiza o lead sem tags
-                    upsert_webhook_lead(db, integration.client_id, integration.platform, parsed_data, event_time=history.created_at, force_time=True)
+                    # Sem mapeamento → atualiza o lead sem tags (comportamento padrão)
+                    upsert_webhook_lead(db, integration.client_id, integration.platform, parsed_data, event_time=history.created_at, force_time=True, contact_save_fields=None)
             
             count += 1
         except Exception as e:
@@ -439,29 +461,7 @@ async def sync_all_webhook_history(
 
     db.commit()
 
-    # Limpeza de duplicatas
-    deleted_dupes = db.execute(text("""
-        DELETE FROM webhook_history
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT id,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY
-                                integration_id,
-                                event_type,
-                                (processed_data->>'phone'),
-                                (date_trunc('hour', created_at) + INTERVAL '5 min' * FLOOR(EXTRACT(MINUTE FROM created_at) / 5))
-                           ORDER BY created_at ASC
-                       ) AS rn
-                FROM webhook_history
-                WHERE integration_id = :integration_id
-            ) ranked
-            WHERE rn > 1
-        )
-    """), {"integration_id": str(uuid_obj)}).rowcount
-    db.commit()
-
-    return {"status": "success", "synced_count": count, "duplicates_removed": deleted_dupes}
+    return {"status": "success", "synced_count": count}
 
 @router.post("/{integration_id}/history/import", summary="Importar histórico de webhooks via JSON")
 async def import_webhook_history(

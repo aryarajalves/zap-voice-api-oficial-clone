@@ -14,6 +14,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
     Processa mensagens de entrada brutas da Meta (Inbound / Interações)
     """
     contacts_map = {c.get("wa_id"): c.get("profile", {}).get("name") for c in value.get("contacts", [])}
+    bsud_map = {c.get("wa_id"): c.get("user_id") for c in value.get("contacts", []) if c.get("user_id")}
     
     for msg in messages:
         raw_from = msg.get("from")
@@ -138,6 +139,38 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
             except Exception as e_sync:
                 logger.error(f"❌ Erro ao chamar sync_contact_to_custom_table no Meta Worker: {e_sync}")
             
+            # --- ATUALIZAR OU CRIAR LEAD COM BSUD ---
+            bsud_val = msg.get("from_user_id") or bsud_map.get(raw_from)
+            if bsud_val:
+                try:
+                    suffix_l = from_phone[-8:] if len(from_phone) >= 8 else from_phone
+                    lead = db.query(models.WebhookLead).filter(
+                        models.WebhookLead.client_id == target_cid,
+                        or_(
+                            models.WebhookLead.phone == from_phone,
+                            models.WebhookLead.phone.like(f"%{suffix_l}")
+                        )
+                    ).first()
+                    if lead:
+                        if lead.bsud != bsud_val:
+                            lead.bsud = bsud_val
+                            db.commit()
+                            logger.info(f"✨ [BSUD-UPDATE] BSUD '{bsud_val}' associado ao Lead ID {lead.id} ({from_phone})")
+                    else:
+                        new_lead = models.WebhookLead(
+                            client_id=target_cid,
+                            name=contacts_map.get(raw_from, "Contato"),
+                            phone=from_phone,
+                            bsud=bsud_val,
+                            platform="whatsapp",
+                            total_events=1
+                        )
+                        db.add(new_lead)
+                        db.commit()
+                        logger.info(f"🆕 [BSUD-NEW-LEAD] Criado novo Lead com BSUD '{bsud_val}' para {from_phone}")
+                except Exception as e_bsud:
+                    logger.error(f"❌ Erro ao associar BSUD ao Lead: {e_bsud}")
+
             # Extrair o input do usuário (seja texto ou clique de botão)
             user_input = None
             msg_type = msg.get("type")
@@ -151,6 +184,68 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                     user_input = inter.get("button_reply", {}).get("title")
                 elif inter.get("type") == "list_reply":
                     user_input = inter.get("list_reply", {}).get("title")
+
+            # --- SALVAR NO CHAT LOCAL ---
+            try:
+                chat_convo = db.query(models.ChatConversation).filter(
+                    models.ChatConversation.client_id == target_cid,
+                    models.ChatConversation.phone == from_phone
+                ).first()
+                
+                if not chat_convo:
+                    chat_convo = models.ChatConversation(
+                        client_id=target_cid,
+                        phone=from_phone,
+                        contact_name=contacts_map.get(raw_from, "Contato"),
+                        status="open",
+                        unread_count=0
+                    )
+                    db.add(chat_convo)
+                    db.flush()
+                
+                # Definir conteúdo de exibição baseado no tipo de mensagem
+                content_text = user_input
+                m_type = msg.get("type", "text")
+                media_url = None
+                
+                # Se for anexo/mídia, extrai o id de mídia
+                media_obj = msg.get(m_type)
+                if isinstance(media_obj, dict) and "id" in media_obj:
+                    media_url = f"media_id:{media_obj['id']}"
+                
+                if m_type != "text" and not content_text:
+                    if m_type == "image":
+                        content_text = "📷 Imagem recebida"
+                    elif m_type == "audio":
+                        content_text = "🎵 Áudio recebido"
+                    elif m_type == "video":
+                        content_text = "🎥 Vídeo recebido"
+                    elif m_type == "document":
+                        content_text = "📄 Documento recebido"
+                    elif m_type == "sticker":
+                        content_text = "✨ Sticker recebido"
+                    else:
+                        content_text = f"📎 Arquivo ({m_type}) recebido"
+                
+                chat_message = models.ChatMessage(
+                    conversation_id=chat_convo.id,
+                    sender_type="contact",
+                    message_type=m_type,
+                    content=content_text,
+                    media_url=media_url,
+                    wa_message_id=msg_id
+                )
+                db.add(chat_message)
+                
+                chat_convo.last_message_content = content_text
+                chat_convo.unread_count += 1
+                chat_convo.status = "open"
+                chat_convo.last_contact_message_at = datetime.now(timezone.utc)
+                
+                db.commit()
+                logger.info(f"💾 [CHAT-LOCAL] Mensagem de {from_phone} salva localmente (Convo ID: {chat_convo.id})")
+            except Exception as e_chat_save:
+                logger.error(f"❌ Erro ao salvar mensagem no chat local: {e_chat_save}")
 
             # --- Rastreamento de Interação em Mensagens Enviadas ---
             context = msg.get("context", {})
@@ -268,7 +363,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                         action_funnel_id = action.get("funnel_id")
                         logger.info(f"🎯 [BUTTON_ACTION] Botão '{btn_key}' → tipo={action_type} funil={action_funnel_id} para {from_phone}")
 
-                        async def _execute_button_action(act_type, act_funnel_id, phone, cid, convo_id, contact_name_val, block_trigger_id):
+                        async def _execute_button_action(act_type, act_funnel_id, phone, cid, convo_id, contact_name_val, block_trigger_id, meta_payload):
                             import random
                             await asyncio.sleep(random.randint(8, 12))
                             db_btn = wah.SessionLocal()
@@ -313,7 +408,8 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                                         is_bulk=False,
                                         is_interaction=(act_type == "interaction"),
                                         skip_block_check=(act_type == "block"),
-                                        parent_id=block_trigger_id
+                                        parent_id=block_trigger_id,
+                                        processed_data=meta_payload
                                     )
                                     db_btn.add(new_t)
                                     db_btn.commit()
@@ -330,6 +426,21 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                             finally:
                                 db_btn.close()
 
+                        meta_payload = {
+                            "object": "whatsapp_business_account",
+                            "entry": [
+                                {
+                                    "id": metadata.get("phone_number_id", "1234567890"),
+                                    "changes": [
+                                        {
+                                            "value": value,
+                                            "field": "messages"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+
                         asyncio.create_task(_execute_button_action(
                             action_type,
                             action_funnel_id,
@@ -337,7 +448,8 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                             target_cid,
                             resolved_convo_id,
                             contacts_map.get(raw_from, "Contato"),
-                            message_record.trigger_id
+                            message_record.trigger_id,
+                            meta_payload
                         ))
                         continue
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FiPlus, FiTrash2, FiEdit2, FiCopy, FiZap, FiSettings, FiPlay, FiRefreshCw, FiEye, FiActivity, FiUsers, FiClock, FiShare2, FiChevronDown, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiEdit2, FiCopy, FiZap, FiSettings, FiPlay, FiRefreshCw, FiEye, FiActivity, FiUsers, FiClock, FiShare2, FiChevronDown, FiSearch, FiSend, FiGitMerge } from 'react-icons/fi';
 import { API_URL, WS_URL, WEBHOOK_BASE_URL } from '../config';
 
 import { useClient } from '../contexts/ClientContext';
@@ -24,7 +24,7 @@ import { useIntegrations } from './Integrations/hooks/useIntegrations';
 import { useWebhookHistory } from './Integrations/hooks/useWebhookHistory';
 import { useDispatchHistory } from './Integrations/hooks/useDispatchHistory';
 
-export default function Integrations() {
+export default function Integrations({ onNavigateToLeads, onNavigateToBulk, onNavigateToDispatchHistory, onNavigateToFunnels, onNavigateToChat }) {
   const { activeClient } = useClient();
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isMappingGuideOpen, setIsMappingGuideOpen] = useState(false);
@@ -83,7 +83,7 @@ export default function Integrations() {
     isSavingJson, syncProgress, fetchHistory, handleResendWebhook, handleSyncHistory, handleSyncAllHistory,
     handleBulkResendHistory,
     handleExportHistory, handleImportHistory, handleDeleteHistory, handleSaveJson
-  } = useWebhookHistory(activeClient);
+  } = useWebhookHistory(activeClient, fetchIntegrations);
 
   const {
     dispatchHistory, setDispatchHistory, loadingDispatchHistory, isPlaying, isCancelling,
@@ -269,8 +269,44 @@ export default function Integrations() {
             <FiZap size={24} fill="currentColor" />
           </div>
           <div>
-            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+            <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-3">
               Webhook Integrations
+              {onNavigateToLeads && (
+                <button
+                  onClick={onNavigateToLeads}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest border border-blue-500/20"
+                  title="Ir para Contatos"
+                >
+                  <FiUsers size={11} /> Contatos
+                </button>
+              )}
+              {onNavigateToBulk && (
+                <button
+                  onClick={onNavigateToBulk}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest border border-indigo-500/20"
+                  title="Ir para Disparo em Massa"
+                >
+                  <FiSend size={11} /> Disparo em Massa
+                </button>
+              )}
+              {onNavigateToDispatchHistory && (
+                <button
+                  onClick={onNavigateToDispatchHistory}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 hover:bg-violet-500 text-violet-400 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest border border-violet-500/20"
+                  title="Ir para Histórico de Disparos"
+                >
+                  <FiActivity size={11} /> Hist. Disparos
+                </button>
+              )}
+              {onNavigateToFunnels && (
+                <button
+                  onClick={onNavigateToFunnels}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest border border-emerald-500/20"
+                  title="Ir para Funis"
+                >
+                  <FiGitMerge size={11} /> Funis
+                </button>
+              )}
             </h2>
             <p className="text-gray-400 text-[11px] font-medium mt-0.5">
               Conecte a Hotmart, Kiwify, Eduzz para Automações de Eventos.
@@ -466,12 +502,12 @@ export default function Integrations() {
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-800/50">
-              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Nome</th>
-              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Plataforma</th>
-              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Webhook URL</th>
-              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Gatilhos</th>
-              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Histórico</th>
-              <th className="px-5 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] text-right">Ações</th>
+              <th className="px-4 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Nome</th>
+              <th className="px-4 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Plataforma</th>
+              <th className="px-4 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Webhook URL</th>
+              <th className="px-4 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Gatilhos</th>
+              <th className="px-4 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Histórico</th>
+              <th className="px-4 py-3 text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -481,35 +517,35 @@ export default function Integrations() {
               <tr><td colSpan="6" className="px-8 py-20 text-center text-gray-500 italic">Nenhuma integração encontrada.</td></tr>
             ) : paginatedIntegrations.map((item) => (
               <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition-all group">
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-3">
-                     <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">{(item.name || '?').charAt(0).toUpperCase()}</div>
-                    <span className="font-bold text-gray-900 dark:text-white">{item.name}</span>
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs shrink-0">{(item.name || '?').charAt(0).toUpperCase()}</div>
+                    <span className="font-bold text-sm text-gray-900 dark:text-white whitespace-nowrap">{item.name}</span>
                   </div>
                 </td>
-                <td className="px-8 py-6">
-                  <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-black uppercase tracking-widest">{item.platform}</span>
+                <td className="px-4 py-4">
+                  <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{item.platform}</span>
                 </td>
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-transparent group-hover:border-blue-500/20 transition-all max-w-[250px]">
-                    <span className="truncate text-[11px] font-mono text-gray-500 dark:text-gray-400">
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-transparent group-hover:border-blue-500/20 transition-all w-[190px]">
+                    <span className="truncate text-[10px] font-mono text-gray-500 dark:text-gray-400">
                       {`${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`}
                     </span>
- 
-                    <FiCopy 
-                      className="cursor-pointer text-gray-400 hover:text-blue-500 transition-colors shrink-0" 
-                      onClick={() => { 
-                        navigator.clipboard.writeText(`${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`); 
-                        toast.success('URL copiada!'); 
-                      }} 
+                    <FiCopy
+                      size={11}
+                      className="cursor-pointer text-gray-400 hover:text-blue-500 transition-colors shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`);
+                        toast.success('URL copiada!');
+                      }}
                     />
                   </div>
                 </td>
-                <td className="px-8 py-6">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{(item.mappings || []).length} gatilhos</span>
+                <td className="px-4 py-4">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">{(item.mappings || []).length} gatilhos</span>
                 </td>
-                <td className="px-8 py-6">
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-lg ${
+                <td className="px-4 py-4">
+                  <span className={`inline-flex items-center gap-1 text-xs font-black px-2 py-1 rounded-lg whitespace-nowrap ${
                     (item.history_count || 0) > 0
                       ? 'bg-blue-500/10 text-blue-400'
                       : 'bg-white/5 text-gray-500'
@@ -518,28 +554,28 @@ export default function Integrations() {
                     {(item.history_count || 0).toLocaleString('pt-BR')}
                   </span>
                 </td>
-                <td className="px-5 py-2.5">
-                  <div className="flex items-center justify-end gap-2">
-                    <button 
-                      onClick={() => { setDispatchIntegration(item); setIsDispatchHistoryModalOpen(true); }} 
-                      className="shrink-0 text-[9px] font-black bg-indigo-500/10 text-indigo-500 px-2 py-1 rounded-md hover:bg-indigo-500 hover:text-white transition-all flex items-center gap-1 uppercase tracking-tighter"
+                <td className="px-4 py-4">
+                  <div className="flex items-center justify-end gap-1.5 flex-nowrap">
+                    <button
+                      onClick={() => { setDispatchIntegration(item); setIsDispatchHistoryModalOpen(true); }}
+                      className="shrink-0 text-[9px] font-black bg-indigo-500/10 text-indigo-500 px-2 py-1 rounded-md hover:bg-indigo-500 hover:text-white transition-all flex items-center gap-1 uppercase tracking-tighter whitespace-nowrap"
                     >
                       <FiPlay size={10} /> Disparos
                     </button>
-                    <button 
-                      onClick={() => { setHistoryIntegration(item); setIsHistoryModalOpen(true); fetchHistory(item.id); }} 
-                      className="shrink-0 text-[9px] font-black bg-blue-500/10 text-blue-500 px-2 py-1 rounded-md hover:bg-blue-500 hover:text-white transition-all flex items-center gap-1 uppercase tracking-tighter"
+                    <button
+                      onClick={() => { setHistoryIntegration(item); setIsHistoryModalOpen(true); fetchHistory(item.id); }}
+                      className="shrink-0 text-[9px] font-black bg-blue-500/10 text-blue-500 px-2 py-1 rounded-md hover:bg-blue-500 hover:text-white transition-all flex items-center gap-1 uppercase tracking-tighter whitespace-nowrap"
                     >
                       <FiActivity size={10} /> Histórico
                     </button>
-                    <button 
-                      onClick={() => { setIntegrationToTest(item); setIsTestModalOpen(true); }} 
-                      className="shrink-0 text-[9px] font-black bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-md hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-1 uppercase tracking-tighter"
+                    <button
+                      onClick={() => { setIntegrationToTest(item); setIsTestModalOpen(true); }}
+                      className="shrink-0 text-[9px] font-black bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-md hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-1 uppercase tracking-tighter whitespace-nowrap"
                     >
                       <FiZap size={10} fill="currentColor" /> Testar
                     </button>
-                    <button onClick={() => openEditModal(item)} className="shrink-0 p-1.5 text-gray-400 hover:text-blue-500 transition-all active:scale-90" title="Editar"><FiEdit2 size={14} /></button>
-                    <button onClick={() => { setIntegrationToDelete(item); setIsDeleteModalOpen(true); }} className="shrink-0 p-1.5 text-gray-400 hover:text-red-500 transition-all active:scale-90" title="Excluir"><FiTrash2 size={14} /></button>
+                    <button onClick={() => openEditModal(item)} className="shrink-0 p-1 text-gray-400 hover:text-blue-500 transition-all active:scale-90" title="Editar"><FiEdit2 size={13} /></button>
+                    <button onClick={() => { setIntegrationToDelete(item); setIsDeleteModalOpen(true); }} className="shrink-0 p-1 text-gray-400 hover:text-red-500 transition-all active:scale-90" title="Excluir"><FiTrash2 size={13} /></button>
                   </div>
                 </td>
               </tr>
@@ -637,7 +673,7 @@ export default function Integrations() {
         setBulkResendProgress={setBulkResendProgress}
         toast={toast} 
       />
-      <DispatchHistoryModal isOpen={isDispatchHistoryModalOpen} onClose={() => setIsDispatchHistoryModalOpen(false)} integration={dispatchIntegration} dispatchHistory={dispatchHistory} loadingDispatchHistory={loadingDispatchHistory} dispatchSearch={dispatchSearch} setDispatchSearch={setDispatchSearch} dispatchEventFilter={dispatchEventFilter} setDispatchEventFilter={setDispatchEventFilter} dispatchTypeFilter={dispatchTypeFilter} setDispatchTypeFilter={setDispatchTypeFilter} dispatchStatusFilter={dispatchStatusFilter} setDispatchStatusFilter={setDispatchStatusFilter} dispatchTemplateFilter={dispatchTemplateFilter} setDispatchTemplateFilter={setDispatchTemplateFilter} distinctTemplates={distinctTemplates} dispatchStartDate={dispatchStartDate} setDispatchStartDate={setDispatchStartDate} dispatchEndDate={dispatchEndDate} setDispatchEndDate={setDispatchEndDate} dispatchPage={dispatchPage} setDispatchPage={setDispatchPage} dispatchLimit={dispatchLimit} setDispatchLimit={setDispatchLimit} dispatchTotal={dispatchTotal} selectedDispatchIds={selectedDispatchIds} setSelectedDispatchIds={setSelectedDispatchIds} handleSelectAllDispatches={(e, list) => setSelectedDispatchIds(e.target.checked ? list.map(i => i.id) : [])} handleToggleSelectDispatch={(id) => setSelectedDispatchIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} handleBulkDispatchPlay={() => handleBulkDispatchPlay(dispatchIntegration.id)} handleBulkDispatchDelete={() => handleDeleteDispatch(dispatchIntegration.id, 'bulk', null, selectedDispatchIds)} handlePlayDispatch={(id) => handlePlayDispatch(id, dispatchIntegration.id)} handleCancelDispatch={() => {}} handleBackfillCosts={() => handleBackfillCosts(dispatchIntegration.id)} isBackfillingCosts={isBackfillingCosts} isBulkPlayingDispatches={isBulkPlayingDispatches} isPlaying={isPlaying} isCancelling={isCancelling} setSelectedDispatch={setSelectedDispatch} setIsPipelineModalOpen={setIsPipelineModalOpen} fetchDispatches={fetchDispatches} setConfirmDeleteDispatch={setConfirmDeleteDispatch} fetchChildren={fetchChildren} dispatchStats={dispatchStats} />
+      <DispatchHistoryModal isOpen={isDispatchHistoryModalOpen} onClose={() => setIsDispatchHistoryModalOpen(false)} integration={dispatchIntegration} dispatchHistory={dispatchHistory} loadingDispatchHistory={loadingDispatchHistory} dispatchSearch={dispatchSearch} setDispatchSearch={setDispatchSearch} dispatchEventFilter={dispatchEventFilter} setDispatchEventFilter={setDispatchEventFilter} dispatchTypeFilter={dispatchTypeFilter} setDispatchTypeFilter={setDispatchTypeFilter} dispatchStatusFilter={dispatchStatusFilter} setDispatchStatusFilter={setDispatchStatusFilter} dispatchTemplateFilter={dispatchTemplateFilter} setDispatchTemplateFilter={setDispatchTemplateFilter} distinctTemplates={distinctTemplates} dispatchStartDate={dispatchStartDate} setDispatchStartDate={setDispatchStartDate} dispatchEndDate={dispatchEndDate} setDispatchEndDate={setDispatchEndDate} dispatchPage={dispatchPage} setDispatchPage={setDispatchPage} dispatchLimit={dispatchLimit} setDispatchLimit={setDispatchLimit} dispatchTotal={dispatchTotal} selectedDispatchIds={selectedDispatchIds} setSelectedDispatchIds={setSelectedDispatchIds} handleSelectAllDispatches={(e, list) => setSelectedDispatchIds(e.target.checked ? list.map(i => i.id) : [])} handleToggleSelectDispatch={(id) => setSelectedDispatchIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} handleBulkDispatchPlay={() => handleBulkDispatchPlay(dispatchIntegration.id)} handleBulkDispatchDelete={() => handleDeleteDispatch(dispatchIntegration.id, 'bulk', null, selectedDispatchIds)} handlePlayDispatch={(id) => handlePlayDispatch(id, dispatchIntegration.id)} handleCancelDispatch={() => {}} handleBackfillCosts={() => handleBackfillCosts(dispatchIntegration.id)} isBackfillingCosts={isBackfillingCosts} isBulkPlayingDispatches={isBulkPlayingDispatches} isPlaying={isPlaying} isCancelling={isCancelling} setSelectedDispatch={setSelectedDispatch} setIsPipelineModalOpen={setIsPipelineModalOpen} fetchDispatches={fetchDispatches} setConfirmDeleteDispatch={setConfirmDeleteDispatch} fetchChildren={fetchChildren} dispatchStats={dispatchStats} onNavigateToChat={(phone, name) => { setIsDispatchHistoryModalOpen(false); onNavigateToChat && onNavigateToChat(phone, name); }} />
       <TestWebhookModal isOpen={isTestModalOpen} onClose={() => setIsTestModalOpen(false)} integration={integrationToTest} onTest={handleRunTest} isTesting={isTesting} />
       <PipelineModal isOpen={isPipelineModalOpen} onClose={() => setIsPipelineModalOpen(false)} dispatch={selectedDispatch} />
       <ChildrenFunnelsModal 

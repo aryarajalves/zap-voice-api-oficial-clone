@@ -3,7 +3,7 @@ import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
 import { toast } from 'react-hot-toast';
 
-export function useWebhookHistory(activeClient) {
+export function useWebhookHistory(activeClient, fetchIntegrations) {
   const [webhookHistory, setWebhookHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -189,6 +189,8 @@ export function useWebhookHistory(activeClient) {
       } else if (type === 'bulk') {
         url += `/bulk-delete`;
         method = 'POST';
+      } else if (type === 'clear') {
+        url += `/clear`;
       }
 
       const res = await fetchWithAuth(url, {
@@ -200,6 +202,7 @@ export function useWebhookHistory(activeClient) {
         toast.success('Registros removidos');
         if (type === 'bulk') setSelectedHistoryIds([]);
         fetchHistory(integrationId, webhookHistoryStatusFilter, webhookHistorySearch);
+        if (fetchIntegrations) fetchIntegrations(true);
       }
     } catch (err) {
       console.error(err);

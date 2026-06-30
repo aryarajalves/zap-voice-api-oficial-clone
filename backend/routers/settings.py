@@ -181,7 +181,8 @@ async def update_settings(
         "WA_WEBHOOK_SLUG",
         "INSTAGRAM_ACCESS_TOKEN",
         "INSTAGRAM_ACCOUNT_ID",
-        "INSTAGRAM_WEBHOOK_SLUG"
+        "INSTAGRAM_WEBHOOK_SLUG",
+        "CHAT_MESSAGES_WEBHOOK_URL"
     }
     
     saved_count = 0
@@ -469,6 +470,51 @@ async def test_memory_webhook(
             }
     except Exception as e:
         print(f"[SETTINGS ERROR] Webhook test failed: {e}")
+        return {
+            "status": 500,
+            "success": False,
+            "error": str(e)
+        }
+
+@router.post("/test-chat-messages-webhook")
+async def test_chat_messages_webhook(
+    req: TestWebhookRequest,
+    x_client_id: int = Depends(get_validated_client_id),
+    current_user: User = Depends(require_admin)
+):
+    """
+    Dispara uma mensagem de teste fictícia para a URL de webhook de mensagens.
+    """
+    test_payload = {
+        "event": "message.created",
+        "client_id": x_client_id,
+        "message": {
+            "id": 99999,
+            "conversation_id": 88888,
+            "sender_type": "user",
+            "message_type": "text",
+            "content": "Esta é uma mensagem de teste enviada pelo ZapVoice para validar seu webhook de mensagens.",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        },
+        "contact": {
+            "phone": "5511900090001",
+            "name": "Contato de Teste ZapVoice",
+            "bsud": "BR.TEST.WEBHOOK.12345"
+        }
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            print(f"[SETTINGS] Testing chat messages webhook for client {x_client_id} -> {req.url}")
+            response = await client.post(req.url, json=test_payload)
+            resp_body = response.text[:500]
+            return {
+                "status": response.status_code,
+                "success": 200 <= response.status_code < 300,
+                "response_body": resp_body
+            }
+    except Exception as e:
+        print(f"[SETTINGS ERROR] Chat messages webhook test failed: {e}")
         return {
             "status": 500,
             "success": False,

@@ -98,6 +98,24 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     trigger.total_interactions = interactions
     trigger.total_cost = total_cost
     trigger.total_paid_templates = paid_templates
+
+    # queue_count: mensagens enviadas à Meta que ainda não receberam confirmação de entrega
+    # (status='sent', sem delivered_counted nem read_counted).
+    # Usa subquery max(id) por telefone igual ao modal — NÃO usa fórmula aritmética
+    # porque as categorias se sobrepõem e podem gerar valor negativo.
+    try:
+        from sqlalchemy import func as sqlfunc
+        subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(
+            models.MessageStatus.trigger_id.in_(all_trigger_ids)
+        ).group_by(models.MessageStatus.phone_number).subquery()
+        trigger.queue_count = db.query(models.MessageStatus).filter(
+            models.MessageStatus.id.in_(subq),
+            models.MessageStatus.status == 'sent',
+            models.MessageStatus.delivered_counted == False,
+            models.MessageStatus.read_counted == False
+        ).count()
+    except Exception:
+        trigger.queue_count = 0
     
     # Não alterar os registros no banco durante o cálculo para evitar efeitos colaterais
     db.commit()

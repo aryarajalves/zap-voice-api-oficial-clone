@@ -265,17 +265,10 @@ async def list_triggers(
         funnel_names = {f.id: f.name for f in funnels}
 
     for trigger in triggers:
-        # Reconciliar as estatísticas para que os contadores no banco reflitam a realidade de contatos únicos deduplicados (e fila)
-        from services.triggers_service import reconcile_trigger_stats_logic
-        try:
-            # Sendo list_triggers uma função assíncrona (async def), damos await diretamente na corrotina,
-            # eliminando problemas de concorrência ou nest_asyncio
-            await reconcile_trigger_stats_logic(trigger.id, client_id, db)
-        except Exception as e:
-            pass
-        
-        # Recarregar trigger após a transação de reconciliação
-        db.refresh(trigger)
+        # NOTA: reconcile NÃO é chamado aqui para não tornar a listagem lenta
+        # (chamada N vezes = N queries pesadas por page load).
+        # Os valores em DB são atualizados pelo botão Sync, pela abertura do modal de contatos
+        # (details.py) e pelos handlers de status do WhatsApp em tempo real.
 
         if trigger.sent_as is None and trigger.messages:
             first_msg = min(trigger.messages, key=lambda m: m.id)
@@ -292,15 +285,13 @@ async def list_triggers(
             models.ScheduledTrigger.skip_block_check == True
         ).count()
         
-        # Calcular queue_count dinamicamente baseado nos contatos pendentes da fila do WhatsApp (em lote)
-        # de forma deduplicada por telefone idêntica ao modal do frontend
-        try:
-            # Buscar todos os triggers filhos (se aplicável) ou o próprio trigger
-            child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger.id).all()]
-            all_ids = [trigger.id] + child_ids
-            if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted']:
-                trigger.queue_count = 0
-            elif trigger.is_bulk:
+        # queue_count: sempre calculado via SQL real (max id por telefone) para todos os bulk.
+        # Garante valor correto tanto em disparos ativos quanto finalizados, sem depender do
+        # valor salvo no DB (que pode estar desatualizado).
+        if trigger.is_bulk:
+            try:
+                child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger.id).all()]
+                all_ids = [trigger.id] + child_ids
                 from sqlalchemy import func as sqlfunc
                 subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(models.MessageStatus.trigger_id.in_(all_ids)).group_by(models.MessageStatus.phone_number).subquery()
                 trigger.queue_count = db.query(models.MessageStatus).filter(
@@ -309,15 +300,8 @@ async def list_triggers(
                     models.MessageStatus.delivered_counted == False,
                     models.MessageStatus.read_counted == False
                 ).count()
-            else:
-                trigger.queue_count = db.query(models.MessageStatus).filter(
-                    models.MessageStatus.trigger_id.in_(all_ids),
-                    models.MessageStatus.status == 'sent',
-                    models.MessageStatus.delivered_counted == False,
-                    models.MessageStatus.read_counted == False
-                ).count()
-        except Exception as e:
-            trigger.queue_count = 0
+            except Exception:
+                pass  # mantém o valor do DB
 
         # Buscar follow-up filho associado
         followup = db.query(models.ScheduledTrigger).filter(

@@ -18,6 +18,7 @@ from rabbitmq_client import rabbitmq
 from services.bulk import process_bulk_send, process_bulk_funnel
 from core.engine.executor import execute_funnel
 from database import SessionLocal
+import services.chat_webhook_service
 
 if __name__ == "__main__":
     try:

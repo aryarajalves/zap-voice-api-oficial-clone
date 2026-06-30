@@ -106,7 +106,7 @@ async def test_webhook_integration(
     # Detecta o event_type baseado no payload e plataforma
     from services.webhooks import parse_webhook_payload, replace_variables_in_string, compute_dynamic_manychat_tag, process_webhook_automation
     parsed = parse_webhook_payload(integration.platform, test_payload)
-    detected_event = parsed.get("event_type") or "compra_aprovada"
+    detected_event = parsed.get("event_type") or "outros"
     
     # Busca mapeamento para popular as flags de exibição no frontend
     mapping = db.query(models.WebhookEventMapping).filter(

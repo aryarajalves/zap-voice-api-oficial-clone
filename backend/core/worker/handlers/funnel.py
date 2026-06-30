@@ -1,5 +1,6 @@
 import logging
 import json
+import random
 from datetime import datetime, timezone
 from sqlalchemy import text
 from database import SessionLocal
@@ -70,6 +71,33 @@ async def handle_funnel_execution(data: dict):
             # CASO 1: TEMPLATE DIRETO (Sem Funil Grafo)
             if trigger.template_name:
                 logger.info(f"📄 Gatilho de Template Direto: {trigger.template_name} para {contact_phone} | Inbox: {effective_inbox_id}")
+
+                # DRY-RUN: Teste de Escala — simula o disparo sem enviar para a API do WhatsApp
+                if getattr(trigger, 'is_stress_test', False):
+                    logger.info(f"🧪 [STRESS_TEST] Disparo simulado (dry-run) para {contact_phone} | Template: {trigger.template_name}")
+                    # Simula métricas aleatórias realistas
+                    sim_delivered = 1 if random.random() < 0.92 else 0
+                    sim_read = 1 if sim_delivered and random.random() < 0.72 else 0
+                    sim_interaction = 1 if sim_read and random.random() < 0.25 else 0
+                    trigger.status = 'completed'
+                    trigger.failure_reason = None
+                    trigger.total_sent = 1
+                    trigger.total_delivered = sim_delivered
+                    trigger.total_read = sim_read
+                    trigger.total_interactions = sim_interaction
+                    db.add(models.MessageStatus(
+                        trigger_id=trigger.id,
+                        message_id=f"stress_test_{trigger.id}",
+                        phone_number=contact_phone,
+                        status='simulated',
+                        message_type='TEMPLATE',
+                        content=f"[SIMULADO] Template: {trigger.template_name}",
+                        delivered_counted=bool(sim_delivered),
+                        read_counted=bool(sim_read),
+                        interaction_counted=bool(sim_interaction),
+                    ))
+                    db.commit()
+                    return
 
                 # 1. Enviar Template via Meta
                 res = await chatwoot_cl.send_template(
@@ -184,6 +212,98 @@ async def handle_funnel_execution(data: dict):
                     if trigger.funnel_id:
                         logger.info(f"⏳ [FUNIL-ZAPVOICE] Template enviado. Aguardando confirmação de entrega para iniciar o Funil {trigger.funnel_id}...")
 
+                    # --- SINCRONIZAÇÃO COM O CHAT LOCAL ---
+                    try:
+                        from rabbitmq_client import rabbitmq
+                        
+                        clean_phone = "".join(filter(str.isdigit, str(contact_phone)))
+                        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                        
+                        # Buscar conversa local ZapVoice correspondente a este cliente com correspondência de 8 dígitos
+                        chat_convo = db.query(models.ChatConversation).filter(
+                            models.ChatConversation.client_id == client_id,
+                            models.ChatConversation.phone.like(f"%{suffix}")
+                        ).first()
+                        
+                        if not chat_convo:
+                            chat_convo = models.ChatConversation(
+                                client_id=client_id,
+                                phone=clean_phone,
+                                contact_name=trigger.contact_name or clean_phone,
+                                status="open",
+                                unread_count=0
+                            )
+                            db.add(chat_convo)
+                            db.flush()
+                            logger.info(f"🆕 [CHAT-LOCAL] Criada nova conversa local para {clean_phone} (Client: {client_id})")
+                        
+                        # Extrair metadados do template para exibição de mídias/botões
+                        meta_data = None
+                        try:
+                            if trigger.template_name:
+                                tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+                                    models.WhatsAppTemplateCache.client_id == client_id,
+                                    models.WhatsAppTemplateCache.name == trigger.template_name
+                                ).first()
+                                if tpl_cache:
+                                    meta_data = {
+                                        "is_template": True,
+                                        "template_name": trigger.template_name,
+                                        "language": tpl_cache.language,
+                                        "header": None,
+                                        "buttons": []
+                                    }
+                                    if isinstance(tpl_cache.components, list):
+                                        for comp in tpl_cache.components:
+                                            comp_type = comp.get("type")
+                                            if comp_type == "HEADER":
+                                                meta_data["header"] = {
+                                                    "format": comp.get("format"),
+                                                    "text": comp.get("text")
+                                                }
+                                            elif comp_type == "BUTTONS":
+                                                btns = comp.get("buttons")
+                                                if isinstance(btns, list):
+                                                    for btn in btns:
+                                                        btn_text = btn.get("text")
+                                                        if btn_text:
+                                                            meta_data["buttons"].append(btn_text)
+                        except Exception as e_meta:
+                            logger.error(f"⚠️ [CHAT-LOCAL] Erro ao extrair metadados do template no funnel: {e_meta}")
+
+                        # Registrar a mensagem do template na timeline do chat local
+                        chat_message = models.ChatMessage(
+                            conversation_id=chat_convo.id,
+                            sender_type="user", # user = enviado pelo agente / sistema
+                            message_type="text",
+                            content=real_content,
+                            wa_message_id=msg_id,
+                            meta_data=meta_data
+                        )
+                        db.add(chat_message)
+                        
+                        chat_convo.last_message_content = real_content
+                        chat_convo.unread_count = 0
+                        chat_convo.last_message_at = datetime.now(timezone.utc)
+                        db.commit()
+                        logger.info(f"💾 [CHAT-LOCAL] Mensagem de template direta salva localmente (Convo ID: {chat_convo.id})")
+                        
+                        # Emitir evento para o WebSocket atualizar o frontend em tempo real
+                        payload_ws = {
+                            "id": chat_message.id,
+                            "conversation_id": chat_message.conversation_id,
+                            "sender_type": chat_message.sender_type,
+                            "message_type": chat_message.message_type,
+                            "content": chat_message.content,
+                            "timestamp": chat_message.timestamp.isoformat() if chat_message.timestamp else datetime.now(timezone.utc).isoformat(),
+                            "wa_message_id": chat_message.wa_message_id,
+                            "client_id": client_id,
+                            "meta_data": meta_data
+                        }
+                        asyncio.create_task(rabbitmq.publish_event("new_message", payload_ws))
+                    except Exception as e_chat_sync:
+                        logger.error(f"❌ [CHAT-LOCAL] Erro na sincronização direta de template: {e_chat_sync}")
+
                 else:
                     trigger.status = 'failed'
                     trigger.failure_reason = str(res.get("detail") if res else "Erro desconhecido na Meta API")
@@ -193,6 +313,21 @@ async def handle_funnel_execution(data: dict):
 
             # CASO 2: EXECUÇÃO DE FUNIL (Grafo ou Legado)
             elif trigger.funnel_id:
+                # DRY-RUN: Teste de Escala — simula o funil sem executar nós reais
+                if getattr(trigger, 'is_stress_test', False):
+                    logger.info(f"🧪 [STRESS_TEST] Funil #{trigger.funnel_id} simulado (dry-run) para {contact_phone}")
+                    sim_delivered = 1 if random.random() < 0.92 else 0
+                    sim_read = 1 if sim_delivered and random.random() < 0.72 else 0
+                    sim_interaction = 1 if sim_read and random.random() < 0.25 else 0
+                    trigger.status = 'completed'
+                    trigger.failure_reason = None
+                    trigger.total_sent = 1
+                    trigger.total_delivered = sim_delivered
+                    trigger.total_read = sim_read
+                    trigger.total_interactions = sim_interaction
+                    db.commit()
+                    return
+
                 logger.info(f"🚀 Iniciando execução de Funil {trigger.funnel_id} para {contact_phone}")
                 await execute_funnel(
                     funnel_id=trigger.funnel_id, 

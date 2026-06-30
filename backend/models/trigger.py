@@ -75,6 +75,7 @@ class ScheduledTrigger(Base):
     parent_id = Column(Integer, ForeignKey("scheduled_triggers.id", ondelete="CASCADE"), nullable=True, index=True)
     is_followup = Column(Boolean, default=False)
     is_recurring = Column(Boolean, default=False)
+    is_stress_test = Column(Boolean, default=False)
     recurring_trigger_id = Column(Integer, ForeignKey("recurring_triggers.id", ondelete="SET NULL"), nullable=True, index=True)
     
     funnel_snapshot = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
@@ -183,6 +184,7 @@ class WebhookEventMapping(Base):
     chatwoot_label = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     internal_tags = Column(String, nullable=True)
     update_contact_on_trigger = Column(Boolean, default=True)
+    contact_save_fields = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     publish_external_event = Column(Boolean, default=False)
     send_as_free_message = Column(Boolean, default=False)
     trigger_once = Column(Boolean, default=False)
@@ -267,6 +269,7 @@ class WebhookLead(Base):
     
     name = Column(String, index=True)
     phone = Column(String, index=True)
+    bsud = Column(String, nullable=True, index=True)
     email = Column(String, index=True)
     
     last_event_type = Column(String)

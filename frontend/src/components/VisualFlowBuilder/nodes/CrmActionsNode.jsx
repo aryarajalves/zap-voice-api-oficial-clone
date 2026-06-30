@@ -28,9 +28,12 @@ const CrmActionsNode = ({ id, data }) => {
     useEffect(() => {
         if (platform === 'chatwoot' && action === 'chatwoot_label' && activeClient) {
             setLoadingLabels(true);
-            fetchWithAuth(`${API_URL}/chatwoot/labels`, { headers: { 'X-Client-ID': activeClient.id } })
+            fetchWithAuth(`${API_URL}/chat/labels`, { headers: { 'X-Client-ID': activeClient.id } })
                 .then(res => res.json())
-                .then(setLabels)
+                .then(data => {
+                    const formatted = Array.isArray(data) ? data.map((str, idx) => ({ id: idx, title: str })) : [];
+                    setLabels(formatted);
+                })
                 .catch(console.error)
                 .finally(() => setLoadingLabels(false));
         }
@@ -119,7 +122,7 @@ const CrmActionsNode = ({ id, data }) => {
                         value={platform}
                         onChange={(e) => handlePlatformChange(e.target.value)}
                     >
-                        <option value="chatwoot">💬 Chatwoot</option>
+                        <option value="chatwoot">💬 Atendimento (Chat Local)</option>
                         <option value="manychat">⚡ ManyChat</option>
                     </select>
                 </div>
@@ -174,10 +177,24 @@ const CrmActionsNode = ({ id, data }) => {
                                     <div className="nodrag nopan absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded shadow-xl max-h-60 overflow-hidden flex flex-col border-gray-200 dark:border-gray-700">
                                         <div className="p-2 border-b flex items-center gap-1"><FiSearch className="text-gray-400" /><input type="text" className="nodrag w-full text-xs bg-transparent outline-none text-gray-900 dark:text-gray-100" placeholder="Buscar..." value={addSearch} onChange={(e) => setAddSearch(e.target.value)} /></div>
                                         <div className="nodrag nopan overflow-y-auto max-h-40 flex-1 premium-scrollbar">
+                                            {addSearch.trim() !== '' && !labels.some(l => l.title.toLowerCase() === addSearch.trim().toLowerCase()) && (
+                                                <div 
+                                                    className="p-2 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer font-bold border-b border-dashed border-indigo-200 dark:border-indigo-850/40 text-center" 
+                                                    onClick={() => {
+                                                        const newLabelStr = addSearch.trim();
+                                                        setLabels(prev => [...prev, { id: prev.length, title: newLabelStr }]);
+                                                        toggleAddLabel(newLabelStr);
+                                                        setIsAddOpen(false);
+                                                        setAddSearch('');
+                                                    }}
+                                                >
+                                                    ➕ Criar etiqueta "{addSearch.trim()}"
+                                                </div>
+                                            )}
                                             {filteredAddLabels.map(l => (
                                                 <div key={l.id} className="p-2 text-xs hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-900 dark:text-gray-100" onClick={() => { toggleAddLabel(l.title); setIsAddOpen(false); setAddSearch(''); }}>{l.title}</div>
                                             ))}
-                                            {filteredAddLabels.length === 0 && (
+                                            {filteredAddLabels.length === 0 && addSearch.trim() === '' && (
                                                 <div className="p-3 text-center text-xs text-gray-400 italic">Nenhuma etiqueta encontrada</div>
                                             )}
                                         </div>

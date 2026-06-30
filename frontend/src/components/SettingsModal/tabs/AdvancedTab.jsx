@@ -6,7 +6,7 @@ const AdvancedTab = ({
     user, formData, handleChange, visibleFields, handleRevealSetting,
     showContactsTable, setShowContactsTable, loadingContacts, fetchSyncedContacts, setContactsPage,
     syncedContacts, contactsPage, contactsLimit, contactsTotal, setContactsLimit,
-    testingWebhook, handleTestWebhook, showMemoryLogsTable, setShowMemoryLogsTable,
+    testingWebhook, handleTestWebhook, testingChatWebhook, handleTestChatWebhook, showMemoryLogsTable, setShowMemoryLogsTable,
     loadingMemoryLogs, fetchMemoryLogs, setMemoryLogsPage, memoryLogs,
     memoryLogsPage, memoryLogsLimit, memoryLogsTotal, setMemoryLogsLimit
 }) => {
@@ -47,102 +47,8 @@ const AdvancedTab = ({
                         </div>
                     </div>
 
-                    {/* Contact Sync Table Section */}
-                    <div className="space-y-4 pt-6 border-t border-gray-100 dark:border-white/5">
-                        <div className="flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-white/5">
-                            <span className="text-orange-600">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M3 12v3c0 1.1.9 2 2 2h10a2 2 0 002-2v-3a2 2 0 00-2-2H5a2 2 0 00-2 2zm2-1h10a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3a1 1 0 011-1z" />
-                                    <path d="M3 6v3c0 1.1.9 2 2 2h10a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2zm2-1h10a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />
-                                </svg>
-                            </span>
-                            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">Monitoramento de Contatos</h3>
-                        </div>
-                        <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-100 dark:border-orange-800 text-sm">
-                            <p className="text-orange-800 dark:text-orange-300">
-                                Os contatos que interagem com o sistema são sincronizados automaticamente na tabela <b>contatos_monitorados</b> do seu banco de dados.
-                            </p>
-                        </div>
-                    </div>
 
-                    {/* Lista de Contatos Sincronizados */}
-                    <div className="mt-6 space-y-3">
-                        <div 
-                            className="flex items-center justify-between cursor-pointer group"
-                            onClick={() => setShowContactsTable(!showContactsTable)}
-                        >
-                            <h4 className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                {showContactsTable ? <FiChevronUp className="text-orange-500" /> : <FiChevronDown className="text-orange-500" />}
-                                Contatos Sincronizados
-                                {loadingContacts && <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>}
-                            </h4>
-                            {showContactsTable && (
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setContactsPage(0); fetchSyncedContacts(); }}
-                                    className="text-xs text-orange-600 hover:underline font-medium"
-                                >
-                                    Atualizar
-                                </button>
-                            )}
-                        </div>
 
-                        {showContactsTable && (
-                            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
-                                <div className="overflow-x-auto">
-                                    {syncedContacts.length === 0 && !loadingContacts ? (
-                                        <div className="p-8 text-center text-gray-400 text-sm italic">
-                                            Nenhum contato sincronizado nesta tabela ainda.
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <table className="w-full text-left text-xs">
-                                                <thead className="bg-gray-100 dark:bg-[#1f2937]/80 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-white/5">
-                                                    <tr>
-                                                        <th className="px-4 py-3 font-bold uppercase tracking-wider">Nome</th>
-                                                        <th className="px-4 py-3 font-bold uppercase tracking-wider">Telefone</th>
-                                                        <th className="px-4 py-3 font-bold uppercase tracking-wider">Última Interação</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                    {loadingContacts ? (
-                                                        Array(3).fill(0).map((_, i) => (
-                                                            <tr key={i} className="animate-pulse">
-                                                                <td colSpan="3" className="px-4 py-4"><div className="h-2 bg-gray-200 dark:bg-[#1f2937]/50 rounded w-full"></div></td>
-                                                            </tr>
-                                                        ))
-                                                    ) : (
-                                                        syncedContacts.map((contact, idx) => (
-                                                            <tr key={idx} className="hover:bg-white dark:hover:bg-gray-800/50 transition-colors">
-                                                                <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-200">{contact.name || 'Sem Nome'}</td>
-                                                                <td className="px-4 py-3 font-mono text-gray-500 dark:text-gray-400">{contact.phone}</td>
-                                                                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                                                                    {contact.last_interaction_at ? new Date(contact.last_interaction_at).toLocaleString('pt-BR', {
-                                                                        day: '2-digit',
-                                                                        month: '2-digit',
-                                                                        year: '2-digit',
-                                                                        hour: '2-digit',
-                                                                        minute: '2-digit'
-                                                                    }) : '-'}
-                                                                </td>
-                                                            </tr>
-                                                        ))
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                            <PaginationControls 
-                                                page={contactsPage} 
-                                                limit={contactsLimit} 
-                                                total={contactsTotal} 
-                                                onPageChange={setContactsPage} 
-                                                onLimitChange={setContactsLimit} 
-                                            />
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
 
                     {/* Webhook Config */}
                     <div className="space-y-4 pt-4">
@@ -172,6 +78,40 @@ const AdvancedTab = ({
                                     {testingWebhook ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : "Testar"}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Webhook de Integração de Mensagens (AgentFlow) */}
+                    <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-white/5">
+                        <div className="flex items-center gap-2">
+                            <span className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                            </span>
+                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200">Webhook de Integração de Mensagens (AgentFlow)</h3>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">URL do Webhook (POST)</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="url"
+                                    name="CHAT_MESSAGES_WEBHOOK_URL"
+                                    value={formData.CHAT_MESSAGES_WEBHOOK_URL || ''}
+                                    onChange={handleChange}
+                                    placeholder="https://seu-agentflow.com/webhook/mensagens"
+                                    className="flex-1 p-2.5 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white dark:bg-[#1f2937]/50 text-gray-900 dark:text-white"
+                                />
+                                <button
+                                    type="button"
+                                    disabled={testingChatWebhook || !formData.CHAT_MESSAGES_WEBHOOK_URL}
+                                    onClick={handleTestChatWebhook}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {testingChatWebhook ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : "Testar"}
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Dispara o JSON de toda nova mensagem (entrada do cliente ou saída do agente) para este endereço.</p>
                         </div>
                     </div>
 

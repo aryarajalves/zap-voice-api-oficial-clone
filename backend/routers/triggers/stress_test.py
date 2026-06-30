@@ -2,9 +2,31 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from typing import Optional
+import random
 import models
 from core.deps import get_current_user, get_db, get_validated_client_id
 from rabbitmq_client import rabbitmq
+
+# ─── Dados para geração aleatória de contatos ────────────────────────────────
+_FIRST_NAMES = [
+    "Ana", "Carlos", "Beatriz", "Diego", "Fernanda", "Gabriel", "Helena",
+    "Igor", "Juliana", "Kevin", "Larissa", "Marcos", "Natalia", "Otávio",
+    "Patricia", "Rafael", "Sabrina", "Thiago", "Ursula", "Vinícius",
+    "Aline", "Bruno", "Camila", "Daniel", "Elaine", "Felipe", "Gisele",
+    "Hugo", "Isabela", "João", "Karla", "Leonardo", "Mariana", "Nicolas",
+    "Olivia", "Paulo", "Renata", "Sandro", "Tatiane", "Ulisses",
+]
+_LAST_NAMES = [
+    "Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira",
+    "Alves", "Pereira", "Lima", "Gomes", "Costa", "Ribeiro", "Martins",
+    "Carvalho", "Almeida", "Lopes", "Sousa", "Fernandes", "Vieira",
+    "Barbosa", "Rocha", "Dias", "Nascimento", "Andrade", "Moreira",
+]
+_TAG_POOL = [
+    "lead-quente", "interessado", "comprador", "assinante", "suporte",
+    "recompra", "indicacao", "evento-2025", "lista-vip", "ativo",
+    "trial", "inativo", "promotor", "prospect", "recuperacao",
+]
 
 router = APIRouter()
 
@@ -110,5 +132,74 @@ async def start_stress_test(
         "status": "success",
         "message": f"Teste de estresse com {number_of_contacts} contatos enfileirado com sucesso",
         "trigger_id": trigger.id
+    }
+
+
+@router.post("/stress-test/contacts", summary="Importar contatos falsos para o banco de contatos")
+def stress_test_contacts(
+    payload: dict = Body(...),
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Gera N contatos fictícios com nomes, emails e etiquetas aleatórias
+    e os insere diretamente na tabela de contatos (webhook_leads).
+    Útil para testar a performance da página de contatos com grandes volumes.
+    """
+    number = payload.get("number_of_contacts", 100)
+    n_tags = max(1, min(15, payload.get("number_of_random_tags", 3)))  # 1-15 etiquetas por contato
+
+    if number <= 0 or number > 50000:
+        raise HTTPException(status_code=400, detail="O número de contatos deve ser entre 1 e 50.000")
+
+    # Etiqueta identificadora desta importação de teste
+    test_tag = f"stress-test-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+
+    # Descobrir project_id do cliente
+    active_client = db.query(models.Client).filter(models.Client.id == x_client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    now = datetime.now(timezone.utc)
+    to_insert = []
+
+    for i in range(number):
+        first = random.choice(_FIRST_NAMES)
+        last = random.choice(_LAST_NAMES)
+        name = f"{first} {last}"
+        # Telefone único: 55 + 11 + 9 + 8 dígitos baseados no índice
+        phone = f"5511{900000000 + i:09d}"
+        email = f"{first.lower()}.{last.lower()}{i}@teste-escala.com"
+
+        # N etiquetas aleatórias do pool + etiqueta identificadora do teste
+        random_tags = random.sample(_TAG_POOL, min(n_tags, len(_TAG_POOL)))
+        all_tags = list(dict.fromkeys([test_tag] + random_tags))
+        tags_str = ", ".join(all_tags)
+
+        to_insert.append({
+            "client_id": x_client_id,
+            "project_id": proj_id,
+            "imported_by_client_id": x_client_id,
+            "name": name,
+            "phone": phone,
+            "email": email,
+            "last_event_type": "stress_test_import",
+            "last_event_at": now,
+            "platform": "stress_test",
+            "tags": tags_str,
+            "total_events": 1,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+    # Inserção em lote
+    db.bulk_insert_mappings(models.WebhookLead, to_insert)
+    db.commit()
+
+    return {
+        "status": "success",
+        "imported": number,
+        "test_tag": test_tag,
+        "message": f"{number} contatos fictícios importados com sucesso.",
     }
 

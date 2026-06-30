@@ -45,13 +45,44 @@ import {
     translateError 
 } from './TriggerTableUtils';
 
-const TriggerTableRow = ({ 
-    trigger, selectedIds, handleSelectOne, handleViewContacts, 
-    fetchChildren, fetchErrors, handleViewPipeline, handleEditParams, 
-    handleStartNow, handleCancel, handleRetry, handleDelete, user,
+const TriggerTableRow = ({
+    trigger, selectedIds, handleSelectOne, handleViewContacts,
+    fetchChildren, fetchErrors, handleViewPipeline, handleEditParams,
+    handleStartNow, handleCancel, handleRetry, handleDelete, handleSyncStats, user,
     onManualInteraction
 }) => {
     const triggerWithActions = { ...trigger, onManualInteraction };
+
+    // Auto-sync a cada 10s enquanto o trigger bulk está ativo E Restam > 0.
+    // Quando Restam chega a 0 com o trigger ainda ativo, dispara um sync final.
+    const finalSyncDoneRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!handleSyncStats || !trigger.is_bulk) return;
+        const ACTIVE = ['processing', 'queued'];
+        const isActive = ACTIVE.includes(trigger.status);
+        if (!isActive) { finalSyncDoneRef.current = false; return; }
+
+        const total = trigger.total_contacts || trigger.contacts_list?.length || 0;
+        const processedNum = (trigger.total_sent || 0) + (trigger.total_failed || 0);
+        const processedArr = trigger.processed_contacts?.length || 0;
+        const remaining = Math.max(0, total - Math.max(processedArr, processedNum));
+
+        if (remaining > 0) {
+            finalSyncDoneRef.current = false;
+            const interval = setInterval(() => handleSyncStats(trigger.id, { silent: true }), 10000);
+            return () => clearInterval(interval);
+        } else if (!finalSyncDoneRef.current) {
+            // Restam chegou a 0 — sync final silencioso
+            finalSyncDoneRef.current = true;
+            handleSyncStats(trigger.id, { silent: true });
+        }
+    }, [
+        trigger.id, trigger.status, trigger.is_bulk,
+        trigger.total_sent, trigger.total_failed,
+        trigger.processed_contacts?.length, trigger.total_contacts,
+        handleSyncStats
+    ]);
+
     return (
         <tr className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition ${selectedIds.includes(trigger?.id) ? 'bg-blue-50 dark:bg-blue-900/10' : ''}`}>
             <td className="p-4">
@@ -195,6 +226,19 @@ const TriggerTableRow = ({
                                          </div>
                                      );
                                  })()}
+
+                                {handleSyncStats && (
+                                    <Tip text="Recalcular os contadores (enviados, entregues, lidos, interações) a partir dos registros reais. Use quando os números da linha não batem com os da lista de contatos.">
+                                        <button
+                                            onClick={() => handleSyncStats(triggerWithActions.id)}
+                                            className="flex items-center gap-1 hover:opacity-80 transition"
+                                            title="Sincronizar contadores"
+                                        >
+                                            <span className="text-sm">🔄</span>
+                                            <span className="text-[10px] font-black text-slate-400 hover:text-blue-500">Sync</span>
+                                        </button>
+                                    </Tip>
+                                )}
                             </div>
                         )}
 
@@ -223,16 +267,6 @@ const TriggerTableRow = ({
                                         <span className="text-[10px] font-black uppercase tracking-tighter">Funis de Interação</span>
                                     </button>
                                 )}
-                                {triggerWithActions.is_bulk && triggerWithActions.interaction_funnel_id && (
-                                    <button 
-                                        onClick={() => triggerWithActions.onManualInteraction && triggerWithActions.onManualInteraction(triggerWithActions.id)} 
-                                        className="flex items-center gap-1.5 hover:bg-amber-500/20 bg-amber-500/10 px-2 py-0.5 rounded transition cursor-pointer text-amber-500 border border-amber-500/30 btn-manual-interaction"
-                                        title="Subir contatos manualmente e ativar o funil de interação"
-                                    >
-                                        <span className="text-xs">📤</span>
-                                        <span className="text-[10px] font-black uppercase tracking-tighter">Subir Interações</span>
-                                    </button>
-                                )}
                                 {triggerWithActions.block_child_count > 0 && (
                                     <button 
                                         onClick={() => fetchChildren(triggerWithActions, 'block')} 
@@ -259,7 +293,7 @@ const TriggerTableRow = ({
                                 📋 Ver Relatório de Falhas ({triggerWithActions.total_failed})
                             </button>
                         )}
-                        {triggerWithActions.total_delivered > 0 && !triggerWithActions.funnel_id && (
+                        {triggerWithActions.total_delivered > 0 && (
                             <div className={`text-xs font-semibold mt-2 flex flex-wrap gap-2 items-center ${triggerWithActions.total_cost > 0 ? 'text-green-600 dark:text-green-400' : 'text-blue-500'}`}>
                                 {(() => {
                                     const totalDelivered = triggerWithActions.total_delivered || 0;
@@ -403,6 +437,11 @@ const TriggerTableRow = ({
             </td>
             <td className="p-4 text-center">
                 {getStatusBadge(triggerWithActions)}
+                {triggerWithActions.is_stress_test && (
+                    <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-400 text-[10px] font-black uppercase tracking-wider">
+                        🧪 Teste de Escala
+                    </div>
+                )}
                 {!triggerWithActions.is_bulk && (triggerWithActions.status === 'failed' || triggerWithActions.status === 'cancelled') && triggerWithActions.failure_reason && (
                     <div className="text-[10px] mt-1.5 leading-tight max-w-[150px] mx-auto break-words italic font-medium text-red-500">
                         {translateError(triggerWithActions.failure_reason)}

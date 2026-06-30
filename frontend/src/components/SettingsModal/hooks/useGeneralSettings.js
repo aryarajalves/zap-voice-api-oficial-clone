@@ -25,7 +25,8 @@ export const INITIAL_FORM_STATE = {
     INSTAGRAM_ACCOUNT_ID: '',
     INSTAGRAM_ACCESS_TOKEN: '',
     INSTAGRAM_WEBHOOK_SLUG: '',
-    WEBHOOK_BASE_URL: ''
+    WEBHOOK_BASE_URL: '',
+    CHAT_MESSAGES_WEBHOOK_URL: ''
 };
 
 export function useGeneralSettings(activeClient, refreshClients) {
@@ -33,6 +34,7 @@ export function useGeneralSettings(activeClient, refreshClients) {
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
     const [isUploading, setIsUploading] = useState(false);
     const [testingWebhook, setTestingWebhook] = useState(false);
+    const [testingChatWebhook, setTestingChatWebhook] = useState(false);
 
     const loadSettings = async (fetchAgents) => {
         if (!activeClient) return;
@@ -126,14 +128,44 @@ export function useGeneralSettings(activeClient, refreshClients) {
         }
     };
 
+    const handleTestChatWebhook = async () => {
+        if (!activeClient || !formData.CHAT_MESSAGES_WEBHOOK_URL) return;
+        setTestingChatWebhook(true);
+        const loadingToast = toast.loading("Enviando evento de teste do chat...");
+        try {
+            const res = await fetchWithAuth(`${API_URL}/settings/test-chat-messages-webhook`, {
+                method: 'POST',
+                body: JSON.stringify({ url: formData.CHAT_MESSAGES_WEBHOOK_URL })
+            }, activeClient.id);
+            const result = await res.json();
+            if (result.success) {
+                toast.success(`Sucesso! Status: ${result.status}`, { id: loadingToast });
+            } else {
+                let errorMsg = `Falha no teste: ${result.status}`;
+                if (result.response_body) {
+                    errorMsg += `\nResposta: ${result.response_body.substring(0, 150)}`;
+                } else if (result.error) {
+                    errorMsg += `\nErro: ${result.error}`;
+                }
+                toast.error(errorMsg, { id: loadingToast, duration: 8000 });
+            }
+        } catch (error) {
+            toast.error("Erro de conexão", { id: loadingToast });
+        } finally {
+            setTestingChatWebhook(false);
+        }
+    };
+
     return {
         loading, setLoading,
         formData, setFormData,
         isUploading,
         testingWebhook,
+        testingChatWebhook,
         loadSettings,
         handleChange,
         handleLogoUpload,
-        handleTestWebhook
+        handleTestWebhook,
+        handleTestChatWebhook
     };
 }

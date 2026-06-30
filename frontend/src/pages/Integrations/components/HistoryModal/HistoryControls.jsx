@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiSearch, FiRefreshCw } from 'react-icons/fi';
+import { FiSearch, FiRefreshCw, FiZap } from 'react-icons/fi';
 import { EVENT_TYPES } from '../../constants';
 
 const HistoryControls = ({
@@ -17,7 +17,9 @@ const HistoryControls = ({
   setWebhookHistoryStatusFilter,
   webhookHistoryMappingFilter,
   setWebhookHistoryMappingFilter,
-  webhookHistory
+  webhookHistory,
+  stressTestFilter,
+  setStressTestFilter,
 }) => {
   if (webhookHistoryLength === 0) return null;
 
@@ -68,6 +70,19 @@ const HistoryControls = ({
         >
           <FiRefreshCw size={14} className={`${isSyncingAll ? 'animate-spin' : 'group-hover:rotate-180'} transition-transform duration-500`} />
           {isSyncingAll ? 'SINCRONIZANDO TUDO...' : 'SINCRONIZAR TUDO'}
+        </button>
+
+        <button
+          onClick={() => { setStressTestFilter(v => !v); setHistoryCurrentPage(1); }}
+          className={`flex items-center gap-2 text-[11px] font-black px-4 py-2 rounded-xl border transition-all active:scale-95 ${
+            stressTestFilter
+              ? 'bg-violet-500/20 text-violet-400 border-violet-500/40 shadow-lg shadow-violet-500/10'
+              : 'bg-white/5 hover:bg-violet-500/10 text-gray-400 hover:text-violet-400 border-white/5 hover:border-violet-500/20'
+          }`}
+          title="Mostrar apenas registros do Teste de Escala"
+        >
+          <FiZap size={13} fill={stressTestFilter ? 'currentColor' : 'none'} />
+          TESTE DE ESCALA
         </button>
 
         <div className="flex items-center gap-3">

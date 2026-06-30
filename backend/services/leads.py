@@ -3,7 +3,15 @@ from datetime import datetime, timezone
 import models
 from core.logger import logger
 
-def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data: dict, event_time: datetime = None, force_time: bool = False, tag: str = None, tags_to_remove: str = None) -> models.WebhookLead:
+DEFAULT_SAVE_FIELDS = {"email", "product_name", "price", "payment_method"}
+
+def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data: dict, event_time: datetime = None, force_time: bool = False, tag: str = None, tags_to_remove: str = None, contact_save_fields: list = None) -> models.WebhookLead:
+    """
+    contact_save_fields: lista de chaves a salvar (None = comportamento padrão, salva tudo).
+    Valores possíveis: "email", "product_name", "price", "payment_method", "document", "custom_fields"
+    """
+    # None → comportamento legado (salva tudo). Lista vazia → só nome/telefone/evento.
+    save = set(contact_save_fields) if contact_save_fields is not None else DEFAULT_SAVE_FIELDS | {"document", "custom_fields"}
     """
     Cria ou atualiza um lead na tabela webhook_leads baseado no telefone do contato.
     - tag: Etiquetas para ADICIONAR (separadas por vírgula)
@@ -17,12 +25,16 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
         # Normalize phone for lookup
         clean_phone_lookup = "".join(filter(str.isdigit, str(phone)))
         name = parsed_data.get("name")
-        email = parsed_data.get("email")
+        email = parsed_data.get("email") if "email" in save else None
         event_type = parsed_data.get("event_type")
-        product_name_raw = parsed_data.get("product_name") or "Produto Desconhecido"
-        payment_method = parsed_data.get("payment_method")
-        price = parsed_data.get("price")
+        product_name_raw = (parsed_data.get("product_name") or "Produto Desconhecido") if "product_name" in save else None
+        payment_method = parsed_data.get("payment_method") if "payment_method" in save else None
+        price = parsed_data.get("price") if "price" in save else None
         currency = parsed_data.get("currency", "BRL")
+
+        # Campos extras: CPF/documento e custom_fields arbitrários
+        document = parsed_data.get("document") if "document" in save else None
+        extra_custom = parsed_data.get("custom_fields", {}) if "custom_fields" in save else {}
         
         # Currency symbol map
         symbol_map = {"BRL": "R$", "USD": "$", "EUR": "€"}
@@ -38,7 +50,7 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
                 final_items.extend(parts_comma)
             return list(dict.fromkeys(final_items))
 
-        incoming_items = get_all_items(product_name_raw)
+        incoming_items = get_all_items(product_name_raw) if product_name_raw else []
 
         def format_item(p_name, p_price=None, p_symbol=None):
             if not p_name: return "Produto Desconhecido"
@@ -146,12 +158,16 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
                 if t not in current_tags:
                     current_tags.append(t)
             
+            current_vars = dict(lead.variables or {})
             if parsed_data.get("created_by_webhook"):
-                current_vars = dict(lead.variables or {})
                 current_vars["created_by_webhook"] = True
                 if parsed_data.get("webhook_name"):
                     current_vars["webhook_name"] = parsed_data.get("webhook_name")
-                lead.variables = current_vars
+            if document:
+                current_vars["document"] = document
+            if extra_custom:
+                current_vars.update({k: v for k, v in extra_custom.items() if v is not None})
+            lead.variables = current_vars
             
             lead.tags = ", ".join(current_tags)
 
@@ -184,6 +200,10 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
                 lead_vars["created_by_webhook"] = True
                 if parsed_data.get("webhook_name"):
                     lead_vars["webhook_name"] = parsed_data.get("webhook_name")
+            if document:
+                lead_vars["document"] = document
+            if extra_custom:
+                lead_vars.update({k: v for k, v in extra_custom.items() if v is not None})
 
             lead = models.WebhookLead(
                 client_id=client_id,

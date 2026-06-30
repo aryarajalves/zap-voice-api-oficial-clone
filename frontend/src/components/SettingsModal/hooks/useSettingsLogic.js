@@ -189,6 +189,8 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
         handleLogoUpload: general.handleLogoUpload, 
         handleRevealSetting, 
         handleTestWebhook: general.handleTestWebhook, 
+        testingChatWebhook: general.testingChatWebhook,
+        handleTestChatWebhook: general.handleTestChatWebhook,
         handleSubmit
     };
 };

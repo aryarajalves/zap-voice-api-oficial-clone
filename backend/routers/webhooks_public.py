@@ -287,7 +287,8 @@ async def handle_external_webhook(
                 client_id=integration.client_id,
                 platform=integration.platform,
                 parsed_data=final_vars,
-                tag=auto_tag
+                tag=auto_tag,
+                contact_save_fields=getattr(mapping, "contact_save_fields", None)
             )
 
 

@@ -70,6 +70,122 @@ async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, n
                 except Exception as e_conv:
                     logger.warning(f"⚠️ [BULK] Não foi possível resolver conversa para {phone}: {e_conv}")
 
+        # --- SINCRONIZAÇÃO COM O CHAT LOCAL ---
+        try:
+            from database import SessionLocal
+            import models
+            from rabbitmq_client import rabbitmq
+            
+            db_chat = SessionLocal()
+            try:
+                clean_phone = "".join(filter(str.isdigit, str(phone)))
+                suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                
+                # Buscar conversa local ZapVoice correspondente a este cliente com correspondência de 8 dígitos
+                chat_convo = db_chat.query(models.ChatConversation).filter(
+                    models.ChatConversation.client_id == chatwoot.client_id,
+                    models.ChatConversation.phone.like(f"%{suffix}")
+                ).first()
+                
+                if not chat_convo:
+                    chat_convo = models.ChatConversation(
+                        client_id=chatwoot.client_id,
+                        phone=clean_phone,
+                        contact_name=contact_name or clean_phone,
+                        status="open",
+                        unread_count=0
+                    )
+                    db_chat.add(chat_convo)
+                    db_chat.flush()
+                    logger.info(f"🆕 [CHAT-LOCAL] Criada nova conversa local para {clean_phone} (Client: {chatwoot.client_id})")
+                
+                # Tentar encontrar o template_name e metadados no trigger correspondente
+                template_name = None
+                meta_data = None
+                trig_obj = None
+                if trigger_id:
+                    try:
+                        trig_obj = db_chat.query(models.ScheduledTrigger).filter(
+                            models.ScheduledTrigger.id == trigger_id
+                        ).first()
+                        if trig_obj:
+                            template_name = trig_obj.template_name
+                            
+                            # Tentar extrair do cache
+                            if template_name:
+                                tpl_cache = db_chat.query(models.WhatsAppTemplateCache).filter(
+                                    models.WhatsAppTemplateCache.client_id == chatwoot.client_id,
+                                    models.WhatsAppTemplateCache.name == template_name
+                                ).first()
+                                if tpl_cache:
+                                    meta_data = {
+                                        "is_template": True,
+                                        "template_name": template_name,
+                                        "language": tpl_cache.language,
+                                        "header": None,
+                                        "buttons": []
+                                    }
+                                    if isinstance(tpl_cache.components, list):
+                                        for comp in tpl_cache.components:
+                                            comp_type = comp.get("type")
+                                            if comp_type == "HEADER":
+                                                meta_data["header"] = {
+                                                    "format": comp.get("format"),
+                                                    "text": comp.get("text")
+                                                }
+                                            elif comp_type == "BUTTONS":
+                                                btns = comp.get("buttons")
+                                                if isinstance(btns, list):
+                                                    for btn in btns:
+                                                        btn_text = btn.get("text")
+                                                        if btn_text:
+                                                            meta_data["buttons"].append(btn_text)
+                    except Exception as e_meta:
+                        logger.error(f"⚠️ [CHAT-LOCAL] Erro ao obter metadados no bulk: {e_meta}")
+
+                # Registrar a mensagem do template na timeline do chat local
+                tpl_media_url = None
+                if trig_obj and trig_obj.template_components:
+                    media_res = _extract_header_media(trig_obj.template_components)
+                    if media_res:
+                        tpl_media_url = media_res[1]
+
+                chat_message = models.ChatMessage(
+                    conversation_id=chat_convo.id,
+                    sender_type="user", # user = enviado pelo agente / sistema
+                    message_type="template",
+                    content=note_content or f"[Template: {trigger_id}]",
+                    meta_data=meta_data,
+                    media_url=tpl_media_url
+                )
+                db_chat.add(chat_message)
+                
+                chat_convo.last_message_content = note_content
+                chat_convo.unread_count = 0
+                chat_convo.last_message_at = datetime.now(timezone.utc)
+                db_chat.commit()
+                logger.info(f"💾 [CHAT-LOCAL] Mensagem de template disparada salva localmente (Convo ID: {chat_convo.id})")
+                
+                # Emitir evento para o WebSocket atualizar o frontend em tempo real
+                payload_ws = {
+                    "id": chat_message.id,
+                    "conversation_id": chat_message.conversation_id,
+                    "sender_type": chat_message.sender_type,
+                    "message_type": chat_message.message_type,
+                    "content": chat_message.content,
+                    "timestamp": chat_message.timestamp.isoformat() if chat_message.timestamp else datetime.now(timezone.utc).isoformat(),
+                    "wa_message_id": chat_message.wa_message_id,
+                    "client_id": chatwoot.client_id,
+                    "meta_data": meta_data
+                }
+                asyncio.create_task(rabbitmq.publish_event("new_message", payload_ws))
+            except Exception as e_inner:
+                logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mensagem localmente: {e_inner}")
+            finally:
+                db_chat.close()
+        except Exception as e_outer:
+            logger.error(f"❌ [CHAT-LOCAL] Erro ao iniciar sessão de sincronização do chat: {e_outer}")
+
         if not resolved_conv_id:
             if is_bulk:
                 logger.info(f"⏭️ [BULK] Conversa não existente para {phone} no disparo em massa #{trigger_id}. Pulando nota e etiquetas (conforme regra de negócio).")

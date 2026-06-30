@@ -166,12 +166,54 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
         });
     };
 
+    // Recalcula contadores do disparo a partir dos registros reais (message_status)
+    // e atualiza a linha na lista sem recarregar tudo.
+    // silent=true: chamada automática (sem toasts) — usado pelo auto-sync da linha.
+    // silent=false (padrão): chamada manual pelo botão — mostra toasts.
+    const handleSyncStats = async (id, { silent = false } = {}) => {
+        const loadingToast = silent ? null : toast.loading('Sincronizando contadores...', { icon: '🔄' });
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${id}/reconcile`, { method: 'POST' }, activeClient?.id);
+            if (res.ok) {
+                // Busca o trigger atualizado e substitui na lista
+                const resGet = await fetchWithAuth(`${API_URL}/triggers/${id}`, {}, activeClient?.id);
+                if (resGet.ok) {
+                    const updated = await resGet.json();
+                    // Merge seletivo: só atualiza contadores.
+                    // Preserva campos relacionais (interaction_child_count, block_child_count,
+                    // total_cost, button_actions, funnel, etc.) que o GET pode retornar
+                    // nulos/undefined e sobreescreveriam os valores corretos já na linha.
+                    const STAT_FIELDS = [
+                        'total_sent', 'total_delivered', 'total_read', 'total_interactions',
+                        'total_failed', 'total_blocked', 'queue_count', 'total_contacts',
+                        'total_paid_templates', 'total_cost', 'cost_per_unit',
+                        'status', 'updated_at'
+                    ];
+                    const patch = {};
+                    for (const f of STAT_FIELDS) {
+                        if (updated[f] !== undefined) patch[f] = updated[f];
+                    }
+                    setTriggers(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+                    if (!silent) toast.success('Contadores sincronizados!', { id: loadingToast, icon: '✅', duration: 3000 });
+                } else {
+                    if (!silent) toast.success('Sincronizado — recarregue para ver.', { id: loadingToast });
+                }
+            } else {
+                const data = await res.json().catch(() => ({}));
+                if (!silent) toast.error(data.detail || 'Erro ao sincronizar', { id: loadingToast });
+            }
+        } catch (e) {
+            if (!silent) toast.error('Erro de conexão', { id: loadingToast });
+        }
+    };
+
     return {
         handleDelete,
         handleCancel,
         handleAction,
         handleBulkDeleteAction,
         handleStartNow,
-        handleRetry
+        handleRetry,
+        handleSyncStats
     };
 };

@@ -22,7 +22,7 @@ def test_s3_connection_and_upload():
         # Se o S3 estiver ativo, a URL deve conter o endpoint do S3
         # Se estiver em fallback local, deve começar com /static/uploads
         if storage.s3_client:
-            assert os.getenv("S3_ENDPOINT_URL") in url or os.getenv("S3_PUBLIC_URL") in url
+            assert os.getenv("S3_ENDPOINT_URL") in url or os.getenv("S3_PUBLIC_URL") in url or "api/media/proxy" in url
             print(f"✅ S3 Upload OK: {url}")
             # Limpeza
             storage.s3_client.delete_object(Bucket=storage.bucket_name, Key=test_filename)

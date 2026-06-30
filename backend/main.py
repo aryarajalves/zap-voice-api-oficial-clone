@@ -45,6 +45,9 @@ from database import engine, auto_migrate
 # Modelos do banco de dados (tabelas/entidades do SQLAlchemy)
 import models
 
+# Registrar listeners do Webhook de Mensagens
+import services.chat_webhook_service
+
 # Roteadores internos — cada um representa um módulo da API
 from routers import (
     auth,           # Autenticação e geração de tokens JWT
@@ -69,7 +72,9 @@ from routers import (
     resting,        # Contatos em repouso
     invitations,    # Convites de cadastro de usuário (Super Admin)
     projects,       # Projetos compartilhados
-    logs            # Visualizador de logs (Super Admin)
+    logs,           # Visualizador de logs (Super Admin)
+    chat,            # Atendimento e Chat local
+    api_keys        # Gerenciamento de chaves de API (Tokens de API)
 )
 
 # Webhook de entrada do Chatwoot (recebe eventos em tempo real)
@@ -187,6 +192,8 @@ default_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:5176",
     "http://127.0.0.1:5176",
+    "http://localhost:5177",
+    "http://127.0.0.1:5177",
     "http://localhost:3000",
     "http://localhost:8000"
 ]
@@ -274,6 +281,8 @@ app.include_router(backup.router, prefix="/api", tags=["Backup"])
 app.include_router(logs.router, prefix="/api", tags=["Logs"])
 app.include_router(hot_leads.router, prefix="/api", tags=["HotLeads"])
 app.include_router(instagram.router, prefix="/api")
+app.include_router(chat.router, prefix="/api", tags=["Chat"])
+app.include_router(api_keys.router, prefix="/api")
 
 # --- Fim dos Webhooks ---
 

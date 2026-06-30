@@ -134,6 +134,8 @@ def parse_hotmart(payload: dict, result: dict) -> None:
         result['raw_status'] = "EXPIRED"
     elif event == "PURCHASE_OUT_OF_SHOPPING_CART":
         result['raw_status'] = "PURCHASE_OUT_OF_SHOPPING_CART"
+    elif event in ["PURCHASE_CANCELED", "PURCHASE_REFUNDED"]:
+        result['raw_status'] = event
     elif event == "SUBSCRIPTION_CANCELLATION":
         result['raw_status'] = "SUBSCRIPTION_CANCELLATION"
     elif event == "SWITCH_PLAN":
@@ -217,6 +219,13 @@ def parse_kiwify(payload: dict, result: dict) -> None:
     result['payment_method'] = kiwify_pm_map.get(payload_pm.lower(), payload_pm)
     result['raw_status'] = order_status.upper()
 
+    # OB: detecta OrderBumps da Kiwify e ajusta event_type
+    ob_list = payload.get("OrderBumps") or []
+    if ob_list:
+        result['order_bump'] = True
+        if result.get('event_type') == 'compra_aprovada':
+            result['event_type'] = 'compra_aprovada_ob'
+
 
 def parse_eduzz(payload: dict, result: dict) -> None:
     event_raw = payload.get("event") or ""
@@ -256,14 +265,16 @@ def parse_eduzz(payload: dict, result: dict) -> None:
         event_name = str(payload.get("event") or "").lower()
         if event_name.startswith("sun."):
             sub_event = event_name.replace("sun.", "")
-            if sub_event == "cart_abandonment":
+            if sub_event in ("cart_abandonment", "order_cart_abandonment"):
                 status = "abandoned_cart"
             elif sub_event == "order_paid":
                 status = "paid"
+            elif sub_event == "order_waiting_payment":
+                status = "waiting_payment"
             elif sub_event == "order_refunded":
                 status = "refunded"
-            elif sub_event == "order_cancelled":
-                status = "cancelled"
+            elif sub_event in ("order_cancelled", "order_canceled"):
+                status = "canceled"
             else:
                 status = sub_event
 
@@ -450,7 +461,10 @@ def parse_pagtrust(payload: dict, result: dict) -> None:
         result['event_type'] = "reembolso"
     elif status == "chargeback":
         result['event_type'] = "chargeback"
-    elif status in ["refused", "canceled", "declined"]:
+    elif status == "canceled":
+        result['event_type'] = "compra_cancelada"
+        raw_status_val = "COMPRA_CANCELADA"
+    elif status in ["refused", "declined"]:
         payment_method = str(payload.get("payment_type") or "").lower()
         if payment_method == "pix":
             result['event_type'] = "pix_expirado"
@@ -615,14 +629,14 @@ def parse_ticto(payload: dict, result: dict) -> None:
     EVENT_MAP = {
         "purchase.approved":       "compra_aprovada",
         "purchase.refused":        "cartao_recusado",
-        "purchase.canceled":       "cartao_recusado",
+        "purchase.canceled":       "compra_cancelada",
         "purchase.refunded":       "reembolso",
         "purchase.chargeback":     "chargeback",
         "purchase.abandoned_cart": "carrinho_abandonado",
         "abandoned_cart":          "carrinho_abandonado",
         "subscription.canceled":   "assinatura_cancelada",
         "subscription.renewed":    "assinatura_renovada",
-        "subscription.overdue":    "assinatura_atrasada",
+        "subscription.overdue":    "assinatura_vencida",
         "subscription.late":       "assinatura_atrasada",
     }
 
@@ -650,6 +664,12 @@ def parse_ticto(payload: dict, result: dict) -> None:
     result['payment_method'] = payment_method or None
     result['raw_status'] = event.upper().replace(".", "_") if event else status.upper()
 
+    # OB: detecta order_bumps da Ticto e ajusta event_type
+    ob_list = order.get("order_bumps") or []
+    if ob_list and result.get("event_type") == "compra_aprovada":
+        result["order_bump"] = True
+        result["event_type"] = "compra_aprovada_ob"
+
 
 def parse_pepper(payload: dict, result: dict) -> None:
     event = str(payload.get("event") or "").upper()
@@ -657,7 +677,7 @@ def parse_pepper(payload: dict, result: dict) -> None:
 
     EVENT_MAP = {
         "PURCHASE_APPROVED":   "compra_aprovada",
-        "PURCHASE_CANCELED":   "cartao_recusado",
+        "PURCHASE_CANCELED":   "compra_cancelada",
         "PURCHASE_REFUSED":    "cartao_recusado",
         "PURCHASE_REFUNDED":   "reembolso",
         "PURCHASE_CHARGEBACK": "chargeback",
@@ -666,6 +686,15 @@ def parse_pepper(payload: dict, result: dict) -> None:
         "ABANDONED_CART":      "carrinho_abandonado",
     }
     result['event_type'] = EVENT_MAP.get(event, "outros")
+
+    # Detecta order bumps e reclassifica se necessário
+    if event == "PURCHASE_APPROVED":
+        ob_products = data.get("order_bumps") or []
+        if ob_products:
+            result['event_type'] = "compra_aprovada_com_ob"
+            bump_names = ", ".join(str(ob.get("product", {}).get("name") or "Produto OB") for ob in ob_products)
+            result.setdefault("custom_fields", {})["Produto(s) Order Bump"] = bump_names
+            result["order_bump"] = True
 
     customer = data.get("customer") or {}
     result['name'] = customer.get("name") or customer.get("full_name")
@@ -683,9 +712,19 @@ def parse_pepper(payload: dict, result: dict) -> None:
 def parse_braip(payload: dict, result: dict) -> None:
     event = str(payload.get("event") or payload.get("status") or "").lower()
 
-    if event in ["approved", "sale_approved"]: result['event_type'] = "compra_aprovada"
-    elif event in ["canceled", "refused", "declined"]: result['event_type'] = "cartao_recusado"
-    elif event in ["refunded", "chargeback"]: result['event_type'] = "reembolso"
+    if event in ["approved", "sale_approved"]:
+        ob = payload.get("order_bump")
+        if ob:
+            result['event_type'] = "compra_aprovada_com_ob"
+            ob_name = ob.get("product_title") or ob.get("name") or "Produto OB"
+            result.setdefault("custom_fields", {})["Produto(s) Order Bump"] = ob_name
+            result["order_bump"] = True
+        else:
+            result['event_type'] = "compra_aprovada"
+    elif event in ["refused", "declined"]: result['event_type'] = "cartao_recusado"
+    elif event == "canceled": result['event_type'] = "compra_cancelada"
+    elif event == "refunded": result['event_type'] = "reembolso"
+    elif event == "chargeback": result['event_type'] = "chargeback"
     elif event in ["billet", "boleto", "waiting_payment"]:
         payment = str(payload.get("payment_method") or "").lower()
         if "pix" in payment: result['event_type'] = "pix_gerado"
@@ -722,7 +761,7 @@ def parse_guru(payload: dict, result: dict) -> None:
             if is_upsell:
                 result['event_type'] = "compra_aprovada_upsell"
             elif ob_products:
-                result['event_type'] = "compra_aprovada_order_bump"
+                result['event_type'] = "compra_aprovada_com_ob"
             else:
                 result['event_type'] = "compra_aprovada"
         elif status in ("refused", "declined", "refused_by_antifraud"):
@@ -1089,7 +1128,7 @@ def parse_greenn(payload: dict, result: dict) -> None:
             if is_upsell:
                 result['event_type'] = "compra_aprovada_upsell"
             elif ob_products:
-                result['event_type'] = "compra_aprovada_order_bump"
+                result['event_type'] = "compra_aprovada_com_ob"
             else:
                 result['event_type'] = "compra_aprovada"
         elif current_status == "waiting_payment":
@@ -1249,7 +1288,7 @@ def parse_herospark(payload: dict, result: dict) -> None:
         if upsell:
             result['event_type'] = "compra_aprovada_upsell"
         elif bump_used:
-            result['event_type'] = "compra_aprovada_order_bump"
+            result['event_type'] = "compra_aprovada_com_ob"
         else:
             result['event_type'] = "compra_aprovada"
     elif event == "PURCHASE_CANCELED":

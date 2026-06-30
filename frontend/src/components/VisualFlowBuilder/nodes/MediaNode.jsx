@@ -12,7 +12,28 @@ import { PortalContext } from '../index';
 
 const resolveUrl = (url) => {
     if (!url) return '';
-    if (url.startsWith('http')) return url;
+    let finalUrl = url;
+    if (url.startsWith('http')) {
+        try {
+            const mediaUrlObj = new URL(url);
+            if (mediaUrlObj.hostname === 'localhost' || mediaUrlObj.hostname === '127.0.0.1') {
+                // Forçar a porta pública do MinIO 9005 se for localhost:9000
+                if (mediaUrlObj.port === '9000') {
+                    mediaUrlObj.port = '9005';
+                }
+                const apiHost = new URL(API_URL).hostname;
+                if (apiHost !== 'localhost' && apiHost !== '127.0.0.1') {
+                    mediaUrlObj.hostname = apiHost;
+                } else {
+                    mediaUrlObj.hostname = '127.0.0.1';
+                }
+            }
+            finalUrl = mediaUrlObj.toString();
+        } catch (e) {
+            console.error("Erro ao resolver URL da mídia:", e);
+        }
+        return finalUrl;
+    }
     const baseUrl = API_URL.replace(/\/api\/*$/, '');
     return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 };
@@ -28,9 +49,16 @@ const MediaNode = ({ id, data }) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf', 'video/mp4'];
-        if (!allowedTypes.includes(file.type)) {
-            toast.error(`Formato "${file.type}" não aceito. Use apenas: PNG, JPG, PDF ou MP4.`);
+        const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+        const allowedExtensions = [
+            '.png', '.jpg', '.jpeg', '.gif', '.webp',
+            '.mp4', '.3gp',
+            '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.zip', '.rar',
+            '.mp3', '.ogg', '.wav', '.aac', '.m4a', '.webm'
+        ];
+
+        if (!allowedExtensions.includes(fileExt)) {
+            toast.error(`Formato de arquivo "${fileExt}" não aceito.`);
             return;
         }
 
@@ -43,6 +71,7 @@ const MediaNode = ({ id, data }) => {
         const formData = new FormData();
         formData.append('file', file);
         setUploading(true);
+        const toastId = toast.loading("Enviando arquivo para o servidor...");
 
         try {
             const token = localStorage.getItem('token');
@@ -59,14 +88,24 @@ const MediaNode = ({ id, data }) => {
 
             if (res.ok) {
                 const result = await res.json();
-                data.onChange(id, { mediaUrl: result.url, fileName: result.filename, mediaType: file.type.split('/')[0] });
-                toast.success("Upload concluído!");
+                
+                let resolvedMediaType = 'document';
+                if (file.type.startsWith('image/') || ['.webp', '.gif', '.png', '.jpg', '.jpeg'].includes(fileExt)) {
+                    resolvedMediaType = 'image';
+                } else if (file.type.startsWith('video/') || ['.mp4', '.3gp'].includes(fileExt)) {
+                    resolvedMediaType = 'video';
+                } else if (file.type.startsWith('audio/') || ['.mp3', '.ogg', '.wav', '.aac', '.m4a', '.webm'].includes(fileExt)) {
+                    resolvedMediaType = 'audio';
+                }
+                
+                data.onChange(id, { mediaUrl: result.url, fileName: result.filename, mediaType: resolvedMediaType });
+                toast.success("Upload concluído com sucesso!", { id: toastId });
             } else {
-                toast.error(`Erro ${res.status}: ${res.statusText}`);
+                toast.error(`Erro ${res.status}: ${res.statusText}`, { id: toastId });
             }
         } catch (error) {
             console.error("Upload error:", error);
-            toast.error("Erro de conexão ao enviar arquivo");
+            toast.error("Erro de conexão ao enviar arquivo", { id: toastId });
         } finally {
             setUploading(false);
         }
@@ -129,11 +168,11 @@ const MediaNode = ({ id, data }) => {
                     </div>
                 </div>
             ) : (
-                <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition group">
+                <label className="nodrag flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition group">
                     <FiUploadCloud className={`w-10 h-10 text-gray-400 group-hover:text-pink-500 transition ${uploading ? 'animate-bounce' : ''}`} />
                     <span className="text-sm text-gray-500 mt-2 font-medium group-hover:text-gray-700 dark:group-hover:text-gray-300">{uploading ? 'Enviando...' : 'Clique para Upload'}</span>
-                    <span className="text-[10px] text-gray-400">PNG, JPG, PDF, MP4 (Máx 16MB)</span>
-                    <input type="file" className="hidden nodrag" onChange={handleUpload} disabled={uploading} accept=".png,.jpg,.jpeg,.pdf,.mp4" />
+                    <span className="text-[10px] text-gray-400">Imagens, Vídeos, Áudios ou PDFs (Máx 16MB)</span>
+                    <input type="file" className="hidden nodrag" onChange={handleUpload} disabled={uploading} accept="image/*,video/*,audio/*,application/pdf,.docx,.xlsx,.pptx,.txt,.zip,.rar" />
                 </label>
             )}
 

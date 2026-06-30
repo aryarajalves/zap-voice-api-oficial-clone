@@ -33,7 +33,7 @@ def get_settings(client_id: int = None):
         "WA_USE_UNIQUE_WEBHOOK", "WA_WEBHOOK_SLUG",
         "AUTO_BLOCK_KEYWORDS", "SYNC_CONTACTS_TABLE", "MANYCHAT_API_KEY",
         "AI_MEMORY_ENABLED", "AGENT_MEMORY_WEBHOOK_URL", "AGENT_MEMORY_ENVIAR_TEXTO",
-        "OPENAI_API_KEY", "OPENAI_API_MODEL"
+        "OPENAI_API_KEY", "OPENAI_API_MODEL", "CHAT_MESSAGES_WEBHOOK_URL"
     ]
     
     db: Session = SessionLocal()

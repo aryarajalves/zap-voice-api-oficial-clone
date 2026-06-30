@@ -47,13 +47,13 @@ async def upload_file(
     # Validar extensão
     allowed_extensions = {
         # Imagens
-        '.jpg', '.jpeg', '.png',
+        '.jpg', '.jpeg', '.png', '.gif', '.webp',
         # Vídeos
-        '.mp4',
+        '.mp4', '.3gp',
         # Documentos
-        '.pdf',
+        '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.zip', '.rar',
         # Áudios
-        '.mp3', '.ogg', '.wav', '.aac'
+        '.mp3', '.ogg', '.wav', '.aac', '.m4a', '.webm'
     }
     
     ext = os.path.splitext(file.filename)[1].lower()
@@ -61,7 +61,7 @@ async def upload_file(
         logger.warning(f"⚠️ [UPLOAD_REJECTED] Extensão '{ext}' não permitida para o arquivo {file.filename}")
         raise HTTPException(
             status_code=400, 
-            detail=f"Extensão '{ext}' não permitida. Aceitamos apenas: PNG, JPG, JPEG, PDF, MP4 e Áudios."
+            detail=f"Extensão '{ext}' não permitida. Aceitamos formatos de imagem, vídeo, áudio e documentos."
         )
 
     # Validar Tamanho (Máximo 16MB para WhatsApp)
@@ -261,4 +261,44 @@ def delete_uploaded_media(
     logger.info(f"🗑️ [UPLOAD_DELETE] Mídia {media_id} removida do banco de dados pelo cliente {client_id_int}")
     
     return {"status": "success", "message": "Mídia removida com sucesso"}
+
+
+@router.get("/media/proxy/{filename}", summary="Proxy de arquivo do storage/MinIO")
+async def get_media_proxy(filename: str):
+    """
+    Retorna o arquivo do storage (MinIO) diretamente pelo backend de forma pública,
+    garantindo acessibilidade mesmo em túneis sem porta do MinIO aberta.
+    """
+    try:
+        from storage import storage
+        file_obj = storage.get_file(filename)
+        if not file_obj:
+            raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+        
+        from fastapi.responses import StreamingResponse
+        ext = os.path.splitext(filename)[1].lower()
+        content_type = "application/octet-stream"
+        if ext in ['.jpg', '.jpeg']:
+            content_type = "image/jpeg"
+        elif ext == '.png':
+            content_type = "image/png"
+        elif ext == '.gif':
+            content_type = "image/gif"
+        elif ext == '.webp':
+            content_type = "image/webp"
+        elif ext == '.mp4':
+            content_type = "video/mp4"
+        elif ext == '.mp3':
+            content_type = "audio/mpeg"
+        elif ext in ['.ogg', '.oga']:
+            content_type = "audio/ogg"
+        elif ext == '.wav':
+            content_type = "audio/wav"
+        elif ext == '.pdf':
+            content_type = "application/pdf"
+            
+        return StreamingResponse(file_obj, media_type=content_type)
+    except Exception as e:
+        logger.error(f"❌ [MEDIA_PROXY_ERROR] Falha ao ler arquivo {filename}: {str(e)}")
+        raise HTTPException(status_code=404, detail="Erro ao ler arquivo do storage")
 

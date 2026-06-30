@@ -39,8 +39,8 @@ services:
       - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-7}
       # S3 Configs will be loaded from .env automatically via env_file
       # === Simulação de Disparos ===
-      - SIMULATE_MESSAGING=true
-      - SIMULATE_CHATWOOT_RATELIMIT=true
+      - SIMULATE_MESSAGING=${SIMULATE_MESSAGING:-false}
+      - SIMULATE_CHATWOOT_RATELIMIT=${SIMULATE_CHATWOOT_RATELIMIT:-false}
 
   zapvoice_worker:
     build:
@@ -67,8 +67,8 @@ services:
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
       # === Simulação de Disparos ===
-      - SIMULATE_MESSAGING=true
-      - SIMULATE_CHATWOOT_RATELIMIT=true
+      - SIMULATE_MESSAGING=${SIMULATE_MESSAGING:-false}
+      - SIMULATE_CHATWOOT_RATELIMIT=${SIMULATE_CHATWOOT_RATELIMIT:-false}
 
   zapvoice_frontend:
     image: node:20-alpine
@@ -89,7 +89,7 @@ services:
       - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:8000/ws}
       - TZ=America/Sao_Paulo
       # === Simulação de Disparos ===
-      - SIMULATE_MESSAGING=true
+      - SIMULATE_MESSAGING=${SIMULATE_MESSAGING:-false}
 
   # === INFRASTRUCTURE SERVICES ===
   zapvoice-postgres:

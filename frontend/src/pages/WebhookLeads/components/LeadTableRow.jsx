@@ -116,15 +116,22 @@ export default function LeadTableRow({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-gray-500 font-mono">{lead.phone}</span>
-              <a href={`https://wa.me/${lead.phone}`} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-600 transition-opacity" title="Abrir WhatsApp">
-                <FiExternalLink size={12} />
-              </a>
-              {lead.chatwoot_url && (
-                <a href={lead.chatwoot_url} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 text-purple-500 hover:text-purple-600 transition-opacity" title="Abrir Chat no Chatwoot">
-                  <FiMessageSquare size={12} />
+            <div className="flex flex-col gap-0.5 mt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 font-mono">{lead.phone}</span>
+                <a href={`https://wa.me/${lead.phone}`} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-600 transition-opacity" title="Abrir WhatsApp">
+                  <FiExternalLink size={12} />
                 </a>
+                {lead.chatwoot_url && (
+                  <a href={lead.chatwoot_url} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 text-purple-500 hover:text-purple-600 transition-opacity" title="Abrir Chat no Chatwoot">
+                    <FiMessageSquare size={12} />
+                  </a>
+                )}
+              </div>
+              {lead.bsud && (
+                <span className="text-[10px] text-pink-500 font-bold font-mono tracking-wide" title="Business-scoped User ID (Meta)">
+                  BSUD: {lead.bsud}
+                </span>
               )}
             </div>
           </div>
