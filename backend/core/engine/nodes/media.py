@@ -46,7 +46,12 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
         "media_type": media_type, "media_url": file_url, "media_file": data.get("fileName", "Mídia"), "caption": caption_processed
     })
     
-    if conversation_id and int(conversation_id) > 0:
+    from config_loader import get_setting
+    cw_token = get_setting("CHATWOOT_API_TOKEN", "", client_id=trigger.client_id)
+    cw_url = get_setting("CHATWOOT_API_URL", "", client_id=trigger.client_id)
+    is_chatwoot_active = bool(cw_token and cw_url)
+
+    if is_chatwoot_active and conversation_id and int(conversation_id) > 0:
         if chatwoot_contact_id and conversation_id and int(conversation_id) > 0:
             resolved_convo_id = conversation_id
         else:
@@ -103,37 +108,50 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
             db.commit()
             return "abort"
     else:
+        # Enviar via Meta Direto
+        res = None
         if media_type == "image":
             res = await chatwoot.send_image_official(contact_phone, file_url, caption=caption_processed)
-            if res and not res.get("error"):
-                msg_id = res.get("messages", [{}])[0].get("id", "direct_meta")
-                
-                # Criar o MessageStatus imediatamente para que os webhooks de status possam localizá-lo e atualizá-lo
-                msg_id_clean = str(msg_id).replace("wamid.", "")
-                db.add(models.MessageStatus(
-                    trigger_id=trigger.id, message_id=msg_id_clean, phone_number=contact_phone,
-                    status='sent', message_type='FREE_MESSAGE', content=f"[{media_type.capitalize()}: {file_url}]",
-                    publish_external_event=data.get("publishExternalEvent", False)
-                ))
-                db.commit()
+        elif media_type == "video":
+            res = await chatwoot.send_video_official(contact_phone, file_url, caption=caption_processed)
+        elif media_type == "audio":
+            res = await chatwoot.send_audio_official(contact_phone, file_url)
+        elif media_type in ["document", "file"]:
+            res = await chatwoot.send_document_official(contact_phone, file_url, caption=caption_processed, filename=data.get("fileName", "documento"))
+        else:
+            logger.warning(f"⚠️ Tipo de mídia '{media_type}' não suportado no envio oficial direto.")
+            return "continue"
 
-                # --- SINCRONIZAR COM O CHAT LOCAL ---
-                try:
-                    from core.engine.sync_utils import sync_message_to_local_chat
-                    await sync_message_to_local_chat(
-                        db=db,
-                        client_id=trigger.client_id,
-                        phone=contact_phone,
-                        contact_name=trigger.contact_name,
-                        content=caption_processed,
-                        message_type=media_type,
-                        media_url=file_url,
-                        wa_message_id=msg_id_clean
-                    )
-                except Exception as e_local:
-                    logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mídia localmente (Meta path): {e_local}")
+        if res and not res.get("error"):
+            msg_id = res.get("messages", [{}])[0].get("id", "direct_meta")
+            
+            # Criar o MessageStatus imediatamente para que os webhooks de status possam localizá-lo e atualizá-lo
+            msg_id_clean = str(msg_id).replace("wamid.", "")
+            db.add(models.MessageStatus(
+                trigger_id=trigger.id, message_id=msg_id_clean, phone_number=contact_phone,
+                status='sent', message_type='FREE_MESSAGE', content=f"[{media_type.capitalize()}: {file_url}]",
+                publish_external_event=data.get("publishExternalEvent", False)
+            ))
+            db.commit()
 
-                # --- NOVO: Sincronizar o envio com o Chatwoot ---
+            # --- SINCRONIZAR COM O CHAT LOCAL ---
+            try:
+                from core.engine.sync_utils import sync_message_to_local_chat
+                await sync_message_to_local_chat(
+                    db=db,
+                    client_id=trigger.client_id,
+                    phone=contact_phone,
+                    contact_name=trigger.contact_name,
+                    content=caption_processed,
+                    message_type=media_type,
+                    media_url=file_url,
+                    wa_message_id=msg_id_clean
+                )
+            except Exception as e_local:
+                logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mídia localmente (Meta path): {e_local}")
+
+            # --- Sincronizar o envio com o Chatwoot (se estiver ativo) ---
+            if is_chatwoot_active:
                 try:
                     logger.info(f"🔄 [SYNC_CHATWOOT] Sincronizando mídia ({media_type}) enviada via Meta Direto para {contact_phone}")
                     effective_inbox_id = trigger.chatwoot_inbox_id
@@ -146,7 +164,6 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
                     from core.engine.sync_utils import safe_chatwoot_sync
                     
                     async def do_sync_media(c_id):
-                        # Postar a cópia da mídia no Chatwoot
                         await chatwoot.send_attachment(c_id, file_url, media_type, caption=caption_processed)
                         
                     await safe_chatwoot_sync(
@@ -162,16 +179,13 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
                     logger.info(f"✅ [SYNC_CHATWOOT] Cópia da mídia postada no Chatwoot (Conversa {conversation_id})")
                 except Exception as e_sync:
                     logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar mídia no Chatwoot: {e_sync}")
-                
-                if not getattr(trigger, 'is_interaction', False): await asyncio.sleep(10)
-            else:
-                trigger.status = 'failed'
-                trigger.failure_reason = f"Meta API (Media): {res.get('error') if res else 'Unknown'}"
-                db.commit()
-                return "abort"
+            
+            if not getattr(trigger, 'is_interaction', False): await asyncio.sleep(10)
         else:
-            logger.warning(f"⚠️ Apenas Imagens suportadas no envio oficial direto.")
-            return "continue"
+            trigger.status = 'failed'
+            trigger.failure_reason = f"Meta API (Media): {res.get('error') if res else 'Unknown'}"
+            db.commit()
+            return "abort"
 
     await publish_node_external_event(db, trigger, data, f"[{media_type.capitalize()}: {file_url}] {caption_processed}", contact_phone, node_id=current_node_id, event_type=f"funnel_{media_type}_sent")
     log_node_execution(db, trigger, current_node_id, "completed", "Mídia enviada e sincronizada.")

@@ -244,6 +244,40 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                 
                 db.commit()
                 logger.info(f"💾 [CHAT-LOCAL] Mensagem de {from_phone} salva localmente (Convo ID: {chat_convo.id})")
+                
+                # --- NOTIFICAR WEBHOOK DE MEMÓRIA (MENSAGEM DO USUÁRIO) ---
+                try:
+                    if user_input:
+                        from services.ai_memory import notify_agent_memory_webhook
+                        # Buscar o contact_id se o lead existir
+                        lead_id = None
+                        try:
+                            suffix_lead = from_phone[-8:] if len(from_phone) >= 8 else from_phone
+                            lead_obj = db.query(models.WebhookLead).filter(
+                                models.WebhookLead.client_id == target_cid,
+                                or_(
+                                    models.WebhookLead.phone == from_phone,
+                                    models.WebhookLead.phone.like(f"%{suffix_lead}")
+                                )
+                            ).first()
+                            if lead_obj:
+                                lead_id = lead_obj.id
+                        except Exception:
+                            pass
+
+                        # Disparar notificação na fila para processamento assíncrono
+                        logger.info(f"🧠 [MEMORIA-INBOUND] Agendando envio de memória do usuário: '{user_input}' ({from_phone})")
+                        asyncio.create_task(notify_agent_memory_webhook(
+                            client_id=target_cid,
+                            phone=from_phone,
+                            name=contacts_map.get(raw_from, "Contato"),
+                            template_name="Mensagem do Usuário",
+                            content=user_input,
+                            internal_contact_id=lead_id,
+                            dono="usuario"
+                        ))
+                except Exception as e_mem_inbound:
+                    logger.error(f"❌ Erro ao enviar memória de entrada (inbound): {e_mem_inbound}")
             except Exception as e_chat_save:
                 logger.error(f"❌ Erro ao salvar mensagem no chat local: {e_chat_save}")
 

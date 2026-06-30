@@ -45,7 +45,12 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
     db.refresh(trigger)
 
     # 24h Window Check
-    if conversation_id and int(conversation_id) > 0:
+    from config_loader import get_setting
+    cw_token = get_setting("CHATWOOT_API_TOKEN", "", client_id=trigger.client_id)
+    cw_url = get_setting("CHATWOOT_API_URL", "", client_id=trigger.client_id)
+    is_chatwoot_active = bool(cw_token and cw_url)
+
+    if is_chatwoot_active and conversation_id and int(conversation_id) > 0:
         resolved_convo_id = await get_best_conversation(trigger.client_id, contact_phone, conversation_id, db, chatwoot)
         if resolved_convo_id != conversation_id:
             conversation_id = resolved_convo_id
