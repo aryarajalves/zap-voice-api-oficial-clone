@@ -64,6 +64,35 @@ class FunnelBulkTag(BaseModel):
     funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para atualizar a etiqueta")
     tag: Optional[str] = Field(None, description="Etiqueta a ser aplicada (null para remover)")
 
+# --- Trigger Folder Schemas ---
+
+class TriggerFolderBase(BaseModel):
+    name: str = Field(..., description="Nome da pasta")
+    color: Optional[str] = Field("#6366f1", description="Cor de identificação da pasta (hex)")
+
+class TriggerFolderCreate(TriggerFolderBase):
+    pass
+
+class TriggerFolderUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+
+class TriggerFolder(TriggerFolderBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    trigger_count: Optional[int] = Field(0, description="Quantidade de disparos nesta pasta")
+
+    class Config:
+        from_attributes = True
+
+class TriggerFolderMove(BaseModel):
+    folder_id: Optional[int] = Field(None, description="ID da pasta destino, ou null para remover da pasta")
+
+class TriggerFolderBulkMove(BaseModel):
+    ids: List[int] = Field(..., description="Lista de IDs de disparos a mover")
+    folder_id: Optional[int] = Field(None, description="ID da pasta destino, ou null para remover da pasta")
+
 # --- Trigger Schemas ---
 
 class ScheduledTriggerBase(BaseModel):
@@ -127,9 +156,19 @@ class ScheduledTrigger(ScheduledTriggerBase):
     funnel_snapshot: Optional[Union[dict, list]] = None
     processed_data: Optional[Dict[str, Any]] = None
     is_stress_test: bool = Field(False, description="Indica se é um disparo de teste de escala (dry-run)")
+    is_pinned: Optional[bool] = Field(False, description="Fixado no topo do histórico de disparos")
+    folder_id: Optional[int] = Field(None, description="ID da pasta em que o disparo está organizado")
+    folder: Optional[TriggerFolder] = Field(None, description="Pasta em que o disparo está organizado")
     chatwoot_contact_id: Optional[int] = Field(None, description="ID do contato no Chatwoot")
     chatwoot_account_id: Optional[int] = Field(None, description="ID da conta no Chatwoot")
     chatwoot_inbox_id: Optional[int] = Field(None, description="ID do inbox no Chatwoot")
+
+    @field_validator('is_pinned', mode='before')
+    @classmethod
+    def parse_is_pinned(cls, v):
+        if v is None:
+            return False
+        return bool(v)
 
     @field_validator('button_actions', mode='before')
     @classmethod
@@ -443,8 +482,26 @@ class WebhookEventMappingBase(BaseModel):
     
     update_contact_on_trigger: Optional[bool] = Field(True, description="Atualizar/criar contato na aba Contatos quando o gatilho disparar")
     contact_save_fields: Optional[List[str]] = Field(None, description="Campos a salvar no contato (None = padrão)")
+    button_actions: Optional[Dict[str, Any]] = Field(None, description="Ações de botões do template")
 
     is_active: Optional[bool] = Field(True, description="Indica se o mapeamento está ativo")
+
+    @field_validator('button_actions', mode='before')
+    @classmethod
+    def parse_button_actions_mapping(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, list):
+            return {}
+        if isinstance(v, str):
+            try:
+                import json
+                return json.loads(v)
+            except Exception:
+                return {}
+        return v
 
     @field_validator('funnel_id', 'template_id', 'followup_template_id', mode='before')
     @classmethod

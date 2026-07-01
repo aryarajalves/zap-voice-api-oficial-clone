@@ -13,7 +13,7 @@ from datetime import date as DateType
 
 router = APIRouter(prefix="/logs", tags=["Logs"])
 
-LOG_DIR  = os.path.dirname(os.path.dirname(__file__))
+LOG_DIR  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "zapvoice_debug.log")
 
 

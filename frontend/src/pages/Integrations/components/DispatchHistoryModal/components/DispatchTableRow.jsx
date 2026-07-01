@@ -1,6 +1,7 @@
 import React from 'react';
-import { FiPlay, FiTrash2, FiCheck, FiInbox, FiEye, FiMousePointer, FiActivity, FiRefreshCw, FiMessageSquare } from 'react-icons/fi';
+import { FiPlay, FiTrash2, FiCheck, FiInbox, FiEye, FiMousePointer, FiActivity, FiRefreshCw, FiMessageSquare, FiAlertTriangle, FiSlash } from 'react-icons/fi';
 import { getStatusBadge } from '../../../helpers';
+import { toast } from 'react-hot-toast';
 
 const getFollowupConfig = (status, scheduledTime) => {
   const timeStr = scheduledTime 
@@ -98,7 +99,7 @@ const DispatchTableRow = ({
       <td className="px-6 py-5 border-y border-white/5">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            {getStatusBadge(item.status)}
+            {getStatusBadge(item.total_failed > 0 ? 'failed' : item.status)}
             {item.funnel_id ? (
               <button
                 type="button"
@@ -132,7 +133,7 @@ const DispatchTableRow = ({
               <span>Excluir</span>
             </button>
           </div>
-          {(item.status === 'cancelled' || item.status === 'failed') && item.failure_reason && (
+          {(item.status === 'cancelled' || item.status === 'failed' || item.total_failed > 0) && item.failure_reason && (
             <div className="text-[9px] text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-lg mt-1 leading-tight max-w-[220px] break-words italic font-bold">
               ⚠️  {translateError(item.failure_reason)}
             </div>
@@ -174,6 +175,37 @@ const DispatchTableRow = ({
             <span className="flex items-center gap-1 text-[11px] font-black text-orange-400" title="Interações (Cliques)">
               <FiMousePointer size={13} /> {item.total_clicks || item.total_interactions || (item.is_interaction ? 1 : 0)}
             </span>
+            {item.total_blocked > 0 && (
+              <>
+                <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
+                <span className="flex items-center gap-1 text-[11px] font-black text-red-400" title="Bloqueados">
+                  <FiSlash size={13} /> {item.total_blocked}
+                </span>
+              </>
+            )}
+            <>
+              <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
+              {item.total_failed > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const errMsg = translateError(item.failure_reason) || 'Erro desconhecido da Meta';
+                    toast.error(`Falha no disparo: ${errMsg}`, { duration: 6000 });
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-black text-red-500 animate-pulse hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 p-0 focus:outline-none"
+                  title={`Hover: ${translateError(item.failure_reason) || 'Erro desconhecido da Meta'} (Clique para ver detalhes)`}
+                >
+                  <FiAlertTriangle size={13} /> {item.total_failed}
+                </button>
+              ) : (
+                <span
+                  className="flex items-center gap-1 text-[11px] font-black text-slate-500"
+                  title="Sem falhas registradas"
+                >
+                  <FiAlertTriangle size={13} /> 0
+                </span>
+              )}
+            </>
             {item.child_count > 0 && (
               <>
                 <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>

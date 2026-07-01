@@ -12,7 +12,7 @@ from config_loader import get_setting, get_settings
 from core.clients.chatwoot.client import ChatwootClient as ModularChatwootClient
 from core.clients.whatsapp.client import WhatsAppClient as ModularWhatsAppClient
 
-logger = setup_logger("ChatwootClientFacade")
+logger = setup_logger("AtendimentoClientFacade")
 
 class ChatwootClient:
     """
@@ -294,8 +294,10 @@ class ChatwootClient:
     # --- WhatsApp Methods (Delegated to _wa) ---
     
     async def send_template(self, contact_phone, template_name, template_language="pt_BR", template_components=None, *args, **kwargs):
-        # Se houver BSUD mapeado no lead correspondente ao contact_phone, envia utilizando o BSUD
-        if self.client_id and contact_phone:
+        # Buscar BSUD correspondente se o contato for um número bruto
+        bsud = None
+        is_bsud = str(contact_phone).startswith("BR.")
+        if self.client_id and contact_phone and not is_bsud:
             try:
                 from database import SessionLocal
                 import models
@@ -311,11 +313,10 @@ class ChatwootClient:
                     )
                 ).first()
                 if lead and lead.bsud:
-                    logger.info(f"✨ [BSUD-ROUTING] Roteando envio para o BSUD '{lead.bsud}' do contato '{contact_phone}'")
-                    contact_phone = lead.bsud
+                    bsud = lead.bsud
                 db.close()
             except Exception as e_bsud:
-                logger.error(f"❌ Erro ao rotear envio usando BSUD: {e_bsud}")
+                logger.error(f"❌ Erro ao buscar BSUD do lead: {e_bsud}")
 
         # Evita conflito se for passado 'components' via kwargs (ex: em disparos em massa)
         components = template_components
@@ -327,7 +328,6 @@ class ChatwootClient:
             await asyncio.sleep(random.uniform(0.01, 0.05))
             
             # Simular instabilidade do servidor da Meta com 3% de chance total
-            # Sorteando entre os erros #2 e #131000 para testar o fluxo de pausa de 30s e retentativas
             if random.random() < 0.03:
                 error_type = random.choice([
                     "(#2) Serviço temporariamente indisponível (Erro do Servidor da Meta)",
@@ -343,7 +343,16 @@ class ChatwootClient:
             return {
                 "messages": [{"id": f"wamid.simulated_{uuid.uuid4().hex}"}]
             }
-        return await self._wa.send_template(contact_phone, template_name, template_language, components, *args, **kwargs)
+
+        # Tenta enviar para o número normal primeiro
+        res = await self._wa.send_template(contact_phone, template_name, template_language, components, *args, **kwargs)
+        
+        # Se falhar imediatamente e tivermos um BSUD mapeado, tenta usar o BSUD
+        if (res.get("error") or not res.get("success")) and bsud:
+            logger.info(f"⚠️ [BSUD-FALLBACK] Falha imediata ao enviar para {contact_phone}. Tentando BSUD '{bsud}'...")
+            res = await self._wa.send_template(bsud, template_name, template_language, components, *args, **kwargs)
+            
+        return res
 
     async def get_whatsapp_templates(self, *args, **kwargs):
         if self.simulate:

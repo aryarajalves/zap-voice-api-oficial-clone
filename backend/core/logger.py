@@ -1,8 +1,15 @@
 import logging
+import os
 import sys
 import time
 from datetime import datetime, timedelta, timezone
 from logging.handlers import TimedRotatingFileHandler
+
+# Pasta dedicada para logs — mapeada para um volume Docker persistente
+# (/app/logs) para não perder o histórico quando os containers reiniciam.
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE_PATH = os.path.join(LOG_DIR, "zapvoice_debug.log")
 
 def br_time_converter(*args):
     """Converte o timestamp para o fuso horário de Brasília (GMT-3)"""
@@ -71,7 +78,7 @@ def setup_logger(name: str = "zapvoice", level: str = "INFO") -> logging.Logger:
     # Handler para arquivo com rotação diária — mantém os últimos 7 dias
     # Roda à meia-noite e apaga automaticamente arquivos com mais de 7 dias
     file_handler = TimedRotatingFileHandler(
-        "zapvoice_debug.log",
+        LOG_FILE_PATH,
         when="midnight",       # Rotaciona todo dia à meia-noite
         interval=1,
         backupCount=7,         # Mantém apenas os últimos 7 arquivos (7 dias)

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-const BulkSummaryBar = ({ selectedIds, setSelectedIds, triggers }) => {
+const BulkSummaryBar = ({ selectedIds, setSelectedIds, triggers, folders, bulkMoveToFolder }) => {
+    const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+
     if (selectedIds.length === 0) return null;
 
     const selectedTriggers = (Array.isArray(triggers) ? triggers : []).filter(t => selectedIds.includes(t.id));
@@ -31,6 +33,44 @@ const BulkSummaryBar = ({ selectedIds, setSelectedIds, triggers }) => {
                             Limpar
                         </button>
                     </div>
+
+                    {bulkMoveToFolder && (
+                        <div className="relative mt-2">
+                            <button
+                                onClick={() => setFolderMenuOpen(v => !v)}
+                                className="text-[10px] font-black bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-500/20 transition-all active:scale-95 uppercase tracking-widest w-full"
+                            >
+                                Mover para pasta
+                            </button>
+                            {folderMenuOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-[100]" onClick={() => setFolderMenuOpen(false)}></div>
+                                    <div className="absolute bottom-full mb-2 left-0 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl z-[101] min-w-[180px] max-h-56 overflow-y-auto p-1.5">
+                                        {(folders || []).length === 0 ? (
+                                            <div className="p-2 text-[10px] text-gray-500 italic text-center">Nenhuma pasta criada</div>
+                                        ) : (
+                                            folders.map(folder => (
+                                                <div
+                                                    key={folder.id}
+                                                    onClick={() => { bulkMoveToFolder(selectedIds, folder.id); setFolderMenuOpen(false); }}
+                                                    className="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer hover:bg-white/5 text-gray-200 flex items-center gap-2"
+                                                >
+                                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: folder.color || '#6366f1' }}></span>
+                                                    <span className="truncate">{folder.name}</span>
+                                                </div>
+                                            ))
+                                        )}
+                                        <div
+                                            onClick={() => { bulkMoveToFolder(selectedIds, null); setFolderMenuOpen(false); }}
+                                            className="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer hover:bg-white/5 text-gray-400 italic border-t border-white/5 mt-1"
+                                        >
+                                            Remover da pasta
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Stats Section */}

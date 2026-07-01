@@ -22,7 +22,7 @@ def _extract_header_media(components: list):
     return None
 
 
-async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, note_content: str, chatwoot_label, trigger_id: int = None):
+async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, note_content: str, chatwoot_label, trigger_id: int = None, wamid: str = None):
     """Após envio bem-sucedido: garante conversa, envia nota privada e aplica etiquetas."""
     try:
         # 1. Verificar se é disparo em massa (bulk) antes de resolver ou criar conversa
@@ -156,7 +156,8 @@ async def _post_send(chatwoot, phone: str, contact_name: str, conversation_id, n
                     message_type="template",
                     content=note_content or f"[Template: {trigger_id}]",
                     meta_data=meta_data,
-                    media_url=tpl_media_url
+                    media_url=tpl_media_url,
+                    wa_message_id=wamid
                 )
                 db_chat.add(chat_message)
                 
@@ -346,7 +347,12 @@ async def send_smart_message(
                     if is_success:
                         now_br = datetime.now(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M:%S")
                         logger.info(f"🚀 [DISPARO] [Trigger {trigger_id}] [{now_br}] [{phone}] Tipo: LIVRE (Sessão) | Sucesso")
-                        asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, free_text, chatwoot_label, trigger_id))
+                        free_wamid = None
+                        if isinstance(res, dict):
+                            msgs = res.get("messages") or []
+                            if msgs: free_wamid = msgs[0].get("id")
+                            if not free_wamid: free_wamid = res.get("id")
+                        asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, free_text, chatwoot_label, trigger_id, wamid=free_wamid))
                         return {"result": res, "type": "FREE_MESSAGE", "success": True}
 
                     err_msg = str(res.get("detail", "")).lower() if isinstance(res, dict) else str(res).lower()
@@ -375,7 +381,11 @@ async def send_smart_message(
                         # Fallback final: apenas se não houver body nem components utilizáveis
                         note_content = f"[Template: {template_name}]"
                         logger.warning(f"⚠️ [Smart Send] Não foi possível extrair conteúdo do template '{template_name}'. Usando nome como fallback.")
-                asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, note_content, chatwoot_label, trigger_id))
+                tpl_wamid = None
+                if isinstance(res, dict):
+                    msgs = res.get("messages") or []
+                    if msgs: tpl_wamid = msgs[0].get("id")
+                asyncio.create_task(_post_send(chatwoot, phone, contact_name, conversation_id, note_content, chatwoot_label, trigger_id, wamid=tpl_wamid))
                 return {"result": res, "type": "TEMPLATE"}
 
 

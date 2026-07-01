@@ -176,6 +176,9 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
             msg_type = msg.get("type")
             if msg_type == "text":
                 user_input = msg.get("text", {}).get("body")
+            elif msg_type == "reaction":
+                emoji = msg.get("reaction", {}).get("emoji", "")
+                user_input = f"Reagiu com {emoji}" if emoji else "Reagiu com emoji"
             elif msg_type == "button":
                 user_input = msg.get("button", {}).get("text")
             elif msg_type == "interactive":
@@ -184,6 +187,55 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                     user_input = inter.get("button_reply", {}).get("title")
                 elif inter.get("type") == "list_reply":
                     user_input = inter.get("list_reply", {}).get("title")
+
+            # --- PRÉ-LOOKUP: Verificar activate_agent para cliques de botão ---
+            # Antes de salvar o ChatMessage, verifica se o botão clicado tem activate_agent=True.
+            # Isso determina se o AgentFlow webhook será acionado para este clique.
+            btn_activate_agent = None  # None = mensagem de texto normal (não é clique de botão)
+            is_btn_pre = msg_type in ("button", "interactive")
+            if is_btn_pre and user_input:
+                try:
+                    pre_context = msg.get("context", {})
+                    pre_replied_id = pre_context.get("id")
+                    pre_trigger_ref = None
+                    if pre_replied_id:
+                        clean_pre_id = pre_replied_id.replace("wamid.", "")
+                        pre_ms = db.query(models.MessageStatus).filter(
+                            models.MessageStatus.message_id == clean_pre_id
+                        ).first()
+                        if pre_ms:
+                            pre_trigger_ref = db.query(models.ScheduledTrigger).get(pre_ms.trigger_id)
+                    # Fallback: último trigger deste número nas últimas 24h
+                    if not pre_trigger_ref:
+                        yesterday_pre = datetime.now(timezone.utc) - timedelta(hours=24)
+                        suffix_pre = from_phone[-8:] if len(from_phone) >= 8 else from_phone
+                        pre_ms_fb = db.query(models.MessageStatus).filter(
+                            models.MessageStatus.phone_number.like(f"%{suffix_pre}"),
+                            models.MessageStatus.timestamp >= yesterday_pre
+                        ).order_by(models.MessageStatus.timestamp.desc()).first()
+                        if pre_ms_fb:
+                            pre_trigger_ref = db.query(models.ScheduledTrigger).get(pre_ms_fb.trigger_id)
+                    if pre_trigger_ref:
+                        pre_btn_actions = getattr(pre_trigger_ref, 'button_actions', None) or {}
+                        # Fallback: buscar no trigger mais recente com mesmo template
+                        if not pre_btn_actions and pre_trigger_ref.template_name:
+                            fallback_pre = db.query(models.ScheduledTrigger).filter(
+                                models.ScheduledTrigger.client_id == pre_trigger_ref.client_id,
+                                models.ScheduledTrigger.template_name == pre_trigger_ref.template_name,
+                                models.ScheduledTrigger.button_actions.isnot(None)
+                            ).order_by(models.ScheduledTrigger.id.desc()).first()
+                            if fallback_pre:
+                                pre_btn_actions = fallback_pre.button_actions or {}
+                        pre_action = pre_btn_actions.get(user_input.strip(), {})
+                        btn_activate_agent = bool(pre_action.get("activate_agent", False))
+                        logger.info(f"🤖 [ACTIVATE_AGENT] Botão '{user_input}' → activate_agent={btn_activate_agent} (trigger={pre_trigger_ref.id})")
+                    else:
+                        # Trigger não encontrado → não dispara agente por segurança
+                        btn_activate_agent = False
+                        logger.info(f"⚠️ [ACTIVATE_AGENT] Nenhum trigger encontrado para botão '{user_input}' de {from_phone} → activate_agent=False")
+                except Exception as e_pre:
+                    logger.error(f"❌ [ACTIVATE_AGENT] Erro no pré-lookup: {e_pre}")
+                    btn_activate_agent = False
 
             # --- SALVAR NO CHAT LOCAL ---
             try:
@@ -224,60 +276,119 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                         content_text = "📄 Documento recebido"
                     elif m_type == "sticker":
                         content_text = "✨ Sticker recebido"
+                    elif m_type == "reaction":
+                        emoji = msg.get("reaction", {}).get("emoji", "")
+                        content_text = f"Reagiu com {emoji}" if emoji else "Reagiu com emoji"
                     else:
                         content_text = f"📎 Arquivo ({m_type}) recebido"
-                
+
+                # ── REAÇÕES: atualizar meta_data da mensagem original ──────────
+                if m_type == "reaction":
+                    emoji = msg.get("reaction", {}).get("emoji", "")
+                    reacted_msg_id = msg.get("reaction", {}).get("message_id", "")
+                    should_create_standalone_message = False
+                    if reacted_msg_id and emoji:
+                        clean_reacted_id = reacted_msg_id.replace("wamid.", "")
+                        target_msg = db.query(models.ChatMessage).filter(
+                            or_(
+                                models.ChatMessage.wa_message_id == reacted_msg_id,
+                                models.ChatMessage.wa_message_id == clean_reacted_id
+                            )
+                        ).first()
+                        if target_msg:
+                            existing_meta = dict(target_msg.meta_data or {})
+                            reactions = existing_meta.get("reactions", [])
+                            # Remove reação prévia do mesmo sender e substitui
+                            reactions = [r for r in reactions if r.get("sender") != "contact"]
+                            if emoji:  # emoji vazio = remover reação
+                                reactions.append({"emoji": emoji, "sender": "contact"})
+                            existing_meta["reactions"] = reactions
+                            target_msg.meta_data = existing_meta
+                            from sqlalchemy.orm.attributes import flag_modified
+                            flag_modified(target_msg, "meta_data")
+                            db.commit()
+                            logger.info(f"❤️ [CHAT-REACTION] Reação '{emoji}' adicionada à mensagem {reacted_msg_id}")
+                        else:
+                            logger.info(f"⚠️ [CHAT-REACTION] Mensagem alvo {reacted_msg_id} não encontrada, criando reação avulsa")
+                            should_create_standalone_message = True
+                    if not should_create_standalone_message:
+                        continue
+
+                # Para cliques de botão: marcar skip_agentflow se activate_agent=False
+                chat_meta = {}
+                if btn_activate_agent is not None and not btn_activate_agent:
+                    chat_meta["skip_agentflow"] = True
+
                 chat_message = models.ChatMessage(
                     conversation_id=chat_convo.id,
                     sender_type="contact",
                     message_type=m_type,
                     content=content_text,
                     media_url=media_url,
-                    wa_message_id=msg_id
+                    wa_message_id=msg_id,
+                    meta_data=chat_meta if chat_meta else None
                 )
                 db.add(chat_message)
-                
+
                 chat_convo.last_message_content = content_text
+                chat_convo.last_message_at = datetime.now(timezone.utc)
                 chat_convo.unread_count += 1
                 chat_convo.status = "open"
                 chat_convo.last_contact_message_at = datetime.now(timezone.utc)
-                
+
                 db.commit()
                 logger.info(f"💾 [CHAT-LOCAL] Mensagem de {from_phone} salva localmente (Convo ID: {chat_convo.id})")
                 
                 # --- NOTIFICAR WEBHOOK DE MEMÓRIA (MENSAGEM DO USUÁRIO) ---
+                # Só dispara se o CHAT_MESSAGES_WEBHOOK_URL não estiver configurado.
+                # Se estiver, o chat_webhook_service.py já envia a mensagem para o AgentFlow,
+                # evitando duplicatas quando ambos os webhooks apontam para o mesmo endpoint.
                 try:
                     if user_input:
                         from services.ai_memory import notify_agent_memory_webhook
-                        # Buscar o contact_id se o lead existir
-                        lead_id = None
-                        try:
-                            suffix_lead = from_phone[-8:] if len(from_phone) >= 8 else from_phone
-                            lead_obj = db.query(models.WebhookLead).filter(
-                                models.WebhookLead.client_id == target_cid,
-                                or_(
-                                    models.WebhookLead.phone == from_phone,
-                                    models.WebhookLead.phone.like(f"%{suffix_lead}")
-                                )
-                            ).first()
-                            if lead_obj:
-                                lead_id = lead_obj.id
-                        except Exception:
-                            pass
+                        from config_loader import get_setting
+                        chat_webhook_url = get_setting("CHAT_MESSAGES_WEBHOOK_URL", "", client_id=target_cid)
+                        memory_webhook_url = get_setting("AGENT_MEMORY_WEBHOOK_URL", "", client_id=target_cid)
+                        # Pula se os dois webhooks apontam para o mesmo destino (duplo disparo)
+                        same_url = (
+                            chat_webhook_url and memory_webhook_url and
+                            chat_webhook_url.strip().rstrip("/") == memory_webhook_url.strip().rstrip("/")
+                        )
+                        # Clique de botão com activate_agent=False → não notificar memória
+                        if is_btn_pre and btn_activate_agent is False:
+                            logger.info(f"⏭️ [MEMORIA-INBOUND] Botão '{user_input}' com activate_agent=False — memória inbound não notificada ({from_phone})")
+                        elif same_url:
+                            logger.info(f"⏭️ [MEMORIA-INBOUND] CHAT_MESSAGES_WEBHOOK_URL == AGENT_MEMORY_WEBHOOK_URL — pulando memória inbound para evitar duplicata ({from_phone})")
+                        else:
+                            # Buscar o contact_id se o lead existir
+                            lead_id = None
+                            try:
+                                suffix_lead = from_phone[-8:] if len(from_phone) >= 8 else from_phone
+                                lead_obj = db.query(models.WebhookLead).filter(
+                                    models.WebhookLead.client_id == target_cid,
+                                    or_(
+                                        models.WebhookLead.phone == from_phone,
+                                        models.WebhookLead.phone.like(f"%{suffix_lead}")
+                                    )
+                                ).first()
+                                if lead_obj:
+                                    lead_id = lead_obj.id
+                            except Exception:
+                                pass
 
-                        # Disparar notificação na fila para processamento assíncrono
-                        is_btn = msg.get("type") in ["button", "interactive"]
-                        logger.info(f"🧠 [MEMORIA-INBOUND] Agendando envio de memória do usuário: '{user_input}' (botão: {is_btn}) ({from_phone})")
-                        asyncio.create_task(notify_agent_memory_webhook(
-                            client_id=target_cid,
-                            phone=from_phone,
-                            name=contacts_map.get(raw_from, "Contato"),
-                            template_name="Clique de Botão" if is_btn else "Mensagem do Usuário",
-                            content=user_input,
-                            internal_contact_id=lead_id,
-                            dono="usuario",
-                            is_button_click=is_btn
-                        ))
+                            # Disparar notificação na fila para processamento assíncrono
+                            is_btn = msg.get("type") in ["button", "interactive"]
+                            logger.info(f"🧠 [MEMORIA-INBOUND] Agendando envio de memória do usuário: '{user_input}' (botão: {is_btn}) ({from_phone})")
+                            asyncio.create_task(notify_agent_memory_webhook(
+                                client_id=target_cid,
+                                phone=from_phone,
+                                name=contacts_map.get(raw_from, "Contato"),
+                                template_name="Clique de Botão" if is_btn else "Mensagem do Usuário",
+                                content=user_input,
+                                internal_contact_id=lead_id,
+                                dono="usuario",
+                                is_button_click=is_btn
+                            ))
                 except Exception as e_mem_inbound:
                     logger.error(f"❌ Erro ao enviar memória de entrada (inbound): {e_mem_inbound}")
             except Exception as e_chat_save:
@@ -287,17 +398,24 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
             context = msg.get("context", {})
             replied_msg_id = context.get("id")
             message_record = None
-            
+
             if replied_msg_id:
                 clean_replied_id = replied_msg_id.replace("wamid.", "")
                 message_record = db.query(models.MessageStatus).filter(models.MessageStatus.message_id == clean_replied_id).first()
-            else:
-                # FALLBACK: Se não tem context.id, buscar a última mensagem enviada para este número nas últimas 24h
+                logger.info(f"🔍 [MSG_LOOKUP] context.id={replied_msg_id} → clean={clean_replied_id} → record={'FOUND (trigger=' + str(message_record.trigger_id) + ')' if message_record else 'NOT FOUND'}")
+
+            if not message_record:
+                # FALLBACK: Buscar a última mensagem enviada para este número nas últimas 24h via sufixo de telefone
+                phone_suffix_fb = from_phone[-8:] if len(from_phone) >= 8 else from_phone
                 yesterday = datetime.now(timezone.utc) - timedelta(hours=24)
                 message_record = db.query(models.MessageStatus).filter(
-                    models.MessageStatus.phone_number == from_phone,
+                    models.MessageStatus.phone_number.like(f"%{phone_suffix_fb}"),
                     models.MessageStatus.timestamp >= yesterday
                 ).order_by(models.MessageStatus.timestamp.desc()).first()
+                if replied_msg_id:
+                    logger.info(f"🔁 [MSG_LOOKUP_FALLBACK] context.id não encontrou registro → fallback por sufixo {phone_suffix_fb} → {'FOUND (trigger=' + str(message_record.trigger_id) + ')' if message_record else 'NOT FOUND'}")
+                else:
+                    logger.info(f"🔁 [MSG_LOOKUP_FALLBACK] sem context.id → fallback por sufixo {phone_suffix_fb} → {'FOUND (trigger=' + str(message_record.trigger_id) + ')' if message_record else 'NOT FOUND'}")
 
             if message_record:
                 trigger_ref = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
@@ -316,7 +434,10 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
             if not is_auto_blocked:
                 # Apenas incrementa se for de fato um clique em botão ou resposta interativa
                 is_button_click = msg.get("type") in ["button", "interactive"]
-                
+
+                if is_button_click:
+                    logger.info(f"🖱️ [BUTTON_CLICK] tipo={msg.get('type')} | user_input={user_input!r} | message_record={'SIM (trigger=' + str(message_record.trigger_id) + ')' if message_record else 'NÃO'} | trigger_ref={'SIM (button_actions=' + str(bool(getattr(trigger_ref, 'button_actions', None))) + ')' if message_record and trigger_ref else 'NÃO'}")
+
                 # --- BUTTON_ACTIONS: Funil/Bloqueio por botão configurado no disparo ---
                 action_type = None
                 if is_button_click and user_input and message_record and trigger_ref:
@@ -336,11 +457,11 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                     if action and action.get("type") in ("interaction", "block"):
                         action_type = action.get("type")
 
-                # Se o clique de botão for do tipo 'block', não deve incrementar total_interactions e sim apenas total_blocked (tratado na action abaixo)
+                # Se o clique de botão for do tipo 'block', deve incrementar total_interactions e total_blocked
                 if is_button_click and message_record and not getattr(message_record, 'interaction_counted', False):
                     message_record.interaction_counted = True
+                    message_record.is_interaction = True
                     if action_type == "block":
-                        message_record.is_interaction = False
                         message_record.failure_reason = 'BLOCKED_VIA_BUTTON'
                         
                         # Adiciona o contato na lista de exclusão/bloqueados imediatamente
@@ -400,8 +521,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                         logger.info(f"🎯 [BUTTON_ACTION] Botão '{btn_key}' → tipo={action_type} funil={action_funnel_id} para {from_phone}")
 
                         async def _execute_button_action(act_type, act_funnel_id, phone, cid, convo_id, contact_name_val, block_trigger_id, meta_payload):
-                            import random
-                            await asyncio.sleep(random.randint(8, 12))
+                            await asyncio.sleep(2)
                             db_btn = wah.SessionLocal()
                             try:
                                 if act_type == "block":
@@ -433,10 +553,25 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                                         db_btn.commit()
 
                                 if act_funnel_id:
+                                    # Resolver conversation_id via ChatConversation local (ZapVoice-native, sem Chatwoot)
+                                    resolved_cid = convo_id
+                                    if not resolved_cid:
+                                        try:
+                                            suffix_conv = phone[-8:] if len(phone) >= 8 else phone
+                                            chat_convo_btn = db_btn.query(models.ChatConversation).filter(
+                                                models.ChatConversation.client_id == cid,
+                                                models.ChatConversation.phone.like(f"%{suffix_conv}")
+                                            ).first()
+                                            if chat_convo_btn:
+                                                resolved_cid = chat_convo_btn.id
+                                            logger.info(f"🔍 [BUTTON_ACTION] conversation_id local resolvido para {phone}: {resolved_cid}")
+                                        except Exception as e_resolve:
+                                            logger.warning(f"⚠️ [BUTTON_ACTION] Não foi possível resolver conversation_id local para {phone}: {e_resolve}")
+
                                     new_t = models.ScheduledTrigger(
                                         client_id=cid,
                                         funnel_id=act_funnel_id,
-                                        conversation_id=convo_id,
+                                        conversation_id=resolved_cid,
                                         contact_phone=phone,
                                         contact_name=contact_name_val or phone,
                                         status='processing',
@@ -453,10 +588,10 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                                     await wah.rabbitmq.publish("zapvoice_funnel_executions", {
                                         "trigger_id": new_t.id,
                                         "funnel_id": act_funnel_id,
-                                        "conversation_id": convo_id,
+                                        "conversation_id": resolved_cid,
                                         "contact_phone": phone
                                     })
-                                    logger.info(f"🚀 [BUTTON_ACTION_FUNNEL] Funil {act_funnel_id} iniciado para {phone} (tipo={act_type})")
+                                    logger.info(f"🚀 [BUTTON_ACTION_FUNNEL] Funil {act_funnel_id} iniciado para {phone} (tipo={act_type}, convo={resolved_cid})")
                             except Exception as e_btn:
                                 logger.error(f"❌ [BUTTON_ACTION] Erro ao executar ação do botão para {phone}: {e_btn}")
                             finally:

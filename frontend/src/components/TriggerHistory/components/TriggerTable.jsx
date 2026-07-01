@@ -5,9 +5,16 @@ const TriggerTable = ({
     triggers, loading, triggerType, selectedIds, handleSelectAll,
     handleSelectOne, handleViewContacts, fetchChildren, fetchErrors,
     handleViewPipeline, handleEditParams, handleStartNow, handleCancel,
-    handleRetry, handleDelete, handleSyncStats, user, confirmBulkDelete, onManualInteraction
+    handleRetry, handleDelete, handleSyncStats, user, confirmBulkDelete, onManualInteraction,
+    handleTogglePin, showOnlyPinned, folders, moveTriggerToFolder
 }) => {
-    const displayTriggers = Array.isArray(triggers) ? triggers : [];
+    const raw = Array.isArray(triggers) ? triggers : [];
+    // Fixados sobem ao topo; se showOnlyPinned, mostra só os fixados
+    const sorted = [
+        ...raw.filter(t => t.is_pinned),
+        ...raw.filter(t => !t.is_pinned),
+    ];
+    const displayTriggers = showOnlyPinned ? sorted.filter(t => t.is_pinned) : sorted;
 
     if (loading && displayTriggers.length === 0) {
         return <div className="p-8 text-center text-gray-400 animate-pulse">Carregando histórico...</div>;
@@ -49,7 +56,7 @@ const TriggerTable = ({
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                     {displayTriggers.map((trigger) => (
-                        <TriggerTableRow 
+                        <TriggerTableRow
                             key={trigger.id || Math.random()}
                             trigger={trigger}
                             selectedIds={selectedIds}
@@ -66,7 +73,11 @@ const TriggerTable = ({
                             handleSyncStats={handleSyncStats}
                             user={user}
                             onManualInteraction={onManualInteraction}
+                            handleTogglePin={handleTogglePin}
+                            folders={folders}
+                            moveTriggerToFolder={moveTriggerToFolder}
                         />
+
                     ))}
                 </tbody>
             </table>

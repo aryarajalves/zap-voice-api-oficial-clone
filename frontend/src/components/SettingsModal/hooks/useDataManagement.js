@@ -15,6 +15,12 @@ export function useDataManagement(activeClient) {
     const [memoryLogsLimit, setMemoryLogsLimit] = useState(20);
     const [memoryLogsTotal, setMemoryLogsTotal] = useState(0);
 
+    const [chatLogs, setChatLogs] = useState([]);
+    const [loadingChatLogs, setLoadingChatLogs] = useState(false);
+    const [chatLogsPage, setChatLogsPage] = useState(0);
+    const [chatLogsLimit, setChatLogsLimit] = useState(20);
+    const [chatLogsTotal, setChatLogsTotal] = useState(0);
+
     const fetchSyncedContacts = async () => {
         if (!activeClient) return;
         setLoadingContacts(true);
@@ -51,9 +57,28 @@ export function useDataManagement(activeClient) {
         }
     };
 
+    const fetchChatLogs = async () => {
+        if (!activeClient) return;
+        setLoadingChatLogs(true);
+        try {
+            const skip = chatLogsPage * chatLogsLimit;
+            const res = await fetchWithAuth(`${API_URL}/settings/chat-logs?skip=${skip}&limit=${chatLogsLimit}`, {}, activeClient.id);
+            if (res.ok) {
+                const data = await res.json();
+                setChatLogs(data.items || []);
+                setChatLogsTotal(data.total || 0);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar logs de chat (AgentFlow):", error);
+        } finally {
+            setLoadingChatLogs(false);
+        }
+    };
+
     return {
         syncedContacts, loadingContacts, contactsPage, setContactsPage, contactsLimit, setContactsLimit, contactsTotal,
         memoryLogs, loadingMemoryLogs, memoryLogsPage, setMemoryLogsPage, memoryLogsLimit, setMemoryLogsLimit, memoryLogsTotal,
-        fetchSyncedContacts, fetchMemoryLogs
+        chatLogs, loadingChatLogs, chatLogsPage, setChatLogsPage, chatLogsLimit, setChatLogsLimit, chatLogsTotal,
+        fetchSyncedContacts, fetchMemoryLogs, fetchChatLogs
     };
 }

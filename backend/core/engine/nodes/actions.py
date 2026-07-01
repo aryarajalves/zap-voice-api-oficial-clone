@@ -9,7 +9,7 @@ logger = setup_logger("FunnelEngine.Nodes.Actions")
 
 async def handle_update_contact_node(db, trigger, node, chatwoot, contact_phone, apply_vars_func):
     current_node_id = node.get("id")
-    log_node_execution(db, trigger, current_node_id, "processing", "✏️ Atualizando contato no Chatwoot...")
+    log_node_execution(db, trigger, current_node_id, "processing", "✏️ Atualizando contato no Atendimento...")
     try:
         data = node.get("data", {})
         name_type = data.get("nameType", "fixed")
@@ -28,7 +28,7 @@ async def handle_update_contact_node(db, trigger, node, chatwoot, contact_phone,
 
 async def handle_label_node(db, trigger, node, chatwoot, contact_phone, conversation_id):
     current_node_id = node.get("id")
-    log_node_execution(db, trigger, current_node_id, "processing", "🏷️ Processando etiquetas no Chatwoot...")
+    log_node_execution(db, trigger, current_node_id, "processing", "🏷️ Processando etiquetas no Atendimento...")
     label = node.get("data", {}).get("label")
     remove_label = node.get("data", {}).get("remove_label")
     try:

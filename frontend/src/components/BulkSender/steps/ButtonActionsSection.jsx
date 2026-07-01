@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiZap, FiSlash, FiMinus } from 'react-icons/fi';
+import { FiZap, FiSlash, FiMinus, FiCpu } from 'react-icons/fi';
 
 const TYPE_OPTIONS = [
     { value: 'none',        label: 'Nenhum',    icon: FiMinus,  color: 'slate' },
@@ -17,7 +17,7 @@ const ButtonActionsSection = ({ templateButtons, buttonActions, setButtonActions
     if (!templateButtons || templateButtons.length === 0) return null;
 
     const getAction = (btnText) =>
-        buttonActions[btnText] || { type: 'none', funnel_id: null };
+        buttonActions[btnText] || { type: 'none', funnel_id: null, activate_agent: false };
 
     const setType = (btnText, type) => {
         setButtonActions(prev => ({
@@ -30,6 +30,13 @@ const ButtonActionsSection = ({ templateButtons, buttonActions, setButtonActions
         setButtonActions(prev => ({
             ...prev,
             [btnText]: { ...getAction(btnText), funnel_id: funnel_id ? parseInt(funnel_id) : null }
+        }));
+    };
+
+    const toggleAgent = (btnText) => {
+        setButtonActions(prev => ({
+            ...prev,
+            [btnText]: { ...getAction(btnText), activate_agent: !getAction(btnText).activate_agent }
         }));
     };
 
@@ -69,7 +76,7 @@ const ButtonActionsSection = ({ templateButtons, buttonActions, setButtonActions
                             </div>
 
                             {/* Type selector */}
-                            <div className="flex gap-3 flex-wrap mb-5">
+                            <div className="flex gap-3 flex-wrap mb-4">
                                 {TYPE_OPTIONS.map((opt) => {
                                     const Icon = opt.icon;
                                     const sel = action.type === opt.value;
@@ -91,6 +98,24 @@ const ButtonActionsSection = ({ templateButtons, buttonActions, setButtonActions
                                     );
                                 })}
                             </div>
+
+                            {/* Toggle: Ativar Agente de IA */}
+                            <button
+                                type="button"
+                                onClick={() => toggleAgent(btnText)}
+                                className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border text-xs font-bold uppercase tracking-widest transition-all mb-4 ${
+                                    action.activate_agent
+                                        ? 'bg-violet-500/15 text-violet-400 border-violet-500/30 shadow-lg shadow-violet-500/10'
+                                        : 'bg-slate-800/40 text-slate-600 border-white/5 hover:border-white/10 hover:text-slate-400'
+                                }`}
+                            >
+                                <FiCpu size={13} />
+                                <span>Ativar Agente de IA</span>
+                                {/* pill indicator */}
+                                <span className={`ml-1 w-7 h-4 rounded-full flex items-center transition-all relative ${action.activate_agent ? 'bg-violet-500' : 'bg-slate-700'}`}>
+                                    <span className={`absolute w-3 h-3 rounded-full bg-white shadow transition-all ${action.activate_agent ? 'left-3.5' : 'left-0.5'}`} />
+                                </span>
+                            </button>
 
                             {/* Funnel selector (optional) */}
                             {showFunnel && (

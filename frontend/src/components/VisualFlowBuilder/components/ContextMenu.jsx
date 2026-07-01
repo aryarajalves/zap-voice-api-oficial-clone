@@ -153,15 +153,7 @@ const ContextMenu = ({ top, left, onClose, onAddNode }) => {
             hoverBg: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600',
             keywords: ['requisicao http', 'webhook', 'api', 'url', 'post', 'get', 'integromat', 'make', 'n8n']
         },
-        {
-            type: 'localSegmentNode',
-            label: 'Segmentação Local (Tag/Blacklist)',
-            category: 'Integrações',
-            icon: FiTag,
-            colorClass: 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 group-hover:bg-indigo-200',
-            hoverBg: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600',
-            keywords: ['segmentacao local', 'blacklist', 'lista', 'tag local', 'cadastrar tag', 'remover tag']
-        },
+
         {
             type: 'pixelNode',
             label: 'Pixel de Conversão (Meta CAPI)',

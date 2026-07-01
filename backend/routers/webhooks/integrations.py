@@ -255,7 +255,8 @@ def create_webhook_integration(
                     followup_business_hours_end=getattr(mapping, 'followup_business_hours_end', '18:00'),
                     followup_business_hours_days=getattr(mapping, 'followup_business_hours_days', [0, 1, 2, 3, 4]),
                     update_contact_on_trigger=getattr(mapping, 'update_contact_on_trigger', True),
-                    contact_save_fields=getattr(mapping, 'contact_save_fields', None)
+                    contact_save_fields=getattr(mapping, 'contact_save_fields', None),
+                    button_actions=getattr(mapping, 'button_actions', None)
                 )
                 db.add(db_mapping)
 
@@ -419,7 +420,8 @@ def update_webhook_integration(
                     followup_business_hours_end=getattr(mapping, 'followup_business_hours_end', '18:00'),
                     followup_business_hours_days=getattr(mapping, 'followup_business_hours_days', [0, 1, 2, 3, 4]),
                     update_contact_on_trigger=getattr(mapping, 'update_contact_on_trigger', True),
-                    contact_save_fields=getattr(mapping, 'contact_save_fields', None)
+                    contact_save_fields=getattr(mapping, 'contact_save_fields', None),
+                    button_actions=getattr(mapping, 'button_actions', None)
                 )
                 db.add(db_mapping)
 

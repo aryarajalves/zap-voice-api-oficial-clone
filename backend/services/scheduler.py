@@ -30,7 +30,7 @@ async def run_log_file_cleanup():
         return
 
     def _sync_cleanup():
-        log_path = "zapvoice_debug.log"
+        log_path = "logs/zapvoice_debug.log"
         if not os.path.exists(log_path):
             return
         
@@ -488,5 +488,5 @@ async def scheduler_task():
         except Exception as e:
             logger.error(f"Scheduler loop error: {e}")
 
-        # Aguardar 10s para o próximo ciclo para não sobrecarregar em caso de locks
-        await asyncio.sleep(10)
+        # Aguardar 2s para o próximo ciclo
+        await asyncio.sleep(2)

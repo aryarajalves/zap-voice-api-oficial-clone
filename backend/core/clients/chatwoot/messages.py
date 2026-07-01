@@ -4,7 +4,7 @@ import httpx
 from datetime import datetime, timezone
 from core.logger import setup_logger
 
-logger = setup_logger("ChatwootClient")
+logger = setup_logger("AtendimentoClient")
 
 class ChatwootMessagesMixin:
     async def get_messages(self, conversation_id: int):

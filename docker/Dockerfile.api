@@ -38,8 +38,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=backend-builder /install /usr/local
 COPY backend/ .
 
-# Criar diretórios necessários
-RUN mkdir -p /app/static/dist && mkdir -p /app/static/uploads
+# Criar diretórios necessários (logs é montado como volume persistente)
+RUN mkdir -p /app/static/dist && mkdir -p /app/static/uploads && mkdir -p /app/logs
 
 # Copiar build do frontend
 COPY --from=frontend-build /app/frontend/dist /app/static/dist

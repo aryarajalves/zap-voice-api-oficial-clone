@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from typing import List, Optional
 import models, schemas
 from core.deps import get_current_user, get_db
@@ -176,6 +176,8 @@ async def list_triggers(
     trigger_type: Optional[str] = None,
     exclude_webhooks: bool = True,
     show_technical: bool = False,
+    pinned_only: bool = False,
+    folder_id: Optional[int] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -187,14 +189,21 @@ async def list_triggers(
     query = db.query(models.ScheduledTrigger).options(
         joinedload(models.ScheduledTrigger.funnel),
         joinedload(models.ScheduledTrigger.interaction_funnel),
-        joinedload(models.ScheduledTrigger.block_funnel)
+        joinedload(models.ScheduledTrigger.block_funnel),
+        joinedload(models.ScheduledTrigger.folder)
     )
     client_id = x_client_id if x_client_id else current_user.client_id
     query = query.filter(models.ScheduledTrigger.client_id == client_id)
-    
+
     # Sempre ocultar registros em processo de deleção suave (evita deadlocks visíveis)
     query = query.filter(models.ScheduledTrigger.status != 'deleted_pending')
-    
+
+    if pinned_only:
+        query = query.filter(models.ScheduledTrigger.is_pinned == True)
+
+    if folder_id is not None:
+        query = query.filter(models.ScheduledTrigger.folder_id == folder_id)
+
     if exclude_webhooks:
         query = query.filter(models.ScheduledTrigger.integration_id == None)
     
@@ -248,7 +257,13 @@ async def list_triggers(
             query = query.filter(models.ScheduledTrigger.product_name == 'SCALE_TEST')
 
     total = query.count()
-    triggers = query.order_by(models.ScheduledTrigger.created_at.desc()).offset(skip).limit(limit).all()
+    # Alguns registros antigos/em massa têm is_pinned NULL em vez de FALSE (não passaram
+    # pelo default do ORM). No Postgres, NULL vem ANTES de TRUE em ORDER BY ... DESC,
+    # então sem o coalesce os não-fixados (NULL) furariam a frente dos fixados.
+    triggers = query.order_by(
+        func.coalesce(models.ScheduledTrigger.is_pinned, False).desc(),
+        models.ScheduledTrigger.created_at.desc()
+    ).offset(skip).limit(limit).all()
 
     # Coletar todos os funnel_ids únicos nas button_actions dos triggers retornados
     funnel_ids = set()
@@ -327,6 +342,22 @@ async def list_triggers(
             trigger.button_actions = resolved_actions
 
     return {"items": triggers, "total": total}
+
+@router.patch("/{trigger_id}/pin", summary="Fixar/Desafixar Disparo no Topo")
+async def toggle_pin_trigger(
+    trigger_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id).first()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo não encontrado")
+    if current_user.role == 'admin' and trigger.client_id != current_user.client_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    trigger.is_pinned = not bool(trigger.is_pinned)
+    db.commit()
+    return {"id": trigger_id, "is_pinned": trigger.is_pinned}
+
 
 @router.delete("/{trigger_id}", summary="Excluir Registro de Disparo")
 async def delete_trigger(trigger_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

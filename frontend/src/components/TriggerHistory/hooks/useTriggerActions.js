@@ -207,6 +207,20 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
         }
     };
 
+    const handleTogglePin = async (id) => {
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${id}/pin`, { method: 'PATCH' }, activeClient?.id);
+            if (res.ok) {
+                const data = await res.json();
+                setTriggers(prev => prev.map(t => t.id === id ? { ...t, is_pinned: data.is_pinned } : t));
+            } else {
+                toast.error('Erro ao fixar disparo');
+            }
+        } catch {
+            toast.error('Erro de conexão');
+        }
+    };
+
     return {
         handleDelete,
         handleCancel,
@@ -214,6 +228,7 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
         handleBulkDeleteAction,
         handleStartNow,
         handleRetry,
-        handleSyncStats
+        handleSyncStats,
+        handleTogglePin
     };
 };

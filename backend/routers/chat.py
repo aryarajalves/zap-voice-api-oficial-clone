@@ -939,3 +939,42 @@ async def update_conversation_note(
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
         "wa_message_id": None
     }}
+
+
+@router.delete("/chat/conversations/{conversation_id}", summary="Deletar conversa")
+async def delete_conversation(
+    conversation_id: int,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    db.delete(convo)
+    db.commit()
+    return {"status": "ok", "deleted_id": conversation_id}
+
+
+@router.delete("/chat/conversations", summary="Deletar múltiplas conversas")
+async def delete_conversations_bulk(
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    ids = payload.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="Nenhum ID fornecido.")
+    deleted = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id.in_(ids),
+        models.ChatConversation.client_id == client_id
+    ).all()
+    count = len(deleted)
+    for convo in deleted:
+        db.delete(convo)
+    db.commit()
+    return {"status": "ok", "deleted_count": count}

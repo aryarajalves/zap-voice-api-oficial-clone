@@ -180,6 +180,19 @@ async def handle_crm_actions_node(db, trigger, node, chatwoot, contact_phone, co
                     log_node_execution(db, trigger, current_node_id, "completed", f"Ação de Alterar Responsável ignorada: ID do agente inválido ('{value}').")
 
         # ==========================================
+        # LOCAL SEGMENTATION ACTIONS (ZAPVOICE)
+        # ==========================================
+        elif platform == "local":
+            fake_node = {
+                "id": current_node_id,
+                "data": {
+                    "action": action,
+                    "tagName": value
+                }
+            }
+            return await handle_local_segment_node(db, trigger, fake_node, contact_phone)
+
+        # ==========================================
         # MANYCHAT ACTIONS
         # ==========================================
         elif platform == "manychat":

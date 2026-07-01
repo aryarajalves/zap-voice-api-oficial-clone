@@ -2,7 +2,7 @@ import httpx
 from datetime import datetime, timezone, timedelta
 from core.logger import setup_logger
 
-logger = setup_logger("ChatwootClient")
+logger = setup_logger("AtendimentoClient")
 
 class ChatwootContactsMixin:
     async def get_contact_conversations(self, phone: str = None, contact_id: int = None) -> list:
@@ -355,7 +355,7 @@ class ChatwootContactsMixin:
                         if c_id and c_id not in found_contacts:
                             found_contacts.append(c_id)
             except Exception as e_search:
-                logger.warning(f"⚠️ [CHATWOOT] Erro ao buscar contato com query '{q}': {e_search}")
+                logger.warning(f"⚠️ [ATENDIMENTO] Erro ao buscar contato com query '{q}': {e_search}")
 
         contact_id = None
         conversation_id = None
@@ -409,7 +409,7 @@ class ChatwootContactsMixin:
                 elif isinstance(res_inboxes_data, dict) and "payload" in res_inboxes_data:
                     res_inboxes = res_inboxes_data["payload"]
             except Exception as e_inb:
-                logger.warning(f"⚠️ [CHATWOOT] Could not fetch contact_inboxes for {contact_id}: {e_inb}")
+                logger.warning(f"⚠️ [ATENDIMENTO] Could not fetch contact_inboxes for {contact_id}: {e_inb}")
             
             source_id = clean_phone
             if res_inboxes and isinstance(res_inboxes, list):

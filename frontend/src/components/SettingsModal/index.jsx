@@ -201,6 +201,16 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                                 memoryLogsLimit={logic.memoryLogsLimit}
                                 memoryLogsTotal={logic.memoryLogsTotal}
                                 setMemoryLogsLimit={logic.setMemoryLogsLimit}
+                                showChatLogsTable={logic.showChatLogsTable}
+                                setShowChatLogsTable={logic.setShowChatLogsTable}
+                                loadingChatLogs={logic.loadingChatLogs}
+                                fetchChatLogs={logic.fetchChatLogs}
+                                setChatLogsPage={logic.setChatLogsPage}
+                                chatLogs={logic.chatLogs}
+                                chatLogsPage={logic.chatLogsPage}
+                                chatLogsLimit={logic.chatLogsLimit}
+                                chatLogsTotal={logic.chatLogsTotal}
+                                setChatLogsLimit={logic.setChatLogsLimit}
                             />
                         )}
 

@@ -12,7 +12,7 @@ class ChatConversation(Base):
     phone = Column(String, index=True, nullable=False)
     contact_name = Column(String, nullable=True)
     last_message_content = Column(String, nullable=True)
-    last_message_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_message_at = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String, default="open", index=True)  # open, resolved
     unread_count = Column(Integer, default=0)
     assigned_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -44,6 +44,10 @@ class ChatMessage(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     wa_message_id = Column(String, nullable=True, index=True)
     meta_data = Column(JSON, nullable=True)
+    
+    # Logs do Webhook de mensagens do AgentFlow
+    agentflow_webhook_status = Column(String, nullable=True)
+    agentflow_webhook_error = Column(String, nullable=True)
 
     # Relationships
     conversation = relationship("ChatConversation", back_populates="messages")

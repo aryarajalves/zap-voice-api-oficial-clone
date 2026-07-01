@@ -13,7 +13,7 @@ from services.webhook_processing_service import check_hmac_signature_logic
 from rabbitmq_client import rabbitmq
 from utils import normalize_phone
 
-logger = setup_logger(__name__)
+logger = setup_logger("AtendimentoWebhook")
 router = APIRouter()
 
 @router.post("/chatwoot")
@@ -26,14 +26,15 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
         body = await request.body()
         signature = request.headers.get("X-Chatwoot-Signature", "")
         if not check_hmac_signature_logic(body, chatwoot_secret, signature):
-            logger.warning("❌ Chatwoot webhook: assinatura HMAC inválida")
+            logger.warning("❌ Atendimento webhook: assinatura HMAC inválida")
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     event_type = payload.get("event")
-    log_msg = f"📥 [CHATWOOT] {datetime.now(timezone.utc)} | Event: {event_type}"
+    log_msg = f"📥 [ATENDIMENTO] {datetime.now(timezone.utc)} | Event: {event_type}"
     logger.info(log_msg)
-    
-    with open("webhooks_incoming.log", "a", encoding="utf-8") as f:
+
+    os.makedirs("logs", exist_ok=True)
+    with open("logs/webhooks_incoming.log", "a", encoding="utf-8") as f:
         f.write(f"{log_msg} | Payload: {json.dumps(payload)}\n")
 
     try:
@@ -44,7 +45,7 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
         else: db.add(AppConfig(client_id=1, key="DEBUG_CHATWOOT_LAST", value=debug_json))
         db.commit()
     except Exception as e:
-        logger.error(f"Erro ao salvar debug chatwoot: {e}")
+        logger.error(f"Erro ao salvar debug atendimento: {e}")
 
     if event_type == "message_created":
         msg_type = payload.get("message_type")
@@ -55,18 +56,18 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
                 conversation = payload.get("conversation", {})
                 sender = payload.get("sender", {})
                 phone_number = sender.get("phone_number") or conversation.get("meta", {}).get("sender", {}).get("phone_number") or conversation.get("contact_inbox", {}).get("source_id")
-                
+
                 if phone_number:
                     clean_phone = "".join(filter(str.isdigit, str(phone_number)))
-                    
+
                     client_id_param = request.query_params.get("client_id")
                     if client_id_param and client_id_param.isdigit():
                         client_id = int(client_id_param)
                     else:
-                        client_id = 1 
+                        client_id = 1
                         config = db.query(models.AppConfig).filter(models.AppConfig.key == 'CHATWOOT_ACCOUNT_ID', models.AppConfig.value == str(account_id)).first()
                         if config: client_id = config.client_id
-                    
+
                     if msg_type in ["incoming", 0]:
                         now_utc = datetime.now(timezone.utc)
                         logger.info(f"🕒 [WINDOW] Atualizando janela para {clean_phone} (Client: {client_id}, Inbox: {inbox_id})")
@@ -95,17 +96,17 @@ async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks, 
                                 last_interaction_at=now_utc
                             )
                         except Exception as e_sync:
-                            logger.error(f"❌ Erro ao chamar sync_contact_to_custom_table no Chatwoot: {e_sync}")
-                        
+                            logger.error(f"❌ Erro ao chamar sync_contact_to_custom_table no Atendimento: {e_sync}")
+
                         # Cancelar follow-ups pendentes devido a interacao detectada no Chatwoot
                         from services.triggers_service import cancel_pending_followups_for_phone
                         cancel_pending_followups_for_phone(db, clean_phone)
 
-                        # Gatilho de funil removido daqui para evitar duplicidade. 
+                        # Gatilho de funil removido daqui para evitar duplicidade.
                         # O Meta Webhook (whatsapp.py) é a fonte de verdade para interações e funis,
                         # pois ele possui o `context.id` exato para rastrear o disparo pai (parent_id).
             except Exception as e:
-                logger.error(f"❌ Erro no processamento de webhook Chatwoot: {e}")
+                logger.error(f"❌ Erro no processamento de webhook Atendimento: {e}")
                 db.rollback()
 
     elif event_type == "message_updated":

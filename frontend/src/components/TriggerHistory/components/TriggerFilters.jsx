@@ -1,9 +1,12 @@
 import React from 'react';
+import FolderDropdown from './FolderDropdown';
 
 const TriggerFilters = ({
     filterName, setFilterName, dateRange, setDateRange, filterStatus, setFilterStatus,
     triggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
-    itemsPerPage, setItemsPerPage, fetchHistory, onNavigateToBulk, onNavigateToFunnels, onNavigateToChat, setPage
+    itemsPerPage, setItemsPerPage, fetchHistory, onNavigateToBulk, onNavigateToFunnels, onNavigateToChat, setPage,
+    showOnlyPinned, setShowOnlyPinned,
+    folders, loadingFolders, selectedFolderId, onSelectFolder, createFolder, updateFolder, deleteFolder
 }) => {
     return (
         <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col gap-4">
@@ -50,7 +53,36 @@ const TriggerFilters = ({
                     <option value="aborted">Abortado</option>
                     <option value="cancelled">Cancelado</option>
                 </select>
-                
+
+                {setShowOnlyPinned && (
+                    <button
+                        onClick={() => setShowOnlyPinned(v => !v)}
+                        title={showOnlyPinned ? "Mostrar todos" : "Mostrar apenas fixados"}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                            showOnlyPinned
+                                ? 'bg-amber-400 border-amber-400 text-white shadow-sm'
+                                : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-400 hover:text-amber-500'
+                        }`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill={showOnlyPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                        </svg>
+                        Fixados
+                    </button>
+                )}
+
+                {folders && onSelectFolder && (
+                    <FolderDropdown
+                        folders={folders}
+                        loadingFolders={loadingFolders}
+                        selectedFolderId={selectedFolderId}
+                        onSelectFolder={onSelectFolder}
+                        createFolder={createFolder}
+                        updateFolder={updateFolder}
+                        deleteFolder={deleteFolder}
+                    />
+                )}
+
                 {onNavigateToBulk && (
                     <button
                         onClick={onNavigateToBulk}

@@ -27,7 +27,7 @@ META_CATEGORY_PRICES_BRL = {
 }
 
 @router.get("/{integration_id}/dispatches", response_model=schemas.TriggerListResponse, summary="Listar histórico de disparos e agendamentos")
-def list_dispatches(
+async def list_dispatches(
     integration_id: str,
     skip: int = 0,
     limit: int = 50,
@@ -127,14 +127,8 @@ def list_dispatches(
         
         # Reconciliar as estatísticas para garantir que os ícones de vistos e totais reflitam a realidade de contatos únicos deduplicados
         from services.triggers_service import reconcile_trigger_stats_logic
-        import asyncio
-        # Como list_dispatches é síncrona, rodamos a lógica assíncrona usando o loop atual
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(reconcile_trigger_stats_logic(trigger.id, x_client_id, db))
-            else:
-                loop.run_until_complete(reconcile_trigger_stats_logic(trigger.id, x_client_id, db))
+            await reconcile_trigger_stats_logic(trigger.id, x_client_id, db)
         except Exception as e:
             logger.error(f"Erro ao reconciliar estatísticas do disparo {trigger.id}: {e}")
 

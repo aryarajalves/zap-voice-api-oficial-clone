@@ -28,8 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=backend-builder /install /usr/local
 COPY backend/ .
 
-# Criar diretórios necessários (Uploads são compartilhados via volume)
-RUN mkdir -p /app/static/uploads
+# Criar diretórios necessários (Uploads e logs são compartilhados via volume)
+RUN mkdir -p /app/static/uploads && mkdir -p /app/logs
 
 # --- FIX ENTRYPOINT ---
 COPY docker/entrypoint.sh /app/docker_entrypoint.sh

@@ -3,7 +3,7 @@ import asyncio
 from core.logger import setup_logger
 from models import ContactWindow
 
-logger = setup_logger("ChatwootSyncUtils")
+logger = setup_logger("AtendimentoSyncUtils")
 
 async def safe_chatwoot_sync(db, trigger, contact_phone, client_id, effective_inbox_id, chatwoot_client, sync_fn):
     """
@@ -17,12 +17,12 @@ async def safe_chatwoot_sync(db, trigger, contact_phone, client_id, effective_in
     # Mas se temos, tentamos com ele.
     if conversation_id:
         try:
-            logger.info(f"🔄 [SYNC_CHATWOOT] Tentando sincronizar na conversa {conversation_id} para {contact_phone}...")
+            logger.info(f"🔄 [SYNC_ATENDIMENTO] Tentando sincronizar na conversa {conversation_id} para {contact_phone}...")
             await sync_fn(conversation_id)
             return
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                logger.warning(f"⚠️ [SYNC_404] Conversa {conversation_id} não encontrada no Chatwoot para {contact_phone}. Invalidando cache...")
+                logger.warning(f"⚠️ [SYNC_404] Conversa {conversation_id} não encontrada no Atendimento para {contact_phone}. Invalidando cache...")
             else:
                 logger.error(f"❌ [SYNC] Erro HTTP ao sincronizar na conversa {conversation_id}: {e}")
                 return

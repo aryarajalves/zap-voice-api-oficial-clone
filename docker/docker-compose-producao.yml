@@ -5,7 +5,7 @@ services:
   # SERVIÇO PRINCIPAL (Backend + Frontend)
   # ==========================================
   zapvoice_app:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:backend-4.0.5
+    image: aryalvesfernandes/zapvoice:backend-1.1.2
     container_name: zap-voice-api-oficial
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     ports:
@@ -14,6 +14,7 @@ services:
       - docker_zapvoice_net
     volumes:
       - zapvoice_uploads:/app/static/uploads
+      - zapvoice_logs:/app/logs
     env_file:
       - ../backend/.env
     command: uvicorn main:app --host 0.0.0.0 --port 8000
@@ -54,13 +55,14 @@ services:
   # SERVIÇO WORKER (Processamento em Segundo Plano)
   # ==========================================
   zapvoice_worker:
-    image: aryarajalves/zap-voice-funil-api-oficial-zap:worker-4.0.5
+    image: aryalvesfernandes/zapvoice:worker-1.1.2
     command: python worker.py
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - docker_zapvoice_net
     volumes:
       - zapvoice_uploads:/app/static/uploads
+      - zapvoice_logs:/app/logs
     env_file:
       - ../backend/.env
     environment:
@@ -95,6 +97,8 @@ volumes:
   zapvoice_uploads:
     external: true
     name: zapvoice_uploads
+  zapvoice_logs:
+    name: zapvoice_logs
 
 networks:
   docker_zapvoice_net:

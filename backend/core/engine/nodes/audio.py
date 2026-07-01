@@ -89,7 +89,7 @@ async def handle_audio_node(db, trigger, node, chatwoot, conversation_id, contac
 
         # --- Sincronizar o envio com o Chatwoot ---
         try:
-            logger.info(f"🔄 [SYNC_CHATWOOT] Sincronizando áudio enviado via Meta Direto para {contact_phone}")
+            logger.info(f"🔄 [SYNC_ATENDIMENTO] Sincronizando áudio enviado via Meta Direto para {contact_phone}")
             effective_inbox_id = trigger.chatwoot_inbox_id
             if not effective_inbox_id:
                 from config_loader import get_setting
@@ -113,9 +113,9 @@ async def handle_audio_node(db, trigger, node, chatwoot, conversation_id, contac
                 sync_fn=do_sync_audio
             )
             conversation_id = trigger.conversation_id
-            logger.info(f"✅ [SYNC_CHATWOOT] Registro de áudio postado no Chatwoot (Conversa {conversation_id})")
+            logger.info(f"✅ [SYNC_ATENDIMENTO] Registro de áudio postado no Atendimento (Conversa {conversation_id})")
         except Exception as e_sync:
-            logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar áudio no Chatwoot: {e_sync}")
+            logger.error(f"❌ [SYNC_ATENDIMENTO] Erro ao sincronizar áudio no Atendimento: {e_sync}")
         
         if not getattr(trigger, 'is_interaction', False):
             await asyncio.sleep(10)

@@ -1,7 +1,7 @@
 from typing import Union, List
 from core.logger import setup_logger
 
-logger = setup_logger("ChatwootClient")
+logger = setup_logger("AtendimentoClient")
 
 class ChatwootLabelsMixin:
     async def get_all_labels(self):

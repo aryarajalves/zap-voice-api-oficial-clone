@@ -29,6 +29,7 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
     const [isSettingsGuideOpen, setIsSettingsGuideOpen] = useState(false);
     const [showContactsTable, setShowContactsTable] = useState(false);
     const [showMemoryLogsTable, setShowMemoryLogsTable] = useState(false);
+    const [showChatLogsTable, setShowChatLogsTable] = useState(false);
 
     // Orchestration - Load Data
     useEffect(() => {
@@ -36,6 +37,7 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
             general.loadSettings(chatwoot.fetchAgents);
             dataMgmt.fetchSyncedContacts();
             dataMgmt.fetchMemoryLogs();
+            dataMgmt.fetchChatLogs();
             whatsapp.fetchWhatsAppProfile();
             chatwoot.fetchAgents();
             if (user) {
@@ -54,9 +56,12 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
     }, [dataMgmt.contactsPage, dataMgmt.contactsLimit]);
 
     useEffect(() => {
-        if (isOpen && activeTab === 'advanced') dataMgmt.fetchMemoryLogs();
+        if (isOpen && activeTab === 'advanced') {
+            dataMgmt.fetchMemoryLogs();
+            dataMgmt.fetchChatLogs();
+        }
         if (isOpen && activeTab === 'chatwoot') chatwoot.fetchLabels();
-    }, [dataMgmt.memoryLogsPage, dataMgmt.memoryLogsLimit, activeTab]);
+    }, [dataMgmt.memoryLogsPage, dataMgmt.memoryLogsLimit, dataMgmt.chatLogsPage, dataMgmt.chatLogsLimit, activeTab]);
 
     useEffect(() => {
         const handleOpenSettings = (e) => {
@@ -184,6 +189,8 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
         setShowContactsTable,
         showMemoryLogsTable, 
         setShowMemoryLogsTable,
+        showChatLogsTable,
+        setShowChatLogsTable,
         handleChange: general.handleChange, 
         handleProfileChange: profile.handleProfileChange, 
         handleLogoUpload: general.handleLogoUpload, 

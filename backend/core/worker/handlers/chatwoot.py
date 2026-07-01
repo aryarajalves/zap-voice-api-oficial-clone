@@ -88,12 +88,12 @@ async def delayed_sync_chatwoot_name(client_id: int, phone: str, name: str, dela
             current_name = contact.get("name")
             
             if name and current_name != name:
-                logger.info(f"🔄 [SYNC] Atualizando nome no Chatwoot para {phone}: '{current_name}' -> '{name}'")
+                logger.info(f"🔄 [SYNC] Atualizando nome no Atendimento para {phone}: '{current_name}' -> '{name}'")
                 await chatwoot.update_contact(contact_id, {"name": name})
             else:
                 logger.info(f"✅ [SYNC] Nome já está atualizado ou coincide para {phone}")
         else:
-            logger.warning(f"⚠️ [SYNC] Contato {phone} não encontrado no Chatwoot.")
+            logger.warning(f"⚠️ [SYNC] Contato {phone} não encontrado no Atendimento.")
             
     except Exception as e:
         logger.error(f"❌ [SYNC] Erro na sincronização atrasada de nome para {phone}: {e}")

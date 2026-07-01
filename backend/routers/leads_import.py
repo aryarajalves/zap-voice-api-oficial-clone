@@ -620,16 +620,16 @@ async def run_chatwoot_import(
     from database import SessionLocal
     db = SessionLocal()
     try:
-        logger.info(f"🚀 Iniciando importação assíncrona do Chatwoot. Client ID: {client_id}, Label: {label}")
+        logger.info(f"🚀 Iniciando importação assíncrona do Atendimento. Client ID: {client_id}, Label: {label}")
         chatwoot = ChatwootClient(client_id=client_id)
         
         # 1. Fetch contacts from Chatwoot by label
         contacts = await chatwoot.get_contacts_by_label(label)
         if not contacts:
-            logger.info(f"ℹ️ Nenhum contato encontrado no Chatwoot com a etiqueta '{label}'")
+            logger.info(f"ℹ️ Nenhum contato encontrado no Atendimento com a etiqueta '{label}'")
             return
             
-        logger.info(f"📦 Encontrados {len(contacts)} contatos no Chatwoot com a etiqueta '{label}'")
+        logger.info(f"📦 Encontrados {len(contacts)} contatos no Atendimento com a etiqueta '{label}'")
         
         imported_count = 0
         for c in contacts:

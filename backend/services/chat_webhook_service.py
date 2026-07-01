@@ -12,15 +12,36 @@ from core.logger import setup_logger
 logger = setup_logger("ChatWebhookService")
 
 # Thread pool ou thread isolada para evitar travar as transações síncronas do DB com requisições HTTP
-def dispatch_webhook_in_thread(url: str, payload: dict):
+def dispatch_webhook_in_thread(url: str, payload: dict, message_id: int):
     def run():
+        db: Session = SessionLocal()
         try:
             logger.info(f"📤 [CHAT-WEBHOOK] Despachando evento para: {url}")
-            with httpx.Client(timeout=5.0) as client:
-                response = client.post(url, json=payload)
-                logger.info(f"📥 [CHAT-WEBHOOK] Resposta do Webhook: Status {response.status_code}")
-        except Exception as e:
-            logger.error(f"❌ [CHAT-WEBHOOK] Falha ao despachar webhook para {url}: {e}")
+            status = "failed"
+            error_msg = None
+            try:
+                with httpx.Client(timeout=5.0) as client:
+                    response = client.post(url, json=payload)
+                    logger.info(f"📥 [CHAT-WEBHOOK] Resposta do Webhook: Status {response.status_code}")
+                    if 200 <= response.status_code < 300:
+                        status = "success"
+                    else:
+                        error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+            except Exception as http_err:
+                error_msg = str(http_err)
+                logger.error(f"❌ [CHAT-WEBHOOK] Falha ao despachar webhook para {url}: {http_err}")
+
+            # Atualizar ChatMessage no banco
+            msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id).first()
+            if msg:
+                msg.agentflow_webhook_status = status
+                msg.agentflow_webhook_error = error_msg
+                db.commit()
+                logger.info(f"💾 [CHAT-WEBHOOK] Log salvo no banco para a mensagem {message_id}: status={status}")
+        except Exception as db_err:
+            logger.error(f"❌ [CHAT-WEBHOOK] Erro ao salvar status de log no banco: {db_err}")
+        finally:
+            db.close()
 
     # Dispara a execução em segundo plano de forma isolada
     t = threading.Thread(target=run, daemon=True)
@@ -43,11 +64,31 @@ def after_message_insert(mapper, connection, target):
         if not convo or not convo.client_id:
             return
 
+        # Enviar apenas mensagens recebidas do cliente (contact)
+        if target.sender_type != "contact":
+            return
+
+        # Clique de botão com activate_agent=False → não despachar para o AgentFlow
+        if target.meta_data and target.meta_data.get("skip_agentflow"):
+            logger.info(f"⏭️ [CHAT-WEBHOOK] Mensagem {target.id} marcada com skip_agentflow — AgentFlow não notificado.")
+            connection.execute(
+                models.ChatMessage.__table__.update()
+                .where(models.ChatMessage.id == target.id)
+                .values(agentflow_webhook_status="skipped")
+            )
+            return
+
         client_id = convo.client_id
 
         # 2. Buscar a URL do webhook configurada para este cliente
         webhook_url = get_setting("CHAT_MESSAGES_WEBHOOK_URL", "", client_id=client_id)
         if not webhook_url or not webhook_url.strip():
+            # Gravar como não configurado
+            connection.execute(
+                models.ChatMessage.__table__.update()
+                .where(models.ChatMessage.id == target.id)
+                .values(agentflow_webhook_status="not_configured")
+            )
             return
 
         # 3. Buscar o BSUD do Lead se disponível
@@ -81,7 +122,7 @@ def after_message_insert(mapper, connection, target):
         }
 
         # 5. Despachar em Background sem travar a thread da requisição original
-        dispatch_webhook_in_thread(webhook_url, payload)
+        dispatch_webhook_in_thread(webhook_url, payload, target.id)
 
     except Exception as err:
         logger.error(f"❌ [CHAT-WEBHOOK-LISTENER] Erro ao preparar dados do webhook: {err}")

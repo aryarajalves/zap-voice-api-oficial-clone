@@ -90,7 +90,7 @@ async def handle_input_data_node(db, trigger, node, chatwoot, conversation_id, c
                             db.commit()
                             await chatwoot.send_private_note(conversation_id, f"[Enviado via Meta]: {final_question}")
                     except Exception as e_sync:
-                        logger.error(f"❌ Erro ao sincronizar cópia da pergunta no Chatwoot: {e_sync}")
+                        logger.error(f"❌ Erro ao sincronizar cópia da pergunta no Atendimento: {e_sync}")
                 else:
                     trigger.status = 'failed'
                     trigger.failure_reason = f"Erro ao enviar pergunta via Meta API: {res.get('error') if res else 'Unknown'}"

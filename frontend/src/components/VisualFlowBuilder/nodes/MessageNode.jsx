@@ -185,6 +185,21 @@ const MessageNode = ({ id, data }) => {
                             <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-blue-600 transition-colors">Apenas Horário Comercial?</span>
                         </div>
                     </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none group/toggle">
+                        <div className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={data.sendToMemory !== false}
+                                onChange={(e) => data.onChange(id, { sendToMemory: e.target.checked })}
+                            />
+                            <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-violet-600"></div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="text-[10px]">🧠</span>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase group-hover/toggle:text-violet-600 transition-colors">Disparar na Memória?</span>
+                        </div>
+                    </label>
                 </div>
             </div>
 

@@ -77,7 +77,7 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
                 conversation_id = conversations[0]["id"]
             else:
                 logger.warning(f"⚠️ [AI_CONDITION] Nenhuma conversa encontrada para {contact_phone}. Seguindo fluxo 'error'.")
-                log_node_execution(db, trigger, current_node_id, "failed", "Nenhuma conversa encontrada no Chatwoot.")
+                log_node_execution(db, trigger, current_node_id, "failed", "Nenhuma conversa encontrada no Atendimento.")
                 return "error"
 
         logger.info(f"📖 [AI_CONDITION] Buscando mensagens para conversa {conversation_id} (limite: {ai_limit})...")

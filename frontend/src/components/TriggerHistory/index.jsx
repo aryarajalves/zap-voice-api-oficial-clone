@@ -21,12 +21,26 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
         triggerType: currentTriggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
         itemsPerPage, setItemsPerPage, page, setPage, totalPages, totalItems, fetchHistory,
         handleDelete, handleCancel, handleAction, handleBulkDeleteAction, handleStartNow,
-        handleRetry, handleSyncStats, fetchErrors, fetchChildren, handleViewPipeline, handleSelectAll, handleSelectOne,
+        handleRetry, handleSyncStats, handleTogglePin, fetchErrors, fetchChildren, handleViewPipeline, handleSelectAll, handleSelectOne,
         handleViewContacts, handleEditParams,
+        showOnlyPinned, setShowOnlyPinned,
+        selectedFolderId, setSelectedFolderId,
+        folders, loadingFolders, createFolder, updateFolder, deleteFolder,
+        moveTriggerToFolder, bulkMoveToFolder,
         contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal
     } = useTriggerHistory(refreshKey, initialTriggerTypeProp);
 
     const [manualInteractionTriggerId, setManualInteractionTriggerId] = useState(null);
+
+    const handleToggleShowOnlyPinned = () => {
+        setShowOnlyPinned(v => !v);
+        setPage(1);
+    };
+
+    const handleSelectFolder = (folderId) => {
+        setSelectedFolderId(folderId);
+        setPage(1);
+    };
 
     const handleActionWrapper = () => {
         if (modalConfig.type === 'bulk_delete') {
@@ -125,7 +139,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 fetchChildren={fetchChildren}
             />
 
-            <TriggerFilters 
+            <TriggerFilters
                 filterName={filterName} setFilterName={setFilterName}
                 dateRange={dateRange} setDateRange={setDateRange}
                 filterStatus={filterStatus} setFilterStatus={setFilterStatus}
@@ -137,9 +151,13 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 onNavigateToFunnels={onNavigateToFunnels}
                 onNavigateToChat={onNavigateToChat}
                 setPage={setPage}
+                showOnlyPinned={showOnlyPinned} setShowOnlyPinned={handleToggleShowOnlyPinned}
+                folders={folders} loadingFolders={loadingFolders}
+                selectedFolderId={selectedFolderId} onSelectFolder={handleSelectFolder}
+                createFolder={createFolder} updateFolder={updateFolder} deleteFolder={deleteFolder}
             />
 
-            <TriggerTable 
+            <TriggerTable
                 triggers={triggers} loading={loading} triggerType={currentTriggerType}
                 selectedIds={selectedIds} handleSelectAll={handleSelectAll}
                 handleSelectOne={handleSelectOne} handleViewContacts={handleViewContacts}
@@ -150,6 +168,10 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 handleSyncStats={handleSyncStats}
                 user={user} confirmBulkDelete={confirmBulkDelete}
                 onManualInteraction={(id) => setManualInteractionTriggerId(id)}
+                handleTogglePin={handleTogglePin}
+                showOnlyPinned={showOnlyPinned}
+                folders={folders}
+                moveTriggerToFolder={moveTriggerToFolder}
             />
 
             <Pagination 
@@ -157,10 +179,12 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 totalItems={totalItems} setPage={setPage} 
             />
 
-            <BulkSummaryBar 
-                selectedIds={selectedIds} 
-                setSelectedIds={setSelectedIds} 
-                triggers={triggers} 
+            <BulkSummaryBar
+                selectedIds={selectedIds}
+                setSelectedIds={setSelectedIds}
+                triggers={triggers}
+                folders={folders}
+                bulkMoveToFolder={bulkMoveToFolder}
             />
 
             {monitoringTrigger && (

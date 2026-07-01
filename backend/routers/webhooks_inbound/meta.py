@@ -132,7 +132,8 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
 
     # Log para arquivo para depuração histórica
     try:
-        with open("webhooks_incoming.log", "a", encoding="utf-8") as f:
+        os.makedirs("logs", exist_ok=True)
+        with open("logs/webhooks_incoming.log", "a", encoding="utf-8") as f:
             f.write(f"📥 [META] {datetime.now(timezone.utc)} | Client: {client_id} | Payload: {json.dumps(payload)}\n")
     except Exception as e:
         logger.error(f"❌ Erro ao gravar log de webhook: {e}")

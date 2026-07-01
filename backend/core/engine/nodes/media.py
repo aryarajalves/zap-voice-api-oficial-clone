@@ -46,10 +46,8 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
         "media_type": media_type, "media_url": file_url, "media_file": data.get("fileName", "Mídia"), "caption": caption_processed
     })
     
-    from config_loader import get_setting
-    cw_token = get_setting("CHATWOOT_API_TOKEN", "", client_id=trigger.client_id)
-    cw_url = get_setting("CHATWOOT_API_URL", "", client_id=trigger.client_id)
-    is_chatwoot_active = bool(cw_token and cw_url)
+    # ZapVoice-only: sempre usa Meta Direto. Chatwoot foi removido do sistema.
+    is_chatwoot_active = False
 
     if is_chatwoot_active and conversation_id and int(conversation_id) > 0:
         if chatwoot_contact_id and conversation_id and int(conversation_id) > 0:
@@ -89,7 +87,7 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
                     wa_message_id=msg_id_clean
                 )
             except Exception as e_local:
-                logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mídia localmente (Chatwoot path): {e_local}")
+                logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar mídia localmente (via Atendimento): {e_local}")
 
             if not trigger.is_bulk:
                 log_node_execution(db, trigger, current_node_id, "processing", "Aguardando confirmação do WhatsApp...")
@@ -104,7 +102,7 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
                     await asyncio.sleep(10)
         else:
             trigger.status = 'failed'
-            trigger.failure_reason = f"Chatwoot Media Error: {res.get('error') if isinstance(res, dict) else 'Unknown'}"
+            trigger.failure_reason = f"Erro de Mídia no Atendimento: {res.get('error') if isinstance(res, dict) else 'Unknown'}"
             db.commit()
             return "abort"
     else:
@@ -153,7 +151,7 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
             # --- Sincronizar o envio com o Chatwoot (se estiver ativo) ---
             if is_chatwoot_active:
                 try:
-                    logger.info(f"🔄 [SYNC_CHATWOOT] Sincronizando mídia ({media_type}) enviada via Meta Direto para {contact_phone}")
+                    logger.info(f"🔄 [SYNC_ATENDIMENTO] Sincronizando mídia ({media_type}) enviada via Meta Direto para {contact_phone}")
                     effective_inbox_id = trigger.chatwoot_inbox_id
                     if not effective_inbox_id:
                         from config_loader import get_setting
@@ -176,9 +174,9 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
                         sync_fn=do_sync_media
                     )
                     conversation_id = trigger.conversation_id
-                    logger.info(f"✅ [SYNC_CHATWOOT] Cópia da mídia postada no Chatwoot (Conversa {conversation_id})")
+                    logger.info(f"✅ [SYNC_ATENDIMENTO] Cópia da mídia postada no Atendimento (Conversa {conversation_id})")
                 except Exception as e_sync:
-                    logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar mídia no Chatwoot: {e_sync}")
+                    logger.error(f"❌ [SYNC_ATENDIMENTO] Erro ao sincronizar mídia no Atendimento: {e_sync}")
             
             if not getattr(trigger, 'is_interaction', False): await asyncio.sleep(10)
         else:

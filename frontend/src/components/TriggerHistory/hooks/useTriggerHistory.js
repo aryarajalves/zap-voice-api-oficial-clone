@@ -6,6 +6,7 @@ import { useClient } from '../../../contexts/ClientContext';
 import { useAuth } from '../../../AuthContext';
 import { useTriggerModals } from './useTriggerModals';
 import { useTriggerActions } from './useTriggerActions';
+import { useFolders } from './useFolders';
 import { handleWebSocketMessage, fetchErrorsHelper, fetchChildrenHelper } from '../utils/triggerHistoryUtils';
 
 
@@ -76,6 +77,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
+    const [showOnlyPinned, setShowOnlyPinned] = useState(false);
+    const [selectedFolderId, setSelectedFolderId] = useState(null);
 
     const fetchHistory = useCallback(async () => {
         if (!activeClient) return;
@@ -88,6 +91,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
             if (filterName) url += `&funnel_name=${encodeURIComponent(filterName)}`;
             if (filterStatus && filterStatus !== 'all') url += `&status=${filterStatus}`;
             if (showTechnical) url += `&show_technical=true`;
+            if (showOnlyPinned) url += `&pinned_only=true`;
+            if (selectedFolderId) url += `&folder_id=${selectedFolderId}`;
 
             const now = new Date();
             let start = null;
@@ -138,7 +143,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         } finally {
             setLoading(false);
         }
-    }, [filterName, dateRange, customStart, customEnd, filterStatus, itemsPerPage, page, triggerType, showTechnical, activeClient]);
+    }, [filterName, dateRange, customStart, customEnd, filterStatus, itemsPerPage, page, triggerType, showTechnical, showOnlyPinned, selectedFolderId, activeClient]);
 
     const {
         handleDelete,
@@ -147,7 +152,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         handleBulkDeleteAction,
         handleStartNow,
         handleRetry,
-        handleSyncStats
+        handleSyncStats,
+        handleTogglePin
     } = useTriggerActions({
         activeClient,
         setTriggers,
@@ -156,6 +162,24 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         setSelectedIds,
         setMonitoringTrigger,
         selectedIds
+    });
+
+    const {
+        folders,
+        loadingFolders,
+        fetchFolders,
+        createFolder,
+        updateFolder,
+        deleteFolder,
+        moveTriggerToFolder,
+        bulkMoveToFolder
+    } = useFolders({
+        activeClient,
+        setTriggers,
+        fetchHistory,
+        setSelectedIds,
+        selectedFolderId,
+        setSelectedFolderId
     });
 
     useEffect(() => {
@@ -369,8 +393,12 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         filterName, setFilterName, dateRange, setDateRange, filterStatus, setFilterStatus,
         triggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
         showTechnical, setShowTechnical, itemsPerPage, setItemsPerPage, page, setPage,
+        showOnlyPinned, setShowOnlyPinned,
+        selectedFolderId, setSelectedFolderId,
+        folders, loadingFolders, fetchFolders, createFolder, updateFolder, deleteFolder,
+        moveTriggerToFolder, bulkMoveToFolder,
         totalPages, totalItems, fetchHistory, handleDelete, handleCancel, handleAction,
-        handleBulkDeleteAction, handleStartNow, handleRetry, handleSyncStats, fetchErrors, fetchChildren,
+        handleBulkDeleteAction, handleStartNow, handleRetry, handleSyncStats, handleTogglePin, fetchErrors, fetchChildren,
         handleViewPipeline, fetchTriggerContacts, handleSelectAll, handleSelectOne,
         handleViewContacts, handleEditParams,
         contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal

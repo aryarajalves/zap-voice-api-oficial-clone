@@ -1,7 +1,7 @@
 import httpx
 from core.logger import setup_logger
 
-logger = setup_logger("ChatwootClient")
+logger = setup_logger("AtendimentoClient")
 
 class ChatwootAgentsMixin:
     async def create_agent(self, name: str, email: str, role: str = "agent"):

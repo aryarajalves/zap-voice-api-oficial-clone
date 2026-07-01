@@ -72,9 +72,9 @@ const ExecutionStep = ({
     const formatBRL = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const handleSendWithQualityCheck = () => {
-        // Se a qualidade for MEDIUM ou LOW (ou amarela/vermelha), abrimos o popup
+        // Se a qualidade for LOW (ou vermelha/ruim), abrimos o popup
         const quality = String(whatsappProfile?.quality_rating || '').toUpperCase();
-        if (quality === 'MEDIUM' || quality === 'YELLOW' || quality === 'AVERAGE' || quality === 'LOW' || quality === 'RED' || quality === 'BAD') {
+        if (quality === 'LOW' || quality === 'RED' || quality === 'BAD') {
             setShowQualityWarningModal(true);
         } else {
             handleSend();

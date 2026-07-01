@@ -79,7 +79,10 @@ class ScheduledTrigger(Base):
     recurring_trigger_id = Column(Integer, ForeignKey("recurring_triggers.id", ondelete="SET NULL"), nullable=True, index=True)
     
     funnel_snapshot = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
-    
+
+    is_pinned = Column(Boolean, default=False, nullable=False, server_default="false")
+    folder_id = Column(Integer, ForeignKey("trigger_folders.id", ondelete="SET NULL"), nullable=True, index=True)
+
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     client = relationship("Client", back_populates="triggers")
@@ -88,6 +91,21 @@ class ScheduledTrigger(Base):
     block_funnel = relationship("Funnel", foreign_keys=[block_funnel_id])
     messages = relationship("MessageStatus", back_populates="trigger", cascade="all, delete-orphan")
     children = relationship("ScheduledTrigger", backref=backref("parent", remote_side=[id]), cascade="all, delete-orphan")
+    folder = relationship("TriggerFolder", back_populates="triggers")
+
+
+class TriggerFolder(Base):
+    __tablename__ = "trigger_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    color = Column(String, nullable=True, default="#6366f1", server_default="#6366f1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    client = relationship("Client")
+    triggers = relationship("ScheduledTrigger", back_populates="folder")
 
 class MessageStatus(Base):
     __tablename__ = "message_status"
@@ -212,6 +230,7 @@ class WebhookEventMapping(Base):
     followup_business_hours_start = Column(String, nullable=True, default="08:00")
     followup_business_hours_end = Column(String, nullable=True, default="18:00")
     followup_business_hours_days = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=lambda: [0, 1, 2, 3, 4])
+    button_actions = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     
     is_active = Column(Boolean, default=True)
     cost_per_message = Column(Float, default=0.0)

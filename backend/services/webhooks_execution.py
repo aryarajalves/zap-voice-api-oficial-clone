@@ -206,7 +206,8 @@ async def execute_webhook_resend_logic(
             integration_id=integration.id,
             funnel_id=funnel_id,
             is_bulk=False,
-            skip_block_check=True # Forçar envio manual ignorando travas de supressão
+            skip_block_check=True, # Forçar envio manual ignorando travas de supressão
+            button_actions=mapping.button_actions
         )
         db.add(st)
         db.commit()

@@ -13,7 +13,7 @@ import httpx
 import json
 import time
 from core.logger import setup_logger
-logger = setup_logger("ChatwootRouter")
+logger = setup_logger("AtendimentoRouter")
 router = APIRouter()
 
 def get_client_id(
@@ -118,19 +118,19 @@ async def create_chatwoot_agent(
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user)
 ):
-    logger.info(f"🚀 [CHATWOOT ROUTER] Recebida solicitação para criar agente. ClientID: {client_id}")
+    logger.info(f"🚀 [ATENDIMENTO ROUTER] Recebida solicitação para criar agente. ClientID: {client_id}")
     chatwoot = ChatwootClient(client_id=client_id)
-    
+
     if not chatwoot.api_token:
-        logger.warning(f"⚠️ [CHATWOOT ROUTER] Tentativa de criar agente falhou: Chatwoot não configurado para ClientID {client_id}")
+        logger.warning(f"⚠️ [ATENDIMENTO ROUTER] Tentativa de criar agente falhou: Atendimento não configurado para ClientID {client_id}")
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Chatwoot não configurado. Verifique o Token da API nas configurações.")
+        raise HTTPException(status_code=400, detail="Atendimento não configurado. Verifique o Token da API nas configurações.")
         
     name = payload.get("name")
     email = payload.get("email")
     role = payload.get("role", "agent")
     
-    logger.debug(f"🔍 [CHATWOOT ROUTER] Dados do Agente: Name={name}, Email={email}, Role={role}")
+    logger.debug(f"🔍 [ATENDIMENTO ROUTER] Dados do Agente: Name={name}, Email={email}, Role={role}")
     
     if not name or not email:
         from fastapi import HTTPException
@@ -141,7 +141,7 @@ async def create_chatwoot_agent(
         return data
     except Exception as e:
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail=f"Erro ao criar agente no Chatwoot: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Erro ao criar agente no Atendimento: {str(e)}")
 
 @router.get("/chatwoot/agents")
 async def list_chatwoot_agents(
@@ -167,7 +167,7 @@ async def delete_chatwoot_agent(
     chatwoot = ChatwootClient(client_id=client_id)
     if not chatwoot.api_token:
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Chatwoot não configurado.")
+        raise HTTPException(status_code=400, detail="Atendimento não configurado.")
     try:
         data = await chatwoot.delete_agent(agent_id=agent_id)
         return {"success": True, "data": data}
@@ -431,7 +431,7 @@ async def cleanup_duplicates(
             to_delete = [{"id": cid} for cid in specific_ids]
             yield json.dumps({"status": "starting", "message": f"Iniciando remoção de {len(to_delete)} itens selecionados..."}) + "\n"
         else:
-            yield json.dumps({"status": "searching", "message": "Buscando contatos no Chatwoot (Lote completo)..."}) + "\n"
+            yield json.dumps({"status": "searching", "message": "Buscando contatos no Atendimento (Lote completo)..."}) + "\n"
             contacts = await chatwoot.get_all_contacts(inbox_id=inbox_id)
             
             # Agrupar por contato

@@ -44,11 +44,8 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
     })
     db.refresh(trigger)
 
-    # 24h Window Check
-    from config_loader import get_setting
-    cw_token = get_setting("CHATWOOT_API_TOKEN", "", client_id=trigger.client_id)
-    cw_url = get_setting("CHATWOOT_API_URL", "", client_id=trigger.client_id)
-    is_chatwoot_active = bool(cw_token and cw_url)
+    # ZapVoice-only: sempre usa Meta Direto. Chatwoot foi removido do sistema.
+    is_chatwoot_active = False
 
     if is_chatwoot_active and conversation_id and int(conversation_id) > 0:
         resolved_convo_id = await get_best_conversation(trigger.client_id, contact_phone, conversation_id, db, chatwoot)
@@ -107,7 +104,7 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                     )
                     conversation_id = trigger.conversation_id
                 except Exception as e_sync:
-                    logger.error(f"❌ [SYNC_CHATWOOT] Erro ao enviar nota privada no Chatwoot: {e_sync}")
+                    logger.error(f"❌ [SYNC_ATENDIMENTO] Erro ao enviar nota privada no Atendimento: {e_sync}")
                 
                 trigger.status = 'suspended'
                 trigger.current_node_id = current_node_id
@@ -118,7 +115,7 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                 return "stop"
             else:
                 trigger.status = 'failed'
-                trigger.failure_reason = f"Chatwoot Error: {res.get('detail') or res.get('error') if isinstance(res, dict) else 'Unknown'}"
+                trigger.failure_reason = f"Erro no Atendimento: {res.get('detail') or res.get('error') if isinstance(res, dict) else 'Unknown'}"
                 db.commit()
                 return "abort"
         else:
@@ -185,14 +182,16 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
             else: msg_id = msg_id
         else:
             trigger.status = 'failed'
-            trigger.failure_reason = f"Chatwoot Error: {res.get('detail') or res.get('error') if isinstance(res, dict) else 'Unknown'}"
+            trigger.failure_reason = f"Erro no Atendimento: {res.get('detail') or res.get('error') if isinstance(res, dict) else 'Unknown'}"
             db.commit()
             return "abort"
     else:
         # Enviar via Meta Direto
         buttons = [b.strip() for b in data.get("buttons", []) if b.strip()]
         if buttons:
+            logger.info(f"📤 [MSG-NODE] Enviando interativo com botões para {contact_phone} (trigger={trigger.id})")
             res = await chatwoot.send_interactive_buttons(contact_phone, final_content, buttons)
+            logger.info(f"📨 [MSG-NODE] Resposta Meta (botões) para {contact_phone}: {str(res)[:300]}")
             if res and not res.get("error"):
                 msg_id = res.get("messages", [{}])[0].get("id", "direct_meta")
                 msg_id_clean = str(msg_id).replace("wamid.", "")
@@ -207,36 +206,7 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                     publish_external_event=data.get("publishExternalEvent", False)
                 ))
                 trigger.total_sent = (trigger.total_sent or 0) + 1
-                
-                # Sincronizar com o Chatwoot
-                try:
-                    effective_inbox_id = trigger.chatwoot_inbox_id
-                    if not effective_inbox_id:
-                        from config_loader import get_setting
-                        inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
-                        if inbox_id_str and str(inbox_id_str).isdigit():
-                            effective_inbox_id = int(inbox_id_str)
-                    
-                    from core.engine.sync_utils import safe_chatwoot_sync
-                    formatted_copy = final_content + "\n\n🔘 [Botões]: " + ", ".join([f"[{b}]" for b in buttons])
-                    
-                    async def do_sync(c_id):
-                        await chatwoot.send_private_note(c_id, formatted_copy)
-                        
-                    await safe_chatwoot_sync(
-                        db=db,
-                        trigger=trigger,
-                        contact_phone=contact_phone,
-                        client_id=trigger.client_id,
-                        effective_inbox_id=effective_inbox_id,
-                        chatwoot_client=chatwoot,
-                        sync_fn=do_sync
-                    )
-                    # Atualiza a referência local da conversation_id após a sincronia
-                    conversation_id = trigger.conversation_id
-                except Exception as e_sync:
-                    logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar cópia no Chatwoot (Meta Direto): {e_sync}")
-                
+
                 trigger.status = 'suspended'
                 trigger.current_node_id = current_node_id
                 db.commit()
@@ -250,40 +220,14 @@ async def handle_message_node(db, trigger, node, chatwoot, conversation_id, cont
                 db.commit()
                 return "abort"
         else:
+            logger.info(f"📤 [MSG-NODE] Enviando via Meta Direto para {contact_phone} (trigger={trigger.id})")
             res = await chatwoot.send_text_official(contact_phone, final_content)
+            logger.info(f"📨 [MSG-NODE] Resposta Meta para {contact_phone}: {str(res)[:300]}")
             if not getattr(trigger, 'is_interaction', False):
                 await asyncio.sleep(10)
 
             if res and not res.get("error"):
                 msg_id = res.get("messages", [{}])[0].get("id", "direct_meta")
-                
-                # --- NOVO: Sincronizar o envio com o Chatwoot ---
-                try:
-                    logger.info(f"🔄 [SYNC_CHATWOOT] Sincronizando mensagem enviada via Meta Direto para {contact_phone}")
-                    effective_inbox_id = trigger.chatwoot_inbox_id
-                    if not effective_inbox_id:
-                        from config_loader import get_setting
-                        inbox_id_str = get_setting("CHATWOOT_SELECTED_INBOX_ID", client_id=trigger.client_id)
-                        if inbox_id_str and str(inbox_id_str).isdigit():
-                            effective_inbox_id = int(inbox_id_str)
-                    
-                    from core.engine.sync_utils import safe_chatwoot_sync
-                    
-                    async def do_sync_simple(c_id):
-                        await chatwoot.send_private_note(c_id, f"[Enviado via Meta]: {final_content}")
-                        
-                    await safe_chatwoot_sync(
-                        db=db,
-                        trigger=trigger,
-                        contact_phone=contact_phone,
-                        client_id=trigger.client_id,
-                        effective_inbox_id=effective_inbox_id,
-                        chatwoot_client=chatwoot,
-                        sync_fn=do_sync_simple
-                    )
-                    conversation_id = trigger.conversation_id
-                except Exception as e_sync:
-                    logger.error(f"❌ [SYNC_CHATWOOT] Erro ao sincronizar cópia no Chatwoot: {e_sync}")
             else:
                 trigger.status = 'failed'
                 trigger.failure_reason = f"Meta API: {res.get('error') if res else 'Unknown'}"

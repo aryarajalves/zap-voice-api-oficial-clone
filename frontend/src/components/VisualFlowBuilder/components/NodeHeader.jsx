@@ -143,10 +143,12 @@ const HELP_CONTENT = {
         outputs: "Fluxo sequencial direto."
     },
     "Ações de CRM": {
-        description: "Executa tarefas automáticas de CRM (ex: alterar status do lead, atribuir agente responsável).",
+        description: "Executa tarefas automáticas de CRM. Primeiro escolha a Plataforma onde a ação será executada, depois a Ação específica.",
         details: [
-            "Automatiza a triagem e direcionamento de leads no Chatwoot.",
-            "Mantém o pipeline do CRM organizado sem esforço manual."
+            "💬 Atendimento (Chat Local): age direto na conversa da ferramenta de chat/atendimento do próprio ZapVoice — etiquetar, atualizar contato, adicionar nota privada ou trocar responsável.",
+            "🛡️ Segmentação Local (ZapVoice): atua direto no banco de contatos (leads) do próprio ZapVoice — adiciona/remove tags ou bloqueia/desbloqueia na blacklist local, sem depender de serviço externo.",
+            "⚡ ManyChat: integra com sua conta ManyChat externa — adiciona/remove tags ou define custom fields por lá.",
+            "Mantém o pipeline do CRM organizado sem esforço manual, seja no chat do ZapVoice, na segmentação local ou no ManyChat."
         ],
         outputs: "Fluxo sequencial direto."
     },

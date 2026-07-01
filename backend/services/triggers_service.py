@@ -32,6 +32,9 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         models.MessageStatus.trigger_id.in_(all_trigger_ids)
     ).all()
 
+    if not all_statuses:
+        return None
+
     # 2. Inicializar contadores
     sent = 0
     delivered = 0
@@ -51,7 +54,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         phone_groups[phone].append(ms)
 
     for phone, group in phone_groups.items():
-        has_interaction = any((ms.is_interaction or ms.interaction_counted) and ms.failure_reason != 'BLOCKED_VIA_BUTTON' for ms in group)
+        has_interaction = any((ms.is_interaction or ms.interaction_counted) for ms in group)
         has_sent = any(ms.status in ['sent', 'delivered', 'read', 'interaction'] or ms.delivered_counted or ms.read_counted for ms in group)
         has_delivered = any(ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction for ms in group)
         # Mensagens só são lidas (read) se tiverem status 'read' ou 'interaction' (ou sinalização de read_counted), 
@@ -98,6 +101,13 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     trigger.total_interactions = interactions
     trigger.total_cost = total_cost
     trigger.total_paid_templates = paid_templates
+
+    # Se houver mensagens falhas, sincronizar a razão do erro
+    failed_msgs = [ms for ms in all_statuses if ms.status == 'failed' and ms.failure_reason]
+    if failed_msgs:
+        latest_failed_msg = max(failed_msgs, key=lambda x: x.id)
+        trigger.failure_reason = latest_failed_msg.failure_reason
+
 
     # queue_count: mensagens enviadas à Meta que ainda não receberam confirmação de entrega
     # (status='sent', sem delivered_counted nem read_counted).

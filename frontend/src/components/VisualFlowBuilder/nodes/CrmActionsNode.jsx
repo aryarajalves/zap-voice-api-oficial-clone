@@ -1,11 +1,28 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Handle, Position } from 'reactflow';
-import { FiSliders, FiX, FiChevronDown, FiSearch } from 'react-icons/fi';
+import { FiSliders, FiX, FiChevronDown, FiSearch, FiTag, FiPlus, FiInfo } from 'react-icons/fi';
 import { useClient } from '../../../contexts/ClientContext';
 import { fetchWithAuth } from '../../../AuthContext';
 import { API_URL } from '../../../config';
 import NodeHeader from '../components/NodeHeader';
 import VariableSelector from '../components/VariableSelector';
+
+// Explica para que serve cada plataforma disponível na Ação de CRM,
+// para o usuário entender a diferença antes de escolher.
+const PLATFORM_INFO = {
+    chatwoot: {
+        title: 'Atendimento (Chat Local)',
+        description: 'Executa a ação direto na conversa da sua ferramenta de chat/atendimento do próprio ZapVoice: etiquetar a conversa, atualizar dados do contato, adicionar nota privada ou trocar o agente responsável.'
+    },
+    local: {
+        title: 'Segmentação Local (ZapVoice)',
+        description: 'Atua direto no banco de contatos (leads) do próprio ZapVoice, sem depender de nenhum serviço externo: adiciona/remove tags ou bloqueia/desbloqueia o contato na blacklist local, controlando quem recebe disparos futuros.'
+    },
+    manychat: {
+        title: 'ManyChat',
+        description: 'Integra com sua conta ManyChat (CRM externo): adiciona/remove tags ou define custom fields diretamente lá. Use quando o fluxo de automação principal do contato roda no ManyChat.'
+    }
+};
 
 const CrmActionsNode = ({ id, data }) => {
     const { activeClient } = useClient();
@@ -21,12 +38,16 @@ const CrmActionsNode = ({ id, data }) => {
     const [addSearch, setAddSearch] = useState('');
     const [removeSearch, setRemoveSearch] = useState('');
 
+    const [existingTags, setExistingTags] = useState([]);
+    const [showLocalSuggestions, setShowLocalSuggestions] = useState(false);
+
     const addDropdownRef = useRef(null);
     const removeDropdownRef = useRef(null);
 
-    // Carrega etiquetas se for a ação 'chatwoot_label'
+    // Carrega etiquetas se for a ação 'chatwoot_label' ou carrega as tags locais do cliente
     useEffect(() => {
-        if (platform === 'chatwoot' && action === 'chatwoot_label' && activeClient) {
+        if (!activeClient) return;
+        if (platform === 'chatwoot' && action === 'chatwoot_label') {
             setLoadingLabels(true);
             fetchWithAuth(`${API_URL}/chat/labels`, { headers: { 'X-Client-ID': activeClient.id } })
                 .then(res => res.json())
@@ -36,6 +57,15 @@ const CrmActionsNode = ({ id, data }) => {
                 })
                 .catch(console.error)
                 .finally(() => setLoadingLabels(false));
+        } else if (platform === 'local' && (action === 'add_tag' || action === 'remove_tag')) {
+            fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && Array.isArray(data.tags)) {
+                        setExistingTags(data.tags);
+                    }
+                })
+                .catch(console.error);
         }
     }, [platform, action, activeClient]);
 
@@ -102,7 +132,7 @@ const CrmActionsNode = ({ id, data }) => {
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-indigo-500 min-w-[280px] transition-all hover:shadow-2xl">
             <Handle type="target" position={Position.Left} className="w-3 h-3 bg-indigo-500" />
-            
+
             <NodeHeader
                 label="Ações de CRM"
                 icon={FiSliders}
@@ -116,13 +146,25 @@ const CrmActionsNode = ({ id, data }) => {
             <div className="space-y-3 mt-2 px-1">
                 {/* Seleção de Plataforma */}
                 <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase block">Plataforma</label>
+                    <div className="flex items-center gap-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase block">Plataforma</label>
+                        {PLATFORM_INFO[platform] && (
+                            <span className="relative inline-flex group nodrag">
+                                <FiInfo size={11} className="text-gray-400 hover:text-indigo-400 cursor-help" />
+                                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-56 opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-gray-900 text-gray-100 text-[10px] leading-snug font-normal normal-case p-2 rounded-lg shadow-xl">
+                                    {PLATFORM_INFO[platform].description}
+                                    <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                                </span>
+                            </span>
+                        )}
+                    </div>
                     <select
                         className="nodrag nopan w-full text-xs border rounded p-2 bg-gray-55 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-semibold focus:ring-2 focus:ring-indigo-500 outline-none border-gray-300 dark:border-gray-700"
                         value={platform}
                         onChange={(e) => handlePlatformChange(e.target.value)}
                     >
                         <option value="chatwoot">💬 Atendimento (Chat Local)</option>
+                        <option value="local">🛡️ Segmentação Local (ZapVoice)</option>
                         <option value="manychat">⚡ ManyChat</option>
                     </select>
                 </div>
@@ -141,6 +183,13 @@ const CrmActionsNode = ({ id, data }) => {
                                 <option value="update_contact">👤 Atualizar Contato (Nome)</option>
                                 <option value="add_private_note">📝 Adicionar Nota Privada</option>
                                 <option value="change_assignee">👤 Alterar Responsável</option>
+                            </>
+                        ) : platform === 'local' ? (
+                            <>
+                                <option value="add_tag">🏷️ Adicionar Tag Local</option>
+                                <option value="remove_tag">🏷️ Remover Tag Local</option>
+                                <option value="block">🚫 Adicionar à Blacklist (Bloquear)</option>
+                                <option value="unblock">🟢 Remover da Blacklist (Desbloquear)</option>
                             </>
                         ) : (
                             <>
@@ -176,10 +225,10 @@ const CrmActionsNode = ({ id, data }) => {
                                 {isAddOpen && (
                                     <div className="nodrag nopan absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded shadow-xl max-h-60 overflow-hidden flex flex-col border-gray-200 dark:border-gray-700">
                                         <div className="p-2 border-b flex items-center gap-1"><FiSearch className="text-gray-400" /><input type="text" className="nodrag w-full text-xs bg-transparent outline-none text-gray-900 dark:text-gray-100" placeholder="Buscar..." value={addSearch} onChange={(e) => setAddSearch(e.target.value)} /></div>
-                                        <div className="nodrag nopan overflow-y-auto max-h-40 flex-1 premium-scrollbar">
+                                        <div className="nodrag nopan nowheel overflow-y-auto max-h-40 flex-1 premium-scrollbar">
                                             {addSearch.trim() !== '' && !labels.some(l => l.title.toLowerCase() === addSearch.trim().toLowerCase()) && (
-                                                <div 
-                                                    className="p-2 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer font-bold border-b border-dashed border-indigo-200 dark:border-indigo-850/40 text-center" 
+                                                <div
+                                                    className="p-2 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer font-bold border-b border-dashed border-indigo-200 dark:border-indigo-850/40 text-center"
                                                     onClick={() => {
                                                         const newLabelStr = addSearch.trim();
                                                         setLabels(prev => [...prev, { id: prev.length, title: newLabelStr }]);
@@ -224,7 +273,7 @@ const CrmActionsNode = ({ id, data }) => {
                                 {isRemoveOpen && (
                                     <div className="nodrag nopan absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded shadow-xl max-h-60 overflow-hidden flex flex-col border-gray-200 dark:border-gray-700">
                                         <div className="p-2 border-b flex items-center gap-1"><FiSearch className="text-gray-400" /><input type="text" className="nodrag w-full text-xs bg-transparent outline-none text-gray-900 dark:text-gray-100" placeholder="Buscar..." value={removeSearch} onChange={(e) => setRemoveSearch(e.target.value)} /></div>
-                                        <div className="nodrag nopan overflow-y-auto max-h-40 flex-1 premium-scrollbar">
+                                        <div className="nodrag nopan nowheel overflow-y-auto max-h-40 flex-1 premium-scrollbar">
                                             {filteredRemoveLabels.map(l => (
                                                 <div key={l.id} className="p-2 text-xs hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-900 dark:text-gray-100" onClick={() => { toggleRemoveLabel(l.title); setIsRemoveOpen(false); setRemoveSearch(''); }}>{l.title}</div>
                                             ))}
@@ -278,8 +327,72 @@ const CrmActionsNode = ({ id, data }) => {
                     </div>
                 )}
 
+                {/* VISÃO ESPECÍFICA: SEGMENTAÇÃO LOCAL */}
+                {platform === 'local' && (action === 'add_tag' || action === 'remove_tag') && (
+                    <div className="flex flex-col gap-1 relative pt-1 border-t border-gray-100 dark:border-gray-700/50">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase block">Nome da Tag Local</label>
+                        <input
+                            type="text"
+                            placeholder="Buscar ou criar tag..."
+                            className="nodrag nopan w-full text-xs p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none border-gray-300 dark:border-gray-700"
+                            value={value}
+                            onChange={(e) => {
+                                data.onChange(id, { value: e.target.value, tagName: e.target.value });
+                                setShowLocalSuggestions(true);
+                            }}
+                            onFocus={() => setShowLocalSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowLocalSuggestions(false), 250)}
+                        />
+
+                        {/* Caixa de Sugestões de Tags */}
+                        {showLocalSuggestions && (
+                            <div className="absolute top-full left-0 right-0 mt-1 z-[50] max-h-[160px] overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl nodrag nopan nowheel premium-scrollbar p-1">
+                                {existingTags
+                                    .filter(t => t.toLowerCase().includes((value || '').toLowerCase()))
+                                    .map((tag) => (
+                                        <button
+                                            key={tag}
+                                            type="button"
+                                            onClick={() => {
+                                                data.onChange(id, { value: tag, tagName: tag });
+                                                setShowLocalSuggestions(false);
+                                            }}
+                                            className="w-full text-left text-xs px-2.5 py-1.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-700 dark:text-gray-200 rounded-md transition cursor-pointer font-medium"
+                                        >
+                                            🏷️ {tag}
+                                        </button>
+                                    ))}
+
+                                {value.trim() !== '' && !existingTags.some(t => t.toLowerCase() === value.trim().toLowerCase()) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            data.onChange(id, { value: value.trim(), tagName: value.trim() });
+                                            setShowLocalSuggestions(false);
+                                        }}
+                                        className="w-full text-left text-xs px-2.5 py-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 dark:text-green-400 border-t border-dashed border-gray-100 dark:border-gray-800 rounded-md transition cursor-pointer font-bold flex items-center gap-1.5"
+                                    >
+                                        <FiPlus size={12} /> Criar tag "{value.trim()}"
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {platform === 'local' && (action === 'block' || action === 'unblock') && (
+                    <div className="pt-1 border-t border-gray-100 dark:border-gray-700/50">
+                        <p className="text-[10px] text-gray-400 italic bg-gray-50 dark:bg-gray-900/50 p-2 rounded border border-dashed border-gray-200 dark:border-gray-700">
+                            {action === 'block'
+                                ? "O número do contato será inserido na Blacklist local do ZapVoice, interrompendo réguas futuras."
+                                : "O contato voltará a estar elegível para disparos de novos funis e fluxos no sistema."
+                            }
+                        </p>
+                    </div>
+                )}
+
                 {/* INPUT PADRÃO PARA OUTRAS AÇÕES */}
-                {action !== 'chatwoot_label' && action !== 'update_contact' && (
+                {action !== 'chatwoot_label' && action !== 'update_contact' && platform !== 'local' && (
                     <div className="flex flex-col gap-1 relative pt-1 border-t border-gray-100 dark:border-gray-700/50">
                         <div className="flex justify-between items-center mb-0.5">
                             <label className="text-[10px] font-bold text-gray-400 uppercase block">
@@ -290,8 +403,8 @@ const CrmActionsNode = ({ id, data }) => {
                         <input
                             type="text"
                             placeholder={
-                                action === 'change_assignee' ? 'Ex: 45' : 
-                                action === 'set_custom_field' ? 'Ex: lead_score:100' : 
+                                action === 'change_assignee' ? 'Ex: 45' :
+                                action === 'set_custom_field' ? 'Ex: lead_score:100' :
                                 'Ex: lead-quente'
                             }
                             className="nodrag nopan w-full text-xs p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none border-gray-300 dark:border-gray-700"

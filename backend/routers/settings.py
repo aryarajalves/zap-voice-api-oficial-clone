@@ -364,19 +364,76 @@ def fetch_memory_logs(
         
         formatted_items = []
         for item in items:
+            trigger = item.trigger
+            is_funnel = bool(trigger and trigger.funnel_id)
+            is_bulk = bool(trigger and getattr(trigger, 'is_bulk', False))
+            msg_type = item.message_type or ""
+            # Classificação do tipo de mensagem
+            if msg_type == "TEMPLATE" or bool(item.template_name):
+                kind = "template"
+            elif is_funnel:
+                kind = "funil"
+            elif is_bulk:
+                kind = "disparo_sessao"
+            else:
+                kind = "direto"
+
             formatted_items.append({
                 "id": item.id,
                 "phone": item.phone_number,
                 "content": item.content,
-                "status": item.memory_webhook_status, # sent, failed, pending, not_configured
+                "status": item.memory_webhook_status,
                 "error": item.memory_webhook_error,
                 "timestamp": item.timestamp.isoformat() if item.timestamp else None,
-                "template_name": item.template_name
+                "template_name": item.template_name,
+                "message_type": msg_type,
+                "kind": kind,
             })
             
         return {"items": formatted_items, "total": total}
     except Exception as e:
         print(f"❌ [SETTINGS] Erro ao buscar logs de memória: {e}")
+        return {"items": [], "total": 0}
+
+@router.get("/chat-logs")
+def fetch_chat_logs(
+    skip: int = 0,
+    limit: int = 20,
+    x_client_id: int = Depends(get_validated_client_id),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Busca os logs do webhook de mensagens (ChatMessage) com paginação.
+    Exibe mensagens que foram enviadas (ou tentadas) para o webhook do AgentFlow.
+    """
+    from models import ChatMessage, ChatConversation
+    
+    try:
+        # Join com ChatConversation para filtrar pelo client_id
+        query = db.query(ChatMessage).join(ChatConversation).filter(
+            ChatConversation.client_id == x_client_id,
+            ChatMessage.agentflow_webhook_status.isnot(None)
+        )
+        
+        total = query.count()
+        items = query.order_by(ChatMessage.timestamp.desc()).offset(skip).limit(limit).all()
+        
+        formatted_items = []
+        for item in items:
+            formatted_items.append({
+                "id": item.id,
+                "phone": item.conversation.phone if item.conversation else "Desconhecido",
+                "content": item.content,
+                "status": item.agentflow_webhook_status,  # success, failed, not_configured
+                "error": item.agentflow_webhook_error,
+                "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                "sender_type": item.sender_type
+            })
+            
+        return {"items": formatted_items, "total": total}
+    except Exception as e:
+        print(f"❌ [SETTINGS] Erro ao buscar logs de chat (AgentFlow): {e}")
         return {"items": [], "total": 0}
 
 @router.post("/test-memory-webhook")

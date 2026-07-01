@@ -16,6 +16,8 @@ export default function ChatConversations({ onClose }) {
     const [activeTab, setActiveTab] = useState('todos'); // minha, nao_atribuida, todos
     const [statusFilter, setStatusFilter] = useState('open'); // open, resolved
     const [selectedLabelFilter, setSelectedLabelFilter] = useState(null); // filtro por etiqueta
+    const [filterWindowOpen, setFilterWindowOpen] = useState(false); // só conversas com janela 24h aberta
+    const [filterUnread, setFilterUnread] = useState(false); // só conversas com mensagem não lida
     const [availableLabels, setAvailableLabels] = useState([]); // todas as etiquetas do cliente
     const [availableLabelsDetails, setAvailableLabelsDetails] = useState([]); // detalhes com cor
     const [showRightSidebar, setShowRightSidebar] = useState(true); // fechar/abrir barra lateral direita
@@ -29,6 +31,11 @@ export default function ChatConversations({ onClose }) {
     const [timeLeft24h, setTimeLeft24h] = useState('');
     const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
     const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+    // Seleção e delete de conversas
+    const [selectedConvoIds, setSelectedConvoIds] = useState([]);
+    const [confirmDeleteConvos, setConfirmDeleteConvos] = useState(null); // null | 'single' | 'bulk'
+    const [deletingConvoId, setDeletingConvoId] = useState(null); // id para delete individual
 
     // Preview de mídia antes do envio
     const [mediaPreview, setMediaPreview] = useState(null); // { file, fileUrl, localUrl, messageType, caption }
@@ -124,8 +131,13 @@ export default function ChatConversations({ onClose }) {
             if (res.ok) {
                 const data = await res.json();
                 setMessages(data);
+                if (showLoading) setShouldScrollToBottom(true); // scroll após carregar as mensagens
+            } else {
+                setMessages([]);
+                if (showLoading) console.warn('Erro ao carregar mensagens:', res.status);
             }
         } catch (err) {
+            setMessages([]);
             console.error('Erro ao carregar mensagens:', err);
         } finally {
             if (showLoading) setIsLoadingMessages(false);
@@ -255,8 +267,8 @@ export default function ChatConversations({ onClose }) {
 
     useEffect(() => {
         if (!selectedConvo) return;
-        loadMessages(selectedConvo.id, true);
-        setShouldScrollToBottom(true); // Forçar scroll ao abrir conversa
+        setMessages([]); // Limpa mensagens da conversa anterior antes de carregar a nova
+        loadMessages(selectedConvo.id, true); // scroll para o fim acontece dentro de loadMessages
         setPrivateNote(selectedConvo.private_note || '');
 
         const msgInterval = setInterval(() => {
@@ -593,6 +605,51 @@ export default function ChatConversations({ onClose }) {
         }
     };
 
+    // Delete de conversa individual
+    const handleDeleteConversation = async (convoId) => {
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${convoId}`, { method: 'DELETE' }, activeClient?.id);
+            if (res.ok) {
+                setConversations(prev => prev.filter(c => c.id !== convoId));
+                setSelectedConvoIds(prev => prev.filter(id => id !== convoId));
+                if (selectedConvo?.id === convoId) setSelectedConvo(null);
+                toast.success('Conversa deletada.');
+            } else {
+                toast.error('Erro ao deletar conversa.');
+            }
+        } catch {
+            toast.error('Erro de conexão.');
+        } finally {
+            setConfirmDeleteConvos(null);
+            setDeletingConvoId(null);
+        }
+    };
+
+    // Delete em massa
+    const handleDeleteSelectedConversations = async () => {
+        if (!selectedConvoIds.length) return;
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/conversations`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: selectedConvoIds })
+            }, activeClient?.id);
+            if (res.ok) {
+                const data = await res.json();
+                setConversations(prev => prev.filter(c => !selectedConvoIds.includes(c.id)));
+                if (selectedConvoIds.includes(selectedConvo?.id)) setSelectedConvo(null);
+                setSelectedConvoIds([]);
+                toast.success(`${data.deleted_count} conversa(s) deletada(s).`);
+            } else {
+                toast.error('Erro ao deletar conversas.');
+            }
+        } catch {
+            toast.error('Erro de conexão.');
+        } finally {
+            setConfirmDeleteConvos(null);
+        }
+    };
+
     // Formatar data relativa
     const formatTime = (isoString) => {
         if (!isoString) return '';
@@ -600,12 +657,14 @@ export default function ChatConversations({ onClose }) {
         const now = new Date();
         const diffMs = now - date;
         const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMins / 60000);
-        
+
         if (diffMins < 1) return 'Agora';
         if (diffMins < 60) return `${diffMins}m`;
-        if (diffHours < 24) return `${diffHours}h`;
-        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        // Mais de 60 min: mostrar horário real (HH:MM)
+        if (date.toDateString() === now.toDateString()) {
+            return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     };
 
     // Formatar data e hora amigável para mensagens
@@ -630,6 +689,13 @@ export default function ChatConversations({ onClose }) {
             return `${dateStr} às ${timeStr}`;
         }
     };
+
+    // Conversas visíveis após aplicar filtros
+    const visibleConversations = conversations.filter(c => {
+        if (filterWindowOpen && !(c.last_contact_message_at && (Date.now() - new Date(c.last_contact_message_at).getTime()) < 24 * 60 * 60 * 1000)) return false;
+        if (filterUnread && !(c.unread_count > 0)) return false;
+        return true;
+    });
 
     return (
         <>
@@ -709,6 +775,34 @@ export default function ChatConversations({ onClose }) {
                                 )}
                             </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Modal de confirmação de delete de conversa(s) */}
+        {confirmDeleteConvos && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">
+                        {confirmDeleteConvos === 'bulk' ? `Deletar ${selectedConvoIds.length} conversa(s)?` : 'Deletar conversa?'}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+                        Esta ação é irreversível. Todas as mensagens da(s) conversa(s) serão apagadas permanentemente.
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => { setConfirmDeleteConvos(null); setDeletingConvoId(null); }}
+                            className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={() => confirmDeleteConvos === 'bulk' ? handleDeleteSelectedConversations() : handleDeleteConversation(deletingConvoId)}
+                            className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition"
+                        >
+                            Deletar
+                        </button>
                     </div>
                 </div>
             </div>
@@ -796,7 +890,7 @@ export default function ChatConversations({ onClose }) {
                                 <span>Filtrar por Marcador</span>
                             </div>
                             <span className="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                {conversations.length} contato{conversations.length !== 1 ? 's' : ''}
+                                {visibleConversations.length} contato{visibleConversations.length !== 1 ? 's' : ''}
                             </span>
                         </div>
                         <select
@@ -809,6 +903,65 @@ export default function ChatConversations({ onClose }) {
                                 <option key={label} value={label}>{label}</option>
                             ))}
                         </select>
+
+                        <div className="flex gap-2">
+                            {/* Filtro: Janela 24h aberta */}
+                            <button
+                                onClick={() => setFilterWindowOpen(v => !v)}
+                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                    filterWindowOpen
+                                        ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                                        : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-green-500/40 hover:text-green-400'
+                                }`}
+                            >
+                                <span className={`w-2 h-2 rounded-full ${filterWindowOpen ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
+                                Janela 24h aberta
+                            </button>
+
+                            {/* Filtro: Não lidas */}
+                            <button
+                                onClick={() => setFilterUnread(v => !v)}
+                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                    filterUnread
+                                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                                        : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-emerald-500/40 hover:text-emerald-400'
+                                }`}
+                            >
+                                <span className={`w-2 h-2 rounded-full ${filterUnread ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
+                                Não lidas
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Barra de seleção em massa */}
+                {visibleConversations.length > 0 && (
+                    <div className="px-4 py-2 border-b border-gray-200 dark:border-white/5 flex items-center gap-2 bg-gray-50/30 dark:bg-black/10">
+                        <button
+                            onClick={() => {
+                                const allIds = visibleConversations.map(c => c.id);
+                                const allSelected = allIds.every(id => selectedConvoIds.includes(id));
+                                setSelectedConvoIds(allSelected ? [] : allIds);
+                            }}
+                            className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 font-medium transition-colors"
+                        >
+                            <input
+                                type="checkbox"
+                                readOnly
+                                checked={visibleConversations.length > 0 && visibleConversations.every(c => selectedConvoIds.includes(c.id))}
+                                className="rounded border-gray-300 text-blue-600 pointer-events-none"
+                            />
+                            Selecionar todas
+                        </button>
+                        {selectedConvoIds.length > 0 && (
+                            <button
+                                onClick={() => setConfirmDeleteConvos('bulk')}
+                                className="ml-auto flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold transition border border-red-500/20"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                Deletar ({selectedConvoIds.length})
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -825,7 +978,7 @@ export default function ChatConversations({ onClose }) {
                             <span className="text-xs">Nenhuma conversa encontrada</span>
                         </div>
                     ) : (
-                        conversations.map((convo) => {
+                        visibleConversations.map((convo) => {
                             const isSelected = selectedConvo?.id === convo.id;
                             const initials = (convo.contact_name || convo.phone || 'C')
                                 .split(' ')
@@ -834,60 +987,96 @@ export default function ChatConversations({ onClose }) {
                                 .join('')
                                 .toUpperCase();
 
+                            const isChecked = selectedConvoIds.includes(convo.id);
                             return (
                                 <div
                                     key={convo.id}
-                                    onClick={() => setSelectedConvo(convo)}
-                                    className={`p-4 cursor-pointer transition-all flex gap-3 items-center ${
-                                        isSelected 
-                                        ? 'bg-blue-50/50 dark:bg-blue-900/10 border-l-4 border-blue-600' 
+                                    className={`relative group/convo p-4 cursor-pointer transition-all flex gap-3 items-center ${
+                                        isSelected
+                                        ? 'bg-blue-50/50 dark:bg-blue-900/10 border-l-4 border-blue-600'
+                                        : isChecked
+                                        ? 'bg-red-50/30 dark:bg-red-900/10 border-l-4 border-red-400'
                                         : 'hover:bg-gray-100/50 dark:hover:bg-gray-800/20'
                                     }`}
                                 >
-                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm tracking-wide shrink-0">
-                                        {initials}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-baseline mb-1">
-                                            <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate pr-2 flex items-center gap-1">
-                                                {convo.pinned && <BsPinAngleFill className="text-blue-500 rotate-45 shrink-0" size={12} />}
-                                                {convo.contact_name || convo.phone}
-                                            </h4>
-                                            <span className="text-[10px] text-gray-400 shrink-0">
-                                                {formatTime(convo.last_message_at)}
-                                            </span>
+                                    {/* Checkbox de seleção */}
+                                    <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedConvoIds(prev =>
+                                                isChecked ? prev.filter(id => id !== convo.id) : [...prev, convo.id]
+                                            );
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="rounded border-gray-300 text-blue-600 shrink-0 cursor-pointer"
+                                    />
+
+                                    <div
+                                        className="flex flex-1 gap-3 items-center min-w-0"
+                                        onClick={() => setSelectedConvo(convo)}
+                                    >
+                                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm tracking-wide shrink-0">
+                                            {initials}
                                         </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">
-                                            {convo.last_message_content || 'Nenhuma mensagem'}
-                                        </p>
-                                        
-                                        {/* Exibição de Marcadores/Etiquetas no Card */}
-                                        {convo.labels && convo.labels.length > 0 && (
-                                            <div className="flex flex-wrap gap-1">
-                                                {convo.labels.map(label => {
-                                                    const labelColor = getLabelColor(label);
-                                                    return (
-                                                        <span 
-                                                            key={label} 
-                                                            style={{
-                                                                color: labelColor,
-                                                                borderColor: labelColor + '33',
-                                                                backgroundColor: labelColor + '15'
-                                                            }}
-                                                            className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
-                                                        >
-                                                            {label}
-                                                        </span>
-                                                    );
-                                                })}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-baseline mb-1">
+                                                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate pr-2 flex items-center gap-1">
+                                                    {convo.pinned && <BsPinAngleFill className="text-blue-500 rotate-45 shrink-0" size={12} />}
+                                                    {convo.contact_name || convo.phone}
+                                                </h4>
+                                                <span className="text-[10px] text-gray-400 shrink-0">
+                                                    {formatTime(convo.last_message_at)}
+                                                </span>
                                             </div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">
+                                                {convo.last_message_content || 'Nenhuma mensagem'}
+                                            </p>
+
+                                            {/* Exibição de Marcadores/Etiquetas no Card */}
+                                            {convo.labels && convo.labels.length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {convo.labels.map(label => {
+                                                        const labelColor = getLabelColor(label);
+                                                        return (
+                                                            <span
+                                                                key={label}
+                                                                style={{
+                                                                    color: labelColor,
+                                                                    borderColor: labelColor + '33',
+                                                                    backgroundColor: labelColor + '15'
+                                                                }}
+                                                                className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                                                            >
+                                                                {label}
+                                                            </span>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {convo.unread_count > 0 && (
+                                            <span className="bg-emerald-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">
+                                                {convo.unread_count}
+                                            </span>
                                         )}
                                     </div>
-                                    {convo.unread_count > 0 && (
-                                        <span className="bg-emerald-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">
-                                            {convo.unread_count}
-                                        </span>
-                                    )}
+
+                                    {/* Botão delete individual (aparece no hover) */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeletingConvoId(convo.id);
+                                            setConfirmDeleteConvos('single');
+                                        }}
+                                        className="opacity-0 group-hover/convo:opacity-100 shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                                        title="Deletar conversa"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
                                 </div>
                             );
                         })
@@ -970,11 +1159,17 @@ export default function ChatConversations({ onClose }) {
                                 <div className="flex items-center justify-center h-full text-gray-400">
                                     <FiRefreshCw className="animate-spin mb-1" size={20} />
                                 </div>
+                            ) : messages.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 gap-2">
+                                    <FiMessageSquare size={32} className="opacity-40" />
+                                    <span className="text-xs">Nenhuma mensagem ainda</span>
+                                </div>
                             ) : (
                                 messages.map((msg) => {
+                                    // Reações salvas como ChatMessage
                                     const isSystem = msg.sender_type === 'system';
                                     const isMe = msg.sender_type === 'user';
-                                    
+
                                     if (isSystem) {
                                         return (
                                             <div
@@ -1000,10 +1195,10 @@ export default function ChatConversations({ onClose }) {
                                     return (
                                         <div
                                             key={msg.id}
-                                            className={`flex ${isMe ? 'justify-end' : 'justify-start'} group/msg`}
+                                            className={`flex ${isMe ? 'justify-end' : 'justify-start'} group/msg ${msg.meta_data?.reactions?.length > 0 ? 'mb-4' : ''}`}
                                         >
                                             <div
-                                                className={`max-w-lg rounded-2xl px-4 py-2.5 shadow-sm text-sm ${
+                                                className={`relative max-w-lg rounded-2xl px-4 py-2.5 shadow-sm text-sm ${
                                                     isTemplate
                                                     ? 'bg-gradient-to-br from-[#1e1b4b] to-[#1e293b] text-gray-100 border border-indigo-500/30 rounded-tr-none'
                                                     : isMe
@@ -1127,6 +1322,21 @@ export default function ChatConversations({ onClose }) {
                                                         {formatMessageTimestamp(msg.timestamp)}
                                                     </span>
                                                 </div>
+
+                                                {/* Badge de reação — dentro do div relative da bolha */}
+                                                {msg.meta_data?.reactions?.length > 0 && (
+                                                    <div className={`absolute -bottom-3 ${isMe ? 'left-2' : 'right-2'} flex gap-0.5`}>
+                                                        {msg.meta_data.reactions.map((r, i) => (
+                                                            <span
+                                                                key={i}
+                                                                className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full px-1.5 py-0.5 shadow-sm leading-none"
+                                                                title={r.sender === 'contact' ? 'Contato reagiu' : 'Você reagiu'}
+                                                            >
+                                                                {r.emoji}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );

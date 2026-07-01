@@ -10,8 +10,13 @@ async def publish_node_external_event(db, trigger, data, content, contact_phone,
     O envio é automático — não depende mais do toggle 'publishExternalEvent' no nó.
     """
     is_memory_configured = bool(get_setting("AGENT_MEMORY_WEBHOOK_URL", "", client_id=trigger.client_id))
-        
+
     if not is_memory_configured:
+        return
+
+    # Respeita o toggle "Disparar na Memória" do nó (padrão: True)
+    if not data.get("sendToMemory", True):
+        logger.info(f"⏭️ [EXTERNAL EVENT] Nó {node_id} com 'sendToMemory=False' — não enviado à memória.")
         return
         
     logger.info(f"🧠 [EXTERNAL EVENT] Nó {node_id} capturado para Memória IA.")
