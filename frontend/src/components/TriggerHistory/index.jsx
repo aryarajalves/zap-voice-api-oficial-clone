@@ -27,7 +27,11 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
         selectedFolderId, setSelectedFolderId,
         folders, loadingFolders, createFolder, updateFolder, deleteFolder,
         moveTriggerToFolder, bulkMoveToFolder,
-        contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal
+        contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal,
+        contactsSearchPhone, setContactsSearchPhone,
+        contactsFilterDdi, setContactsFilterDdi,
+        contactsFilterDdd, setContactsFilterDdd,
+        contactsDdiOptions, contactsDddOptions
     } = useTriggerHistory(refreshKey, initialTriggerTypeProp);
 
     const [manualInteractionTriggerId, setManualInteractionTriggerId] = useState(null);
@@ -125,6 +129,14 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 contactsTotal={contactsTotal}
                 activeClient={activeClient}
                 onRefresh={fetchHistory}
+                contactsSearchPhone={contactsSearchPhone}
+                setContactsSearchPhone={setContactsSearchPhone}
+                contactsFilterDdi={contactsFilterDdi}
+                setContactsFilterDdi={setContactsFilterDdi}
+                contactsFilterDdd={contactsFilterDdd}
+                setContactsFilterDdd={setContactsFilterDdd}
+                contactsDdiOptions={contactsDdiOptions}
+                contactsDddOptions={contactsDddOptions}
             />
 
             <ErrorReportModal 

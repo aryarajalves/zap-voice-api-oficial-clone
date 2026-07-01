@@ -18,7 +18,13 @@ export const useContactsModalLogic = ({
     setContactsPerPage,
     contactsTotal,
     activeClient,
-    onRefresh
+    onRefresh,
+    contactsSearchPhone,
+    setContactsSearchPhone,
+    contactsFilterDdi,
+    setContactsFilterDdi,
+    contactsFilterDdd,
+    setContactsFilterDdd
 }) => {
     const [selectedPhones, setSelectedPhones] = React.useState([]);
     const [explainError, setExplainError] = React.useState(null);
@@ -65,6 +71,10 @@ export const useContactsModalLogic = ({
                 if ((contactsFilter === 'failed' || contactsFilter === 'blocked') && contactsErrorFilter !== 'all') {
                     params.append('failure_reason', contactsErrorFilter);
                 }
+                if (contactsSearchPhone) params.append('search_phone', contactsSearchPhone);
+                if (contactsFilterDdi) params.append('filter_ddi', contactsFilterDdi);
+                if (contactsFilterDdd) params.append('filter_ddd', contactsFilterDdd);
+                
                 params.append('limit', 999999);
                 params.append('skip', 0);
                 const res = await fetchWithAuth(`${url}?${params.toString()}`, {}, activeClient?.id);
@@ -145,6 +155,11 @@ export const useContactsModalLogic = ({
     React.useEffect(() => {
         setSelectedPhones([]);
         setPage(1);
+        if (!contactsModal.isOpen) {
+            if (setContactsSearchPhone) setContactsSearchPhone('');
+            if (setContactsFilterDdi) setContactsFilterDdi('');
+            if (setContactsFilterDdd) setContactsFilterDdd('');
+        }
     }, [contactsModal.isOpen, contactsFilter, contactsTypeFilter, contactsErrorFilter]);
 
     React.useEffect(() => {

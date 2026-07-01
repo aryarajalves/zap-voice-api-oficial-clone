@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FiSearch, FiTag, FiCalendar, FiChevronDown, FiX, FiFilter } from 'react-icons/fi';
+import { formatDddOption, formatDdiOption } from '../../../utils/dddInfo';
+import FilterSelect from './FilterSelect';
 
 // Meses do ano para o seletor de mês específico
 const MONTHS = [
@@ -45,6 +47,12 @@ export default function Filters({
   importedByClientId, setImportedByClientId,
   origin, setOrigin,
   lockedFilter, setLockedFilter,
+  bsudFilter, setBsudFilter,
+  filterDdi, setFilterDdi,
+  filterDdd, setFilterDdd,
+  ddiOptions = [], dddOptions = [],
+  blockStatusFilter, setBlockStatusFilter,
+  hasBlockedLeads = false, hasRestingLeads = false,
   availableFilters,
   total,
   datePreset, setDatePreset,
@@ -110,10 +118,18 @@ export default function Filters({
     );
   };
 
+  // Opções do filtro de Bloqueio/Repouso: só aparece "Bloqueados" ou "Em
+  // Repouso" quando existe pelo menos 1 contato nesse estado entre os
+  // resultados filtrados — nunca uma opção vazia/sem uso.
+  const blockStatusOptions = [
+    ...(hasBlockedLeads ? [{ value: 'blocked', label: '🚫 Bloqueados' }] : []),
+    ...(hasRestingLeads ? [{ value: 'resting', label: '😴 Em Repouso' }] : []),
+  ];
+
   return (
     <div className="mb-6 space-y-3">
       {/* Linha 1: Busca + Criador + Origem + Etiquetas + Data */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
         
         {/* Busca */}
         <div className="relative">
@@ -129,50 +145,94 @@ export default function Filters({
         </div>
 
         {/* Filtro por Cliente Criador/Importador */}
-        <div className="relative">
-          <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <select
-            value={importedByClientId}
-            onChange={(e) => setImportedByClientId(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-600 dark:text-gray-300 font-medium"
-          >
-            <option value="">Todos os Criadores</option>
-            {availableFilters.imported_by_clients?.map(c => (
-              <option key={c.id} value={c.id}>
-                👤 {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FilterSelect
+          icon={FiFilter}
+          placeholder="Todos os Criadores"
+          value={importedByClientId}
+          onChange={setImportedByClientId}
+          color="blue"
+          options={(availableFilters.imported_by_clients || []).map(c => ({ value: c.id, label: `👤 ${c.name}` }))}
+        />
 
         {/* Filtro por Origem (Manual, Planilha, Webhook) */}
-        <div className="relative">
-          <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <select
-            value={origin}
-            onChange={(e) => setOrigin(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-600 dark:text-gray-300 font-medium"
-          >
-            <option value="">Todas as Origens</option>
-            <option value="manual">👤 Criado Manualmente</option>
-            <option value="manual_bulk">📥 Importado por Planilha (CSV)</option>
-            <option value="webhook">🔗 Criado via Webhook</option>
-          </select>
-        </div>
+        <FilterSelect
+          icon={FiFilter}
+          placeholder="Todas as Origens"
+          value={origin}
+          onChange={setOrigin}
+          color="blue"
+          searchable={false}
+          options={[
+            { value: 'manual', label: '👤 Criado Manualmente' },
+            { value: 'manual_bulk', label: '📥 Importado por Planilha (CSV)' },
+            { value: 'webhook', label: '🔗 Criado via Webhook' },
+          ]}
+        />
 
-        {/* Filtro por Bloqueio */}
-        <div className="relative">
-          <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <select
-            value={lockedFilter}
-            onChange={(e) => setLockedFilter(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-600 dark:text-gray-300 font-medium"
-          >
-            <option value="">Todos os Contatos</option>
-            <option value="true">🔒 Bloqueados</option>
-            <option value="false">🔓 Não Bloqueados</option>
-          </select>
-        </div>
+        {/* Filtro por Proteção contra exclusão (não confundir com o bloqueio
+            de envio de disparos, que é outra funcionalidade) */}
+        <FilterSelect
+          icon={FiFilter}
+          placeholder="Todos os Status de Proteção"
+          value={lockedFilter}
+          onChange={setLockedFilter}
+          color="blue"
+          searchable={false}
+          options={[
+            { value: 'true', label: '🔒 Protegidos' },
+            { value: 'false', label: '🔓 Não Protegidos' },
+          ]}
+        />
+
+        {/* Filtro por Bloqueio real / Repouso — as opções só existem se houver
+            pelo menos 1 contato bloqueado / em repouso na base filtrada */}
+        <FilterSelect
+          icon={FiFilter}
+          placeholder="Todos os Status"
+          value={blockStatusFilter}
+          onChange={setBlockStatusFilter}
+          color="blue"
+          searchable={false}
+          disabled={blockStatusOptions.length === 0}
+          options={blockStatusOptions}
+        />
+
+        {/* Filtro por BSUD */}
+        <FilterSelect
+          icon={FiFilter}
+          placeholder="Todos (BSUD)"
+          value={bsudFilter}
+          onChange={setBsudFilter}
+          color="blue"
+          searchable={false}
+          options={[
+            { value: 'true', label: '💬 Com BSUD (nº fallback)' },
+            { value: 'false', label: '⚠️ Sem BSUD' },
+          ]}
+        />
+
+        {/* Filtro por DDI — opções calculadas dinamicamente pelo backend a
+            partir dos contatos que já batem com os demais filtros ativos */}
+        <FilterSelect
+          icon={FiFilter}
+          placeholder="Todos os DDIs"
+          value={filterDdi}
+          onChange={setFilterDdi}
+          color="green"
+          disabled={ddiOptions.length === 0}
+          options={ddiOptions.map(ddi => ({ value: ddi, label: formatDdiOption(ddi) }))}
+        />
+
+        {/* Filtro por DDD — idem, só mostra os DDDs que existem na base filtrada */}
+        <FilterSelect
+          icon={FiFilter}
+          placeholder="Todos os DDDs"
+          value={filterDdd}
+          onChange={setFilterDdd}
+          color="green"
+          disabled={dddOptions.length === 0}
+          options={dddOptions.map(ddd => ({ value: ddd, label: formatDddOption(ddd) }))}
+        />
 
         {/* Etiquetas — Dropdown com busca e checkboxes */}
         <div className="relative" ref={tagDropdownRef}>
@@ -457,9 +517,45 @@ export default function Filters({
       </div>
 
       {/* Badges de filtros ativos */}
-      {(hasDateFilter || (selectedTags && selectedTags.length > 0)) && (
+      {(hasDateFilter || filterDdi || filterDdd || blockStatusFilter || (selectedTags && selectedTags.length > 0)) && (
         <div className="flex flex-wrap items-center gap-2 px-1">
           <span className="text-xs text-gray-400 font-medium">Filtros ativos:</span>
+
+          {blockStatusFilter && (
+            <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700/50">
+              {blockStatusFilter === 'blocked' ? '🚫 Bloqueados' : '😴 Em Repouso'}
+              <button
+                onClick={() => setBlockStatusFilter('')}
+                className="ml-0.5 text-red-400 hover:text-red-600 transition-colors"
+              >
+                <FiX size={11} />
+              </button>
+            </span>
+          )}
+
+          {filterDdi && (
+            <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700/50">
+              {formatDdiOption(filterDdi)}
+              <button
+                onClick={() => setFilterDdi('')}
+                className="ml-0.5 text-green-400 hover:text-green-600 transition-colors"
+              >
+                <FiX size={11} />
+              </button>
+            </span>
+          )}
+
+          {filterDdd && (
+            <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700/50">
+              {formatDddOption(filterDdd)}
+              <button
+                onClick={() => setFilterDdd('')}
+                className="ml-0.5 text-green-400 hover:text-green-600 transition-colors"
+              >
+                <FiX size={11} />
+              </button>
+            </span>
+          )}
 
           {hasDateFilter && (
             <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700/50">
@@ -495,7 +591,7 @@ export default function Filters({
         </div>
       )}
 
-      {!hasDateFilter && (!selectedTags || selectedTags.length === 0) && (
+      {!hasDateFilter && !filterDdi && !filterDdd && !blockStatusFilter && (!selectedTags || selectedTags.length === 0) && (
         <div className="flex items-center justify-end px-1">
           <span className="text-xs font-semibold text-gray-400">Total: {total} contatos</span>
         </div>

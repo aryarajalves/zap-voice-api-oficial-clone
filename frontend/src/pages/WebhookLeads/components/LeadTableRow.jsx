@@ -1,6 +1,55 @@
-import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar, FiLock, FiUnlock, FiDatabase } from 'react-icons/fi';
+import { useState, useEffect } from 'react';
+import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar, FiLock, FiUnlock, FiDatabase, FiSlash } from 'react-icons/fi';
 import { SiChatwoot } from 'react-icons/si';
 import { toast } from 'react-hot-toast';
+
+/**
+ * O backend guarda/retorna datas em UTC "ingênuo" (sem 'Z' no fim, ex:
+ * "2026-07-03T10:15:30"). Sem isso, `new Date(...)` interpreta a string como
+ * horário LOCAL do navegador, deslocando o cálculo pelo fuso do usuário
+ * (mesmo problema já corrigido em TriggerTableUtils.jsx e importHistoryUtils.js).
+ */
+function parseUtcDate(raw) {
+  if (!raw) return null;
+  const str = String(raw);
+  const hasTimezone = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(str);
+  const date = new Date(hasTimezone ? str : `${str}Z`);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+/** Mostra quanto tempo falta para o contato sair do repouso, atualizando sozinho. */
+function RestingCountdown({ expiresAt }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!expiresAt) return;
+    // Sincroniza imediatamente ao montar/trocar de contato, e depois a cada 1s
+    // para o contador ficar sempre correto (inclusive logo após um refresh).
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  const expiresAtDate = parseUtcDate(expiresAt);
+  if (!expiresAtDate) return null;
+
+  const diffMs = expiresAtDate.getTime() - now;
+  if (diffMs <= 0) return null;
+
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const label = hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
+
+  return (
+    <span
+      className="text-[10px] text-amber-500 font-bold font-mono tracking-wide"
+      title={`Volta a receber disparos em ${label}`}
+    >
+      😴 Repouso: {label} restantes
+    </span>
+  );
+}
 
 function formatDateBrasilia(isoStr) {
   if (!isoStr) return '---';
@@ -64,6 +113,7 @@ export default function LeadTableRow({
   onToggleLock,
   onOpenVariables,
   onOpenTagsModal,
+  onOpenBlockModal,
 }) {
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
@@ -74,7 +124,7 @@ export default function LeadTableRow({
           checked={selectedLeads.includes(lead.id)}
           onChange={() => onSelectLead(lead.id)}
           disabled={lead.is_locked}
-          title={lead.is_locked ? "Contatos bloqueados não podem ser selecionados para exclusão em massa." : ""}
+          title={lead.is_locked ? "Contatos protegidos não podem ser selecionados para exclusão em massa." : ""}
         />
       </td>
       <td className="px-3 py-2.5">
@@ -133,6 +183,12 @@ export default function LeadTableRow({
                   BSUD: {lead.bsud}
                 </span>
               )}
+              {lead.is_really_blocked && (
+                <span className="text-[10px] text-red-500 font-bold font-mono tracking-wide" title="Bloqueado — não recebe disparos">
+                  🚫 Bloqueado
+                </span>
+              )}
+              <RestingCountdown expiresAt={lead.resting_expires_at} />
             </div>
           </div>
         </div>
@@ -176,20 +232,27 @@ export default function LeadTableRow({
             <FiEdit2 size={15} />
           </button>
           <button
+            onClick={() => onOpenBlockModal({ id: lead.id, name: lead.name || 'Sem Nome', phone: lead.phone })}
+            className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+            title="Bloquear ou colocar em repouso"
+          >
+            <FiSlash size={15} />
+          </button>
+          <button
             onClick={() => onToggleLock(lead)}
             disabled={togglingLock === lead.id}
             className={`p-1.5 rounded-lg transition-colors ${lead.is_locked ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'} disabled:opacity-50`}
-            title={lead.is_locked ? 'Desbloquear contato' : 'Bloquear contato (impede exclusão)'}
+            title={lead.is_locked ? 'Remover proteção do contato' : 'Proteger contato (impede exclusão)'}
           >
             {lead.is_locked ? <FiLock size={15} /> : <FiUnlock size={15} />}
           </button>
           <button
             onClick={() => {
-              if (lead.is_locked) toast.error("Não é possível deletar um contato bloqueado.");
+              if (lead.is_locked) toast.error("Não é possível deletar um contato protegido.");
               else onDelete(lead);
             }}
             className={`p-1.5 rounded-lg transition-colors ${lead.is_locked ? 'text-gray-400/30 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
-            title={lead.is_locked ? 'Contato bloqueado — desbloqueie para excluir' : 'Excluir Contato e Histórico'}
+            title={lead.is_locked ? 'Contato protegido — remova a proteção para excluir' : 'Excluir Contato e Histórico'}
           >
             <FiTrash2 size={15} />
           </button>

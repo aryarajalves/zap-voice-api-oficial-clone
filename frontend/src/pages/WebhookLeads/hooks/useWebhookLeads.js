@@ -72,7 +72,19 @@ export function useWebhookLeads(activeClient) {
   const [selectedTags, setSelectedTags] = useState([]);
   const [importedByClientId, setImportedByClientId] = useState('');
   const [origin, setOrigin] = useState('');
-  const [lockedFilter, setLockedFilter] = useState(''); // '' = todos, 'true' = bloqueados, 'false' = não bloqueados
+  const [lockedFilter, setLockedFilter] = useState(''); // '' = todos, 'true' = protegidos, 'false' = não protegidos
+  const [bsudFilter, setBsudFilter] = useState(''); // '' = todos, 'true' = com BSUD disponível, 'false' = sem BSUD
+  const [filterDdi, setFilterDdiState] = useState('');
+  const [filterDdd, setFilterDddState] = useState('');
+  // Opções de DDI/DDD calculadas dinamicamente pelo backend a partir dos
+  // contatos que já batem com os demais filtros — nunca uma lista fixa.
+  const [ddiOptions, setDdiOptions] = useState([]);
+  const [dddOptions, setDddOptions] = useState([]);
+  // Bloqueio real (BlockedContact) e repouso temporário (RestingContact) —
+  // diferente de lockedFilter, que é só proteção contra exclusão.
+  const [blockStatusFilter, setBlockStatusFilterState] = useState(''); // '' | 'blocked' | 'resting'
+  const [hasBlockedLeads, setHasBlockedLeads] = useState(false);
+  const [hasRestingLeads, setHasRestingLeads] = useState(false);
   const [availableFilters, setAvailableFilters] = useState({ event_types: [], product_names: [], tags: [], imported_by_clients: [] });
 
   // Filtros de data
@@ -99,6 +111,15 @@ export function useWebhookLeads(activeClient) {
   // Seleção de todas as páginas
   const [selectAllPages, setSelectAllPages] = useState(false);
 
+  // Etiquetar em massa
+  const [isBulkTagModalOpen, setIsBulkTagModalOpen] = useState(false);
+  const [isBulkTagging, setIsBulkTagging] = useState(false);
+
+  // Bloquear / colocar em repouso (individual ou em massa)
+  // blockTarget: null | 'bulk' | { id, name, phone } (contato único)
+  const [blockTarget, setBlockTarget] = useState(null);
+  const [isBlocking, setIsBlocking] = useState(false);
+
   const fetchLeads = useCallback(async (overrides = {}) => {
     if (!activeClient?.id) return;
     
@@ -112,6 +133,10 @@ export function useWebhookLeads(activeClient) {
     const currentImportedBy = overrides.importedByClientId !== undefined ? overrides.importedByClientId : importedByClientId;
     const currentOrigin = overrides.origin !== undefined ? overrides.origin : origin;
     const currentLocked = overrides.lockedFilter !== undefined ? overrides.lockedFilter : lockedFilter;
+    const currentBsud = overrides.bsudFilter !== undefined ? overrides.bsudFilter : bsudFilter;
+    const currentDdi = overrides.filterDdi !== undefined ? overrides.filterDdi : filterDdi;
+    const currentDdd = overrides.filterDdd !== undefined ? overrides.filterDdd : filterDdd;
+    const currentBlockStatus = overrides.blockStatusFilter !== undefined ? overrides.blockStatusFilter : blockStatusFilter;
 
     const { from, to } = resolveDateRange(currentDatePreset, currentCustomFrom, currentCustomTo);
 
@@ -123,6 +148,10 @@ export function useWebhookLeads(activeClient) {
       if (currentImportedBy) url += `&imported_by_client_id=${currentImportedBy}`;
       if (currentOrigin) url += `&origin=${encodeURIComponent(currentOrigin)}`;
       if (currentLocked !== '') url += `&is_locked=${currentLocked}`;
+      if (currentBsud !== '') url += `&has_bsud=${currentBsud}`;
+      if (currentDdi) url += `&filter_ddi=${encodeURIComponent(currentDdi)}`;
+      if (currentDdd) url += `&filter_ddd=${encodeURIComponent(currentDdd)}`;
+      if (currentBlockStatus) url += `&block_status=${encodeURIComponent(currentBlockStatus)}`;
       if (currentTags && currentTags.length > 0) {
         currentTags.forEach(t => {
           url += `&tag=${encodeURIComponent(t)}`;
@@ -143,7 +172,7 @@ export function useWebhookLeads(activeClient) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter]);
+  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
 
   const fetchFilters = useCallback(async () => {
     if (!activeClient?.id) return;
@@ -158,6 +187,57 @@ export function useWebhookLeads(activeClient) {
     }
   }, [activeClient?.id]);
 
+  // Calcula quais DDIs/DDDs realmente existem entre os contatos que batem com
+  // os filtros atuais (exceto DDI/DDD, senão o dropdown "encolheria" para
+  // mostrar só a opção já selecionada).
+  const fetchDdiDddOptions = useCallback(async (overrides = {}) => {
+    if (!activeClient?.id) return;
+
+    const currentSearch = overrides.search !== undefined ? overrides.search : search;
+    const currentEventType = overrides.eventType !== undefined ? overrides.eventType : eventType;
+    const currentTags = overrides.tags !== undefined ? overrides.tags : selectedTags;
+    const currentDatePreset = overrides.datePreset !== undefined ? overrides.datePreset : datePreset;
+    const currentCustomFrom = overrides.customDateFrom !== undefined ? overrides.customDateFrom : customDateFrom;
+    const currentCustomTo = overrides.customDateTo !== undefined ? overrides.customDateTo : customDateTo;
+    const currentImportedBy = overrides.importedByClientId !== undefined ? overrides.importedByClientId : importedByClientId;
+    const currentOrigin = overrides.origin !== undefined ? overrides.origin : origin;
+    const currentLocked = overrides.lockedFilter !== undefined ? overrides.lockedFilter : lockedFilter;
+    const currentBsud = overrides.bsudFilter !== undefined ? overrides.bsudFilter : bsudFilter;
+
+    const { from, to } = resolveDateRange(currentDatePreset, currentCustomFrom, currentCustomTo);
+
+    try {
+      let url = `${API_URL}/leads/ddi-ddd-filters?`;
+      if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+      if (currentEventType) url += `&event_type=${encodeURIComponent(currentEventType)}`;
+      if (currentImportedBy) url += `&imported_by_client_id=${currentImportedBy}`;
+      if (currentOrigin) url += `&origin=${encodeURIComponent(currentOrigin)}`;
+      if (currentLocked !== '') url += `&is_locked=${currentLocked}`;
+      if (currentBsud !== '') url += `&has_bsud=${currentBsud}`;
+      if (currentTags && currentTags.length > 0) {
+        currentTags.forEach(t => { url += `&tag=${encodeURIComponent(t)}`; });
+      }
+      if (from) url += `&date_from=${from}`;
+      if (to) url += `&date_to=${to}`;
+
+      const res = await fetchWithAuth(url, {}, activeClient.id);
+      if (res.ok) {
+        const data = await res.json();
+        setDdiOptions(data.ddis || []);
+        setDddOptions(data.ddds || []);
+        setHasBlockedLeads(!!data.has_blocked);
+        setHasRestingLeads(!!data.has_resting);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [activeClient?.id, search, eventType, selectedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter]);
+
+  // Reset de página ao mudar filtro de DDI/DDD/status de bloqueio
+  const setFilterDdi = (val) => { setFilterDdiState(val); setPage(0); };
+  const setFilterDdd = (val) => { setFilterDddState(val); setPage(0); };
+  const setBlockStatusFilter = (val) => { setBlockStatusFilterState(val); setPage(0); };
+
   // Efeito para filtros instantâneos
   useEffect(() => {
     if (activeClient?.id) {
@@ -167,7 +247,16 @@ export function useWebhookLeads(activeClient) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter]);
+  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
+
+  // Efeito exclusivo para recalcular as opções de DDI/DDD — não depende dos
+  // próprios filtros de DDI/DDD nem de página/limite.
+  useEffect(() => {
+    if (activeClient?.id) {
+      fetchDdiDddOptions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClient?.id, eventType, selectedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter]);
 
   const lastSearch = useRef('');
 
@@ -177,8 +266,11 @@ export function useWebhookLeads(activeClient) {
     
     const timer = setTimeout(() => {
       lastSearch.current = search;
-      if (activeClient?.id) fetchLeads({ search });
-    }, 600); 
+      if (activeClient?.id) {
+        fetchLeads({ search });
+        fetchDdiDddOptions({ search });
+      }
+    }, 600);
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -318,6 +410,139 @@ export function useWebhookLeads(activeClient) {
     }
   };
 
+  const handleBulkTag = async (tagValue) => {
+    if (!activeClient || !tagValue || !tagValue.trim()) return;
+    setIsBulkTagging(true);
+    try {
+      if (selectAllPages) {
+        // Etiquetar todos os contatos que batem com os filtros ativos
+        const { from, to } = resolveDateRange(datePreset, customDateFrom, customDateTo);
+        const res = await fetchWithAuth(`${API_URL}/leads/bulk-tag-all`, {
+          method: 'POST',
+          body: JSON.stringify({
+            tag: tagValue,
+            search: search || null,
+            event_type: eventType || null,
+            tag_filter: selectedTags.length > 0 ? selectedTags : null,
+            date_from: from || null,
+            date_to: to || null,
+            imported_by_client_id: importedByClientId || null,
+            origin: origin || null,
+            is_locked: lockedFilter !== '' ? lockedFilter : null,
+            has_bsud: bsudFilter !== '' ? bsudFilter : null,
+            filter_ddi: filterDdi || null,
+            filter_ddd: filterDdd || null,
+          })
+        }, activeClient.id);
+        if (res.ok) {
+          const data = await res.json();
+          toast.success(data.message);
+          setSelectedLeads([]);
+          setSelectAllPages(false);
+          setIsBulkTagModalOpen(false);
+          fetchLeads();
+          fetchFilters();
+        } else {
+          toast.error("Erro ao etiquetar todos os contatos.");
+        }
+      } else {
+        const res = await fetchWithAuth(`${API_URL}/leads/bulk-tag`, {
+          method: 'POST',
+          body: JSON.stringify({ lead_ids: selectedLeads, tag: tagValue })
+        }, activeClient.id);
+        if (res.ok) {
+          const data = await res.json();
+          toast.success(data.message || `Etiqueta aplicada a ${selectedLeads.length} contato(s).`);
+          setSelectedLeads([]);
+          setIsBulkTagModalOpen(false);
+          fetchLeads();
+          fetchFilters();
+        } else {
+          toast.error("Erro ao etiquetar contatos selecionados.");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao processar etiquetagem.");
+    } finally {
+      setIsBulkTagging(false);
+    }
+  };
+
+  // Abre o modal de bloqueio: passe 'bulk' para os selecionados, ou um lead
+  // específico ({ id, name, phone }) para bloquear um único contato.
+  const handleOpenBlockModal = (target) => setBlockTarget(target);
+  const closeBlockModal = () => setBlockTarget(null);
+
+  const handleConfirmBlock = async (type, hours) => {
+    if (!activeClient || !blockTarget) return;
+    const isSingle = blockTarget !== 'bulk';
+    setIsBlocking(true);
+    try {
+      let res;
+      if (isSingle) {
+        const endpoint = type === 'resting' ? 'bulk-rest' : 'bulk-block';
+        const body = type === 'resting'
+          ? { lead_ids: [blockTarget.id], hours }
+          : { lead_ids: [blockTarget.id] };
+        res = await fetchWithAuth(`${API_URL}/leads/${endpoint}`, {
+          method: 'POST',
+          body: JSON.stringify(body)
+        }, activeClient.id);
+      } else if (selectAllPages) {
+        const { from, to } = resolveDateRange(datePreset, customDateFrom, customDateTo);
+        const commonFilters = {
+          search: search || null,
+          event_type: eventType || null,
+          tag_filter: selectedTags.length > 0 ? selectedTags : null,
+          date_from: from || null,
+          date_to: to || null,
+          imported_by_client_id: importedByClientId || null,
+          origin: origin || null,
+          is_locked: lockedFilter !== '' ? lockedFilter : null,
+          has_bsud: bsudFilter !== '' ? bsudFilter : null,
+          filter_ddi: filterDdi || null,
+          filter_ddd: filterDdd || null,
+        };
+        const endpoint = type === 'resting' ? 'bulk-rest-all' : 'bulk-block-all';
+        const body = type === 'resting' ? { ...commonFilters, hours } : commonFilters;
+        res = await fetchWithAuth(`${API_URL}/leads/${endpoint}`, {
+          method: 'POST',
+          body: JSON.stringify(body)
+        }, activeClient.id);
+      } else {
+        const endpoint = type === 'resting' ? 'bulk-rest' : 'bulk-block';
+        const body = type === 'resting'
+          ? { lead_ids: selectedLeads, hours }
+          : { lead_ids: selectedLeads };
+        res = await fetchWithAuth(`${API_URL}/leads/${endpoint}`, {
+          method: 'POST',
+          body: JSON.stringify(body)
+        }, activeClient.id);
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message);
+        if (!isSingle) {
+          setSelectedLeads([]);
+          setSelectAllPages(false);
+        }
+        closeBlockModal();
+        fetchLeads();
+        fetchDdiDddOptions();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || "Erro ao bloquear contato(s).");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao processar bloqueio.");
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedLeads(leads.filter(lead => !lead.is_locked).map(lead => lead.id));
@@ -372,6 +597,12 @@ export function useWebhookLeads(activeClient) {
     importedByClientId, setImportedByClientId,
     origin, setOrigin,
     lockedFilter, setLockedFilter,
+    bsudFilter, setBsudFilter,
+    filterDdi, setFilterDdi,
+    filterDdd, setFilterDdd,
+    ddiOptions, dddOptions,
+    blockStatusFilter, setBlockStatusFilter,
+    hasBlockedLeads, hasRestingLeads,
     // Filtros de data
     datePreset, setDatePreset: handleSetDatePreset,
     customDateFrom, setCustomDateFrom: handleSetCustomDateFrom,
@@ -384,6 +615,10 @@ export function useWebhookLeads(activeClient) {
     isCleaningTags, isCleanConfirmOpen, setIsCleanConfirmOpen,
     selectAllPages, handleSelectAllPages, handleClearSelectAllPages,
     fetchLeads, fetchFilters, handleCleanTags, handleExport, executeDelete, handleSelectAll, handleSelectLead,
-    updateLeadInPlace
+    updateLeadInPlace,
+    // Etiquetar em massa
+    isBulkTagModalOpen, setIsBulkTagModalOpen, isBulkTagging, handleBulkTag,
+    // Bloquear / repouso (individual ou em massa)
+    blockTarget, handleOpenBlockModal, closeBlockModal, handleConfirmBlock, isBlocking
   };
 }

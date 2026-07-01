@@ -6,8 +6,10 @@ import Filters from './components/Filters';
 import Table from './components/Table';
 import Modals from './components/Modals';
 import LoadingOverlay from './components/LoadingOverlay';
+import BulkTagModal from './components/BulkTagModal';
+import BlockContactModal from './components/BlockContactModal';
 
-export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIntegrations, onNavigateToBulk, onNavigateToDispatchHistory }) {
+export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIntegrations, onNavigateToBulk, onNavigateToDispatchHistory, onNavigateToChat }) {
   const { activeClient } = useClient();
   const logic = useWebhookLeads(activeClient);
 
@@ -20,6 +22,8 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         total={logic.total}
         setIsDeleteModalOpen={logic.setIsDeleteModalOpen}
         setLeadToDelete={logic.setLeadToDelete}
+        setIsBulkTagModalOpen={logic.setIsBulkTagModalOpen}
+        onOpenBlockModal={logic.handleOpenBlockModal}
         setIsCleanConfirmOpen={logic.setIsCleanConfirmOpen}
         isCleaningTags={logic.isCleaningTags}
         setIsCreateModalOpen={logic.setIsCreateModalOpen}
@@ -32,6 +36,7 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         onNavigateToIntegrations={onNavigateToIntegrations}
         onNavigateToBulk={onNavigateToBulk}
         onNavigateToDispatchHistory={onNavigateToDispatchHistory}
+        onNavigateToChat={onNavigateToChat}
       />
 
       <Filters
@@ -45,6 +50,18 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         setOrigin={logic.setOrigin}
         lockedFilter={logic.lockedFilter}
         setLockedFilter={logic.setLockedFilter}
+        bsudFilter={logic.bsudFilter}
+        setBsudFilter={logic.setBsudFilter}
+        filterDdi={logic.filterDdi}
+        setFilterDdi={logic.setFilterDdi}
+        filterDdd={logic.filterDdd}
+        setFilterDdd={logic.setFilterDdd}
+        ddiOptions={logic.ddiOptions}
+        dddOptions={logic.dddOptions}
+        blockStatusFilter={logic.blockStatusFilter}
+        setBlockStatusFilter={logic.setBlockStatusFilter}
+        hasBlockedLeads={logic.hasBlockedLeads}
+        hasRestingLeads={logic.hasRestingLeads}
         availableFilters={logic.availableFilters}
         total={logic.total}
         datePreset={logic.datePreset}
@@ -76,9 +93,37 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         handleSelectAllPages={logic.handleSelectAllPages}
         handleClearSelectAllPages={logic.handleClearSelectAllPages}
         updateLeadInPlace={logic.updateLeadInPlace}
+        onOpenBlockModal={logic.handleOpenBlockModal}
       />
 
-      <Modals 
+      <BulkTagModal
+        isOpen={logic.isBulkTagModalOpen}
+        onClose={() => logic.setIsBulkTagModalOpen(false)}
+        onConfirm={logic.handleBulkTag}
+        isSaving={logic.isBulkTagging}
+        count={logic.selectAllPages ? logic.total : logic.selectedLeads.length}
+        selectAllPages={logic.selectAllPages}
+      />
+
+      <BlockContactModal
+        isOpen={!!logic.blockTarget}
+        onClose={logic.closeBlockModal}
+        onConfirm={logic.handleConfirmBlock}
+        isSaving={logic.isBlocking}
+        count={
+          logic.blockTarget === 'bulk'
+            ? (logic.selectAllPages ? logic.total : logic.selectedLeads.length)
+            : 1
+        }
+        selectAllPages={logic.blockTarget === 'bulk' && logic.selectAllPages}
+        targetLabel={
+          logic.blockTarget && logic.blockTarget !== 'bulk'
+            ? `${logic.blockTarget.name} (${logic.blockTarget.phone})`
+            : null
+        }
+      />
+
+      <Modals
         isCleanConfirmOpen={logic.isCleanConfirmOpen}
         setIsCleanConfirmOpen={logic.setIsCleanConfirmOpen}
         handleCleanTags={logic.handleCleanTags}

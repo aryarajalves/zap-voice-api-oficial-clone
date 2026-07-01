@@ -24,6 +24,155 @@ class BulkDeleteRequest(BaseModel):
 
 router = APIRouter()
 
+def extract_ddi_ddd(raw_phone: Optional[str]):
+    """
+    Extrai DDI e DDD de um telefone (mesma heurística usada no frontend,
+    ver frontend/src/utils/dddInfo.js -> extractDdiDdd).
+
+    IMPORTANTE: só reconhece "tem DDI" quando o número realmente começa com
+    "55" (praticamente 100% dos contatos desta base, já que vêm do WhatsApp
+    Business API em formato E.164). Antes, qualquer telefone com 12-13
+    dígitos tinha seus 2 primeiros dígitos tratados como DDI "às cegas" —
+    isso fazia números tipo "17988887777" com um dígito extra (ex: erro de
+    importação) virarem um DDI fantasma "+17" (na verdade é o DDD de SP).
+
+      - Começa com "55" e tem 12-13 dígitos => DDI "55", DDD = próximos 2 dígitos
+      - 10 a 11 dígitos (sem DDI)            => DDD = 2 primeiros dígitos
+      - Qualquer outro formato               => não reconhecido, não conta para os filtros
+
+    Retorna (ddi, ddd), ambos podendo ser '' quando não aplicável.
+    """
+    digits = re.sub(r"\D", "", raw_phone or "")
+    length = len(digits)
+    if digits.startswith("55") and length in (12, 13):
+        return "55", digits[2:4]
+    if length in (10, 11):
+        return "", digits[0:2]
+    return "", ""
+
+
+def _apply_common_lead_filters(query, search, event_type, product_name,
+                                tag, tag_mode, is_locked, has_bsud, date_from, date_to,
+                                imported_by_client_id, origin):
+    """Filtros compartilhados entre /leads, /leads/ddi-ddd-filters e afins."""
+    if imported_by_client_id:
+        query = query.filter(
+            or_(
+                models.WebhookLead.imported_by_client_id == imported_by_client_id,
+                and_(models.WebhookLead.imported_by_client_id.is_(None), models.WebhookLead.client_id == imported_by_client_id)
+            )
+        )
+    if origin == "manual":
+        query = query.filter(models.WebhookLead.platform == "manual")
+    elif origin == "manual_bulk":
+        query = query.filter(models.WebhookLead.platform == "manual_bulk")
+    elif origin == "webhook":
+        query = query.filter(
+            and_(
+                models.WebhookLead.platform != "manual",
+                models.WebhookLead.platform != "manual_bulk",
+                models.WebhookLead.platform != "chatwoot_import"
+            )
+        )
+
+    if search:
+        search_filter = or_(
+            models.WebhookLead.name.ilike(f"%{search}%"),
+            models.WebhookLead.phone.ilike(f"%{search}%"),
+            models.WebhookLead.email.ilike(f"%{search}%")
+        )
+        query = query.filter(search_filter)
+
+    if event_type:
+        query = query.filter(models.WebhookLead.last_event_type == event_type)
+
+    if product_name:
+        query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
+
+    if tag:
+        if isinstance(tag, str):
+            tag = [tag]
+        tags_filter = []
+        for t in tag:
+            if t:
+                parts = [x.strip() for x in t.split(",") if x.strip()]
+                tags_filter.extend(parts)
+        if tags_filter:
+            if tag_mode == "AND":
+                query = query.filter(and_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+            else:
+                query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+
+    if is_locked == 'true':
+        query = query.filter(models.WebhookLead.is_locked == True)
+    elif is_locked == 'false':
+        query = query.filter(or_(models.WebhookLead.is_locked == False, models.WebhookLead.is_locked.is_(None)))
+
+    if has_bsud == 'true':
+        query = query.filter(
+            models.WebhookLead.bsud.isnot(None),
+            models.WebhookLead.bsud != ''
+        )
+    elif has_bsud == 'false':
+        query = query.filter(
+            or_(models.WebhookLead.bsud.is_(None), models.WebhookLead.bsud == '')
+        )
+
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.filter(models.WebhookLead.created_at >= dt_from)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de date_from inválido. Use YYYY-MM-DD.")
+
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1, seconds=-1)
+            query = query.filter(models.WebhookLead.created_at <= dt_to)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de date_to inválido. Use YYYY-MM-DD.")
+
+    return query
+
+
+def _get_related_client_ids(db: Session, client_id: int):
+    """Mesma lógica de herança usada em routers/blocked.py e routers/resting.py:
+    se o cliente pertence a um projeto, bloqueio/repouso valem para todos os
+    clientes-irmãos do projeto."""
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if client and client.project_id:
+        siblings = db.query(models.Client.id).filter(models.Client.project_id == client.project_id).all()
+        return [c[0] for c in siblings]
+    return [client_id]
+
+
+def _get_blocked_suffixes(db: Session, client_ids):
+    """Sufixos (últimos 8 dígitos) dos telefones com bloqueio real (BlockedContact)."""
+    entries = db.query(models.BlockedContact.phone).filter(models.BlockedContact.client_id.in_(client_ids)).all()
+    return {p[0][-8:] for p in entries if p[0] and len(p[0]) >= 8}
+
+
+def _get_resting_suffix_map(db: Session, client_ids):
+    """Mapa sufixo -> expires_at dos telefones atualmente em repouso (RestingContact ainda não expirado)."""
+    now = datetime.utcnow()
+    entries = db.query(models.RestingContact.phone, models.RestingContact.expires_at).filter(
+        models.RestingContact.client_id.in_(client_ids),
+        models.RestingContact.expires_at > now
+    ).all()
+    result = {}
+    for phone, expires_at in entries:
+        if phone and len(phone) >= 8:
+            suffix = phone[-8:]
+            if suffix not in result or expires_at > result[suffix]:
+                result[suffix] = expires_at
+    return result
+
+
+def _phone_suffix(phone: Optional[str]):
+    digits = re.sub(r"\D", "", phone or "")
+    return digits[-8:] if len(digits) >= 8 else digits
+
+
 @router.post("/leads", response_model=schemas.WebhookLead, summary="Criar ou atualizar lead manualmente")
 def create_manual_lead(
     lead_in: schemas.WebhookLeadCreate,
@@ -149,6 +298,10 @@ def list_leads(
     imported_by_client_id: Optional[int] = None,
     origin: Optional[str] = None,
     is_locked: Optional[str] = None,  # 'true' | 'false' | None (todos)
+    has_bsud: Optional[str] = None,  # 'true' | 'false' | None (todos) — filtra contatos com número BSUD de fallback disponível
+    filter_ddi: Optional[str] = None,
+    filter_ddd: Optional[str] = None,
+    block_status: Optional[str] = None,  # 'blocked' (bloqueio real) | 'resting' (repouso temporário) | None (todos)
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("leads"))
@@ -158,7 +311,7 @@ def list_leads(
     Filtros de data (date_from, date_to) aceitam formato ISO 8601 (YYYY-MM-DD).
     """
     client_id = x_client_id if x_client_id else current_user.client_id
-    
+
     # Verificar se o cliente tem um projeto associado
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
     proj_id = active_client.project_id if active_client else None
@@ -168,76 +321,42 @@ def list_leads(
     else:
         query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
 
-    if imported_by_client_id:
-        query = query.filter(
-            or_(
-                models.WebhookLead.imported_by_client_id == imported_by_client_id,
-                # Se imported_by_client_id não estiver preenchido no contato mas o client_id do contato coincidir com o pesquisado
-                and_(models.WebhookLead.imported_by_client_id.is_(None), models.WebhookLead.client_id == imported_by_client_id)
-            )
-        )
-    if origin == "manual":
-        query = query.filter(models.WebhookLead.platform == "manual")
-    elif origin == "manual_bulk":
-        query = query.filter(models.WebhookLead.platform == "manual_bulk")
-    elif origin == "webhook":
-        query = query.filter(
-            and_(
-                models.WebhookLead.platform != "manual",
-                models.WebhookLead.platform != "manual_bulk",
-                models.WebhookLead.platform != "chatwoot_import"
-            )
-        )
+    query = _apply_common_lead_filters(
+        query, search, event_type, product_name, tag, tag_mode,
+        is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin
+    )
 
-    if search:
-        search_filter = or_(
-            models.WebhookLead.name.ilike(f"%{search}%"),
-            models.WebhookLead.phone.ilike(f"%{search}%"),
-            models.WebhookLead.email.ilike(f"%{search}%")
-        )
-        query = query.filter(search_filter)
+    # Filtro por DDI/DDD do telefone
+    if filter_ddi:
+        clean_ddi = re.sub(r"\D", "", filter_ddi)
+        if clean_ddi:
+            query = query.filter(models.WebhookLead.phone.like(f"{clean_ddi}%"))
 
-    if event_type:
-        query = query.filter(models.WebhookLead.last_event_type == event_type)
+    if filter_ddd:
+        clean_ddd = re.sub(r"\D", "", filter_ddd)
+        if clean_ddd:
+            query = query.filter(or_(
+                models.WebhookLead.phone.like(f"55{clean_ddd}%"),
+                models.WebhookLead.phone.like(f"{clean_ddd}%")
+            ))
 
-    if product_name:
-        query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
+    # Bloqueio real (BlockedContact) e repouso temporário (RestingContact) —
+    # calculados uma única vez aqui para reaproveitar tanto no filtro quanto
+    # no enriquecimento dos itens retornados (evita duas consultas iguais).
+    related_client_ids = _get_related_client_ids(db, client_id)
+    blocked_suffixes = _get_blocked_suffixes(db, related_client_ids)
+    resting_suffix_map = _get_resting_suffix_map(db, related_client_ids)
 
-    if tag:
-        if isinstance(tag, str):
-            tag = [tag]
-        tags_filter = []
-        for t in tag:
-            if t:
-                parts = [x.strip() for x in t.split(",") if x.strip()]
-                tags_filter.extend(parts)
-        if tags_filter:
-            if tag_mode == "AND":
-                query = query.filter(and_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
-            else:
-                query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
-
-    # Filtro de bloqueio
-    if is_locked == 'true':
-        query = query.filter(models.WebhookLead.is_locked == True)
-    elif is_locked == 'false':
-        query = query.filter(or_(models.WebhookLead.is_locked == False, models.WebhookLead.is_locked.is_(None)))
-
-    # Filtro de data de criação do contato
-    if date_from:
-        try:
-            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-            query = query.filter(models.WebhookLead.created_at >= dt_from)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Formato de date_from inválido. Use YYYY-MM-DD.")
-
-    if date_to:
-        try:
-            # Incluir o dia inteiro: até 23:59:59
-            dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1, seconds=-1)
-            query = query.filter(models.WebhookLead.created_at <= dt_to)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Formato de date_to inválido. Use YYYY-MM-DD.")
+    if block_status == 'blocked':
+        if blocked_suffixes:
+            query = query.filter(or_(*(models.WebhookLead.phone.like(f"%{s}") for s in blocked_suffixes)))
+        else:
+            query = query.filter(models.WebhookLead.id == -1)
+    elif block_status == 'resting':
+        if resting_suffix_map:
+            query = query.filter(or_(*(models.WebhookLead.phone.like(f"%{s}") for s in resting_suffix_map.keys())))
+        else:
+            query = query.filter(models.WebhookLead.id == -1)
 
     total = query.count()
     items = query.order_by(desc(models.WebhookLead.updated_at)).offset(skip).limit(limit).all()
@@ -273,9 +392,83 @@ def list_leads(
         else:
             item.imported_by_name = None
 
+        # Enriquecer com status de bloqueio real e repouso temporário
+        suffix = _phone_suffix(item.phone)
+        item.is_really_blocked = suffix in blocked_suffixes
+        item.resting_expires_at = resting_suffix_map.get(suffix)
+
     return {
         "items": items,
         "total": total
+    }
+
+@router.get("/leads/ddi-ddd-filters", summary="Obter DDIs/DDDs presentes nos leads filtrados")
+def get_lead_ddi_ddd_filters(
+    search: Optional[str] = None,
+    event_type: Optional[str] = None,
+    product_name: Optional[str] = None,
+    tag: Optional[List[str]] = Query(None),
+    tag_mode: Optional[str] = "OR",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    imported_by_client_id: Optional[int] = None,
+    origin: Optional[str] = None,
+    is_locked: Optional[str] = None,
+    has_bsud: Optional[str] = None,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_feature("leads"))
+):
+    """
+    Calcula, a partir dos MESMOS filtros aplicados na listagem de /leads (exceto
+    DDI/DDD, que é o que estamos calculando aqui), quais DDIs e DDDs realmente
+    existem entre os contatos resultantes — para popular os dropdowns do
+    Frontend de forma dinâmica, nunca com uma lista fixa de códigos.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    if proj_id:
+        query = db.query(models.WebhookLead.phone).filter(models.WebhookLead.project_id == proj_id)
+    else:
+        query = db.query(models.WebhookLead.phone).filter(models.WebhookLead.client_id == client_id)
+
+    query = _apply_common_lead_filters(
+        query, search, event_type, product_name, tag, tag_mode,
+        is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin
+    )
+
+    related_client_ids = _get_related_client_ids(db, client_id)
+    blocked_suffixes = _get_blocked_suffixes(db, related_client_ids)
+    resting_suffix_map = _get_resting_suffix_map(db, related_client_ids)
+
+    ddis = set()
+    ddds = set()
+    has_blocked = False
+    has_resting = False
+    for (phone,) in query.all():
+        ddi, ddd = extract_ddi_ddd(phone)
+        if ddi:
+            ddis.add(ddi)
+        if ddd:
+            ddds.add(ddd)
+
+        suffix = _phone_suffix(phone)
+        if suffix in blocked_suffixes:
+            has_blocked = True
+        if suffix in resting_suffix_map:
+            has_resting = True
+
+    sorted_ddis = sorted(ddis, key=lambda d: (d != "55", d))
+    sorted_ddds = sorted(ddds, key=lambda d: int(d))
+
+    return {
+        "ddis": sorted_ddis,
+        "ddds": sorted_ddds,
+        "has_blocked": has_blocked,
+        "has_resting": has_resting,
     }
 
 @router.get("/leads/filters", summary="Obter valores únicos para filtros")
@@ -566,7 +759,7 @@ def delete_lead(
         raise HTTPException(status_code=404, detail="Lead não encontrado")
 
     if getattr(lead, 'is_locked', False):
-        raise HTTPException(status_code=403, detail="Este contato está bloqueado e não pode ser excluído.")
+        raise HTTPException(status_code=403, detail="Este contato está protegido e não pode ser excluído.")
 
     _delete_lead_and_relations(db, lead, client_id)
     db.commit()
@@ -632,7 +825,7 @@ def bulk_delete_leads(
     db.commit()
     msg = f"{deleted_count} lead(s) excluído(s)."
     if skipped_locked:
-        msg += f" {skipped_locked} ignorado(s) por estarem bloqueados."
+        msg += f" {skipped_locked} ignorado(s) por estarem protegidos."
     return {"status": "success", "deleted_count": deleted_count, "skipped_locked": skipped_locked, "message": msg}
 
 class BulkDeleteAllRequest(BaseModel):
@@ -653,7 +846,7 @@ def bulk_delete_all_leads(
     current_user: models.User = Depends(require_premium)
 ):
     """
-    Deleta TODOS os leads que correspondem aos filtros informados (exceto bloqueados).
+    Deleta TODOS os leads que correspondem aos filtros informados (exceto protegidos).
     Usado quando o usuário seleciona 'Todos os contatos de todas as páginas'.
     """
     client_id = x_client_id if x_client_id else current_user.client_id
@@ -713,13 +906,13 @@ def bulk_delete_all_leads(
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de date_to inválido.")
 
-    # Separar em deletáveis e bloqueados
+    # Separar em deletáveis e protegidos
     all_leads = query.all()
     deletable = [l for l in all_leads if not getattr(l, 'is_locked', False)]
     skipped_locked = len(all_leads) - len(deletable)
 
     if not deletable:
-        return {"status": "success", "deleted_count": 0, "skipped_locked": skipped_locked, "message": f"Nenhum contato deletável. {skipped_locked} bloqueado(s)."}
+        return {"status": "success", "deleted_count": 0, "skipped_locked": skipped_locked, "message": f"Nenhum contato deletável. {skipped_locked} protegido(s)."}
 
     deletable_ids = [l.id for l in deletable]
     phones = list({l.phone for l in deletable if l.phone})
@@ -744,11 +937,358 @@ def bulk_delete_all_leads(
     deleted_count = len(deletable_ids)
     msg = f"{deleted_count} contato(s) excluído(s)."
     if skipped_locked:
-        msg += f" {skipped_locked} ignorado(s) por estarem bloqueados."
+        msg += f" {skipped_locked} ignorado(s) por estarem protegidos."
     return {"status": "success", "deleted_count": deleted_count, "skipped_locked": skipped_locked, "message": msg}
 
 
-@router.patch("/leads/{lead_id}/lock", summary="Bloquear ou desbloquear um lead")
+def _add_tags_to_lead(lead, new_tags_str: str) -> bool:
+    """Adiciona etiqueta(s) ao campo 'tags' do lead sem apagar as existentes.
+    Aceita múltiplas etiquetas separadas por vírgula. Retorna True se algo mudou."""
+    existing = [t.strip() for t in (lead.tags or '').split(',') if t.strip()]
+    new_tags = [t.strip() for t in (new_tags_str or '').split(',') if t.strip()]
+    changed = False
+    for t in new_tags:
+        if t not in existing:
+            existing.append(t)
+            changed = True
+    if changed:
+        lead.tags = ', '.join(existing)
+        lead.updated_at = datetime.now()
+    return changed
+
+
+class BulkTagRequest(BaseModel):
+    lead_ids: List[int]
+    tag: str
+
+
+@router.post("/leads/bulk-tag", summary="Adicionar etiqueta a múltiplos leads selecionados")
+def bulk_tag_leads(
+    request: BulkTagRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """Aplica uma (ou mais, separadas por vírgula) etiqueta(s) aos leads informados,
+    preservando as etiquetas que já existiam em cada contato."""
+    if not request.tag or not request.tag.strip():
+        raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta.")
+
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = db.query(models.WebhookLead).filter(
+        models.WebhookLead.id.in_(request.lead_ids),
+        models.WebhookLead.client_id == client_id
+    ).all()
+
+    tagged_count = sum(1 for lead in leads if _add_tags_to_lead(lead, request.tag))
+    db.commit()
+
+    return {
+        "status": "success",
+        "tagged_count": tagged_count,
+        "total": len(leads),
+        "message": f"Etiqueta aplicada a {tagged_count} de {len(leads)} contato(s) selecionado(s)."
+    }
+
+
+class BulkTagAllRequest(BaseModel):
+    tag: str
+    search: Optional[str] = None
+    event_type: Optional[str] = None
+    tag_filter: Optional[List[str]] = None  # etiquetas usadas para filtrar quais leads receberão a nova etiqueta
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    imported_by_client_id: Optional[int] = None
+    origin: Optional[str] = None
+    is_locked: Optional[str] = None
+    has_bsud: Optional[str] = None
+    filter_ddi: Optional[str] = None
+    filter_ddd: Optional[str] = None
+
+
+@router.post("/leads/bulk-tag-all", summary="Adicionar etiqueta a todos os leads dos filtros ativos")
+def bulk_tag_all_leads(
+    request: BulkTagAllRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Aplica uma etiqueta a TODOS os leads que correspondem aos filtros informados.
+    Usado quando o usuário seleciona 'Todos os contatos de todas as páginas'.
+    """
+    if not request.tag or not request.tag.strip():
+        raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta.")
+
+    client_id = x_client_id if x_client_id else current_user.client_id
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    if proj_id:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.project_id == proj_id)
+    else:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
+
+    query = _apply_common_lead_filters(
+        query, request.search, request.event_type, None, request.tag_filter, "OR",
+        request.is_locked, request.has_bsud, request.date_from, request.date_to,
+        request.imported_by_client_id, request.origin
+    )
+
+    if request.filter_ddi:
+        clean_ddi = re.sub(r"\D", "", request.filter_ddi)
+        if clean_ddi:
+            query = query.filter(models.WebhookLead.phone.like(f"{clean_ddi}%"))
+
+    if request.filter_ddd:
+        clean_ddd = re.sub(r"\D", "", request.filter_ddd)
+        if clean_ddd:
+            query = query.filter(or_(
+                models.WebhookLead.phone.like(f"55{clean_ddd}%"),
+                models.WebhookLead.phone.like(f"{clean_ddd}%")
+            ))
+
+    leads = query.all()
+    tagged_count = sum(1 for lead in leads if _add_tags_to_lead(lead, request.tag))
+    db.commit()
+
+    return {
+        "status": "success",
+        "tagged_count": tagged_count,
+        "total": len(leads),
+        "message": f"Etiqueta aplicada a {tagged_count} de {len(leads)} contato(s)."
+    }
+
+
+def _filter_leads_by_active_filters(db: Session, client_id: int, filters):
+    """Reconstrói a query de leads a partir de um objeto de filtros (Bulk*AllRequest),
+    espelhando exatamente os filtros usados em /leads. Usado pelas rotas
+    '...-all' (bloquear/colocar em repouso/etiquetar todos os filtrados)."""
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    if proj_id:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.project_id == proj_id)
+    else:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
+
+    query = _apply_common_lead_filters(
+        query, filters.search, filters.event_type, None, getattr(filters, 'tag_filter', None), "OR",
+        filters.is_locked, filters.has_bsud, filters.date_from, filters.date_to,
+        filters.imported_by_client_id, filters.origin
+    )
+
+    if filters.filter_ddi:
+        clean_ddi = re.sub(r"\D", "", filters.filter_ddi)
+        if clean_ddi:
+            query = query.filter(models.WebhookLead.phone.like(f"{clean_ddi}%"))
+
+    if filters.filter_ddd:
+        clean_ddd = re.sub(r"\D", "", filters.filter_ddd)
+        if clean_ddd:
+            query = query.filter(or_(
+                models.WebhookLead.phone.like(f"55{clean_ddd}%"),
+                models.WebhookLead.phone.like(f"{clean_ddd}%")
+            ))
+
+    return query
+
+
+class BulkBlockRequest(BaseModel):
+    lead_ids: List[int]
+
+
+@router.post("/leads/bulk-block", summary="Bloquear permanentemente múltiplos leads selecionados")
+def bulk_block_leads(
+    request: BulkBlockRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """Coloca os leads informados na lista de bloqueio permanente (BlockedContact) —
+    eles param de receber disparos até serem desbloqueados manualmente."""
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = db.query(models.WebhookLead).filter(
+        models.WebhookLead.id.in_(request.lead_ids),
+        models.WebhookLead.client_id == client_id
+    ).all()
+
+    related_client_ids = _get_related_client_ids(db, client_id)
+    existing_suffixes = _get_blocked_suffixes(db, related_client_ids)
+
+    blocked_count = 0
+    already_count = 0
+    seen = set()
+    for lead in leads:
+        suffix = _phone_suffix(lead.phone)
+        if not suffix or suffix in existing_suffixes or suffix in seen:
+            already_count += 1
+            continue
+        seen.add(suffix)
+        db.add(models.BlockedContact(client_id=client_id, phone=lead.phone, name=lead.name, reason="Bloqueado via Contatos"))
+        blocked_count += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "blocked_count": blocked_count,
+        "already_blocked_count": already_count,
+        "message": f"{blocked_count} contato(s) bloqueado(s) permanentemente."
+    }
+
+
+class BulkBlockAllRequest(BaseModel):
+    search: Optional[str] = None
+    event_type: Optional[str] = None
+    tag_filter: Optional[List[str]] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    imported_by_client_id: Optional[int] = None
+    origin: Optional[str] = None
+    is_locked: Optional[str] = None
+    has_bsud: Optional[str] = None
+    filter_ddi: Optional[str] = None
+    filter_ddd: Optional[str] = None
+
+
+@router.post("/leads/bulk-block-all", summary="Bloquear permanentemente todos os leads dos filtros ativos")
+def bulk_block_all_leads(
+    request: BulkBlockAllRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = _filter_leads_by_active_filters(db, client_id, request).all()
+
+    related_client_ids = _get_related_client_ids(db, client_id)
+    existing_suffixes = _get_blocked_suffixes(db, related_client_ids)
+
+    blocked_count = 0
+    already_count = 0
+    seen = set()
+    for lead in leads:
+        suffix = _phone_suffix(lead.phone)
+        if not suffix or suffix in existing_suffixes or suffix in seen:
+            already_count += 1
+            continue
+        seen.add(suffix)
+        db.add(models.BlockedContact(client_id=client_id, phone=lead.phone, name=lead.name, reason="Bloqueado via Contatos"))
+        blocked_count += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "blocked_count": blocked_count,
+        "already_blocked_count": already_count,
+        "message": f"{blocked_count} contato(s) bloqueado(s) permanentemente."
+    }
+
+
+class BulkRestRequest(BaseModel):
+    lead_ids: List[int]
+    hours: Optional[int] = 24
+
+
+@router.post("/leads/bulk-rest", summary="Colocar múltiplos leads selecionados em repouso temporário")
+def bulk_rest_leads(
+    request: BulkRestRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """Coloca os leads informados em repouso (RestingContact) — param de receber
+    disparos até o prazo definido expirar (ou serem tirados do repouso manualmente)."""
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = db.query(models.WebhookLead).filter(
+        models.WebhookLead.id.in_(request.lead_ids),
+        models.WebhookLead.client_id == client_id
+    ).all()
+
+    related_client_ids = _get_related_client_ids(db, client_id)
+    existing_suffixes = set(_get_resting_suffix_map(db, related_client_ids).keys())
+    now = datetime.utcnow()
+    hours = request.hours or 24
+
+    rested_count = 0
+    already_count = 0
+    seen = set()
+    for lead in leads:
+        suffix = _phone_suffix(lead.phone)
+        if not suffix or suffix in existing_suffixes or suffix in seen:
+            already_count += 1
+            continue
+        seen.add(suffix)
+        db.add(models.RestingContact(
+            client_id=client_id, phone=lead.phone, name=lead.name,
+            reason="Repouso via Contatos", expires_at=now + timedelta(hours=hours)
+        ))
+        rested_count += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "rested_count": rested_count,
+        "already_resting_count": already_count,
+        "message": f"{rested_count} contato(s) colocado(s) em repouso por {hours}h."
+    }
+
+
+class BulkRestAllRequest(BaseModel):
+    hours: Optional[int] = 24
+    search: Optional[str] = None
+    event_type: Optional[str] = None
+    tag_filter: Optional[List[str]] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    imported_by_client_id: Optional[int] = None
+    origin: Optional[str] = None
+    is_locked: Optional[str] = None
+    has_bsud: Optional[str] = None
+    filter_ddi: Optional[str] = None
+    filter_ddd: Optional[str] = None
+
+
+@router.post("/leads/bulk-rest-all", summary="Colocar todos os leads dos filtros ativos em repouso temporário")
+def bulk_rest_all_leads(
+    request: BulkRestAllRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = _filter_leads_by_active_filters(db, client_id, request).all()
+
+    related_client_ids = _get_related_client_ids(db, client_id)
+    existing_suffixes = set(_get_resting_suffix_map(db, related_client_ids).keys())
+    now = datetime.utcnow()
+    hours = request.hours or 24
+
+    rested_count = 0
+    already_count = 0
+    seen = set()
+    for lead in leads:
+        suffix = _phone_suffix(lead.phone)
+        if not suffix or suffix in existing_suffixes or suffix in seen:
+            already_count += 1
+            continue
+        seen.add(suffix)
+        db.add(models.RestingContact(
+            client_id=client_id, phone=lead.phone, name=lead.name,
+            reason="Repouso via Contatos", expires_at=now + timedelta(hours=hours)
+        ))
+        rested_count += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "rested_count": rested_count,
+        "already_resting_count": already_count,
+        "message": f"{rested_count} contato(s) colocado(s) em repouso por {hours}h."
+    }
+
+
+@router.patch("/leads/{lead_id}/lock", summary="Proteger ou desproteger um lead contra exclusão")
 def toggle_lead_lock(
     lead_id: int,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
@@ -767,5 +1307,5 @@ def toggle_lead_lock(
     db.add(lead)
     db.commit()
     db.refresh(lead)
-    status = "bloqueado" if lead.is_locked else "desbloqueado"
+    status = "protegido" if lead.is_locked else "desprotegido"
     return {"status": "success", "is_locked": lead.is_locked, "message": f"Contato {status} com sucesso."}

@@ -28,6 +28,7 @@ export default function Table({
   handleSelectAllPages,
   handleClearSelectAllPages,
   updateLeadInPlace,
+  onOpenBlockModal,
 }) {
   const { activeClient } = useClient();
   const [togglingLock, setTogglingLock] = useState(null);
@@ -116,7 +117,7 @@ export default function Table({
           fetchLeads();
         }
       } else {
-        toast.error('Erro ao alterar bloqueio do contato.');
+        toast.error('Erro ao alterar proteção do contato.');
       }
     } catch {
       toast.error('Erro ao alterar bloqueio do contato.');
@@ -235,6 +236,7 @@ export default function Table({
                   onToggleLock={handleToggleLock}
                   onOpenVariables={(l) => { setLeadForVariables(l); setIsVariablesModalOpen(true); }}
                   onOpenTagsModal={handleOpenTagsModal}
+                  onOpenBlockModal={onOpenBlockModal}
                 />
               ))
             )}

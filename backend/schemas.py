@@ -624,6 +624,11 @@ class WebhookLeadBase(BaseModel):
     imported_by_name: Optional[str] = None
     project_id: Optional[int] = None
 
+    # Bloqueio real (BlockedContact) e repouso temporário (RestingContact) —
+    # não confundir com is_locked, que é só proteção contra exclusão.
+    is_really_blocked: bool = False
+    resting_expires_at: Optional[datetime] = None
+
     @field_validator('variables', mode='before')
     @classmethod
     def parse_variables(cls, v):

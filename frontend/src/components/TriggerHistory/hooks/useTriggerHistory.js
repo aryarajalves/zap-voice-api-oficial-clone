@@ -8,6 +8,7 @@ import { useTriggerModals } from './useTriggerModals';
 import { useTriggerActions } from './useTriggerActions';
 import { useFolders } from './useFolders';
 import { handleWebSocketMessage, fetchErrorsHelper, fetchChildrenHelper } from '../utils/triggerHistoryUtils';
+import { getAvailableDdiDdd } from '../../../utils/dddInfo';
 
 
 export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
@@ -62,6 +63,13 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
     const [contactsFilter, setContactsFilter] = useState('all');
     const [contactsTypeFilter, setContactsTypeFilter] = useState('all');
     const [contactsErrorFilter, setContactsErrorFilter] = useState('all');
+    const [contactsSearchPhone, setContactsSearchPhone] = useState('');
+    const [contactsFilterDdi, setContactsFilterDdi] = useState('');
+    const [contactsFilterDdd, setContactsFilterDdd] = useState('');
+    // Opções de DDI/DDD calculadas dinamicamente a partir dos contatos que
+    // batem com os filtros atuais (status/tipo/busca) — nunca uma lista fixa.
+    const [contactsDdiOptions, setContactsDdiOptions] = useState([]);
+    const [contactsDddOptions, setContactsDddOptions] = useState([]);
     const [loadingContacts, setLoadingContacts] = useState(false);
     const [contactsPage, setContactsPage] = useState(1);
     const [contactsPerPage, setContactsPerPage] = useState(20);
@@ -245,9 +253,10 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                 if (resT.ok) {
                     const trig = await resT.json();
                     const raw = trig.contacts_list || [];
-                    const start = (contactsPage - 1) * contactsPerPage;
-                    const paginated = raw.slice(start, start + contactsPerPage);
-                    const formatted = paginated.map(c => {
+
+                    // Formata primeiro para poder filtrar por telefone/DDI/DDD (a lista "total"
+                    // vem crua de trig.contacts_list e não passava pelos filtros — bug corrigido aqui).
+                    const allFormatted = raw.map(c => {
                         const phone = typeof c === 'string' ? c : (c.phone || c.whatsapp || c.telefone || c.contact_phone || c.phone_number || c.number || c.meta?.sender?.phone_number || '');
                         const name = typeof c === 'object' ? (c.nome || c.name || c.full_name || c.contact_name || c.meta?.sender?.name || c['{{1}}'] || c['1'] || '') : '';
                         return {
@@ -258,11 +267,38 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
                             is_bulk_raw: true
                         };
                     });
-                    setContactsTotal(raw.length);
+
+                    const cleanSearch = contactsSearchPhone ? contactsSearchPhone.replace(/\D/g, '') : '';
+                    const cleanDdi = contactsFilterDdi ? contactsFilterDdi.replace(/\D/g, '') : '';
+                    const cleanDdd = contactsFilterDdd ? contactsFilterDdd.replace(/\D/g, '') : '';
+
+                    const filtered = allFormatted.filter(c => {
+                        const digits = (c.phone_number || '').replace(/\D/g, '');
+                        if (cleanSearch && !digits.includes(cleanSearch)) return false;
+                        if (cleanDdi && !digits.startsWith(cleanDdi)) return false;
+                        if (cleanDdd && !(digits.startsWith(`55${cleanDdd}`) || digits.startsWith(cleanDdd))) return false;
+                        return true;
+                    });
+
+                    const start = (contactsPage - 1) * contactsPerPage;
+                    const paginated = filtered.slice(start, start + contactsPerPage);
+
+                    // Opções do dropdown = DDI/DDD presentes em TODOS os contatos que já
+                    // batem com busca por telefone (mas ainda sem aplicar o filtro de
+                    // DDI/DDD em si — senão, ao selecionar um DDD o dropdown "encolheria"
+                    // para mostrar só ele mesmo).
+                    const optionsSource = cleanSearch
+                        ? allFormatted.filter(c => (c.phone_number || '').replace(/\D/g, '').includes(cleanSearch))
+                        : allFormatted;
+                    const { ddis, ddds } = getAvailableDdiDdd(optionsSource.map(c => c.phone_number));
+                    setContactsDdiOptions(ddis);
+                    setContactsDddOptions(ddds);
+
+                    setContactsTotal(filtered.length);
                     setContactsModal(prev => ({
                         ...prev,
-                        contacts: formatted,
-                        counts: { total: raw.length }
+                        contacts: paginated,
+                        counts: { total: filtered.length }
                     }));
                     setLoadingContacts(false);
                     return;
@@ -274,6 +310,10 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
             if ((contactsFilter === 'failed' || contactsFilter === 'blocked') && contactsErrorFilter !== 'all') {
                 params.append('failure_reason', contactsErrorFilter);
             }
+            if (contactsSearchPhone) params.append('search_phone', contactsSearchPhone);
+            if (contactsFilterDdi) params.append('filter_ddi', contactsFilterDdi);
+            if (contactsFilterDdd) params.append('filter_ddd', contactsFilterDdd);
+            
             params.append('limit', contactsPerPage);
             params.append('skip', (contactsPage - 1) * contactsPerPage);
             const queryString = params.toString();
@@ -328,7 +368,43 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         if (contactsModal.isOpen && contactsModal.triggerId) {
             fetchTriggerContacts();
         }
-    }, [contactsFilter, contactsTypeFilter, contactsErrorFilter, contactsModal.isOpen, contactsModal.triggerId, contactsPage, contactsPerPage]);
+    }, [contactsFilter, contactsTypeFilter, contactsErrorFilter, contactsSearchPhone, contactsFilterDdi, contactsFilterDdd, contactsModal.isOpen, contactsModal.triggerId, contactsPage, contactsPerPage]);
+
+    // Calcula as opções de DDI/DDD disponíveis nas abas paginadas (tudo exceto
+    // "total", que já calcula isso sozinha em fetchTriggerContacts acima).
+    // Busca a lista completa (sem o filtro de DDI/DDD) para saber quais códigos
+    // realmente existem entre os contatos deste filtro, e só então popula o dropdown.
+    const fetchAvailableDdiDddOptions = async () => {
+        if (!contactsModal.triggerId) return;
+        try {
+            let url = `${API_URL}/triggers/${contactsModal.triggerId}/messages`;
+            const params = new URLSearchParams();
+            if (contactsFilter !== 'all') params.append('status_filter', contactsFilter);
+            if (contactsTypeFilter !== 'all') params.append('message_type', contactsTypeFilter);
+            if ((contactsFilter === 'failed' || contactsFilter === 'blocked') && contactsErrorFilter !== 'all') {
+                params.append('failure_reason', contactsErrorFilter);
+            }
+            if (contactsSearchPhone) params.append('search_phone', contactsSearchPhone);
+            params.append('limit', 999999);
+            params.append('skip', 0);
+            const res = await fetchWithAuth(`${url}?${params.toString()}`, {}, activeClient?.id);
+            if (res.ok) {
+                const data = await res.json();
+                const phones = (data.items || []).map(i => i.phone_number || i.phone).filter(Boolean);
+                const { ddis, ddds } = getAvailableDdiDdd(phones);
+                setContactsDdiOptions(ddis);
+                setContactsDddOptions(ddds);
+            }
+        } catch (_) {
+            // silencioso — dropdown apenas fica sem opções extras nesse caso
+        }
+    };
+
+    useEffect(() => {
+        if (contactsModal.isOpen && contactsModal.triggerId && contactsFilter !== 'total') {
+            fetchAvailableDdiDddOptions();
+        }
+    }, [contactsFilter, contactsTypeFilter, contactsErrorFilter, contactsSearchPhone, contactsModal.isOpen, contactsModal.triggerId]);
 
     const handleSelectAll = (e) => {
         if (e.target.checked) {
@@ -401,6 +477,10 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
         handleBulkDeleteAction, handleStartNow, handleRetry, handleSyncStats, handleTogglePin, fetchErrors, fetchChildren,
         handleViewPipeline, fetchTriggerContacts, handleSelectAll, handleSelectOne,
         handleViewContacts, handleEditParams,
-        contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal
+        contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal,
+        contactsSearchPhone, setContactsSearchPhone,
+        contactsFilterDdi, setContactsFilterDdi,
+        contactsFilterDdd, setContactsFilterDdd,
+        contactsDdiOptions, contactsDddOptions
     };
 };

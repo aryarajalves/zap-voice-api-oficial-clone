@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiInfo, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare } from 'react-icons/fi';
+import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiInfo, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash } from 'react-icons/fi';
 import { BsPinAngle, BsPinAngleFill, BsJournalText } from 'react-icons/bs';
 import { fetchWithAuth } from '../AuthContext';
 import { API_URL } from '../config';
 import { useClient } from '../contexts/ClientContext';
+import BlockContactModal from './WebhookLeads/components/BlockContactModal';
 
-export default function ChatConversations({ onClose }) {
+const NAV_SHORTCUTS = [
+    { view: 'bulk_sender', label: 'Disparo em Massa', icon: FiHome },
+    { view: 'history',     label: 'Histórico de Disparos', icon: FiClock },
+    { view: 'funnels',     label: 'Funis', icon: FiLayers },
+    { view: 'leads',       label: 'Contatos', icon: FiUsers },
+];
+
+export default function ChatConversations({ onClose, onNavigate }) {
     const { activeClient } = useClient();
     const [conversations, setConversations] = useState([]);
     const [selectedConvo, setSelectedConvo] = useState(null);
@@ -48,6 +56,10 @@ export default function ChatConversations({ onClose }) {
 
     // Modal de confirmação de delete
     const [confirmDelete, setConfirmDelete] = useState(null); // { messageId } or null
+
+    // Bloquear/colocar em repouso o contato ativo (não recebe mais disparos)
+    const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+    const [isBlockingContact, setIsBlockingContact] = useState(false);
 
     // Gravação de áudio
     const [isRecording, setIsRecording] = useState(false);
@@ -574,6 +586,36 @@ export default function ChatConversations({ onClose }) {
         }
     };
 
+    // Bloquear (permanente) ou colocar em repouso (temporário) o contato da conversa ativa
+    const handleConfirmBlockContact = async (type, hours) => {
+        if (!selectedConvo || !activeClient) return;
+        setIsBlockingContact(true);
+        try {
+            const endpoint = type === 'resting' ? `${API_URL}/resting/` : `${API_URL}/blocked/`;
+            const body = type === 'resting'
+                ? { phone: selectedConvo.phone, name: selectedConvo.contact_name, reason: 'Bloqueado via Atendimento', hours }
+                : { phone: selectedConvo.phone, name: selectedConvo.contact_name, reason: 'Bloqueado via Atendimento' };
+
+            const res = await fetchWithAuth(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            }, activeClient.id);
+
+            if (res.ok) {
+                toast.success(type === 'resting' ? 'Contato colocado em repouso — não receberá disparos até o prazo terminar.' : 'Contato bloqueado — não receberá mais disparos.');
+                setIsBlockModalOpen(false);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                toast.error(err.detail || 'Erro ao bloquear contato.');
+            }
+        } catch (err) {
+            toast.error('Erro ao bloquear contato.');
+        } finally {
+            setIsBlockingContact(false);
+        }
+    };
+
     // Salvar nota privada
     const handleSaveNote = async () => {
         if (!selectedConvo) return;
@@ -808,6 +850,17 @@ export default function ChatConversations({ onClose }) {
             </div>
         )}
 
+        {/* Modal de bloqueio / repouso do contato da conversa ativa */}
+        <BlockContactModal
+            isOpen={isBlockModalOpen}
+            onClose={() => setIsBlockModalOpen(false)}
+            onConfirm={handleConfirmBlockContact}
+            isSaving={isBlockingContact}
+            count={1}
+            selectAllPages={false}
+            targetLabel={selectedConvo ? `${selectedConvo.contact_name || selectedConvo.phone} (${selectedConvo.phone})` : null}
+        />
+
         <div className="flex flex-col h-screen w-screen bg-[#0f172a] text-gray-100 overflow-hidden font-sans">
             {/* Header de Atendimento */}
             <div className="h-16 border-b border-gray-200 dark:border-white/5 flex items-center justify-between px-6 bg-white dark:bg-[#1e293b] shrink-0">
@@ -822,16 +875,22 @@ export default function ChatConversations({ onClose }) {
                         )}
                     </div>
                 </div>
-                {onClose && (
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 rounded-xl transition-all font-bold text-xs border border-red-500/20"
-                    >
-                        <FiX size={15} />
-                        Sair do Atendimento
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {NAV_SHORTCUTS.map((shortcut) => {
+                        const Icon = shortcut.icon;
+                        return (
+                            <button
+                                key={shortcut.view}
+                                type="button"
+                                onClick={() => (shortcut.view === 'bulk_sender' && onClose ? onClose() : onNavigate && onNavigate(shortcut.view))}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-blue-500/10 text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 rounded-xl transition-all font-bold text-xs border border-gray-200 dark:border-white/10 hover:border-blue-500/30"
+                            >
+                                <Icon size={14} />
+                                {shortcut.label}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* Corpo do Chat */}
@@ -1120,6 +1179,14 @@ export default function ChatConversations({ onClose }) {
                                     }`}
                                 >
                                     {selectedConvo.pinned ? <BsPinAngleFill size={16} /> : <BsPinAngle size={16} />}
+                                </button>
+
+                                <button
+                                    onClick={() => setIsBlockModalOpen(true)}
+                                    title="Bloquear ou colocar em repouso — impede que este contato receba disparos"
+                                    className="p-2 rounded-xl border bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:border-orange-200 dark:hover:border-orange-800/30 transition-all"
+                                >
+                                    <FiSlash size={16} />
                                 </button>
 
                                 <button

@@ -84,16 +84,56 @@ function levelIcon(level) {
 }
 
 const QUICK_FILTERS = [
-    { id: 'bulk',      label: 'Disparo em Massa',    emoji: '📤', color: 'bg-blue-700 text-blue-100',     pattern: /\[(bulk|disparo|wa-trigger|direct|bulk-post-send|bulk_resend)\]/i },
-    { id: 'followup',  label: 'Follow-up',            emoji: '🔁', color: 'bg-cyan-700 text-cyan-100',     pattern: /\[follow-up|\[bulk-play-followup|\[play-followup/i },
-    { id: 'funnel',    label: 'Funis',                emoji: '🔀', color: 'bg-indigo-700 text-indigo-100', pattern: /\[(graph|engine|funil|wa-resume|play-clone|button_action_funnel|resume)\]/i },
-    { id: 'webhook',   label: 'Webhooks / Chatwoot',  emoji: '🔗', color: 'bg-orange-700 text-orange-100', pattern: /\[(webhook|chatwoot|meta|sync_chatwoot|meta_webhook|meta_inbound|webhooks)\]/i },
-    { id: 'scheduler', label: 'Agendamentos',          emoji: '⏰', color: 'bg-yellow-700 text-yellow-100', pattern: /\[(scheduler|backup-scheduler|schedule)\]/i },
-    { id: 'ai',        label: 'IA',                   emoji: '🤖', color: 'bg-violet-700 text-violet-100', pattern: /\[(ai_condition|input-data-ai|mem_lock|event)\]/i },
-    { id: 'database',  label: 'Banco / PostgreSQL',   emoji: '🗄', color: 'bg-green-700 text-green-100',   pattern: /\[(database|migration|auto-migrate|storage)\]|postgres|sqlalchemy|psycopg/i },
-    { id: 'backup',    label: 'Backup',                emoji: '💾', color: 'bg-teal-700 text-teal-100',    pattern: /\[(backup|upload-backup|restore)\]/i },
-    { id: 'upload',    label: 'Uploads',               emoji: '📁', color: 'bg-pink-700 text-pink-100',    pattern: /\[upload/i },
-    { id: 'import',    label: 'Importacao',            emoji: '📥', color: 'bg-rose-700 text-rose-100',    pattern: /import|duplicity_check|leads_import/i },
+    {
+        id: 'bulk', label: 'Disparo em Massa', emoji: '📤', color: 'bg-blue-700 text-blue-100',
+        pattern: /\[(bulk|disparo|wa-trigger|direct|bulk-post-send|bulk_resend)\]/i,
+        description: "Linhas de disparos em massa (envio para vários contatos de uma vez). Procura pelas marcações [bulk], [disparo], [wa-trigger], [direct], [bulk-post-send] e [bulk_resend]."
+    },
+    {
+        id: 'followup', label: 'Follow-up', emoji: '🔁', color: 'bg-cyan-700 text-cyan-100',
+        pattern: /\[follow-up|\[bulk-play-followup|\[play-followup/i,
+        description: "Linhas de mensagens de follow-up automático (reenvio programado para quem não respondeu). Procura pelas marcações [follow-up], [bulk-play-followup] e [play-followup]."
+    },
+    {
+        id: 'funnel', label: 'Funis', emoji: '🔀', color: 'bg-indigo-700 text-indigo-100',
+        pattern: /\[(graph|engine|funil|wa-resume|play-clone|button_action_funnel|resume)\]/i,
+        description: "Linhas da execução dos funis de automação (o motor que processa cada etapa do fluxo). Procura pelas marcações [graph], [engine], [funil], [wa-resume], [play-clone], [button_action_funnel] e [resume]."
+    },
+    {
+        id: 'webhook', label: 'Webhooks / Atendimento', emoji: '🔗', color: 'bg-orange-700 text-orange-100',
+        pattern: /\[(webhook|atendimento|chatwoot|meta|sync_atendimento|sync_chatwoot|meta_webhook|meta_inbound|webhooks)\]/i,
+        description: "Linhas de webhooks recebidos (Meta/WhatsApp) e de sincronização com o chat de Atendimento do ZapVoice. Procura pelas marcações [webhook], [atendimento], [meta], [sync_atendimento], [meta_webhook], [meta_inbound] e [webhooks]."
+    },
+    {
+        id: 'scheduler', label: 'Agendamentos', emoji: '⏰', color: 'bg-yellow-700 text-yellow-100',
+        pattern: /\[(scheduler|backup-scheduler|schedule)\]/i,
+        description: "Linhas do agendador de tarefas: disparos agendados e rotinas de backup programadas. Procura pelas marcações [scheduler], [backup-scheduler] e [schedule]."
+    },
+    {
+        id: 'ai', label: 'IA', emoji: '🤖', color: 'bg-violet-700 text-violet-100',
+        pattern: /\[(ai_condition|input-data-ai|mem_lock|event)\]/i,
+        description: "Linhas de processamento por inteligência artificial: condições de funil decididas por IA e extração de dados de respostas. Procura pelas marcações [ai_condition], [input-data-ai], [mem_lock] e [event]."
+    },
+    {
+        id: 'database', label: 'Banco / PostgreSQL', emoji: '🗄', color: 'bg-green-700 text-green-100',
+        pattern: /\[(database|migration|auto-migrate|storage)\]|postgres|sqlalchemy|psycopg/i,
+        description: "Linhas relacionadas ao banco de dados: migrações automáticas, armazenamento e erros de conexão. Procura pelas marcações [database], [migration], [auto-migrate], [storage] ou menções a postgres, sqlalchemy e psycopg."
+    },
+    {
+        id: 'backup', label: 'Backup', emoji: '💾', color: 'bg-teal-700 text-teal-100',
+        pattern: /\[(backup|upload-backup|restore)\]/i,
+        description: "Linhas do processo de backup automático do banco de dados e uploads, incluindo restaurações. Procura pelas marcações [backup], [upload-backup] e [restore]."
+    },
+    {
+        id: 'upload', label: 'Uploads', emoji: '📁', color: 'bg-pink-700 text-pink-100',
+        pattern: /\[upload/i,
+        description: "Linhas de upload de arquivos e mídias (imagens, áudios, vídeos, documentos). Procura pela marcação [upload."
+    },
+    {
+        id: 'import', label: 'Importacao', emoji: '📥', color: 'bg-rose-700 text-rose-100',
+        pattern: /import|duplicity_check|leads_import/i,
+        description: "Linhas de importação de contatos/leads e verificação de duplicidade. Procura pelas palavras 'import', 'duplicity_check' e 'leads_import'."
+    },
 ];
 
 const LINE_OPTIONS    = [500, 1000, 2000, 5000, 10000];
@@ -185,6 +225,7 @@ export default function LogViewer() {
     const [filterTimeTo, setFilterTimeTo]               = useState('');
     const [filterLevels, setFilterLevels]               = useState([]);
     const [filterText, setFilterText]                   = useState('');
+    const [filterTags, setFilterTags]                   = useState([]);
     const [activeQuickFilters, setActiveQuickFilters]   = useState([]);
 
     const dateMenuRef = useRef(null);
@@ -287,7 +328,7 @@ export default function LogViewer() {
         setParsed([]); setHasProcessed(false); setRawPaste(''); setTotalLines(0);
         setTruncated(false); setCurrentPage(1); setTotalPages(1);
         setFilterTimeFrom(''); setFilterTimeTo(''); setFilterLevels([]);
-        setFilterText(''); setActiveQuickFilters([]);
+        setFilterText(''); setFilterTags([]); setActiveQuickFilters([]);
     };
 
     const handleClearServer = async () => {
@@ -318,11 +359,20 @@ export default function LogViewer() {
                 const norm = line.level === 'WARN' ? 'WARNING' : line.level === 'FATAL' ? 'CRITICAL' : line.level;
                 if (!filterLevels.includes(norm)) return false;
             }
-            if (filterText && !line.rawLower.includes(filterText.toLowerCase())) return false;
+            
+            // Unir as tags confirmadas e o texto que o usuário está digitando atualmente
+            const inputTerms = filterText.toLowerCase().split(/[\s,]+/).filter(t => t.trim().length > 0);
+            const tagTerms = filterTags.map(tag => tag.toLowerCase());
+            const allTerms = [...new Set([...tagTerms, ...inputTerms])];
+            
+            if (allTerms.length > 0) {
+                const matchAll = allTerms.every(term => line.rawLower.includes(term));
+                if (!matchAll) return false;
+            }
             if (activePatterns.length > 0 && !activePatterns.some(re => re.test(line.raw))) return false;
             return true;
         });
-    }, [parsed, filterTimeFrom, filterTimeTo, filterLevels, filterText, activeQuickFilters]);
+    }, [parsed, filterTimeFrom, filterTimeTo, filterLevels, filterText, filterTags, activeQuickFilters]);
 
     const counts = useMemo(() => {
         const c = { CRITICAL: 0, ERROR: 0, WARNING: 0, INFO: 0, DEBUG: 0 };
@@ -335,7 +385,7 @@ export default function LogViewer() {
 
     const copyFiltered = () => {
         navigator.clipboard.writeText(filtered.map(l => l.raw).join('\n'));
-        toast.success('Copiado!');
+        toast.success(`${filtered.length.toLocaleString()} linha${filtered.length === 1 ? '' : 's'} copiada${filtered.length === 1 ? '' : 's'}!`);
     };
 
     const downloadFiltered = () => {
@@ -521,6 +571,13 @@ export default function LogViewer() {
                                         }`}
                                     >
                                         {f.emoji} {f.label}
+                                        <span className="relative inline-flex group">
+                                            <FiInfo size={11} className="opacity-60 hover:opacity-100 cursor-help" />
+                                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-64 opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-gray-900 text-gray-100 text-[11px] leading-snug font-normal normal-case p-2.5 rounded-lg shadow-xl">
+                                                {f.description}
+                                                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                                            </span>
+                                        </span>
                                     </button>
                                 );
                             })}
@@ -540,13 +597,48 @@ export default function LogViewer() {
                             <input type="time" step="1" value={filterTimeTo} onChange={e => setFilterTimeTo(e.target.value)}
                                 className="w-full px-3 py-2 bg-gray-50 dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20" />
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Busca no texto</label>
                             <div className="relative">
                                 <FiSearch size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input type="text" value={filterText} onChange={e => setFilterText(e.target.value)} placeholder="Palavras-chave..."
-                                    className="w-full pl-8 pr-3 py-2 bg-gray-50 dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 placeholder:text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    value={filterText} 
+                                    onChange={e => setFilterText(e.target.value)} 
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' || e.key === ',') {
+                                            e.preventDefault();
+                                            const val = filterText.trim().replace(/,/g, '');
+                                            if (val && !filterTags.includes(val)) {
+                                                setFilterTags(prev => [...prev, val]);
+                                                setFilterText('');
+                                            }
+                                        } else if (e.key === 'Backspace' && !filterText && filterTags.length > 0) {
+                                            // Apagar última tag com Backspace se o input estiver vazio
+                                            setFilterTags(prev => prev.slice(0, -1));
+                                        }
+                                    }}
+                                    placeholder="Buscar ou pressionar Enter..." 
+                                    className="w-full pl-8 pr-3 py-2 bg-gray-50 dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-xl text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 placeholder:text-gray-400"
+                                />
                             </div>
+                            
+                            {/* Renderização das tags de busca na parte de baixo do input */}
+                            {filterTags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                    {filterTags.map((tag, i) => (
+                                        <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-bold transition-all">
+                                            {tag}
+                                            <button 
+                                                onClick={() => setFilterTags(prev => prev.filter((_, idx) => idx !== i))}
+                                                className="hover:text-blue-200 ml-0.5 focus:outline-none font-bold"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -619,7 +711,10 @@ export default function LogViewer() {
                             <p className="font-bold">Nenhuma linha corresponde aos filtros</p>
                         </div>
                     ) : (
-                        <VirtualList items={filtered} filterText={filterText} />
+                        <VirtualList 
+                            items={filtered} 
+                            filterText={[...filterTags, filterText].filter(t => t.trim().length > 0).join(' ')} 
+                        />
                     )}
 
                     {/* Paginação — só aparece no modo por data */}
@@ -681,9 +776,19 @@ export default function LogViewer() {
 function highlightText(text, search) {
     if (!search) return text;
     try {
-        const parts = text.split(new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+        const terms = search.split(/[\s,]+/).filter(t => t.trim().length > 0);
+        if (terms.length === 0) return text;
+        
+        // Escapar caracteres especiais e juntar termos em (termo1|termo2|...)
+        const pattern = terms
+            .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+            .join('|');
+            
+        const parts = text.split(new RegExp(`(${pattern})`, 'gi'));
+        const termSet = new Set(terms.map(t => t.toLowerCase()));
+        
         return parts.map((part, i) =>
-            part.toLowerCase() === search.toLowerCase()
+            termSet.has(part.toLowerCase())
                 ? <mark key={i} className="bg-yellow-400/40 text-yellow-200 rounded px-0.5">{part}</mark>
                 : part
         );

@@ -188,6 +188,7 @@ export default function AppContent() {
                     onNavigateToIntegrations={() => logic.setCurrentView('integrations')}
                     onNavigateToBulk={() => logic.setCurrentView('bulk_sender')}
                     onNavigateToDispatchHistory={() => logic.setCurrentView('history')}
+                    onNavigateToChat={() => logic.setCurrentView('chat_conversations')}
                   />
                 </PageGuard>
               )}
@@ -339,7 +340,10 @@ export default function AppContent() {
       {/* Atendimento em Popup de Tela Cheia */}
       {logic.currentView === 'chat_conversations' && (
         <div className="fixed inset-0 z-[100] flex flex-col bg-[#0f172a] animate-in fade-in duration-300">
-          <ChatConversations onClose={() => logic.handleViewChange('bulk_sender')} />
+          <ChatConversations
+            onClose={() => logic.handleViewChange('bulk_sender')}
+            onNavigate={(view) => logic.handleViewChange(view)}
+          />
         </div>
       )}
     </div>

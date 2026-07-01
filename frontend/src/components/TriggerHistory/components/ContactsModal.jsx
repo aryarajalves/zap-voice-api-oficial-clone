@@ -6,6 +6,7 @@ import ConfirmationDialog from './ConfirmationDialog';
 import ExplainErrorDialog from './ExplainErrorDialog';
 import ContactRow from './ContactRow';
 import { useContactsModalLogic } from '../hooks/useContactsModalLogic';
+import { formatDddOption, formatDdiOption } from '../../../utils/dddInfo';
 
 // Mini modal multi-select de etiquetas do Chatwoot
 // Mini modal multi-select de etiquetas do Atendimento Local (Chat)
@@ -174,7 +175,11 @@ const ContactsModal = ({
     contactsModal, setContactsModal, contactsFilter, setContactsFilter,
     contactsTypeFilter, setContactsTypeFilter, contactsErrorFilter, setContactsErrorFilter,
     loadingContacts, contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal,
-    activeClient, onRefresh
+    activeClient, onRefresh,
+    contactsSearchPhone, setContactsSearchPhone,
+    contactsFilterDdi, setContactsFilterDdi,
+    contactsFilterDdd, setContactsFilterDdd,
+    contactsDdiOptions = [], contactsDddOptions = []
 }) => {
     const {
         selectedPhones,
@@ -217,7 +222,10 @@ const ContactsModal = ({
         contactsModal, setContactsModal, contactsFilter, setContactsFilter,
         contactsTypeFilter, setContactsTypeFilter, contactsErrorFilter, setContactsErrorFilter,
         loadingContacts, contactsPage, setContactsPage, contactsPerPage, setContactsPerPage, contactsTotal,
-        activeClient, onRefresh
+        activeClient, onRefresh,
+        contactsSearchPhone, setContactsSearchPhone,
+        contactsFilterDdi, setContactsFilterDdi,
+        contactsFilterDdd, setContactsFilterDdd
     });
 
     React.useEffect(() => {
@@ -278,6 +286,58 @@ const ContactsModal = ({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
+                </div>
+                
+                {/* Barra de Filtros Adicionais (Telefone, DDI, DDD) */}
+                <div className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/20 border-b border-gray-100 dark:border-gray-700 flex flex-wrap gap-2.5 items-center">
+                    <div className="flex-1 min-w-[200px] relative">
+                        <input 
+                            type="text" 
+                            value={contactsSearchPhone} 
+                            onChange={e => { setContactsSearchPhone(e.target.value); setPage(1); }} 
+                            placeholder="Buscar por número..."
+                            className="w-full pl-3 pr-8 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-gray-400"
+                        />
+                        {contactsSearchPhone && (
+                            <button 
+                                onClick={() => { setContactsSearchPhone(''); setPage(1); }}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs"
+                            >
+                                ×
+                            </button>
+                        )}
+                    </div>
+                    
+                    <div className="w-[140px] relative">
+                        <select
+                            value={contactsFilterDdi}
+                            onChange={e => { setContactsFilterDdi(e.target.value); setPage(1); }}
+                            className="w-full px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
+                            disabled={contactsDdiOptions.length === 0}
+                        >
+                            <option value="">Todos DDIs</option>
+                            {contactsDdiOptions.map(ddi => (
+                                <option key={ddi} value={ddi}>{formatDdiOption(ddi)}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="w-[140px] relative">
+                        {/* Dropdown de DDD gerado dinamicamente: só mostra os códigos que
+                            realmente existem entre os contatos deste filtro — nunca a lista
+                            fixa de todos os DDDs do Brasil. */}
+                        <select
+                            value={contactsFilterDdd}
+                            onChange={e => { setContactsFilterDdd(e.target.value); setPage(1); }}
+                            className="w-full px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
+                            disabled={contactsDddOptions.length === 0}
+                        >
+                            <option value="">Todos DDDs</option>
+                            {contactsDddOptions.map(ddd => (
+                                <option key={ddd} value={ddd}>{formatDddOption(ddd)}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 {/* Corpo do Modal condicional baseado no estado de loading */}

@@ -16,6 +16,9 @@ async def get_trigger_messages(
     status_filter: Optional[str] = None,
     message_type: Optional[str] = None,
     failure_reason: Optional[str] = None,
+    search_phone: Optional[str] = None,
+    filter_ddi: Optional[str] = None,
+    filter_ddd: Optional[str] = None,
     limit: int = 20,
     skip: int = 0,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
@@ -109,6 +112,30 @@ async def get_trigger_messages(
                 models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE']),
                 models.MessageStatus.meta_price_brl == 0,
                 models.MessageStatus.meta_price_brl == None
+            ))
+
+    # Filtros de Busca por Telefone, DDI e DDD
+    if search_phone:
+        # Remove caracteres não numéricos para garantir comparação correta
+        clean_search = "".join(filter(str.isdigit, search_phone))
+        if clean_search:
+            base_query = base_query.filter(models.MessageStatus.phone_number.like(f"%{clean_search}%"))
+            
+    if filter_ddi:
+        clean_ddi = "".join(filter(str.isdigit, filter_ddi))
+        if clean_ddi:
+            # DDI geralmente é o início do número (ex: 55...)
+            base_query = base_query.filter(models.MessageStatus.phone_number.like(f"{clean_ddi}%"))
+            
+    if filter_ddd:
+        clean_ddd = "".join(filter(str.isdigit, filter_ddd))
+        if clean_ddd:
+            # DDD em número brasileiro padrão "55DD..." ou sem DDI "DD..."
+            # Procuramos por 55 + DDD no começo, ou apenas o DDD depois do DDI
+            base_query = base_query.filter(or_(
+                models.MessageStatus.phone_number.like(f"55{clean_ddd}%"),
+                # Caso o número venha sem o DDI 55
+                models.MessageStatus.phone_number.like(f"{clean_ddd}%")
             ))
 
     total = base_query.count()
