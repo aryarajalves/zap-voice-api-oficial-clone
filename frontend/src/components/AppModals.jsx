@@ -2,7 +2,6 @@ import React from 'react';
 import ClientModal from './ClientModal';
 import SettingsModal from './SettingsModal';
 import GlobalsModal from './GlobalsModal';
-import ChatwootLabelsModal from './ChatwootLabelsModal';
 import TriggerFunnelModal from './TriggerFunnelModal';
 import ConfirmModal from './ConfirmModal';
 import FunnelTagModal from './FunnelTagModal';
@@ -27,12 +26,7 @@ const AppModals = ({ logic }) => {
         onClose={() => logic.setIsGlobalsModalOpen(false)} 
       />
       
-      <ChatwootLabelsModal 
-        isOpen={logic.isLabelsModalOpen} 
-        onClose={() => logic.setIsLabelsModalOpen(false)} 
-      />
-      
-      <TriggerFunnelModal 
+      <TriggerFunnelModal
         isOpen={logic.isTriggerModalOpen} 
         onClose={() => { logic.setIsTriggerModalOpen(false); logic.setSelectedFunnel(null); }} 
         funnel={logic.selectedFunnel} 

@@ -184,7 +184,7 @@ const RecipientSelector = ({
             <ProcessingOverlay 
                 isVisible={hook.isValidating}
                 title="Validando Público"
-                message="Sincronizando com o banco do Chatwoot para identificar janelas ativas."
+                message="Verificando janelas de atendimento ativas e contatos bloqueados."
                 type="blue"
                 progress={hook.progress}
             />

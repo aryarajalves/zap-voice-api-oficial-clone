@@ -54,7 +54,6 @@ from routers import (
     funnels,        # Funis de vendas e automações de mensagens
     schedules,      # Agendamentos de disparos
     settings,       # Configurações gerais do sistema
-    chatwoot,       # Integração com o Chatwoot
     whatsapp,       # Conexão e envio via WhatsApp
     whatsapp_profile, # Configurações e Perfil do WhatsApp
     blocked,        # Lista de contatos bloqueados
@@ -77,7 +76,7 @@ from routers import (
     api_keys        # Gerenciamento de chaves de API (Tokens de API)
 )
 
-# Webhook de entrada do Chatwoot (recebe eventos em tempo real)
+# Webhooks de entrada (sistemas externos, gestão de eventos — Chatwoot removido)
 from routers.webhooks_inbound import router as webhooks_inbound_router
 
 # Handler direto do Meta (Facebook/Instagram) — registrado com prioridade máxima
@@ -262,7 +261,6 @@ app.include_router(funnels.router, prefix="/api", tags=["Funnels"])
 app.include_router(schedules.router, prefix="/api", tags=["Schedules"])
 app.include_router(triggers_router, prefix="/api", tags=["Triggers"])
 app.include_router(uploads.router, prefix="/api", tags=["Uploads"])
-app.include_router(chatwoot.router, prefix="/api", tags=["Chatwoot"])
 app.include_router(auth.router, prefix="/api", tags=["Auth"])
 app.include_router(invitations.router, prefix="/api", tags=["Invitations"])
 app.include_router(clients.router, prefix="/api", tags=["Clients"])

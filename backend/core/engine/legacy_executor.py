@@ -25,15 +25,36 @@ async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, conta
 
         step_type = step.get("type")
         content = step.get("content")
-        
+
         if step_type == "message":
             content_processed = apply_vars_func(content)
+            # ZapVoice-only: Chatwoot removido — envio sempre via Meta Direto,
+            # igual ao padrão já usado em nodes/message.py.
             if step.get("buttons"):
-                await chatwoot.send_interactive_buttons(contact_phone, content_processed, step.get("buttons"))
-            await chatwoot.send_message(conversation_id, content_processed)
-            
+                res = await chatwoot.send_interactive_buttons(contact_phone, content_processed, step.get("buttons"))
+            else:
+                res = await chatwoot.send_text_official(contact_phone, content_processed)
+
+            if not res or (isinstance(res, dict) and res.get("error")):
+                logger.error(f"❌ [LEGACY] Falha ao enviar mensagem (step {step_index}) para {contact_phone}: {res}")
+                try:
+                    db.expire(trigger)
+                except Exception:
+                    pass
+                trigger.status = 'failed'
+                trigger.failure_reason = f"Meta API (Legacy Message): {res.get('error') if isinstance(res, dict) else 'Unknown'}"
+                db.commit()
+                return
+
+            msg_id = None
+            if isinstance(res, dict):
+                messages = res.get("messages")
+                if messages:
+                    msg_id = messages[0].get("id")
+            msg_id_clean = str(msg_id).replace("wamid.", "") if msg_id else f"legacy_{int(datetime.now().timestamp())}"
+
             db.add(models.MessageStatus(
-                trigger_id=trigger.id, message_id=f"legacy_{int(datetime.now().timestamp())}",
+                trigger_id=trigger.id, message_id=msg_id_clean,
                 phone_number=contact_phone, status='sent', content=content_processed
             ))
             try:
@@ -45,7 +66,45 @@ async def execute_legacy_funnel(trigger, steps, chatwoot, conversation_id, conta
             log_node_execution(db, trigger, f"step_{step_index}", "completed")
 
         elif step_type in ["image", "video", "audio", "document"]:
-             await chatwoot.send_attachment(conversation_id, content, step_type)
+            # ZapVoice-only: Chatwoot removido — envio sempre via Meta Direto.
+            if step_type == "image":
+                res = await chatwoot.send_image_official(contact_phone, content)
+            elif step_type == "video":
+                res = await chatwoot.send_video_official(contact_phone, content)
+            elif step_type == "audio":
+                res = await chatwoot.send_audio_official(contact_phone, content)
+            else:
+                res = await chatwoot.send_document_official(contact_phone, content)
+
+            if not res or (isinstance(res, dict) and res.get("error")):
+                logger.error(f"❌ [LEGACY] Falha ao enviar mídia ({step_type}, step {step_index}) para {contact_phone}: {res}")
+                try:
+                    db.expire(trigger)
+                except Exception:
+                    pass
+                trigger.status = 'failed'
+                trigger.failure_reason = f"Meta API (Legacy Media): {res.get('error') if isinstance(res, dict) else 'Unknown'}"
+                db.commit()
+                return
+
+            msg_id = None
+            if isinstance(res, dict):
+                messages = res.get("messages")
+                if messages:
+                    msg_id = messages[0].get("id")
+            msg_id_clean = str(msg_id).replace("wamid.", "") if msg_id else f"legacy_{int(datetime.now().timestamp())}"
+
+            db.add(models.MessageStatus(
+                trigger_id=trigger.id, message_id=msg_id_clean,
+                phone_number=contact_phone, status='sent', content=f"[{step_type}] {content}"
+            ))
+            try:
+                db.expire(trigger)
+            except Exception:
+                pass
+            trigger.total_sent = (trigger.total_sent or 0) + 1
+            db.commit()
+            log_node_execution(db, trigger, f"step_{step_index}", "completed")
 
         raw_delay = int(step.get("delay", 0))
         if raw_delay > 0:

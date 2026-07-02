@@ -117,6 +117,13 @@ class MessageStatus(Base):
     contact_name = Column(String, nullable=True)
     status = Column(String, default="sent")
     failure_reason = Column(String, nullable=True)
+
+    # Quando uma falha é "resolvida" a partir do relatório de falhas (bloquear, colocar
+    # em repouso, ou reenviar/disparar de novo), NÃO apagamos mais o registro — apenas
+    # marcamos aqui a ação tomada, para o relatório continuar mostrando o contato (só que
+    # travado, sem poder repetir a ação). Valores: 'blocked' | 'resting' | 'resent' | None.
+    failure_resolution = Column(String, nullable=True)
+    failure_resolved_at = Column(DateTime(timezone=True), nullable=True)
     is_interaction = Column(Boolean, default=False)
     message_type = Column(String, nullable=True)
     meta_price_category = Column(String, nullable=True)

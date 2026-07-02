@@ -1,8 +1,23 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { API_URL } from '../../../config';
-import { fetchWithAuth } from '../../../AuthContext';
 import { useClient } from '../../../contexts/ClientContext';
 import { toast } from 'react-hot-toast';
+
+// Mapeamento de telefone pode ser:
+// - uma string simples: nome da coluna com o telefone completo
+// - um objeto { mode: 'composite', ddi_column, ddd_column, number_column, manual_ddi }:
+//   quando o telefone está dividido em várias colunas (DDI/DDD/Número) na planilha.
+// Retorna a mensagem de erro de validação, ou null se estiver válido.
+export function getPhoneMappingError(phone) {
+  if (!phone) return 'A coluna de Telefone é obrigatória.';
+  if (typeof phone === 'object') {
+    if (!phone.number_column) return 'Selecione a coluna do Número de telefone.';
+    if (!phone.ddi_column && !phone.manual_ddi) {
+      return 'Informe o DDI manualmente (ex: 55) ou selecione uma coluna de DDI.';
+    }
+  }
+  return null;
+}
 
 export function useContactImport(onClose, onImportComplete) {
   const { activeClient } = useClient();
@@ -20,81 +35,9 @@ export function useContactImport(onClose, onImportComplete) {
   const [importResult, setImportResult] = useState(null);
   const fileInputRef = useRef(null);
 
-  const [importSource, setImportSource] = useState(null);
-  const [chatwootLabels, setChatwootLabels] = useState([]);
-  const [loadingLabels, setLoadingLabels] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState('');
-  const [importAllTags, setImportAllTags] = useState(false);
-  const [customTag, setCustomTag] = useState('');
-
   // Tags fixas digitadas manualmente no passo 2
   const [fixedTags, setFixedTags] = useState([]);
   const [fixedRemoveTags, setFixedRemoveTags] = useState([]);
-
-  const fetchChatwootLabels = async () => {
-    setLoadingLabels(true);
-    try {
-      const response = await fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, activeClient?.id);
-      if (response && response.ok) {
-        const data = await response.json();
-        setChatwootLabels(Array.isArray(data) ? data : []);
-      } else {
-        toast.error("Erro ao carregar etiquetas do Chatwoot.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao carregar etiquetas.");
-    } finally {
-      setLoadingLabels(false);
-    }
-  };
-
-  useEffect(() => {
-    if (importSource === 'chatwoot') {
-      fetchChatwootLabels();
-    }
-  }, [importSource]);
-
-  const handleChatwootImport = async () => {
-    if (!selectedLabel) {
-      toast.error('Selecione uma etiqueta do Chatwoot.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const response = await fetchWithAuth(`${API_URL}/leads/import/chatwoot`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          label: selectedLabel,
-          import_all_tags: importAllTags,
-          custom_tag: customTag || null
-        })
-      }, activeClient?.id);
-
-      if (response && response.ok) {
-        const data = await response.json();
-        if (data && data.status === 'success') {
-          toast.success(data.message);
-          onClose();
-          onImportComplete();
-        } else {
-          toast.error(data?.detail || 'Erro ao iniciar importação.');
-        }
-      } else {
-        let errorMsg = 'Erro ao iniciar importação.';
-        try { const err = await response.json(); errorMsg = err?.detail || errorMsg; } catch (_) {}
-        toast.error(errorMsg);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao iniciar importação.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
@@ -161,8 +104,9 @@ export function useContactImport(onClose, onImportComplete) {
   };
 
   const handleExecuteImport = async () => {
-    if (!mapping.phone) {
-      toast.error('A coluna de Telefone é obrigatória.');
+    const phoneError = getPhoneMappingError(mapping.phone);
+    if (phoneError) {
+      toast.error(phoneError);
       return;
     }
 
@@ -210,10 +154,6 @@ export function useContactImport(onClose, onImportComplete) {
     setPreviewData(null);
     setImportResult(null);
     setMapping({ name: '', phone: '', email: '', tags: '', remove_tags: '' });
-    setImportSource(null);
-    setSelectedLabel('');
-    setImportAllTags(false);
-    setCustomTag('');
     setFixedTags([]);
     setFixedRemoveTags([]);
   };
@@ -221,10 +161,8 @@ export function useContactImport(onClose, onImportComplete) {
   return {
     activeClient, step, setStep, file, setFile, loading, setLoading,
     previewData, setPreviewData, mapping, setMapping, importResult, setImportResult,
-    fileInputRef, importSource, setImportSource, chatwootLabels, setChatwootLabels,
-    loadingLabels, setLoadingLabels, selectedLabel, setSelectedLabel,
-    importAllTags, setImportAllTags, customTag, setCustomTag,
-    fetchChatwootLabels, handleChatwootImport, handleFileChange, handleExecuteImport, reset,
+    fileInputRef,
+    handleFileChange, handleExecuteImport, reset,
     fixedTags, setFixedTags, fixedRemoveTags, setFixedRemoveTags
   };
 }

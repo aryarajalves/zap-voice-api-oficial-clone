@@ -48,17 +48,8 @@ class ChatwootAgentsMixin:
         return None
 
     async def get_accounts(self):
-        if not self.api_token: return [{"id": 1, "name": "Mock Account"}]
-        # Profile is at api/v1/profile
-        profile_url = f"{self.api_url}/profile"
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                response = await client.get(profile_url, headers=self.headers)
-                response.raise_for_status()
-                return response.json().get("accounts", [])
-            except Exception as e:
-                logger.error(f"Error fetching accounts: {e}")
-                raise e
+        # Chatwoot foi desativado neste projeto.
+        return []
 
     async def assign_agent_to_conversation(self, conversation_id: int, agent_id: int):
         """

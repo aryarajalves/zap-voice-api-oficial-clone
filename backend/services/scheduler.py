@@ -279,12 +279,41 @@ async def run_stale_triggers_cleanup(db_session=None):
             tr.failure_reason = f"Disparo travado: O tempo limite de processamento (2h) foi excedido. Possível queda do sistema ou erro crítico no worker durante o status {tr.status}."
             from services.engine import log_node_execution
             log_node_execution(db, tr, node_id=tr.current_node_id or 'DELIVERY', status="failed", details=tr.failure_reason)
-            
+
+        # 3. Mensagens individuais presas na fila da Meta (enviadas, mas sem confirmação de
+        # entrega/leitura) há mais de 24 horas. Isso acontece quando a Meta aceita a mensagem
+        # mas nunca confirma o status via webhook (ex: número inválido silencioso, throttling
+        # da Meta, etc.). Sem esse corte, o contato fica "preso" na fila indefinidamente.
+        logger.info("🔍 [STALE CLEANUP] Verificando mensagens presas na fila da Meta há mais de 24h...")
+        stale_queue_messages = db.query(models.MessageStatus).filter(
+            models.MessageStatus.status == 'sent',
+            models.MessageStatus.delivered_counted == False,
+            models.MessageStatus.read_counted == False,
+            models.MessageStatus.timestamp < cutoff_24h
+        ).all()
+
+        if stale_queue_messages:
+            queue_fail_reason = "Ultrapassou 24 horas ainda na fila da Meta (WhatsApp) sem confirmação de entrega — disparo abortado."
+            failed_per_trigger = {}
+            for ms in stale_queue_messages:
+                ms.status = 'failed'
+                ms.failure_reason = queue_fail_reason
+                failed_per_trigger[ms.trigger_id] = failed_per_trigger.get(ms.trigger_id, 0) + 1
+
+            if failed_per_trigger:
+                triggers_to_update = db.query(models.ScheduledTrigger).filter(
+                    models.ScheduledTrigger.id.in_(failed_per_trigger.keys())
+                ).all()
+                for tr in triggers_to_update:
+                    tr.total_failed = (tr.total_failed or 0) + failed_per_trigger.get(tr.id, 0)
+
+            logger.warning(f"🧟 [REAPER] {len(stale_queue_messages)} mensagem(ns) presas na fila da Meta há +24h marcadas como falha.")
+
         db.commit()
-        if not stale_waiting and not stale_processing:
+        if not stale_waiting and not stale_processing and not stale_queue_messages:
             logger.info("✅ [STALE CLEANUP] Nenhum gatilho obsoleto encontrado.")
         else:
-            logger.info(f"🧹 [STALE CLEANUP] Limpeza concluída: {len(stale_waiting)} expirados, {len(stale_processing)} travados.")
+            logger.info(f"🧹 [STALE CLEANUP] Limpeza concluída: {len(stale_waiting)} expirados, {len(stale_processing)} travados, {len(stale_queue_messages)} presos na fila da Meta.")
             
     except Exception as e:
         logger.error(f"❌ [STALE CLEANUP] Erro ao limpar gatilhos obsoletos: {e}")

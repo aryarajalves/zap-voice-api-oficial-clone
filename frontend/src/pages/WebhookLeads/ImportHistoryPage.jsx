@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { FiClock, FiFileText, FiCheckCircle, FiAlertTriangle, FiLoader, FiEdit2, FiCheck, FiX, FiRefreshCw, FiTrash2, FiTrash, FiUsers } from 'react-icons/fi';
+import { FiClock, FiFileText, FiCheckCircle, FiAlertTriangle, FiLoader, FiEdit2, FiCheck, FiX, FiRefreshCw, FiTrash2, FiTrash, FiUsers, FiEye } from 'react-icons/fi';
 import { useClient } from '../../contexts/ClientContext';
 import { API_URL } from '../../config';
 import { fetchWithAuth } from '../../AuthContext';
 import { toast } from 'react-hot-toast';
 import { parseDateSafe } from './utils/importHistoryUtils';
+import ImportResultsModal from './components/ImportResultsModal';
 
 /** Formata segundos em "Xm Ys" ou "Xs" */
 function formatDuration(seconds) {
@@ -42,6 +43,7 @@ export default function ImportHistoryPage({ onNavigateToLeads }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, type: null, targetId: null });
   const [deleting, setDeleting] = useState(false);
+  const [resultsModal, setResultsModal] = useState({ isOpen: false, item: null });
 
   const fetchHistory = async (showLoading = false) => {
     if (!activeClient?.id) return;
@@ -336,11 +338,12 @@ export default function ImportHistoryPage({ onNavigateToLeads }) {
               const dateStr = parseDateSafe(dateSource);
               const isSelected = selectedIds.includes(item.id);
 
-              // Duplicatas eliminadas (arquivo tinha mais do que totalRows, mas totalRows já é pós-dedup no backend)
-              // Mostramos só quando completado e há erros ou diferença
-              const duplicatesRemoved = item.status === 'completed' && totalRows > importedRows + errorRows
-                ? totalRows - importedRows - errorRows
-                : 0;
+              // Linhas descartadas ANTES de tentar importar (telefone inválido / duplicado
+              // dentro do próprio arquivo) — vêm prontas do backend, não são mais estimadas.
+              const rejectedDuplicates = item.rejected_duplicate_rows || 0;
+              const rejectedInvalidPhone = item.rejected_invalid_phone_rows || 0;
+              const originalTotalRows = item.original_total_rows || 0;
+              const hasDetails = (importedRows + errorRows + rejectedDuplicates + rejectedInvalidPhone) > 0;
 
               return (
                 <div key={item.id} className="p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-white/10 dark:hover:bg-gray-800/10 transition-all">
@@ -424,7 +427,12 @@ export default function ImportHistoryPage({ onNavigateToLeads }) {
                               {percentage}% Concluído
                             </span>
                             <span>•</span>
-                            <span>{processed.toLocaleString('pt-BR')} de {totalRows.toLocaleString('pt-BR')} contatos</span>
+                            <span>
+                              {processed.toLocaleString('pt-BR')} de {totalRows.toLocaleString('pt-BR')} contatos
+                              {originalTotalRows > totalRows && (
+                                <span className="text-gray-400 font-normal"> (arquivo tinha {originalTotalRows.toLocaleString('pt-BR')} linhas)</span>
+                              )}
+                            </span>
                             {errorRows > 0 && (
                               <>
                                 <span>•</span>
@@ -453,10 +461,23 @@ export default function ImportHistoryPage({ onNavigateToLeads }) {
                                   ✗ {errorRows.toLocaleString('pt-BR')} falharam
                                 </span>
                               )}
-                              {duplicatesRemoved > 0 && (
+                              {rejectedDuplicates > 0 && (
                                 <span className="px-2.5 py-1 bg-gray-50 dark:bg-gray-700/30 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700/40 rounded-lg text-[11px] font-bold">
-                                  ⊘ {duplicatesRemoved.toLocaleString('pt-BR')} duplicatas removidas
+                                  ⊘ {rejectedDuplicates.toLocaleString('pt-BR')} duplicados no arquivo
                                 </span>
+                              )}
+                              {rejectedInvalidPhone > 0 && (
+                                <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/20 rounded-lg text-[11px] font-bold">
+                                  ⚠ {rejectedInvalidPhone.toLocaleString('pt-BR')} telefone inválido
+                                </span>
+                              )}
+                              {hasDetails && (
+                                <button
+                                  onClick={() => setResultsModal({ isOpen: true, item })}
+                                  className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/30 rounded-lg text-[11px] font-bold hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all flex items-center gap-1"
+                                >
+                                  <FiEye size={11} /> Ver quem foi importado/rejeitado
+                                </button>
                               )}
                             </div>
                           )}
@@ -538,6 +559,12 @@ export default function ImportHistoryPage({ onNavigateToLeads }) {
           </div>
         </div>
       )}
+
+      <ImportResultsModal
+        isOpen={resultsModal.isOpen}
+        importItem={resultsModal.item}
+        onClose={() => setResultsModal({ isOpen: false, item: null })}
+      />
 
       {/* Popup Modal de Confirmação de Deleção Premium */}
       {deleteModal.isOpen && (

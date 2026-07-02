@@ -21,7 +21,7 @@ export const useValidation = ({ contacts, setContacts, activeClient, selectedInb
 
             for (let i = 0; i < phones.length; i += batchSize) {
                 const batch = phones.slice(i, i + batchSize);
-                const res = await fetchWithAuth(`${API_URL}/chatwoot/validate-contacts`, {
+                const res = await fetchWithAuth(`${API_URL}/leads/validate-contacts`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

@@ -304,26 +304,26 @@ async def schedule_bulk_send(
         if orig_trigger:
             child_ids = [cid[0] for cid in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == orig_trigger.id).all()]
             all_trigger_ids = [orig_trigger.id] + child_ids
-            
+
+            # Marca (em vez de apagar) as mensagens com falha desses telefones que acabaram de
+            # ser reenviados pelo relatório de falhas — o relatório continua mostrando o
+            # contato normalmente, só que travado (failure_resolution='resent'), sem poder
+            # repetir a ação nele. Os contadores do trigger original não são mais alterados:
+            # a falha aconteceu de verdade e continua contando no histórico.
+            now = datetime.now(timezone.utc)
             for c in formatted_contacts:
                 phone_val = c.get("phone") if isinstance(c, dict) else c
                 clean_phone = "".join(filter(str.isdigit, str(phone_val)))
                 if clean_phone:
                     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-                    failed_messages = db.query(models.MessageStatus).filter(
+                    db.query(models.MessageStatus).filter(
                         models.MessageStatus.trigger_id.in_(all_trigger_ids),
                         models.MessageStatus.status == 'failed',
                         models.MessageStatus.phone_number.like(f"%{suffix}")
-                    ).all()
-                    
-                    for msg in failed_messages:
-                        t_obj = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == msg.trigger_id).first()
-                        if t_obj:
-                            if t_obj.total_failed > 0:
-                                t_obj.total_failed -= 1
-                            if t_obj.total_contacts > 0:
-                                t_obj.total_contacts -= 1
-                        db.delete(msg)
+                    ).update({
+                        models.MessageStatus.failure_resolution: 'resent',
+                        models.MessageStatus.failure_resolved_at: now
+                    }, synchronize_session=False)
             db.commit()
 
     db.refresh(trigger)

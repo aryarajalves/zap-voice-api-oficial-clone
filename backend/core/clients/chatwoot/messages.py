@@ -33,92 +33,14 @@ class ChatwootMessagesMixin:
         return await self.send_private_note(conversation_id, content)
 
     async def send_attachment(self, conversation_id: int, url: str, attachment_type: str, custom_filename: str = None, caption: str = None):
-        if not self.api_token:
-            self.log_debug(f"Chatwoot Token not set. Mocking send_attachment ({attachment_type}): {url}")
-            return {"id": 124, "content": url, "attachment": True}
-
-        self.log_debug(f"DEBUG: send_attachment called with URL: {url}, type: {attachment_type}")
-
-        from urllib.parse import unquote
-
-        # Resolve local file path
-        file_path = self._resolve_local_path(url)
-        
-        # Download from URL if not found locally
-        temp_download_path = None
-        if not file_path or not os.path.exists(file_path):
-            file_path, temp_download_path = await self._download_remote_file(url)
-
-        if not file_path or not os.path.exists(file_path):
-             self.log_debug(f"File not found locally: {file_path}. Sending as text link.")
-             content = f"[{attachment_type.upper()}] {url}\n⚠️ Arquivo local não encontrado: {file_path}"
-             return await self.send_message(conversation_id, content)
-
-        # Prepare headers without Content-Type
-        upload_headers = self.headers.copy()
-        upload_headers.pop("Content-Type", None)
-
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            try:
-                mime_type, _ = mimetypes.guess_type(file_path)
-                if not mime_type:
-                    mime_type = 'application/octet-stream'
-                
-                self.log_debug(f"DEBUG: Uploading {file_path} with mime {mime_type}")
-
-                with open(file_path, "rb") as f:
-                    final_filename = self._prepare_filename(file_path, custom_filename, attachment_type)
-                    
-                    if attachment_type == 'audio':
-                         mime_type = 'audio/ogg'
-
-                    files = {'attachments[]': (final_filename, f, mime_type)}
-                    data = {
-                        'message_type': 'outgoing', 
-                        'private': 'false',
-                        'content': caption or ''
-                    }
-                    
-                    self.log_debug(f"DEBUG: Sending to Chatwoot with filename: {final_filename} and data: {data}")
-
-                    response = await client.post(
-                        f"{self.base_url}/conversations/{conversation_id}/messages",
-                        data=data,
-                        files=files,
-                        headers=upload_headers
-                    )
-                
-                self.log_debug(f"DEBUG: Chatwoot Response Status: {response.status_code}")
-                response.raise_for_status()
-                
-                if temp_download_path and os.path.exists(temp_download_path):
-                    try: os.remove(temp_download_path)
-                    except: pass
-                        
-                return response.json()
-            except httpx.HTTPError as e:
-                err_msg = str(e)
-                if hasattr(e, 'response') and e.response:
-                    err_msg += f" | Resp: {e.response.text[:100]}"
-                return await self.send_message(conversation_id, f"[{attachment_type}] {url}\n⚠️ Erro HTTP: {err_msg}")
-            except Exception as e:
-                 return await self.send_message(conversation_id, f"[{attachment_type}] {url}\n⚠️ Erro Inesperado: {str(e)}")
+        # Chatwoot foi desativado neste projeto — nunca fazemos upload para o Chatwoot.
+        # (Este método fazia uma requisição HTTP direta, fora do `_request` centralizado,
+        # então precisa ser interrompido aqui também.)
+        return None
 
     async def toggle_typing(self, conversation_id: int, status: str = 'on'):
-        if not self.api_token:
-            return
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/conversations/{conversation_id}/toggle_typing",
-                    json={"typing_status": status},
-                    headers=self.headers
-                )
-                if response.status_code not in [200, 204]:
-                     logger.debug(f"DEBUG: Toggle typing {status} failed ({response.status_code}): {response.text}")
-            except httpx.HTTPError as e:
-                logger.error(f"Error toggling typing status: {e}")
+        # Chatwoot foi desativado neste projeto.
+        return None
 
     # Helper methods for attachment handling
     def _resolve_local_path(self, url: str) -> str:

@@ -8,7 +8,6 @@ import { useAuth } from '../../../AuthContext';
 // Sub-hooks
 import { useGeneralSettings } from './useGeneralSettings';
 import { useWhatsAppSettings } from './useWhatsAppSettings';
-import { useChatwootSettings } from './useChatwootSettings';
 import { useDataManagement } from './useDataManagement';
 import { useProfileSettings } from './useProfileSettings';
 
@@ -19,7 +18,6 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
     // Sub-hooks
     const general = useGeneralSettings(activeClient, refreshClients);
     const whatsapp = useWhatsAppSettings(activeClient);
-    const chatwoot = useChatwootSettings(activeClient, general.formData);
     const dataMgmt = useDataManagement(activeClient);
     const profile = useProfileSettings();
 
@@ -34,12 +32,11 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
     // Orchestration - Load Data
     useEffect(() => {
         if (isOpen) {
-            general.loadSettings(chatwoot.fetchAgents);
+            general.loadSettings();
             dataMgmt.fetchSyncedContacts();
             dataMgmt.fetchMemoryLogs();
             dataMgmt.fetchChatLogs();
             whatsapp.fetchWhatsAppProfile();
-            chatwoot.fetchAgents();
             if (user) {
                 profile.setProfileData({
                     email: user.email || '',
@@ -60,7 +57,6 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
             dataMgmt.fetchMemoryLogs();
             dataMgmt.fetchChatLogs();
         }
-        if (isOpen && activeTab === 'chatwoot') chatwoot.fetchLabels();
     }, [dataMgmt.memoryLogsPage, dataMgmt.memoryLogsLimit, dataMgmt.chatLogsPage, dataMgmt.chatLogsLimit, activeTab]);
 
     useEffect(() => {
@@ -84,7 +80,7 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
                 try {
                     const payload = JSON.parse(event.data);
                     if (payload.event === "settings_updated" && payload.client_id === activeClient.id) {
-                        general.loadSettings(chatwoot.fetchAgents);
+                        general.loadSettings();
                     }
                 } catch (e) {}
             };
@@ -95,7 +91,7 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
     const handleRevealSetting = async (key) => {
         if (visibleFields[key]) {
             setVisibleFields(prev => ({ ...prev, [key]: false }));
-            general.loadSettings(chatwoot.fetchAgents);
+            general.loadSettings();
             return;
         }
 
@@ -117,7 +113,6 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
                 const data = await res.json();
                 general.setFormData(prev => ({ ...prev, [key]: data.value }));
                 setVisibleFields(prev => ({ ...prev, [key]: true }));
-                if (key === 'CHATWOOT_API_TOKEN') setTimeout(() => chatwoot.fetchAgents(), 500);
             }
         } catch (error) {
             toast.error("Erro ao revelar configuração");
@@ -179,7 +174,6 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
         setActiveTab, 
         visibleFields,
         ...whatsapp,
-        ...chatwoot,
         ...dataMgmt,
         ...profile,
         testingWebhook: general.testingWebhook, 

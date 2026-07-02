@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 import models
 import schemas
-from core.deps import get_db
+from core.deps import get_db, get_current_user
 from core.permissions import require_premium, require_user, require_feature
 from services.leads import upsert_webhook_lead
 from core.logger import setup_logger
@@ -918,13 +918,26 @@ def bulk_delete_all_leads(
     phones = list({l.phone for l in deletable if l.phone})
 
     # 1. Deletar ScheduledTriggers em batch (por lote de 500 telefones)
+    #    IMPORTANTE: message_status.trigger_id -> scheduled_triggers.id não tem
+    #    ON DELETE CASCADE no banco (só no modelo ORM). É preciso apagar os
+    #    MessageStatus antes, senão o DELETE do trigger quebra por violação de
+    #    FK (era essa a causa do "Erro ao processar exclusão").
     BATCH = 500
     for i in range(0, len(phones), BATCH):
         batch_phones = phones[i:i + BATCH]
-        db.query(models.ScheduledTrigger).filter(
+        trigger_ids = [t[0] for t in db.query(models.ScheduledTrigger.id).filter(
             models.ScheduledTrigger.client_id == client_id,
             models.ScheduledTrigger.contact_phone.in_(batch_phones)
-        ).delete(synchronize_session=False)
+        ).all()]
+
+        if trigger_ids:
+            db.query(models.MessageStatus).filter(
+                models.MessageStatus.trigger_id.in_(trigger_ids)
+            ).delete(synchronize_session=False)
+
+            db.query(models.ScheduledTrigger).filter(
+                models.ScheduledTrigger.id.in_(trigger_ids)
+            ).delete(synchronize_session=False)
 
     # 2. Deletar os leads em batch (por lote de 1000 IDs)
     for i in range(0, len(deletable_ids), 1000):
@@ -1309,3 +1322,121 @@ def toggle_lead_lock(
     db.refresh(lead)
     status = "protegido" if lead.is_locked else "desprotegido"
     return {"status": "success", "is_locked": lead.is_locked, "message": f"Contato {status} com sucesso."}
+
+
+@router.post("/leads/validate-contacts", summary="Validar contatos antes de um disparo em massa (janela 24h / bloqueio)")
+async def validate_contacts_for_bulk(
+    payload: dict,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Valida uma lista de números antes de um disparo em massa, usando somente dados
+    locais (não depende mais do Chatwoot): tabela customizada do cliente
+    (SYNC_CONTACTS_TABLE), cache local de janela (ContactWindow) e bloqueio/repouso.
+    """
+    import asyncio
+    from sqlalchemy import text
+    from config_loader import get_setting
+
+    client_id = x_client_id if x_client_id else current_user.client_id
+    contacts = payload.get("phones", [])
+
+    semaphore = asyncio.Semaphore(500)
+
+    try:
+        # 1. Tabela customizada (SYNC_CONTACTS_TABLE), se configurada
+        sync_table_raw = get_setting("SYNC_CONTACTS_TABLE", "", client_id=client_id)
+        custom_mapping = {}
+        clean_phones_input = [''.join(filter(str.isdigit, str(p))) for p in contacts]
+
+        if sync_table_raw and clean_phones_input:
+            safe_table = "".join(c for c in sync_table_raw if c.isalnum() or c == '_')
+            try:
+                phones_tuple = tuple(clean_phones_input)
+                if phones_tuple:
+                    sql = text(f"SELECT phone, name, last_interaction_at FROM {safe_table} WHERE phone IN :phones")
+                    result = db.execute(sql, {"phones": phones_tuple}).fetchall()
+                    for row in result:
+                        p_cleaned = str(row[0])
+                        custom_mapping[p_cleaned] = {"name": row[1], "last_interaction": row[2]}
+            except Exception as e:
+                logger.error(f"⚠️ [VALIDATE] Erro ao consultar tabela customizada {sync_table_raw}: {e}")
+
+        # 2. Cache local (ContactWindow)
+        window_map = {}
+        if clean_phones_input:
+            cached_windows = db.query(models.ContactWindow).filter(
+                models.ContactWindow.client_id == client_id,
+                models.ContactWindow.phone.in_(clean_phones_input)
+            ).all()
+            window_map = {w.phone: w for w in cached_windows}
+
+        # 3. Sufixos bloqueados/em repouso
+        blocked_suffixes = set()
+        try:
+            blocked_entries = db.query(models.BlockedContact.phone).filter(
+                models.BlockedContact.client_id == client_id
+            ).all()
+            blocked_suffixes = {b.phone[-8:] for b in blocked_entries if len(b.phone) >= 8}
+
+            now = datetime.utcnow()
+            resting_entries = db.query(models.RestingContact.phone).filter(
+                models.RestingContact.client_id == client_id,
+                models.RestingContact.expires_at > now
+            ).all()
+            for r in resting_entries:
+                if len(r.phone) >= 8:
+                    blocked_suffixes.add(r.phone[-8:])
+        except Exception as e:
+            logger.error(f"⚠️ [VALIDATE] Erro ao carregar sufixos bloqueados/repouso: {e}")
+
+        async def check_contact(phone):
+            async with semaphore:
+                clean_phone = ''.join(filter(str.isdigit, str(phone)))
+                status_data = {
+                    "phone": clean_phone, "original": phone, "exists": False,
+                    "window_open": False, "is_blocked": False,
+                    "contact_name": None, "contact_id": None,
+                    "conversation_id": None, "last_activity": None
+                }
+
+                if len(clean_phone) >= 8 and clean_phone[-8:] in blocked_suffixes:
+                    status_data["is_blocked"] = True
+
+                custom_entry = custom_mapping.get(clean_phone)
+                if custom_entry:
+                    status_data["exists"] = True
+                    status_data["contact_name"] = custom_entry["name"]
+                    status_data["last_activity"] = custom_entry["last_interaction"]
+
+                window_entry = window_map.get(clean_phone)
+                if window_entry:
+                    status_data["exists"] = True
+                    if not status_data["contact_name"]:
+                        status_data["contact_name"] = window_entry.chatwoot_contact_name
+                    status_data["conversation_id"] = window_entry.chatwoot_conversation_id
+                    if not custom_entry:
+                        status_data["last_activity"] = window_entry.last_interaction_at
+
+                if status_data["last_activity"]:
+                    last_activity = status_data["last_activity"]
+                    if last_activity.tzinfo is None:
+                        now_cmp = datetime.now()
+                    else:
+                        from datetime import timezone
+                        now_cmp = datetime.now(timezone.utc)
+                    if now_cmp - last_activity < timedelta(hours=24):
+                        status_data["window_open"] = True
+                    status_data["last_activity"] = status_data["last_activity"].isoformat()
+
+                return status_data
+
+        tasks = [check_contact(phone) for phone in contacts]
+        results = await asyncio.gather(*tasks)
+        return {r["phone"]: r for r in results}
+
+    except Exception as e:
+        logger.error(f"Error in validate_contacts_for_bulk: {e}")
+        return {}

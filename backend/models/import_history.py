@@ -16,6 +16,14 @@ class ContactImportHistory(Base):
     error_rows = Column(Integer, default=0)
     error_message = Column(String, nullable=True)
 
+    # Linhas do arquivo original ANTES de qualquer filtro (telefone inválido / duplicado
+    # dentro do próprio arquivo) — `total_rows` acima já é pós-filtro (é o que efetivamente
+    # é processado), então esse campo existe para o usuário poder ver a diferença entre
+    # "quantas linhas o arquivo tinha" e "quantas realmente foram tentadas".
+    original_total_rows = Column(Integer, default=0)
+    rejected_invalid_phone_rows = Column(Integer, default=0)
+    rejected_duplicate_rows = Column(Integer, default=0)
+
     # Campos para suporte a resumo após reinicialização
     file_path = Column(String, nullable=True)       # caminho do arquivo salvo em disco
     file_ext = Column(String, nullable=True)        # extensão do arquivo (csv, xlsx...)

@@ -285,32 +285,27 @@ def block_bulk(
         
     if new_entries:
         db.bulk_save_objects(new_entries)
-        
-        # Remove os registros do MessageStatus com falha para esses telefones bloqueados
-        from models.trigger import MessageStatus, ScheduledTrigger
-        
+
+        # Marca (em vez de apagar) as mensagens com falha desses telefones agora bloqueados —
+        # o relatório de falhas continua mostrando o contato normalmente, só que travado
+        # (failure_resolution='blocked'), sem poder repetir a ação nele. Os contadores do
+        # trigger (total_failed/total_contacts) não são mais alterados: a falha aconteceu
+        # de verdade e continua contando no histórico.
+        from models.trigger import MessageStatus
+
+        now = datetime.utcnow()
         for entry in new_entries:
             clean_phone = entry.phone
             suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-            
-            # Localizar mensagens deste cliente cujo status seja falha e o telefone corresponda ao bloqueado
-            failed_messages = db.query(MessageStatus).filter(
+
+            db.query(MessageStatus).filter(
                 MessageStatus.status == 'failed',
                 MessageStatus.phone_number.like(f"%{suffix}")
-            ).all()
-            
-            for msg in failed_messages:
-                # Decrementar total_failed e total_contacts no trigger correspondente
-                trigger = db.query(ScheduledTrigger).filter(ScheduledTrigger.id == msg.trigger_id).first()
-                if trigger:
-                    # Ajusta os contadores do histórico
-                    if trigger.total_failed > 0:
-                        trigger.total_failed -= 1
-                    if trigger.total_contacts > 0:
-                        trigger.total_contacts -= 1
-                        
-                db.delete(msg)
-                
+            ).update({
+                MessageStatus.failure_resolution: 'blocked',
+                MessageStatus.failure_resolved_at: now
+            }, synchronize_session=False)
+
         db.commit()
         
     return {

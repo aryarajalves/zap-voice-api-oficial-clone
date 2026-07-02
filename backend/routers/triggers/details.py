@@ -188,7 +188,9 @@ async def get_trigger_messages(
                     "updated_at": child.updated_at.isoformat() if child.updated_at else None,
                     "contact_name": child.contact_name or child.contact_phone,
                     "chatwoot_url": None,
-                    "lead_tags": None
+                    "lead_tags": None,
+                    "failure_resolution": None,
+                    "failure_resolved_at": None
                 })
             total = len(virtual_items)
             virtual_items = virtual_items[skip:skip+limit]
@@ -256,7 +258,9 @@ async def get_trigger_messages(
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
                 "contact_name": item.contact_name,
                 "chatwoot_url": item.chatwoot_url,
-                "lead_tags": lead_tags
+                "lead_tags": lead_tags,
+                "failure_resolution": item.failure_resolution,
+                "failure_resolved_at": item.failure_resolved_at.isoformat() if item.failure_resolved_at else None
             }
             serialized_items.append(item_dict)
 

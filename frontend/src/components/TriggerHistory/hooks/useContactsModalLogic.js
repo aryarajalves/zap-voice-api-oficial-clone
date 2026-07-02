@@ -41,6 +41,24 @@ export const useContactsModalLogic = ({
 
     const getContactPhone = (contact) => contact.phone_number || contact.phone || '';
 
+    // Marca contatos como "resolvidos" (bloqueado/repousado/reenviado) em vez de removê-los
+    // do relatório de falhas. O contato continua aparecendo na lista, só que travado — o
+    // ContactRow usa `failure_resolution` para desenhar o estado bloqueado e impedir seleção.
+    const markContactsResolved = (phones, resolution) => {
+        const cleanTargets = new Set((phones || []).map(p => (p || '').replace(/\D/g, '')));
+        if (cleanTargets.size === 0) return;
+        const resolvedAt = new Date().toISOString();
+        setContactsModal(prev => ({
+            ...prev,
+            contacts: (prev.contacts || []).map(c => {
+                const cPhone = getContactPhone(c).replace(/\D/g, '');
+                return cleanTargets.has(cPhone)
+                    ? { ...c, failure_resolution: resolution, failure_resolved_at: resolvedAt }
+                    : c;
+            })
+        }));
+    };
+
     const getAllTargetContacts = async () => {
         if (!contactsModal.triggerId) return [];
         setLoadingAllTarget(true);
@@ -209,10 +227,13 @@ export const useContactsModalLogic = ({
             if (res.ok) {
                 const data = await res.json();
                 toast.success(`${data.success_count} contatos adicionados à lista de bloqueio.`);
-                
-                setSelectedPhones([]);
+
+                // Não fecha mais o modal nem remove os contatos da lista — eles continuam
+                // visíveis no relatório de falhas, só que travados (não podem ser
+                // selecionados/acionados de novo).
+                markContactsResolved(targetPhones, 'blocked');
+                setSelectedPhones(prev => prev.filter(p => !targetPhones.includes(p)));
                 setIsConfirmBlockOpen(false);
-                setContactsModal(prev => ({ ...prev, isOpen: false }));
                 if (onRefresh) onRefresh();
             } else {
                 const err = await res.json().catch(() => ({}));
@@ -319,10 +340,13 @@ export const useContactsModalLogic = ({
             if (res.ok) {
                 const data = await res.json();
                 toast.success(`${data.success_count} contatos colocados em repouso de 24h.`);
-                
-                setSelectedPhones([]);
+
+                // Não fecha mais o modal nem remove os contatos da lista — eles continuam
+                // visíveis no relatório de falhas, só que travados (não podem ser
+                // selecionados/acionados de novo).
+                markContactsResolved(targetPhones, 'resting');
+                setSelectedPhones(prev => prev.filter(p => !targetPhones.includes(p)));
                 setIsConfirmRestOpen(false);
-                setContactsModal(prev => ({ ...prev, isOpen: false }));
                 if (onRefresh) onRefresh();
             } else {
                 const err = await res.json().catch(() => ({}));
@@ -341,6 +365,7 @@ export const useContactsModalLogic = ({
     };
 
     const toggleSelectOne = (contact) => {
+        if (contact.failure_resolution) return; // já resolvido — travado, não pode selecionar
         const phone = getContactPhone(contact);
         if (!phone) return;
         setSelectedPhones(prev =>
@@ -349,7 +374,8 @@ export const useContactsModalLogic = ({
     };
 
     const toggleSelectAll = () => {
-        const visiblePhones = displayContacts.map(getContactPhone).filter(Boolean);
+        // Contatos já resolvidos (bloqueado/repousado/reenviado) ficam de fora da seleção em massa.
+        const visiblePhones = displayContacts.filter(c => !c.failure_resolution).map(getContactPhone).filter(Boolean);
         const allSelected = visiblePhones.length > 0 && visiblePhones.every(p => selectedPhones.includes(p));
         if (allSelected) {
             setSelectedPhones(prev => prev.filter(p => !visiblePhones.includes(p)));
@@ -365,6 +391,7 @@ export const useContactsModalLogic = ({
     return {
         selectedPhones,
         setSelectedPhones,
+        markContactsResolved,
         explainError,
         setExplainError,
         isTagModalOpen,

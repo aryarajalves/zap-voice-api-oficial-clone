@@ -184,6 +184,7 @@ const ContactsModal = ({
     const {
         selectedPhones,
         setSelectedPhones,
+        markContactsResolved,
         explainError,
         setExplainError,
         isTagModalOpen,
@@ -394,7 +395,11 @@ const ContactsModal = ({
                                         <input
                                             type="checkbox"
                                             className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500/20 w-4 h-4 bg-transparent transition-all"
-                                            checked={displayContacts.length > 0 && displayContacts.every(c => selectedPhones.includes(getContactPhone(c)))}
+                                            checked={(() => {
+                                                // Contatos já resolvidos (travados) não entram na conta do "selecionar todos".
+                                                const selectable = displayContacts.filter(c => !c.failure_resolution);
+                                                return selectable.length > 0 && selectable.every(c => selectedPhones.includes(getContactPhone(c)));
+                                            })()}
                                             onChange={toggleSelectAll}
                                         />
                                         <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -622,7 +627,11 @@ const ContactsModal = ({
                 clientId={contactsModal.clientId || activeClient?.id}
                 triggerId={contactsModal.triggerId}
                 onSuccess={() => {
-                    setContactsModal(prev => ({ ...prev, isOpen: false }));
+                    // Não fecha mais o modal nem remove os contatos da lista — eles continuam
+                    // visíveis no relatório de falhas, só que travados (disparo já feito de novo).
+                    markContactsResolved(selectedPhones, 'resent');
+                    setSelectedPhones([]);
+                    setIsBulkSendModalOpen(false);
                     if (onRefresh) onRefresh();
                 }}
             />

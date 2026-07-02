@@ -7,6 +7,7 @@ from .invitation import UserInvitation, invitation_clients
 from .backup import BackupConfig, BackupMetadata
 from .instagram_automation import InstagramAutomation, InstagramLog
 from .import_history import ContactImportHistory
+from .import_row_result import ImportRowResult
 from .chat import ChatConversation, ChatMessage
 from .trigger import (
     ScheduledTrigger,
@@ -65,6 +66,7 @@ __all__ = [
     "BackupConfig",
     "BackupMetadata",
     "ContactImportHistory",
+    "ImportRowResult",
     "UploadedMedia",
     "ChatConversation",
     "ChatMessage",

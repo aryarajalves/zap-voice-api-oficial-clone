@@ -266,28 +266,24 @@ def rest_bulk(
 
     if new_entries:
         db.bulk_save_objects(new_entries)
-        
-        # Remove failed message status reports for these contacts so they disappear from trigger history failures list
+
+        # Marca (em vez de apagar) as mensagens com falha desses telefones agora em repouso —
+        # o relatório de falhas continua mostrando o contato normalmente, só que travado
+        # (failure_resolution='resting'), sem poder repetir a ação nele. Os contadores do
+        # trigger (total_failed/total_contacts) não são mais alterados: a falha aconteceu
+        # de verdade e continua contando no histórico.
         phones_to_clear = [e.phone for e in new_entries]
         if phones_to_clear:
             for clean_phone in phones_to_clear:
                 suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-                
-                # Fetch failed messages matching this phone suffix
-                failed_messages = db.query(MessageStatus).filter(
+
+                db.query(MessageStatus).filter(
                     MessageStatus.status == 'failed',
                     MessageStatus.phone_number.like(f"%{suffix}")
-                ).all()
-                
-                for msg in failed_messages:
-                    # Decrement statistics in triggers
-                    trigger = db.query(ScheduledTrigger).filter(ScheduledTrigger.id == msg.trigger_id).first()
-                    if trigger:
-                        if trigger.total_failed > 0:
-                            trigger.total_failed -= 1
-                        if trigger.total_contacts > 0:
-                            trigger.total_contacts -= 1
-                    db.delete(msg)
+                ).update({
+                    MessageStatus.failure_resolution: 'resting',
+                    MessageStatus.failure_resolved_at: now
+                }, synchronize_session=False)
 
         db.commit()
 

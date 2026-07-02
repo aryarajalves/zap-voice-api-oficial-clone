@@ -4,6 +4,15 @@ import { formatBRDate, getExplanationKey } from './ContactsModalHelpers';
 
 const MAX_TAGS_VISIBLE = 3;
 
+// Ação já tomada sobre um contato do relatório de falhas (bloquear/repousar/reenviar) —
+// o registro continua visível no relatório, mas travado: não pode ser selecionado nem
+// sofrer outra ação a partir daqui.
+const RESOLUTION_META = {
+    blocked: { label: 'Bloqueado', icon: '🚫', badgeClass: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
+    resting: { label: 'Em Repouso', icon: '😴', badgeClass: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
+    resent: { label: 'Reenviado', icon: '📨', badgeClass: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+};
+
 const ContactRow = ({
     contact,
     isSelected,
@@ -14,15 +23,18 @@ const ContactRow = ({
     const phone = contact.phone_number || contact.phone || '';
     const expKey = getExplanationKey(contact.failure_reason);
     const [tagsExpanded, setTagsExpanded] = useState(false);
+    const resolution = contact.failure_resolution ? RESOLUTION_META[contact.failure_resolution] : null;
 
     return (
-        <div className="p-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition flex justify-between items-center group">
+        <div className={`p-3 bg-white dark:bg-gray-800 transition flex justify-between items-center group ${resolution ? 'opacity-60' : 'hover:bg-gray-50 dark:hover:bg-gray-750'}`}>
             <div className="flex items-center gap-4">
                 <input
                     type="checkbox"
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500/20 w-4 h-4 bg-transparent transition-all cursor-pointer mr-1"
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500/20 w-4 h-4 bg-transparent transition-all cursor-pointer mr-1 disabled:cursor-not-allowed disabled:opacity-50"
                     checked={isSelected}
+                    disabled={!!resolution}
                     onChange={onToggleSelect}
+                    title={resolution ? `Já ${resolution.label.toLowerCase()} — não pode ser selecionado novamente` : undefined}
                 />
                 {/* Ícone de status */}
                 <div className="w-10 flex flex-col items-center justify-center">
@@ -120,6 +132,12 @@ const ContactRow = ({
 
             <div className="flex items-center gap-3">
                 <div className="text-right">
+                    {resolution && (
+                        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border mb-1 ${resolution.badgeClass}`}>
+                            <span>{resolution.icon}</span>
+                            <span>{resolution.label}</span>
+                        </div>
+                    )}
                     {contact.failure_reason && (
                         <div className="flex items-center justify-end gap-1">
                             <div className="text-xs text-red-500 font-bold max-w-[150px] truncate" title={contact.failure_reason}>

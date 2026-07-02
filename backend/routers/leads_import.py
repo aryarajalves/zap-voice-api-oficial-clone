@@ -43,11 +43,10 @@ def read_csv_smart(content: bytes, sep: str = ";") -> pd.DataFrame:
     return pd.read_csv(io.BytesIO(content), sep=sep, encoding="latin-1")
 from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_, func as sa_func
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
-from chatwoot_client import ChatwootClient
 
 import models
 from core.deps import get_db
@@ -72,11 +71,6 @@ class RenameImportRequest(BaseModel):
 
 class DeleteImportsRequest(BaseModel):
     import_ids: List[int]
-
-class ChatwootImportRequest(BaseModel):
-    label: str
-    import_all_tags: bool = False
-    custom_tag: Optional[str] = None
 
 router = APIRouter()
 
@@ -164,7 +158,7 @@ async def preview_import(
         if phone_cols:
             p_col = phone_cols[0]
             
-            temp_clean = df_full[p_col].apply(lambda p: "".join(filter(str.isdigit, str(p))) if not pd.isna(p) else "")
+            temp_clean = df_full[p_col].apply(_clean_phone_digits)
             temp_clean = temp_clean[temp_clean.str.len() >= 8]
             unique_contacts = temp_clean.str[-8:].nunique()
 
@@ -180,6 +174,74 @@ async def preview_import(
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
 
+@router.post("/leads/import/preview-phones", summary="Pré-visualizar telefones montados (todas as linhas)")
+async def preview_phones(
+    file: UploadFile = File(...),
+    mapping: str = Form(...),
+    skip: int = Form(0),
+    limit: int = Form(200),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Recalcula, para o arquivo INTEIRO (não só as 3 linhas da prévia inicial), como cada
+    linha vai virar telefone com o mapeamento atual — seja coluna única ou composto
+    (DDI + DDD + Número + DDI manual). Não importa nada, é só para o usuário conferir
+    o resultado da junção em todas as linhas antes de confirmar a importação de verdade.
+    """
+    try:
+        mapping_dict = json.loads(mapping)
+        phone_mapping = mapping_dict.get('phone')
+        name_col = mapping_dict.get('name')
+
+        content = await file.read()
+        file_extension = file.filename.split('.')[-1].lower()
+        if file_extension == 'csv':
+            df = read_csv_smart(content, sep=';')
+            if len(df.columns) <= 1:
+                df = read_csv_smart(content, sep=',')
+        elif file_extension in ['xls', 'xlsx']:
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado. Use CSV ou Excel.")
+
+        for col_name in _get_phone_mapping_columns(phone_mapping):
+            if col_name not in df.columns:
+                raise HTTPException(status_code=400, detail=f"Coluna '{col_name}' não encontrada no arquivo.")
+
+        ddi_s, ddd_s, num_s = _build_phone_components(df, phone_mapping)
+        full_s = ddi_s + ddd_s + num_s
+        valid_mask = full_s.str.len() >= 8
+
+        total_rows = len(df)
+        limit = max(1, min(limit, 1000))
+        skip = max(0, skip)
+        end = min(skip + limit, total_rows)
+
+        items = []
+        for i in range(skip, end):
+            items.append({
+                "row_index": i,
+                "name": _extract_row_name(df.iloc[i], name_col) if name_col else None,
+                "ddi": ddi_s.iat[i],
+                "ddd": ddd_s.iat[i],
+                "number": num_s.iat[i],
+                "full": full_s.iat[i],
+                "valid": bool(valid_mask.iat[i]),
+            })
+
+        return {
+            "total_rows": total_rows,
+            "valid_count": int(valid_mask.sum()),
+            "invalid_count": int((~valid_mask).sum()),
+            "items": items,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Erro ao pré-visualizar telefones: {str(e)}")
+
 def _split_tags(s):
     """Divide string de tags em lista, suportando JSON array ou vírgulas."""
     if not s: return []
@@ -194,6 +256,128 @@ def _split_tags(s):
             pass
     cleaned = val.replace('[', '').replace(']', '').replace('"', '').replace("'", "")
     return [t.strip() for t in cleaned.split(",") if t.strip()]
+
+
+def _clean_phone_digits(v):
+    """Extrai só os dígitos de um valor de célula (trata NaN/None).
+
+    Colunas numéricas (DDI, DDD, telefone) que o Excel/pandas carrega como float
+    ficam tipo 11.0 em vez de 11 — sem tratar isso, "".join(dígitos) geraria "110"
+    (o "0" da parte decimal grudando no número), corrompendo o telefone final.
+    """
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)
+    return "".join(filter(str.isdigit, str(v)))
+
+
+# Linhas sem coluna de DDD preenchida cujo "Número" já tem 10+ dígitos provavelmente já
+# são um telefone completo (ex: número internacional, ou a planilha já embutiu o DDD no
+# "Número" só nessa linha) — nesses casos NÃO grudamos o DDI em cima, senão corrompe.
+_ALREADY_COMPLETE_MIN_LEN = 10
+
+
+def _resolve_ddi_for_row(ddd_val, num_val, raw_ddi_val, manual_ddi):
+    """Decide o DDI a usar para uma linha do mapeamento composto (DDI/DDD/Número).
+
+    Se não há DDD nessa linha e o Número já parece um telefone completo (10+ dígitos),
+    não usa nenhum DDI (nem de coluna, nem manual) — o Número é usado como está.
+    Caso contrário, usa o DDI da coluna (se preenchido) ou cai para o DDI manual.
+    """
+    if not ddd_val and len(num_val) >= _ALREADY_COMPLETE_MIN_LEN:
+        return ""
+    return raw_ddi_val if raw_ddi_val else manual_ddi
+
+
+def _get_phone_mapping_columns(phone_mapping):
+    """
+    Retorna a lista de nomes de colunas realmente referenciadas pelo mapeamento de telefone,
+    seja ele um nome de coluna simples (string) ou um mapeamento composto (dict) com
+    colunas separadas de DDI/DDD/Número.
+    """
+    if isinstance(phone_mapping, dict) and phone_mapping.get('mode') == 'composite':
+        cols = [phone_mapping.get('ddi_column'), phone_mapping.get('ddd_column'), phone_mapping.get('number_column')]
+        return [c for c in cols if c]
+    if isinstance(phone_mapping, str) and phone_mapping:
+        return [phone_mapping]
+    return []
+
+
+def _build_phone_series(df, phone_mapping):
+    """
+    Monta a série (coluna) de telefone já limpa (somente dígitos) a partir do mapeamento.
+
+    - Se `phone_mapping` for uma string: usa a coluna diretamente (caso simples, planilha
+      já tem uma coluna única com o telefone completo).
+    - Se `phone_mapping` for um dict {mode: 'composite', ddi_column, ddd_column,
+      number_column, manual_ddi}: concatena DDI + DDD + Número linha a linha. Quando a
+      planilha não tem coluna de DDI (ou a célula está vazia numa linha específica), usa
+      o `manual_ddi` informado manualmente (ex: "55") para completar o número.
+    """
+    if isinstance(phone_mapping, dict) and phone_mapping.get('mode') == 'composite':
+        ddi_col = phone_mapping.get('ddi_column') or None
+        ddd_col = phone_mapping.get('ddd_column') or None
+        num_col = phone_mapping.get('number_column') or None
+        manual_ddi = _clean_phone_digits(phone_mapping.get('manual_ddi')) if phone_mapping.get('manual_ddi') else ""
+
+        def compose_row(row):
+            ddd_val = _clean_phone_digits(row.get(ddd_col)) if ddd_col else ""
+            num_val = _clean_phone_digits(row.get(num_col)) if num_col else ""
+            raw_ddi_val = _clean_phone_digits(row.get(ddi_col)) if ddi_col else ""
+            ddi_val = _resolve_ddi_for_row(ddd_val, num_val, raw_ddi_val, manual_ddi)
+            return f"{ddi_val}{ddd_val}{num_val}"
+
+        return df.apply(compose_row, axis=1)
+
+    # Caso simples: uma única coluna com o telefone completo
+    if not phone_mapping or phone_mapping not in df.columns:
+        return pd.Series([""] * len(df), index=df.index)
+    return df[phone_mapping].apply(_clean_phone_digits)
+
+
+def _build_phone_components(df, phone_mapping):
+    """
+    Igual a `_build_phone_series`, mas retorna os 3 pedaços (DDI, DDD, Número) separados
+    em vez de já concatenados — usado na prévia visual "maximizada", que mostra cada
+    pedaço colorido para o usuário conferir a junção antes de importar de verdade.
+    Retorna (ddi_series, ddd_series, number_series), todas já limpas (só dígitos).
+    """
+    empty = pd.Series([""] * len(df), index=df.index)
+
+    if isinstance(phone_mapping, dict) and phone_mapping.get('mode') == 'composite':
+        ddi_col = phone_mapping.get('ddi_column') or None
+        ddd_col = phone_mapping.get('ddd_column') or None
+        num_col = phone_mapping.get('number_column') or None
+        manual_ddi = _clean_phone_digits(phone_mapping.get('manual_ddi')) if phone_mapping.get('manual_ddi') else ""
+
+        raw_ddi_series = df[ddi_col].apply(_clean_phone_digits) if ddi_col else empty.copy()
+        ddd_series = df[ddd_col].apply(_clean_phone_digits) if ddd_col else empty.copy()
+        num_series = df[num_col].apply(_clean_phone_digits) if num_col else empty.copy()
+        ddi_series = pd.Series(
+            [
+                _resolve_ddi_for_row(ddd_series.iat[i], num_series.iat[i], raw_ddi_series.iat[i], manual_ddi)
+                for i in range(len(df))
+            ],
+            index=df.index,
+        )
+        return ddi_series, ddd_series, num_series
+
+    # Caso simples: uma única coluna com o telefone completo (não há DDI/DDD separados)
+    num_series = df[phone_mapping].apply(_clean_phone_digits) if (phone_mapping and phone_mapping in df.columns) else empty.copy()
+    return empty.copy(), empty.copy(), num_series
+
+
+def _extract_row_name(row, name_col):
+    """Extrai e limpa o nome de uma linha do DataFrame, para exibição nas listas de
+    contatos importados/rejeitados de uma importação (ver ImportRowResult)."""
+    if not name_col:
+        return None
+    raw = row.get(name_col)
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    s = str(raw).strip()
+    return s if s and s.lower() != 'nan' else None
 
 
 def process_import_in_bg(import_id: int, content: bytes, file_extension: str, mapping_dict: dict, client_id: int, fixed_tags: str = "", fixed_remove_tags: str = ""):
@@ -235,23 +419,78 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
             return
 
         # Normalização: Garantir que as colunas mapeadas existem no DF
+        # (o campo 'phone' pode ser um nome de coluna simples OU um mapeamento
+        # composto {mode: 'composite', ddi_column, ddd_column, number_column, manual_ddi} —
+        # validado separadamente por _get_phone_mapping_columns)
         for key, col_name in mapping_dict.items():
+            if key == 'phone':
+                continue
             if col_name and col_name not in df.columns:
                 history.status = "failed"
                 history.error_message = f"Coluna '{col_name}' não encontrada no arquivo."
                 db.commit()
                 return
 
-        # --- Pré-processamento e Deduplicação ---
-        def clean_p(p):
-            if pd.isna(p): return ""
-            return "".join(filter(str.isdigit, str(p)))
+        for col_name in _get_phone_mapping_columns(mapping_dict.get('phone')):
+            if col_name not in df.columns:
+                history.status = "failed"
+                history.error_message = f"Coluna '{col_name}' não encontrada no arquivo."
+                db.commit()
+                return
 
-        phone_col = mapping_dict.get('phone')
-        df['temp_clean_phone'] = df[phone_col].apply(clean_p)
-        df = df[df['temp_clean_phone'].str.len() >= 8]
+        # --- Pré-processamento e Deduplicação ---
+        original_total_rows = len(df)
+        history.original_total_rows = original_total_rows
+        name_col = mapping_dict.get('name')
+
+        df['temp_clean_phone'] = _build_phone_series(df, mapping_dict.get('phone'))
+
+        # Linhas com telefone inválido/incompleto (menos de 8 dígitos após limpeza) —
+        # rastreadas ANTES de descartar, para o usuário poder ver quem foi rejeitado e por quê
+        # (antes, essas linhas simplesmente desapareciam sem deixar rastro nenhum).
+        invalid_mask = df['temp_clean_phone'].str.len() < 8
+        invalid_df = df[invalid_mask]
+        df = df[~invalid_mask]
+
         df['temp_last_8'] = df['temp_clean_phone'].str[-8:]
-        df = df.drop_duplicates(subset=['temp_last_8'], keep='first')
+
+        # Linhas duplicadas dentro do próprio arquivo (mesmo telefone aparecendo mais de uma
+        # vez) — mantemos só a primeira ocorrência, mas registramos as demais como rejeitadas.
+        dup_mask = df.duplicated(subset=['temp_last_8'], keep='first')
+        duplicate_df = df[dup_mask]
+        df = df[~dup_mask]
+
+        # Idempotência: se esta função for reexecutada para o mesmo import_id (ex: retomada
+        # após restart do servidor), substitui os registros de rejeição em vez de duplicá-los.
+        # Os registros de 'imported'/'updated'/'error' do loop principal não são tocados aqui —
+        # eles já respeitam o corte de `already_done` mais abaixo.
+        db.query(models.ImportRowResult).filter(
+            models.ImportRowResult.import_id == import_id,
+            models.ImportRowResult.status.in_(['rejected_invalid_phone', 'rejected_duplicate_file'])
+        ).delete(synchronize_session=False)
+
+        rejected_dicts = []
+        for _, row in invalid_df.iterrows():
+            rejected_dicts.append({
+                'import_id': import_id,
+                'name': _extract_row_name(row, name_col),
+                'phone': row['temp_clean_phone'] or None,
+                'status': 'rejected_invalid_phone',
+                'reason': 'Telefone incompleto ou inválido (menos de 8 dígitos após limpeza).',
+            })
+        for _, row in duplicate_df.iterrows():
+            rejected_dicts.append({
+                'import_id': import_id,
+                'name': _extract_row_name(row, name_col),
+                'phone': row['temp_clean_phone'] or None,
+                'status': 'rejected_duplicate_file',
+                'reason': 'Telefone duplicado dentro do próprio arquivo importado (mantida apenas a primeira ocorrência).',
+            })
+        if rejected_dicts:
+            db.bulk_insert_mappings(models.ImportRowResult, rejected_dicts)
+
+        history.rejected_invalid_phone_rows = len(invalid_df)
+        history.rejected_duplicate_rows = len(duplicate_df)
 
         total_rows = len(df)
 
@@ -314,6 +553,7 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
 
         to_insert = []
         to_update = []
+        to_results = []
 
         for idx, (_, row) in enumerate(df.iterrows()):
             try:
@@ -367,6 +607,13 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
 
                     to_update.append(update_dict)
                     existing_map[last_8] = {**ex, 'tags': ", ".join(current_tags), 'total_events': (ex['total_events'] or 0) + 1}
+                    to_results.append({
+                        'import_id': import_id,
+                        'name': name or ex.get('name'),
+                        'phone': clean_phone,
+                        'status': 'updated',
+                        'reason': None,
+                    })
                 else:
                     insert_dict = {
                         'client_id': client_id,
@@ -391,11 +638,25 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
                         'email': email,
                         'total_events': 1,
                     }
+                    to_results.append({
+                        'import_id': import_id,
+                        'name': name,
+                        'phone': clean_phone,
+                        'status': 'imported',
+                        'reason': None,
+                    })
 
                 success_count += 1
             except Exception as e:
                 print(f"Erro ao importar linha {idx}: {e}")
                 error_count += 1
+                to_results.append({
+                    'import_id': import_id,
+                    'name': _extract_row_name(row, name_col),
+                    'phone': row.get('temp_clean_phone') or None,
+                    'status': 'error',
+                    'reason': str(e)[:500],
+                })
 
             # Commit em lote a cada BATCH_SIZE linhas
             if (idx + 1) % BATCH_SIZE == 0:
@@ -405,6 +666,9 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
                 if to_update:
                     db.bulk_update_mappings(models.WebhookLead, to_update)
                     to_update.clear()
+                if to_results:
+                    db.bulk_insert_mappings(models.ImportRowResult, to_results)
+                    to_results.clear()
                 history.imported_rows = success_count
                 history.error_rows = error_count
                 db.commit()
@@ -414,6 +678,8 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
             db.bulk_insert_mappings(models.WebhookLead, to_insert)
         if to_update:
             db.bulk_update_mappings(models.WebhookLead, to_update)
+        if to_results:
+            db.bulk_insert_mappings(models.ImportRowResult, to_results)
 
         history.status = "completed"
         history.imported_rows = success_count
@@ -550,6 +816,63 @@ def get_import_history(
         "total": total
     }
 
+@router.get("/leads/import/{import_id}/results", summary="Ver contatos importados e rejeitados de uma importação")
+def get_import_results(
+    import_id: int,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """
+    Lista o resultado linha a linha de uma importação: quais contatos foram
+    importados/atualizados e quais foram rejeitados (com o motivo).
+
+    `status`: filtro opcional — 'imported', 'updated', 'error', 'rejected_invalid_phone',
+    'rejected_duplicate_file', ou o atalho 'rejected' (junta os dois status de rejeição).
+    `search`: busca por nome ou telefone (parcial, case-insensitive).
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    history = db.query(models.ContactImportHistory).filter(
+        models.ContactImportHistory.id == import_id,
+        models.ContactImportHistory.client_id == client_id
+    ).first()
+    if not history:
+        raise HTTPException(status_code=404, detail="Importação não encontrada.")
+
+    base_query = db.query(models.ImportRowResult).filter(models.ImportRowResult.import_id == import_id)
+
+    query = base_query
+    if status == 'rejected':
+        query = query.filter(models.ImportRowResult.status.in_(['rejected_invalid_phone', 'rejected_duplicate_file']))
+    elif status:
+        query = query.filter(models.ImportRowResult.status == status)
+
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.filter(or_(
+            models.ImportRowResult.name.ilike(like),
+            models.ImportRowResult.phone.ilike(like)
+        ))
+
+    total = query.count()
+    rows = query.order_by(models.ImportRowResult.id.asc()).offset(skip).limit(min(limit, 500)).all()
+
+    # Contagem por status (para as abas/badges na UI, sem precisar de outra chamada)
+    status_counts_raw = base_query.with_entities(
+        models.ImportRowResult.status, sa_func.count(models.ImportRowResult.id)
+    ).group_by(models.ImportRowResult.status).all()
+    status_counts = {s: c for s, c in status_counts_raw}
+
+    return {
+        "items": rows,
+        "total": total,
+        "status_counts": status_counts,
+    }
+
 @router.put("/leads/import/{import_id}/rename", summary="Renomear lista importada")
 def rename_import(
     import_id: int,
@@ -611,103 +934,3 @@ def bulk_delete_imports(
     db.commit()
     return {"status": "success", "message": f"{deleted_count} importações deletadas com sucesso."}
 
-async def run_chatwoot_import(
-    client_id: int,
-    label: str,
-    import_all_tags: bool,
-    custom_tag: Optional[str]
-):
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        logger.info(f"🚀 Iniciando importação assíncrona do Atendimento. Client ID: {client_id}, Label: {label}")
-        chatwoot = ChatwootClient(client_id=client_id)
-        
-        # 1. Fetch contacts from Chatwoot by label
-        contacts = await chatwoot.get_contacts_by_label(label)
-        if not contacts:
-            logger.info(f"ℹ️ Nenhum contato encontrado no Atendimento com a etiqueta '{label}'")
-            return
-            
-        logger.info(f"📦 Encontrados {len(contacts)} contatos no Atendimento com a etiqueta '{label}'")
-        
-        imported_count = 0
-        for c in contacts:
-            try:
-                phone_raw = c.get("phone_number") or c.get("custom_attributes", {}).get("phone_number")
-                if not phone_raw:
-                    continue
-                    
-                clean_phone = re.sub(r"\D", "", str(phone_raw))
-                if len(clean_phone) < 8:
-                    continue
-                    
-                name = normalize_name(c.get("name"))
-                email = c.get("email")
-                
-                # Determine tags to apply
-                tags_list = []
-                
-                # Option 1: Import all existing tags from the Chatwoot contact
-                if import_all_tags:
-                    # Get contact labels from Chatwoot client
-                    c_labels = await chatwoot.get_contact_labels(c.get("id"))
-                    if c_labels:
-                        tags_list.extend(c_labels)
-                        
-                # Option 2: Always add the filter label
-                tags_list.append(label)
-                
-                # Option 3: Add custom tag if provided
-                if custom_tag:
-                    tags_list.append(custom_tag)
-                
-                # Remove duplicates and format
-                unique_tags = list(set([t.strip() for t in tags_list if t and t.strip()]))
-                final_tags = ", ".join(unique_tags) if unique_tags else None
-                
-                lead_data = {
-                    "phone": clean_phone,
-                    "name": name,
-                    "email": email,
-                    "event_type": "importado_chatwoot"
-                }
-                
-                upsert_webhook_lead(
-                    db=db,
-                    client_id=client_id,
-                    platform="chatwoot_import",
-                    parsed_data=lead_data,
-                    tag=final_tags
-                )
-                imported_count += 1
-            except Exception as row_error:
-                logger.error(f"❌ Erro ao importar contato individual do Chatwoot: {row_error}")
-                continue
-                
-        db.commit()
-        logger.info(f"✅ Importação do Chatwoot concluída com sucesso! {imported_count} contatos importados/atualizados.")
-    except Exception as e:
-        logger.error(f"❌ Erro crítico no processo de importação do Chatwoot: {e}")
-    finally:
-        db.close()
-
-@router.post("/leads/import/chatwoot", summary="Importar contatos de uma etiqueta do Chatwoot")
-async def import_leads_from_chatwoot(
-    request: ChatwootImportRequest,
-    background_tasks: BackgroundTasks,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(require_premium)
-):
-    client_id = x_client_id if x_client_id else current_user.client_id
-    background_tasks.add_task(
-        run_chatwoot_import,
-        client_id=client_id,
-        label=request.label,
-        import_all_tags=request.import_all_tags,
-        custom_tag=request.custom_tag
-    )
-    return {
-        "status": "success",
-        "message": f"A importação dos contatos com a etiqueta '{request.label}' foi iniciada em segundo plano."
-    }
