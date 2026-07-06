@@ -17,6 +17,7 @@ export const useTagManagement = ({
 }) => {
     const [availableTags, setAvailableTags] = useState([]);
     const [selectedTags, setSelectedTags] = useState([]);
+    const [excludedTags, setExcludedTags] = useState([]);
     const [tagMode, setTagMode] = useState("OR");
     const [isLoadingTags, setIsLoadingTags] = useState(false);
     const [isSavingLeads, setIsSavingLeads] = useState(false);
@@ -59,6 +60,11 @@ export const useTagManagement = ({
         if (!selectedTags || selectedTags.length === 0) return toast.error("Selecione pelo menos uma etiqueta primeiro");
         if (!activeClient) return toast.error("Selecione um cliente primeiro");
 
+        const conflicting = selectedTags.filter(t => excludedTags.includes(t));
+        if (conflicting.length > 0) {
+            return toast.error(`A etiqueta "${conflicting[0]}" não pode estar marcada para incluir e excluir ao mesmo tempo.`);
+        }
+
         if (templateVariables && templateVariables.length > 0) {
             for (const v of templateVariables) {
                 const val = tagVariables[v.key];
@@ -77,7 +83,10 @@ export const useTagManagement = ({
         setIsProcessing(true);
         try {
             const tagParams = selectedTags.map(t => `tag=${encodeURIComponent(t)}`).join('&');
-            const res = await fetchWithAuth(`${API_URL}/leads?${tagParams}&tag_mode=${tagMode}&limit=10000`, {}, activeClient.id);
+            const excludeParams = excludedTags.length > 0
+                ? '&' + excludedTags.map(t => `exclude_tag=${encodeURIComponent(t)}`).join('&')
+                : '';
+            const res = await fetchWithAuth(`${API_URL}/leads?${tagParams}&tag_mode=${tagMode}${excludeParams}&limit=10000`, {}, activeClient.id);
             if (res && res.ok) {
                 const data = await res.json();
                 const incoming = (data.items || []).map(lead => {
@@ -206,6 +215,7 @@ export const useTagManagement = ({
     return {
         availableTags,
         selectedTags, setSelectedTags,
+        excludedTags, setExcludedTags,
         tagMode, setTagMode,
         isLoadingTags,
         isSavingLeads,

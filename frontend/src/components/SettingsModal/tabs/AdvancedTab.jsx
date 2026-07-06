@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import { FiShare2, FiEyeOff, FiEye, FiChevronUp, FiChevronDown, FiAlertCircle, FiCopy } from 'react-icons/fi';
+import { FiShare2, FiEyeOff, FiEye, FiChevronUp, FiChevronDown, FiAlertCircle, FiCopy, FiRefreshCw } from 'react-icons/fi';
 import PaginationControls from '../components/PaginationControls';
 
 const AdvancedTab = ({
@@ -446,9 +446,17 @@ const AdvancedTab = ({
                                                             <td className="px-4 py-3">
                                                                 {log.status === 'sent' || log.status === 'success' ? (
                                                                     <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-bold uppercase text-[10px]">Enviado</span>
+                                                                ) : log.status === 'cancelled' || log.status === 'canceled' ? (
+                                                                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-bold uppercase text-[10px] inline-flex items-center gap-1" title={log.error}>
+                                                                        <FiAlertCircle /> Cancelado
+                                                                    </span>
                                                                 ) : log.status === 'failed' ? (
                                                                     <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-bold uppercase text-[10px] inline-flex items-center gap-1" title={log.error}>
                                                                         <FiAlertCircle /> Erro
+                                                                    </span>
+                                                                ) : log.status === 'sending' ? (
+                                                                    <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold uppercase text-[10px] inline-flex items-center gap-1">
+                                                                        <FiRefreshCw className="animate-spin" /> Enviando
                                                                     </span>
                                                                 ) : (
                                                                     <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-[#1f2937]/80 dark:text-gray-400 font-bold uppercase text-[10px]">{log.status}</span>

@@ -2,11 +2,13 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
     FiSearch, FiTrash2, FiDownload, FiCopy, FiFilter,
     FiAlertCircle, FiInfo, FiAlertTriangle, FiZap, FiList,
-    FiRefreshCw, FiClipboard, FiChevronDown, FiCalendar, FiTag
+    FiRefreshCw, FiClipboard, FiChevronDown, FiCalendar, FiTag,
+    FiCheckSquare, FiSquare, FiX, FiMaximize2
 } from 'react-icons/fi';
 import { fetchWithAuth } from '../../AuthContext';
 import { API_URL } from '../../config';
 import { toast } from 'react-hot-toast';
+import ConfirmModal from '../../components/ConfirmModal';
 
 // ─── Overlay de carregamento ──────────────────────────────────────────────────
 function LoadingOverlay({ stage, progress, total, current }) {
@@ -56,6 +58,18 @@ function parseLine(raw, idx) {
         time:  timeMatch  ? timeMatch[1]  : null,
         level: levelMatch ? levelMatch[1].toUpperCase() : null,
     };
+}
+
+// ─── Assinatura de linha ───────────────────────────────────────────────────
+// Texto da linha sem horário/números variáveis, usado para agrupar e apagar
+// de uma vez todas as ocorrências (passadas e futuras) do mesmo erro.
+function getLineSignature(raw) {
+    return raw
+        .replace(TIME_RE, '')
+        .replace(/\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{2,4}/g, '')
+        .replace(/\d+/g, '#')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function formatDateBR(iso) {
@@ -143,7 +157,7 @@ const LEVELS_OPTIONS  = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'];
 const ROW_HEIGHT = 28; // px por linha (altura fixa)
 const BUFFER     = 40; // linhas extras acima/abaixo da janela visível
 
-function VirtualList({ items, filterText }) {
+function VirtualList({ items, filterText, selectedIdx, onToggleSelect, onOpenDetail }) {
     const containerRef = useRef(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [containerHeight, setContainerHeight] = useState(600);
@@ -172,12 +186,21 @@ function VirtualList({ items, filterText }) {
                 <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT, left: 0, right: 0 }}>
                     {visibleItems.map(line => {
                         const colors = LEVEL_COLORS[line.level] || { bg: '', text: 'text-gray-400', badge: '' };
+                        const isSelected = selectedIdx.has(line.idx);
                         return (
                             <div
                                 key={line.idx}
                                 style={{ height: ROW_HEIGHT }}
-                                className={`flex items-center gap-2 px-4 border-b border-gray-800/40 hover:bg-white/[0.03] transition-colors ${colors.bg}`}
+                                className={`group flex items-center gap-2 px-4 border-b border-gray-800/40 hover:bg-white/[0.03] transition-colors cursor-pointer ${colors.bg} ${isSelected ? 'bg-blue-500/10 ring-1 ring-inset ring-blue-500/30' : ''}`}
+                                onClick={() => onOpenDetail(line)}
                             >
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onToggleSelect(line.idx); }}
+                                    className="flex-shrink-0 text-gray-500 hover:text-blue-400 transition-colors"
+                                    title="Selecionar linha"
+                                >
+                                    {isSelected ? <FiCheckSquare size={13} className="text-blue-400" /> : <FiSquare size={13} />}
+                                </button>
                                 <span className="text-gray-600 select-none w-10 text-right flex-shrink-0">{line.idx + 1}</span>
                                 <span>{levelIcon(line.level)}</span>
                                 {line.level && (
@@ -185,12 +208,52 @@ function VirtualList({ items, filterText }) {
                                         {line.level}
                                     </span>
                                 )}
-                                <span className={`truncate ${colors.text}`}>
+                                <span className={`truncate flex-1 ${colors.text}`}>
                                     {filterText ? highlightText(line.raw, filterText) : line.raw}
                                 </span>
+                                <FiMaximize2 size={11} className="text-gray-600 flex-shrink-0 opacity-0 group-hover:opacity-100" />
                             </div>
                         );
                     })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Modal com a linha completa (sem corte) ───────────────────────────────────
+function LineDetailModal({ line, onClose, onCopy, onDelete }) {
+    if (!line) return null;
+    const colors = LEVEL_COLORS[line.level] || { bg: '', text: 'text-gray-300', badge: '' };
+    return (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            <div
+                className="bg-white dark:bg-[#1e293b] rounded-2xl border border-gray-100 dark:border-white/10 shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="px-5 py-3 bg-gray-50 dark:bg-white/[0.03] border-b border-gray-100 dark:border-white/5 flex items-center gap-2">
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Linha {line.idx + 1}</span>
+                    {line.level && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black flex-shrink-0 ${colors.badge}`}>{line.level}</span>
+                    )}
+                    {line.time && <span className="text-xs text-gray-400">{line.time}</span>}
+                    <button onClick={onClose} className="ml-auto p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                        <FiX size={16} />
+                    </button>
+                </div>
+                <div className="p-5 overflow-auto flex-1">
+                    <pre className={`whitespace-pre-wrap break-all font-mono text-xs leading-relaxed ${colors.text}`}>{line.raw}</pre>
+                </div>
+                <div className="px-5 py-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-end gap-2">
+                    <button onClick={() => onCopy(line.raw)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                        <FiCopy size={12} /> Copiar
+                    </button>
+                    <button
+                        onClick={() => onDelete(line)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-all"
+                    >
+                        <FiTrash2 size={12} /> Apagar este log
+                    </button>
                 </div>
             </div>
         </div>
@@ -220,6 +283,14 @@ export default function LogViewer() {
 
     const [pasteMode, setPasteMode] = useState(false);
     const [rawPaste, setRawPaste]   = useState('');
+
+    const [selectedIdx, setSelectedIdx] = useState(() => new Set());
+    const [detailLine, setDetailLine]   = useState(null);
+    const [deleting, setDeleting]       = useState(false);
+    const [confirmState, setConfirmState] = useState(null); // { title, message, confirmText, isDangerous, onConfirm }
+
+    const askConfirm = (opts) => setConfirmState(opts);
+    const closeConfirm = () => setConfirmState(null);
 
     const [filterTimeFrom, setFilterTimeFrom]           = useState('');
     const [filterTimeTo, setFilterTimeTo]               = useState('');
@@ -329,10 +400,10 @@ export default function LogViewer() {
         setTruncated(false); setCurrentPage(1); setTotalPages(1);
         setFilterTimeFrom(''); setFilterTimeTo(''); setFilterLevels([]);
         setFilterText(''); setFilterTags([]); setActiveQuickFilters([]);
+        setSelectedIdx(new Set()); setDetailLine(null);
     };
 
-    const handleClearServer = async () => {
-        if (!window.confirm('Apagar o arquivo de log atual no servidor?')) return;
+    const doClearServer = async () => {
         try {
             const res = await fetchWithAuth(`${API_URL}/logs/`, { method: 'DELETE' });
             if (!res || !res.ok) throw new Error('Erro ao limpar log');
@@ -342,8 +413,85 @@ export default function LogViewer() {
         } catch (e) { toast.error(e.message); }
     };
 
+    const handleClearServer = () => {
+        askConfirm({
+            title: 'Apagar log do servidor',
+            message: 'Isso apaga o arquivo de log atual por completo, permanentemente. Deseja continuar?',
+            confirmText: 'Apagar tudo',
+            isDangerous: true,
+            onConfirm: doClearServer,
+        });
+    };
+
     const toggleQuickFilter = (id) =>
         setActiveQuickFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+    // ─── Seleção e exclusão permanente de linhas ──────────────────────────────
+    const toggleSelect = useCallback((idx) => {
+        setSelectedIdx(prev => {
+            const next = new Set(prev);
+            if (next.has(idx)) next.delete(idx); else next.add(idx);
+            return next;
+        });
+    }, []);
+
+    const clearSelection = () => setSelectedIdx(new Set());
+
+    // Apaga permanentemente do arquivo de log no servidor (por assinatura),
+    // removendo também da lista local ocorrências já carregadas com a mesma
+    // assinatura — inclusive as que ainda vierem a acontecer no futuro.
+    const deleteLines = useCallback(async (linesToDelete) => {
+        if (!linesToDelete.length) return;
+        const signatures = [...new Set(linesToDelete.map(l => getLineSignature(l.raw)))];
+        setDeleting(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/logs/lines`, {
+                method: 'DELETE',
+                body: JSON.stringify({ signatures }),
+            });
+            if (!res || !res.ok) {
+                const err = res ? await res.json().catch(() => ({})) : {};
+                throw new Error(err.detail || 'Erro ao apagar linhas do log');
+            }
+            const data = await res.json();
+            const sigSet = new Set(signatures);
+            setParsed(prev => prev.filter(l => !sigSet.has(getLineSignature(l.raw))));
+            setSelectedIdx(new Set());
+            setDetailLine(null);
+            toast.success(`${(data.removed ?? linesToDelete.length).toLocaleString()} linha(s) apagada(s) do log`);
+        } catch (e) {
+            toast.error(e.message || 'Erro ao apagar linhas do log');
+        } finally {
+            setDeleting(false);
+        }
+    }, []);
+
+    const deleteSelected = () => {
+        const lines = parsed.filter(l => selectedIdx.has(l.idx));
+        if (lines.length === 0) return;
+        askConfirm({
+            title: 'Apagar linhas de log',
+            message: `Apagar ${lines.length} linha${lines.length === 1 ? '' : 's'} de log permanentemente? Isso remove do arquivo no servidor, inclusive futuras ocorrências do mesmo erro.`,
+            confirmText: 'Apagar',
+            isDangerous: true,
+            onConfirm: () => deleteLines(lines),
+        });
+    };
+
+    const handleDeleteDetail = (line) => {
+        askConfirm({
+            title: 'Apagar esta linha',
+            message: 'Apagar esta linha (e todas as ocorrências iguais) permanentemente do log?',
+            confirmText: 'Apagar',
+            isDangerous: true,
+            onConfirm: () => deleteLines([line]),
+        });
+    };
+
+    const copyLine = (raw) => {
+        navigator.clipboard.writeText(raw);
+        toast.success('Linha copiada!');
+    };
 
     // Filtrar linhas
     const filtered = useMemo(() => {
@@ -373,6 +521,16 @@ export default function LogViewer() {
             return true;
         });
     }, [parsed, filterTimeFrom, filterTimeTo, filterLevels, filterText, filterTags, activeQuickFilters]);
+
+    const allFilteredSelected = filtered.length > 0 && filtered.every(l => selectedIdx.has(l.idx));
+
+    const toggleSelectAllFiltered = () => {
+        if (allFilteredSelected) {
+            clearSelection();
+        } else {
+            setSelectedIdx(new Set(filtered.map(l => l.idx)));
+        }
+    };
 
     const counts = useMemo(() => {
         const c = { CRITICAL: 0, ERROR: 0, WARNING: 0, INFO: 0, DEBUG: 0 };
@@ -411,6 +569,26 @@ export default function LogViewer() {
                     current={parseCurrent}
                 />
             )}
+
+            {detailLine && (
+                <LineDetailModal
+                    line={detailLine}
+                    onClose={() => setDetailLine(null)}
+                    onCopy={copyLine}
+                    onDelete={handleDeleteDetail}
+                />
+            )}
+
+            <ConfirmModal
+                isOpen={!!confirmState}
+                onClose={closeConfirm}
+                onConfirm={() => confirmState?.onConfirm?.()}
+                title={confirmState?.title}
+                message={confirmState?.message}
+                confirmText={confirmState?.confirmText || 'Confirmar'}
+                cancelText="Cancelar"
+                isDangerous={confirmState?.isDangerous}
+            />
 
             {/* Controles principais */}
             <div className="bg-white dark:bg-[#1e293b] rounded-2xl border border-gray-100 dark:border-white/5 p-4 flex flex-wrap items-center gap-3">
@@ -698,6 +876,24 @@ export default function LogViewer() {
                         </div>
                     </div>
 
+                    {selectedIdx.size > 0 && (
+                        <div className="px-5 py-2.5 bg-blue-900/20 border-b border-blue-700/30 flex items-center gap-3">
+                            <span className="text-xs font-bold text-blue-300">
+                                {selectedIdx.size} linha{selectedIdx.size === 1 ? '' : 's'} selecionada{selectedIdx.size === 1 ? '' : 's'}
+                            </span>
+                            <button
+                                onClick={deleteSelected}
+                                disabled={deleting}
+                                className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-red-300 hover:text-white hover:bg-red-500/20 rounded-lg transition-all disabled:opacity-40"
+                            >
+                                <FiTrash2 size={12} /> {deleting ? 'Apagando...' : 'Apagar do log'}
+                            </button>
+                            <button onClick={clearSelection} className="text-xs text-gray-400 hover:text-gray-200 underline ml-auto">
+                                limpar seleção
+                            </button>
+                        </div>
+                    )}
+
                     {truncated && (
                         <div className="px-5 py-2 bg-yellow-900/20 border-b border-yellow-700/30 text-yellow-300 text-xs flex items-center gap-2">
                             <FiAlertTriangle size={12} />
@@ -711,10 +907,27 @@ export default function LogViewer() {
                             <p className="font-bold">Nenhuma linha corresponde aos filtros</p>
                         </div>
                     ) : (
-                        <VirtualList 
-                            items={filtered} 
-                            filterText={[...filterTags, filterText].filter(t => t.trim().length > 0).join(' ')} 
+                        <>
+                        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-800/40 bg-white/[0.02]">
+                            <button
+                                onClick={toggleSelectAllFiltered}
+                                className="flex-shrink-0 text-gray-500 hover:text-blue-400 transition-colors"
+                                title={allFilteredSelected ? 'Desmarcar todos' : 'Selecionar todos os filtrados'}
+                            >
+                                {allFilteredSelected ? <FiCheckSquare size={13} className="text-blue-400" /> : <FiSquare size={13} />}
+                            </button>
+                            <button onClick={toggleSelectAllFiltered} className="text-[10px] font-black text-gray-400 hover:text-gray-200 uppercase tracking-widest transition-colors">
+                                {allFilteredSelected ? 'Desmarcar todos' : `Selecionar todos os filtrados (${filtered.length.toLocaleString()})`}
+                            </button>
+                        </div>
+                        <VirtualList
+                            items={filtered}
+                            filterText={[...filterTags, filterText].filter(t => t.trim().length > 0).join(' ')}
+                            selectedIdx={selectedIdx}
+                            onToggleSelect={toggleSelect}
+                            onOpenDetail={setDetailLine}
                         />
+                        </>
                     )}
 
                     {/* Paginação — só aparece no modo por data */}

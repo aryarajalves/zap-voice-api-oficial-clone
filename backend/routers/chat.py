@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from core.deps import get_db, get_current_user
@@ -88,12 +89,50 @@ def get_client_id(
         return current_user.client_id
     return None
 
+@router.get("/chat/agents")
+async def list_chat_agents(
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista os usuários com acesso ao cliente ativo, para permitir atribuir conversas a um atendente.
+    """
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
+
+    agents = (
+        db.query(models.User)
+        .outerjoin(models.user_clients, models.user_clients.c.user_id == models.User.id)
+        .filter(
+            models.User.is_active == True,
+            or_(
+                models.User.client_id == client_id,
+                models.user_clients.c.client_id == client_id,
+                # super_admin tem acesso a qualquer cliente mesmo sem estar vinculado
+                # explicitamente via accessible_clients — por isso entra na lista de qualquer cliente
+                models.User.role == "super_admin"
+            )
+        )
+        .distinct()
+        .all()
+    )
+
+    return [
+        {"id": a.id, "full_name": a.full_name or a.email, "email": a.email}
+        for a in agents
+    ]
+
 @router.get("/chat/conversations")
 async def list_conversations(
     tab: str = "todos",  # minha, nao_atribuida, todos
     status: str = "open",  # open, resolved, all
     search: Optional[str] = None,
     label: Optional[str] = None,
+    block_status: Optional[str] = None,  # blocked, resting
+    has_note: Optional[bool] = None,  # só conversas com anotação privada preenchida
+    start_date: Optional[str] = None,  # formato YYYY-MM-DD
+    end_date: Optional[str] = None,    # formato YYYY-MM-DD
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -107,18 +146,50 @@ async def list_conversations(
     if status != "all":
         query = query.filter(models.ChatConversation.status == status)
 
+    # Filtro por Datas
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            query = query.filter(models.ChatConversation.last_message_at >= start_dt)
+        except Exception as e_dt:
+            print(f"Erro ao parsear start_date: {e_dt}")
+
+    if end_date:
+        try:
+            from datetime import time
+            end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time(23, 59, 59, 999999))
+            query = query.filter(models.ChatConversation.last_message_at <= end_dt)
+        except Exception as e_dt:
+            print(f"Erro ao parsear end_date: {e_dt}")
+
     # Filtro da Aba (Atribuição)
     if tab == "minha":
         query = query.filter(models.ChatConversation.assigned_user_id == current_user.id)
     elif tab == "nao_atribuida":
         query = query.filter(models.ChatConversation.assigned_user_id == None)
 
-    # Filtro de Busca (Nome ou Telefone)
+    # Filtro de Busca (Nome, Telefone ou conteúdo de alguma mensagem trocada na conversa)
     if search:
         search_term = f"%{search}%"
+        message_match = (
+            db.query(models.ChatMessage.id)
+            .filter(
+                models.ChatMessage.conversation_id == models.ChatConversation.id,
+                models.ChatMessage.content.ilike(search_term)
+            )
+            .exists()
+        )
         query = query.filter(
-            (models.ChatConversation.contact_name.ilike(search_term)) |
-            (models.ChatConversation.phone.ilike(search_term))
+            models.ChatConversation.contact_name.ilike(search_term) |
+            models.ChatConversation.phone.ilike(search_term) |
+            message_match
+        )
+
+    # Filtro: só conversas com anotação privada preenchida
+    if has_note:
+        query = query.filter(
+            models.ChatConversation.private_note.isnot(None),
+            models.ChatConversation.private_note != ''
         )
 
     conversations = query.order_by(
@@ -130,13 +201,43 @@ async def list_conversations(
     if label:
         clean_label = label.strip().lower()
         conversations = [
-            c for c in conversations 
+            c for c in conversations
             if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
         ]
-    
+
+    # Mapear status de bloqueio/repouso por número (últimos 8 dígitos) para exibir na lista
+    now = datetime.utcnow()
+    blocked_entries = db.query(models.BlockedContact.phone).filter(
+        models.BlockedContact.client_id == client_id
+    ).all()
+    blocked_suffixes = {b.phone[-8:] for b in blocked_entries if b.phone and len(b.phone) >= 8}
+
+    resting_entries = db.query(models.RestingContact.phone, models.RestingContact.expires_at).filter(
+        models.RestingContact.client_id == client_id,
+        models.RestingContact.expires_at > now
+    ).all()
+    resting_map = {r.phone[-8:]: r.expires_at for r in resting_entries if r.phone and len(r.phone) >= 8}
+
+    def get_block_info(phone: Optional[str]):
+        digits = "".join(filter(str.isdigit, phone or ""))
+        if len(digits) < 8:
+            return None, None
+        suffix = digits[-8:]
+        if suffix in blocked_suffixes:
+            return "blocked", None
+        if suffix in resting_map:
+            return "resting", resting_map[suffix]
+        return None, None
+
     # Adicionar serialização simples
     result = []
     for c in conversations:
+        block_type, resting_until = get_block_info(c.phone)
+
+        # Filtro por tipo de bloqueio (aplicado após calcular o status, pois depende do cruzamento de tabelas)
+        if block_status and block_type != block_status:
+            continue
+
         result.append({
             "id": c.id,
             "client_id": c.client_id,
@@ -151,7 +252,9 @@ async def list_conversations(
             "labels": c.labels or [],
             "last_contact_message_at": c.last_contact_message_at.isoformat() if c.last_contact_message_at else None,
             "pinned": c.pinned,
-            "private_note": c.private_note
+            "private_note": c.private_note,
+            "block_status": block_type,  # None | "blocked" | "resting"
+            "resting_until": resting_until.isoformat() if resting_until else None
         })
     return result
 
@@ -978,3 +1081,77 @@ async def delete_conversations_bulk(
         db.delete(convo)
     db.commit()
     return {"status": "ok", "deleted_count": count}
+
+
+@router.post("/chat/messages/{message_id}/resend-agentflow")
+async def resend_message_to_agentflow(
+    message_id: int,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from services.chat_webhook_service import dispatch_webhook_in_thread
+    from config_loader import get_setting
+    from models import ChatMessage, ChatConversation, WebhookLead
+    
+    # 1. Obter a mensagem
+    message = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada.")
+        
+    # 2. Validar IDOR (se a conversa pertence ao client_id)
+    convo = db.query(ChatConversation).filter(
+        ChatConversation.id == message.conversation_id,
+        ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=403, detail="Acesso negado a esta mensagem.")
+        
+    # 3. Validar se é mensagem de contato
+    if message.sender_type != "contact":
+        raise HTTPException(status_code=400, detail="Apenas mensagens recebidas de contatos podem ser enviadas ao AgentFlow.")
+        
+    # 4. Buscar webhook url
+    webhook_url = get_setting("CHAT_MESSAGES_WEBHOOK_URL", "", client_id=client_id)
+    if not webhook_url or not webhook_url.strip():
+        raise HTTPException(status_code=400, detail="Webhook de Mensagens (AgentFlow) não está configurado.")
+        
+    # 5. Montar payload
+    lead = db.query(WebhookLead).filter(
+        WebhookLead.client_id == client_id,
+        WebhookLead.phone == convo.phone
+    ).first()
+    bsud = lead.bsud if lead else None
+    
+    payload = {
+        "event": "message.created",
+        "client_id": client_id,
+        "message": {
+            "id": message.id,
+            "conversation_id": message.conversation_id,
+            "sender_type": message.sender_type,
+            "message_type": message.message_type,
+            "content": message.content,
+            "media_url": message.media_url,
+            "timestamp": message.timestamp.isoformat() if message.timestamp else datetime.now(timezone.utc).isoformat(),
+            "is_private": getattr(message, 'is_private', False),
+            "metadata": message.meta_data or {}
+        },
+        "contact": {
+            "phone": convo.phone,
+            "name": convo.contact_name or convo.phone,
+            "bsud": bsud,
+            "labels": convo.labels or []
+        }
+    }
+    
+    # 6. Atualizar status para "sending" no banco
+    message.agentflow_webhook_status = "sending"
+    message.agentflow_webhook_error = None
+    db.commit()
+    
+    # 7. Despachar
+    dispatch_webhook_in_thread(webhook_url, payload, message.id)
+    
+    return {"status": "success", "detail": "Reenvio de webhook iniciado."}
+

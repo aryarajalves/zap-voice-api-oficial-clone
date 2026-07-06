@@ -123,6 +123,22 @@ const TriggerTableRow = ({
 }) => {
     const triggerWithActions = { ...trigger, onManualInteraction };
 
+    // Só existe "interação" de verdade quando há um funil de interação configurado
+    // (seja o funil geral do disparo, seja vinculado a algum botão). Sem isso, o botão
+    // "Cancelar recebimento → Sem ação vinculada" não conta como interação.
+    // NOTA: Botões com type === 'interaction' contam como interação mesmo sem funil vinculado,
+    // pois o próprio clique no botão já é um evento de interação rastreável.
+    const hasInteractionTracking = Boolean(
+        triggerWithActions.interaction_funnel_id ||
+        triggerWithActions.interaction_funnel ||
+        (triggerWithActions.button_actions && Object.values(triggerWithActions.button_actions).some(
+            action => action && (
+                (action.type === 'interaction') ||
+                (action.funnel_id && action.type !== 'block')
+            )
+        ))
+    );
+
     // Auto-sync a cada 10s enquanto o trigger bulk está ativo E Restam > 0.
     // Quando Restam chega a 0 com o trigger ainda ativo, dispara um sync final.
     const finalSyncDoneRef = React.useRef(false);
@@ -268,10 +284,12 @@ const TriggerTableRow = ({
                                     <span className="text-xs font-black text-indigo-500">{triggerWithActions.total_read || 0}</span>
                                 </button>
 
-                                <button onClick={() => handleViewContacts(triggerWithActions, 'interaction')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Cliques">
-                                    <span className="text-sm">👆</span>
-                                    <span className="text-xs font-black text-amber-500">{triggerWithActions.total_interactions || 0}</span>
-                                </button>
+                                {hasInteractionTracking && (
+                                    <button onClick={() => handleViewContacts(triggerWithActions, 'interaction')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Cliques">
+                                        <span className="text-sm">👆</span>
+                                        <span className="text-xs font-black text-amber-500">{triggerWithActions.total_interactions || 0}</span>
+                                    </button>
+                                )}
 
                                 <button onClick={() => handleViewContacts(triggerWithActions, 'blocked')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Bloqueios">
                                     <span className="text-sm">🚫</span>
@@ -410,7 +428,7 @@ const TriggerTableRow = ({
                                         </>
                                     );
                                 })()}
-                                {triggerWithActions.total_cost > 0 && triggerWithActions.total_interactions > 0 && (
+                                {triggerWithActions.total_cost > 0 && triggerWithActions.total_interactions > 0 && hasInteractionTracking && (
                                     <span className="text-[10px] bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded border border-green-200 dark:border-green-800" title="Custo por Interação (CPI)">
                                         R$ {(triggerWithActions.total_cost / triggerWithActions.total_interactions).toFixed(2)} / interação
                                     </span>
@@ -508,10 +526,12 @@ const TriggerTableRow = ({
                                     <span className="text-[10px] font-black uppercase tracking-tighter">Funis Ativados</span>
                                 </button>
                             )}
-                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400 ml-auto">
-                                <FiMousePointer size={10} />
-                                <span className="text-[10px] font-bold">{triggerWithActions.total_interactions || 0}</span>
-                            </span>
+                            {hasInteractionTracking && (
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400 ml-auto">
+                                    <FiMousePointer size={10} />
+                                    <span className="text-[10px] font-bold">{triggerWithActions.total_interactions || 0}</span>
+                                </span>
+                            )}
                         </div>
                     </div>
                 )}

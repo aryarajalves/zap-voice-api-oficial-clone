@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FiGlobe, FiSearch, FiUser } from 'react-icons/fi';
 import { GlobalVarsContext } from '../index';
 import { useClient } from '../../../contexts/ClientContext';
@@ -10,6 +10,8 @@ const VariableSelector = ({ onSelect }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [customContactVars, setCustomContactVars] = useState([]);
+    // Ref para o container scrollável — necessário para bloquear o listener nativo do React Flow
+    const scrollListRef = useRef(null);
 
     let activeClient = null;
     try {
@@ -50,6 +52,18 @@ const VariableSelector = ({ onSelect }) => {
 
         loadCustomVars();
     }, [activeClient]);
+
+    // Bloqueia o listener nativo de wheel do React Flow no DOM diretamente.
+    // O onWheel sintético do React não é suficiente porque o React Flow registra
+    // seus listeners nativos com { passive: false } que capturam o evento antes
+    // do sistema de eventos do React processar qualquer coisa.
+    useEffect(() => {
+        const el = scrollListRef.current;
+        if (!el) return;
+        const stopNativeWheel = (e) => e.stopPropagation();
+        el.addEventListener('wheel', stopNativeWheel, { passive: false });
+        return () => el.removeEventListener('wheel', stopNativeWheel);
+    }, [isOpen]);
 
     // Filtrar chaves personalizadas para não duplicar variáveis estáticas
     const filteredCustomVars = customContactVars
@@ -104,7 +118,7 @@ const VariableSelector = ({ onSelect }) => {
                         </div>
                     </div>
 
-                    <div className="max-h-60 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700">
+                    <div ref={scrollListRef} className="max-h-60 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700">
                         {filteredVars.length > 0 ? (
                             filteredVars.map(v => (
                                 <button

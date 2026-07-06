@@ -32,12 +32,8 @@ const ChatwootLabelNode = ({ id, data }) => {
 
     useEffect(() => {
         if (!activeClient) return;
-        setLoading(true);
-        fetchWithAuth(`${API_URL}/chatwoot/labels`, { headers: { 'X-Client-ID': activeClient.id } })
-            .then(res => res.json())
-            .then(setLabels)
-            .catch(console.error)
-            .finally(() => setLoading(false));
+        setLabels([]);
+        setLoading(false);
     }, [activeClient]);
 
     useEffect(() => {

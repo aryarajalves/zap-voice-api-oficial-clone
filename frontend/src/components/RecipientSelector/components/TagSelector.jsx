@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { VAR_OPTIONS } from '../utils';
-import { FiSearch, FiTag, FiChevronDown, FiX, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { FiSearch, FiTag, FiChevronDown, FiX, FiMaximize2, FiMinimize2, FiCheck, FiSlash } from 'react-icons/fi';
 
 const TagSelector = ({
     selectedTags = [],
     setSelectedTags,
+    excludedTags = [],
+    setExcludedTags,
     tagMode = 'OR',
     setTagMode,
     availableTags = [],
@@ -41,6 +43,18 @@ const TagSelector = ({
         setSelectedTags(prev =>
             prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
         );
+        // Uma etiqueta não pode estar marcada como "incluir" e "excluir" ao mesmo tempo
+        if (setExcludedTags) {
+            setExcludedTags(prev => prev.filter(t => t !== tag));
+        }
+    };
+
+    const handleToggleExcludedTag = (tag) => {
+        if (!setExcludedTags) return;
+        setExcludedTags(prev =>
+            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+        setSelectedTags(prev => prev.filter(t => t !== tag));
     };
 
     return (
@@ -58,10 +72,11 @@ const TagSelector = ({
                             <span className="flex items-center gap-2 truncate">
                                 <FiTag size={16} className="text-emerald-400 flex-shrink-0" />
                                 <span className="truncate">
-                                    {selectedTags.length > 0
-                                        ? (selectedTags.length === 1 
-                                            ? selectedTags[0] 
-                                            : `${selectedTags[0]} +${selectedTags.length - 1}`)
+                                    {(selectedTags.length > 0 || excludedTags.length > 0)
+                                        ? [
+                                            selectedTags.length > 0 && `✓ ${selectedTags.length}`,
+                                            excludedTags.length > 0 && `✕ ${excludedTags.length}`
+                                          ].filter(Boolean).join('  ')
                                         : (isLoadingTags ? 'Carregando etiquetas...' : '-- Escolha as etiquetas --')
                                     }
                                 </span>
@@ -104,6 +119,10 @@ const TagSelector = ({
                                             </button>
                                         )}
                                     </div>
+                                    <div className="flex items-center gap-3 mt-2 px-1 text-[8px] font-black uppercase tracking-wider text-slate-500">
+                                        <span className="flex items-center gap-1"><FiCheck size={10} className="text-emerald-400" /> Precisa ter</span>
+                                        <span className="flex items-center gap-1"><FiSlash size={10} className="text-red-400" /> Não pode ter</span>
+                                    </div>
                                 </div>
 
                                 {/* Lista de etiquetas filtradas */}
@@ -112,26 +131,51 @@ const TagSelector = ({
                                         ?.filter(tag => !tagSearch || tag.toLowerCase().includes(tagSearch.toLowerCase()))
                                         .map(tag => {
                                             const isSelected = selectedTags.includes(tag);
+                                            const isExcluded = excludedTags.includes(tag);
                                             return (
-                                                <button
+                                                <div
                                                     key={tag}
-                                                    type="button"
-                                                    onClick={() => handleToggleTag(tag)}
-                                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors truncate
+                                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-colors
                                                         ${isSelected
                                                             ? 'bg-emerald-500/10 text-emerald-400'
-                                                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                                            : isExcluded
+                                                                ? 'bg-red-500/10 text-red-400'
+                                                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                                                         }`}
                                                     title={tag}
                                                 >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => {}} // Tratado no clique do botão pai
-                                                        className="rounded text-emerald-500 focus:ring-emerald-500 border-white/10 bg-black/20"
-                                                    />
-                                                    <span className="truncate">{tag}</span>
-                                                </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleTag(tag)}
+                                                        title="Precisa ter esta etiqueta"
+                                                        className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg border transition-all ${
+                                                            isSelected
+                                                                ? 'bg-emerald-500 border-emerald-500 text-black'
+                                                                : 'border-white/10 bg-black/20 text-transparent hover:border-emerald-500/50'
+                                                        }`}
+                                                    >
+                                                        <FiCheck size={12} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleExcludedTag(tag)}
+                                                        title="Não pode ter esta etiqueta"
+                                                        className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg border transition-all ${
+                                                            isExcluded
+                                                                ? 'bg-red-500 border-red-500 text-white'
+                                                                : 'border-white/10 bg-black/20 text-transparent hover:border-red-500/50'
+                                                        }`}
+                                                    >
+                                                        <FiSlash size={12} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleTag(tag)}
+                                                        className="flex-1 text-left truncate"
+                                                    >
+                                                        <span className="truncate">{tag}</span>
+                                                    </button>
+                                                </div>
                                             );
                                         })
                                     }
@@ -148,6 +192,24 @@ const TagSelector = ({
                             </div>
                         )}
                     </div>
+
+                    {/* Resumo das etiquetas de exclusão selecionadas */}
+                    {excludedTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                            {excludedTags.map(tag => (
+                                <span
+                                    key={tag}
+                                    className="flex items-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 rounded-lg text-[9px] font-black uppercase tracking-wide"
+                                >
+                                    <FiSlash size={10} />
+                                    {tag}
+                                    <button type="button" onClick={() => handleToggleExcludedTag(tag)} className="hover:text-white">
+                                        <FiX size={10} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Filtro Condicional (E / OU) */}
@@ -295,7 +357,7 @@ const TagSelector = ({
                 
                 <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl text-center">
                     <p className="text-[10px] text-blue-300/60 font-bold uppercase tracking-widest leading-relaxed">
-                        💡 Isso buscará todos os contatos capturados via Webhook ou Importação que possuem as etiquetas selecionadas.
+                        💡 Isso buscará todos os contatos capturados via Webhook ou Importação que possuem as etiquetas marcadas com ✓{excludedTags.length > 0 ? ', e excluirá qualquer contato que possua alguma etiqueta marcada com ✕' : ''}.
                     </p>
                 </div>
             </div>

@@ -182,7 +182,8 @@ async def update_settings(
         "INSTAGRAM_ACCESS_TOKEN",
         "INSTAGRAM_ACCOUNT_ID",
         "INSTAGRAM_WEBHOOK_SLUG",
-        "CHAT_MESSAGES_WEBHOOK_URL"
+        "CHAT_MESSAGES_WEBHOOK_URL",
+        "WA_WINDOW_CLOSED_REMOVE_LABELS"
     }
     
     saved_count = 0

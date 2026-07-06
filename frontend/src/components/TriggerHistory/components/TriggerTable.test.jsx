@@ -141,7 +141,9 @@ describe('TriggerTable Component', () => {
     expect(economyText).toBeInTheDocument();
   });
 
-  it('não deve renderizar estatísticas de economia ou disparos grátis quando funnel_id está definido', () => {
+  it('deve renderizar estatísticas de economia quando há disparos gratuitos, independente de funnel_id', () => {
+    // A condição de exibição é total_delivered > 0 e totalFree > 0,
+    // não depende de funnel_id estar ou não preenchido.
     const funnelTrigger = {
       id: 5,
       is_bulk: true,
@@ -151,7 +153,7 @@ describe('TriggerTable Component', () => {
       total_sent: 10,
       total_failed: 0,
       total_delivered: 10,
-      total_paid_templates: 8,
+      total_paid_templates: 8, // 2 gratuitos → economia deve aparecer
       total_cost: 2.80,
       child_count: 0,
       funnel: { name: 'Funil Economia' }
@@ -159,10 +161,13 @@ describe('TriggerTable Component', () => {
     
     const { queryByText } = render(<TriggerTable {...defaultProps} triggers={[funnelTrigger]} />);
     
+    // Com 2 disparos gratuitos (10 entregues - 8 pagos), a economia DEVE aparecer
     const economyText = queryByText(/economia de R\$/i);
-    expect(economyText).not.toBeInTheDocument();
-    const freeText = queryByText(/disparos grátis/i);
-    expect(freeText).not.toBeInTheDocument();
+    expect(economyText).toBeInTheDocument();
+
+    // Texto de graça também deve estar visível
+    const freeText = queryByText(/de graça|disparos grátis/i);
+    expect(freeText).toBeInTheDocument();
   });
 
   it('deve renderizar o botão "Ver Fluxo Visual" e chamar handleViewPipeline ao ser clicado', () => {
@@ -289,6 +294,38 @@ describe('TriggerTable Component', () => {
     expect(screen.getByText('🚫 Bloqueio: Funil Descadastrar')).toBeInTheDocument();
 
     expect(screen.getByText('Sem Funil')).toBeInTheDocument();
+    expect(screen.getByText('Sem ação vinculada')).toBeInTheDocument();
+
+    // O ícone de interação (👆) deve aparecer pois há botão com type 'interaction',
+    // mesmo que o botão 'Sem Funil' não tenha funnel_id
+    expect(screen.getByTitle('Ver Cliques')).toBeInTheDocument();
+  });
+
+  it('deve exibir o ícone de interação (👆) quando botão tem type interaction SEM funil vinculado', () => {
+    // Cenário reportado: 1 botão configurado como interação mas sem funil associado
+    // O ícone 👆 não aparecia — BUG CORRIGIDO
+    const triggerSoComInteraction = {
+      id: 20,
+      is_bulk: true,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      button_actions: {
+        'Quero saber mais': { type: 'interaction', funnel_id: null }
+      }
+    };
+
+    render(
+      <TriggerTable
+        {...defaultProps}
+        triggers={[triggerSoComInteraction]}
+      />
+    );
+
+    // O ícone de interação DEVE aparecer (type: 'interaction' é suficiente)
+    expect(screen.getByTitle('Ver Cliques')).toBeInTheDocument();
+
+    // E deve mostrar "Sem ação vinculada" para o botão sem funil
+    expect(screen.getByText('Quero saber mais')).toBeInTheDocument();
     expect(screen.getByText('Sem ação vinculada')).toBeInTheDocument();
   });
 

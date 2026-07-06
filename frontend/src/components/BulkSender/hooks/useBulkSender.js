@@ -94,22 +94,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     };
 
     const loadChatwootLabels = async () => {
-        if (!activeClient) return;
-        setIsLoadingChatwootLabels(true);
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, activeClient.id);
-            if (res.ok) {
-                const data = await res.json();
-                setChatwootLabels(data || []);
-            } else {
-                setChatwootLabels([]);
-            }
-        } catch (error) {
-            console.error("Erro ao carregar etiquetas:", error);
-            setChatwootLabels([]);
-        } finally {
-            setIsLoadingChatwootLabels(false);
-        }
+        setChatwootLabels([]);
     };
 
     const loadFunnels = async () => {

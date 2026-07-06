@@ -4,9 +4,11 @@ Lê zapvoice_debug.log (com suporte a arquivos rotacionados dos últimos 7 dias)
 """
 
 import os
+import re
 import glob
 import math
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from core.permissions import require_super_admin
 from models import User
 from datetime import date as DateType
@@ -15,6 +17,27 @@ router = APIRouter(prefix="/logs", tags=["Logs"])
 
 LOG_DIR  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 LOG_FILE = os.path.join(LOG_DIR, "zapvoice_debug.log")
+
+_TIME_RE = re.compile(r"\d{2}:\d{2}:\d{2}")
+_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{2,4}")
+_NUM_RE  = re.compile(r"\d+")
+_WS_RE   = re.compile(r"\s+")
+
+
+def get_line_signature(raw: str) -> str:
+    """
+    Mesma normalização usada no frontend: remove horário, datas e números
+    variáveis para agrupar ocorrências repetidas do mesmo erro.
+    """
+    s = _TIME_RE.sub("", raw)
+    s = _DATE_RE.sub("", s)
+    s = _NUM_RE.sub("#", s)
+    s = _WS_RE.sub(" ", s)
+    return s.strip()
+
+
+class DeleteLinesPayload(BaseModel):
+    signatures: list[str]
 
 
 def _collect_log_files() -> list[str]:
@@ -132,3 +155,49 @@ async def clear_logs(current_user: User = Depends(require_super_admin)):
         return {"message": "Log atual limpo com sucesso"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao limpar log: {str(e)}")
+
+
+@router.delete("/lines", summary="Apagar linhas específicas do log (por assinatura)")
+async def delete_log_lines(
+    payload: DeleteLinesPayload,
+    current_user: User = Depends(require_super_admin),
+):
+    """
+    Remove permanentemente, de todos os arquivos de log (atual + rotacionados),
+    qualquer linha cuja "assinatura" (texto sem horário/números variáveis)
+    bata com alguma das assinaturas enviadas. Isso apaga tanto ocorrências
+    passadas quanto futuras do mesmo erro.
+    """
+    signatures = {s for s in payload.signatures if s}
+    if not signatures:
+        raise HTTPException(status_code=400, detail="Nenhuma assinatura informada")
+
+    files = _collect_log_files()
+    if not files:
+        raise HTTPException(status_code=404, detail="Nenhum arquivo de log encontrado.")
+
+    total_removed = 0
+    try:
+        for path in files:
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    lines = f.readlines()
+            except Exception:
+                continue
+
+            kept = []
+            removed_here = 0
+            for line in lines:
+                if get_line_signature(line) in signatures:
+                    removed_here += 1
+                    continue
+                kept.append(line)
+
+            if removed_here:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.writelines(kept)
+                total_removed += removed_here
+
+        return {"removed": total_removed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao apagar linhas do log: {str(e)}")

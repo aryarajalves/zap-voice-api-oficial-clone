@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiInfo, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash } from 'react-icons/fi';
+import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiInfo, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar } from 'react-icons/fi';
 import { BsPinAngle, BsPinAngleFill, BsJournalText } from 'react-icons/bs';
 import { fetchWithAuth } from '../AuthContext';
 import { API_URL } from '../config';
 import { useClient } from '../contexts/ClientContext';
 import BlockContactModal from './WebhookLeads/components/BlockContactModal';
+import { getFirstName } from '../utils/nameFormatter';
 
 const NAV_SHORTCUTS = [
     { view: 'bulk_sender', label: 'Disparo em Massa', icon: FiHome },
@@ -26,8 +27,15 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [selectedLabelFilter, setSelectedLabelFilter] = useState(null); // filtro por etiqueta
     const [filterWindowOpen, setFilterWindowOpen] = useState(false); // só conversas com janela 24h aberta
     const [filterUnread, setFilterUnread] = useState(false); // só conversas com mensagem não lida
+    const [filterHasNote, setFilterHasNote] = useState(false); // só conversas com anotação privada preenchida
+    const [filterBlockStatus, setFilterBlockStatus] = useState(null); // null | 'blocked' | 'resting'
+    const [filterStartDate, setFilterStartDate] = useState('');
+    const [filterEndDate, setFilterEndDate] = useState('');
+    const [activeFilterTab, setActiveFilterTab] = useState(null); // null | 'marcador' | 'status' | 'bloqueio' — só um painel de filtro aberto por vez, pra economizar espaço
     const [availableLabels, setAvailableLabels] = useState([]); // todas as etiquetas do cliente
     const [availableLabelsDetails, setAvailableLabelsDetails] = useState([]); // detalhes com cor
+    const [availableAgents, setAvailableAgents] = useState([]); // atendentes com acesso ao cliente ativo
+    const [isAssigning, setIsAssigning] = useState(false);
     const [showRightSidebar, setShowRightSidebar] = useState(true); // fechar/abrir barra lateral direita
     const [isLoadingConvos, setIsLoadingConvos] = useState(false);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -56,6 +64,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
 
     // Modal de confirmação de delete
     const [confirmDelete, setConfirmDelete] = useState(null); // { messageId } or null
+    const [confirmResendAgentflow, setConfirmResendAgentflow] = useState(null); // null | messageId
 
     // Bloquear/colocar em repouso o contato ativo (não recebe mais disparos)
     const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
@@ -71,6 +80,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
 
+    const lastContactMessage = messages.filter(m => m.sender_type === 'contact').slice(-1)[0] || null;
+
     // Fetch Conversations
     const loadConversations = async (showLoading = false) => {
         if (!activeClient) return;
@@ -84,6 +95,18 @@ export default function ChatConversations({ onClose, onNavigate }) {
             }
             if (selectedLabelFilter) {
                 url.searchParams.append('label', selectedLabelFilter);
+            }
+            if (filterBlockStatus) {
+                url.searchParams.append('block_status', filterBlockStatus);
+            }
+            if (filterHasNote) {
+                url.searchParams.append('has_note', 'true');
+            }
+            if (filterStartDate) {
+                url.searchParams.append('start_date', filterStartDate);
+            }
+            if (filterEndDate) {
+                url.searchParams.append('end_date', filterEndDate);
             }
 
             const res = await fetchWithAuth(url.toString(), {}, activeClient.id);
@@ -109,6 +132,49 @@ export default function ChatConversations({ onClose, onNavigate }) {
             console.error('Erro ao buscar conversas:', err);
         } finally {
             if (showLoading) setIsLoadingConvos(false);
+        }
+    };
+
+    // Fetch Available Agents (atendentes com acesso ao cliente ativo, para atribuir conversas)
+    const loadAvailableAgents = async () => {
+        if (!activeClient) return;
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/agents`, {}, activeClient.id);
+            if (res.ok) {
+                const data = await res.json();
+                setAvailableAgents(data || []);
+            }
+        } catch (err) {
+            console.error('Erro ao buscar atendentes:', err);
+        }
+    };
+
+    // Atribuir (ou remover atribuição de) uma conversa a um atendente
+    const handleAssignConversation = async (userId) => {
+        if (!selectedConvo) return;
+        setIsAssigning(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId || null })
+            }, activeClient.id);
+
+            if (res.ok) {
+                const data = await res.json();
+                setSelectedConvo(prev => prev ? { ...prev, assigned_user_id: data.assigned_user_id, assigned_user_name: data.assigned_user_name } : prev);
+                setConversations(prev => prev.map(c =>
+                    c.id === selectedConvo.id ? { ...c, assigned_user_id: data.assigned_user_id, assigned_user_name: data.assigned_user_name } : c
+                ));
+                toast.success(data.assigned_user_id ? `Conversa atribuída a ${data.assigned_user_name}.` : 'Atribuição removida.');
+            } else {
+                const err = await res.json().catch(() => ({}));
+                toast.error(err.detail || 'Erro ao atribuir conversa.');
+            }
+        } catch (err) {
+            toast.error('Erro de conexão ao atribuir conversa.');
+        } finally {
+            setIsAssigning(false);
         }
     };
 
@@ -264,6 +330,11 @@ export default function ChatConversations({ onClose, onNavigate }) {
         toast('Gravação cancelada.');
     };
 
+    // Carrega a lista de atendentes disponíveis (não muda com frequência, não precisa de polling)
+    useEffect(() => {
+        loadAvailableAgents();
+    }, [activeClient]);
+
     // Polling de conversas e mensagens
     useEffect(() => {
         loadConversations(true);
@@ -275,7 +346,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
         }, 5000);
 
         return () => clearInterval(convoInterval);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, activeClient]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient]);
 
     useEffect(() => {
         if (!selectedConvo) return;
@@ -586,6 +657,24 @@ export default function ChatConversations({ onClose, onNavigate }) {
         }
     };
 
+    const handleResendToAgentFlow = async (messageId) => {
+        if (!activeClient) return;
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/messages/${messageId}/resend-agentflow`, {
+                method: 'POST'
+            }, activeClient.id);
+            
+            if (res.ok) {
+                toast.success('Reenvio ao AgentFlow iniciado!');
+            } else {
+                const errData = await res.json();
+                toast.error(errData.detail || 'Erro ao reenviar ao AgentFlow.');
+            }
+        } catch (err) {
+            toast.error('Falha de rede ao reenviar mensagem.');
+        }
+    };
+
     // Bloquear (permanente) ou colocar em repouso (temporário) o contato da conversa ativa
     const handleConfirmBlockContact = async (type, hours) => {
         if (!selectedConvo || !activeClient) return;
@@ -605,6 +694,12 @@ export default function ChatConversations({ onClose, onNavigate }) {
             if (res.ok) {
                 toast.success(type === 'resting' ? 'Contato colocado em repouso — não receberá disparos até o prazo terminar.' : 'Contato bloqueado — não receberá mais disparos.');
                 setIsBlockModalOpen(false);
+                // Atualiza o status localmente na hora e depois busca dados frescos do backend (com resting_until preciso)
+                setSelectedConvo(prev => prev ? { ...prev, block_status: type === 'resting' ? 'resting' : 'blocked' } : prev);
+                setConversations(prev => prev.map(c =>
+                    c.id === selectedConvo.id ? { ...c, block_status: type === 'resting' ? 'resting' : 'blocked' } : c
+                ));
+                loadConversations(false);
             } else {
                 const err = await res.json().catch(() => ({}));
                 toast.error(err.detail || 'Erro ao bloquear contato.');
@@ -861,6 +956,37 @@ export default function ChatConversations({ onClose, onNavigate }) {
             targetLabel={selectedConvo ? `${selectedConvo.contact_name || selectedConvo.phone} (${selectedConvo.phone})` : null}
         />
 
+        {confirmResendAgentflow !== null && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                <div className="bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+                    <h3 className="text-base font-bold text-white mb-2">
+                        Confirmar Reenvio ao AgentFlow?
+                    </h3>
+                    <p className="text-sm text-gray-400 mb-5">
+                        Tem certeza que deseja reenviar esta última mensagem do contato para o Webhook de Integração (AgentFlow) configurado?
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setConfirmResendAgentflow(null)}
+                            className="flex-1 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 text-sm font-semibold transition"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={async () => {
+                                const msgId = confirmResendAgentflow;
+                                setConfirmResendAgentflow(null);
+                                await handleResendToAgentFlow(msgId);
+                            }}
+                            className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition"
+                        >
+                            Sim, Reenviar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <div className="flex flex-col h-screen w-screen bg-[#0f172a] text-gray-100 overflow-hidden font-sans">
             {/* Header de Atendimento */}
             <div className="h-16 border-b border-gray-200 dark:border-white/5 flex items-center justify-between px-6 bg-white dark:bg-[#1e293b] shrink-0">
@@ -940,34 +1066,62 @@ export default function ChatConversations({ onClose, onNavigate }) {
                     </div>
                 </div>
 
-                {/* Marcadores para Filtrar (Dropdown) */}
-                {availableLabels.length > 0 && (
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-white/5 space-y-2 bg-gray-50/10 dark:bg-black/10">
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-1.5">
-                                <FiTag size={12} />
-                                <span>Filtrar por Marcador</span>
-                            </div>
-                            <span className="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                {visibleConversations.length} contato{visibleConversations.length !== 1 ? 's' : ''}
-                            </span>
-                        </div>
-                        <select
-                            value={selectedLabelFilter || ''}
-                            onChange={(e) => setSelectedLabelFilter(e.target.value || null)}
-                            className="bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full cursor-pointer"
-                        >
-                            <option value="">Todos os marcadores</option>
-                            {availableLabels.map(label => (
-                                <option key={label} value={label}>{label}</option>
-                            ))}
-                        </select>
+                {/* Painel de Filtros em Abas — só um grupo de filtro visível por vez, pra sobrar espaço pra lista */}
+                <div className="border-b border-gray-200 dark:border-white/5 bg-gray-50/10 dark:bg-black/10">
+                    <div className="flex items-center px-4 py-2 gap-1.5">
+                        {[
+                            { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!selectedLabelFilter, dotColor: 'bg-blue-400' },
+                            { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterUnread || filterHasNote, dotColor: 'bg-emerald-400' },
+                            { key: 'bloqueio', label: 'Bloqueio', icon: FiSlash, active: !!filterBlockStatus, dotColor: 'bg-red-400' },
+                            { key: 'data', label: 'Data', icon: FiCalendar, active: !!filterStartDate || !!filterEndDate, dotColor: 'bg-purple-400' },
+                        ].map(({ key, label, icon: Icon, active, dotColor }) => (
+                            <button
+                                key={key}
+                                onClick={() => setActiveFilterTab(prev => prev === key ? null : key)}
+                                className={`relative flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                                    activeFilterTab === key
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-white dark:bg-[#1e293b] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-white/5 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                }`}
+                            >
+                                <Icon size={12} />
+                                {label}
+                                {active && (
+                                    <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${dotColor} ring-2 ring-white dark:ring-[#111827]`} />
+                                )}
+                            </button>
+                        ))}
+                        <span className="ml-1 shrink-0 bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-1 rounded-full">
+                            {visibleConversations.length}
+                        </span>
+                    </div>
 
-                        <div className="flex gap-2">
-                            {/* Filtro: Janela 24h aberta */}
+                    {/* Conteúdo da aba: Marcador */}
+                    {activeFilterTab === 'marcador' && (
+                        <div className="px-4 pb-3 space-y-2">
+                            {availableLabels.length > 0 ? (
+                                <select
+                                    value={selectedLabelFilter || ''}
+                                    onChange={(e) => setSelectedLabelFilter(e.target.value || null)}
+                                    className="bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full cursor-pointer"
+                                >
+                                    <option value="">Todos os marcadores</option>
+                                    {availableLabels.map(label => (
+                                        <option key={label} value={label}>{label}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <p className="text-[11px] text-gray-400 italic">Nenhum marcador criado ainda.</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Conteúdo da aba: Status (Janela 24h / Não lidas / Com anotação) */}
+                    {activeFilterTab === 'status' && (
+                        <div className="px-4 pb-3 flex flex-wrap gap-2">
                             <button
                                 onClick={() => setFilterWindowOpen(v => !v)}
-                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                className={`flex-1 min-w-[45%] flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                                     filterWindowOpen
                                         ? 'bg-green-500/20 border-green-500/40 text-green-400'
                                         : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-green-500/40 hover:text-green-400'
@@ -977,10 +1131,9 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                 Janela 24h aberta
                             </button>
 
-                            {/* Filtro: Não lidas */}
                             <button
                                 onClick={() => setFilterUnread(v => !v)}
-                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                className={`flex-1 min-w-[45%] flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                                     filterUnread
                                         ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
                                         : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-emerald-500/40 hover:text-emerald-400'
@@ -989,9 +1142,87 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                 <span className={`w-2 h-2 rounded-full ${filterUnread ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
                                 Não lidas
                             </button>
+
+                            <button
+                                onClick={() => setFilterHasNote(v => !v)}
+                                className={`flex-1 min-w-[45%] flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                    filterHasNote
+                                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                                        : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-amber-500/40 hover:text-amber-400'
+                                }`}
+                            >
+                                <BsJournalText size={12} />
+                                Com anotação
+                            </button>
                         </div>
-                    </div>
-                )}
+                    )}
+
+                    {/* Conteúdo da aba: Bloqueio */}
+                    {activeFilterTab === 'bloqueio' && (
+                        <div className="px-4 pb-3 flex gap-2">
+                            <button
+                                onClick={() => setFilterBlockStatus(v => v === 'blocked' ? null : 'blocked')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                    filterBlockStatus === 'blocked'
+                                        ? 'bg-red-500/20 border-red-500/40 text-red-400'
+                                        : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-red-500/40 hover:text-red-400'
+                                }`}
+                            >
+                                <FiSlash size={12} />
+                                Bloqueados
+                            </button>
+
+                            <button
+                                onClick={() => setFilterBlockStatus(v => v === 'resting' ? null : 'resting')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                    filterBlockStatus === 'resting'
+                                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
+                                        : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-orange-500/40 hover:text-orange-400'
+                                }`}
+                            >
+                                <FiClock size={12} />
+                                Em repouso
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Conteúdo da aba: Data */}
+                    {activeFilterTab === 'data' && (
+                        <div className="px-4 pb-3 space-y-2">
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <label className="text-[9px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 block mb-1">De</label>
+                                    <input
+                                        type="date"
+                                        value={filterStartDate}
+                                        onChange={(e) => setFilterStartDate(e.target.value)}
+                                        className="w-full bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-300 text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-[9px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 block mb-1">Até</label>
+                                    <input
+                                        type="date"
+                                        value={filterEndDate}
+                                        onChange={(e) => setFilterEndDate(e.target.value)}
+                                        className="w-full bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-300 text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                    />
+                                </div>
+                            </div>
+                            {(filterStartDate || filterEndDate) && (
+                                <button
+                                    onClick={() => {
+                                        setFilterStartDate('');
+                                        setFilterEndDate('');
+                                    }}
+                                    className="text-left text-[11px] text-red-500 hover:text-red-600 font-semibold mt-1 block"
+                                >
+                                    Limpar Filtro de Data
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* Barra de seleção em massa */}
                 {visibleConversations.length > 0 && (
@@ -1083,7 +1314,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                             <div className="flex justify-between items-baseline mb-1">
                                                 <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate pr-2 flex items-center gap-1">
                                                     {convo.pinned && <BsPinAngleFill className="text-blue-500 rotate-45 shrink-0" size={12} />}
-                                                    {convo.contact_name || convo.phone}
+                                                    {convo.contact_name ? getFirstName(convo.contact_name) : convo.phone}
                                                 </h4>
                                                 <span className="text-[10px] text-gray-400 shrink-0">
                                                     {formatTime(convo.last_message_at)}
@@ -1092,6 +1323,32 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">
                                                 {convo.last_message_content || 'Nenhuma mensagem'}
                                             </p>
+
+                                            {/* Badges de bloqueio/repouso e anotação privada */}
+                                            {(convo.block_status || convo.private_note || convo.assigned_user_name) && (
+                                                <div className="mb-1 flex flex-wrap gap-1">
+                                                    {convo.block_status === 'blocked' && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 border-red-500/30 bg-red-500/10">
+                                                            <FiSlash size={9} /> Bloqueado
+                                                        </span>
+                                                    )}
+                                                    {convo.block_status === 'resting' && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-orange-400 border-orange-500/30 bg-orange-500/10">
+                                                            <FiClock size={9} /> Em repouso
+                                                        </span>
+                                                    )}
+                                                    {convo.private_note && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-amber-400 border-amber-500/30 bg-amber-500/10">
+                                                            <BsJournalText size={9} /> Anotação
+                                                        </span>
+                                                    )}
+                                                    {convo.assigned_user_name && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-blue-400 border-blue-500/30 bg-blue-500/10">
+                                                            <FiUser size={9} /> {convo.assigned_user_name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {/* Exibição de Marcadores/Etiquetas no Card */}
                                             {convo.labels && convo.labels.length > 0 && (
@@ -1151,12 +1408,22 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         <div className="p-4 border-b border-gray-200 dark:border-white/5 flex justify-between items-center bg-gray-50/20 dark:bg-[#111827]/20">
                             <div>
                                 <h3 className="font-bold text-gray-800 dark:text-white text-base">
-                                    {selectedConvo.contact_name || selectedConvo.phone}
+                                    {selectedConvo.contact_name ? getFirstName(selectedConvo.contact_name) : selectedConvo.phone}
                                 </h3>
                                 <div className="flex items-center gap-2 mt-0.5">
                                     <span className="text-xs text-gray-500 dark:text-gray-400">
                                         WhatsApp Oficial: {selectedConvo.phone}
                                     </span>
+                                    {selectedConvo.block_status === 'blocked' && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-red-400 border border-red-500/30 bg-red-500/10">
+                                            <FiSlash size={10} /> Bloqueado
+                                        </span>
+                                    )}
+                                    {selectedConvo.block_status === 'resting' && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-orange-400 border border-orange-500/30 bg-orange-500/10">
+                                            <FiClock size={10} /> Em repouso
+                                        </span>
+                                    )}
                                     {!showRightSidebar && (
                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
                                             timeLeft24h === 'Janela Fechada'
@@ -1183,8 +1450,20 @@ export default function ChatConversations({ onClose, onNavigate }) {
 
                                 <button
                                     onClick={() => setIsBlockModalOpen(true)}
-                                    title="Bloquear ou colocar em repouso — impede que este contato receba disparos"
-                                    className="p-2 rounded-xl border bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:border-orange-200 dark:hover:border-orange-800/30 transition-all"
+                                    title={
+                                        selectedConvo.block_status === 'blocked'
+                                            ? 'Contato bloqueado permanentemente — clique para gerenciar'
+                                            : selectedConvo.block_status === 'resting'
+                                            ? 'Contato em repouso temporário — clique para gerenciar'
+                                            : 'Bloquear ou colocar em repouso — impede que este contato receba disparos'
+                                    }
+                                    className={`p-2 rounded-xl border transition-all ${
+                                        selectedConvo.block_status === 'blocked'
+                                            ? 'bg-red-500/10 border-red-500/30 text-red-500'
+                                            : selectedConvo.block_status === 'resting'
+                                            ? 'bg-orange-500/10 border-orange-500/30 text-orange-500'
+                                            : 'bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:border-orange-200 dark:hover:border-orange-800/30'
+                                    }`}
                                 >
                                     <FiSlash size={16} />
                                 </button>
@@ -1384,7 +1663,18 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                     </div>
                                                 )}
 
-                                                <div className="flex justify-end mt-2">
+                                                 <div className="flex justify-between items-center mt-2 gap-3">
+                                                     <div>
+                                                         {msg.id === lastContactMessage?.id && (
+                                                             <button
+                                                                 onClick={() => setConfirmResendAgentflow(msg.id)}
+                                                                 title="Reenviar esta última mensagem para o Webhook de Integração (AgentFlow)"
+                                                                 className="text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-bold flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full transition border border-blue-200 dark:border-blue-800/40"
+                                                             >
+                                                                 <FiSend size={10} /> Reenviar ao AgentFlow
+                                                             </button>
+                                                         )}
+                                                     </div>
                                                     <span className="text-[9px] opacity-75 font-medium tracking-wide">
                                                         {formatMessageTimestamp(msg.timestamp)}
                                                     </span>
@@ -1533,7 +1823,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
 
             {/* Coluna 3: Detalhes e Marcadores (Direita) - Toggleable */}
             {selectedConvo && showRightSidebar && (
-                <div className="w-80 border-l border-gray-200 dark:border-white/5 p-6 flex flex-col h-full overflow-y-auto bg-gray-50/50 dark:bg-[#111827]/40 space-y-6 shrink-0 animate-fade-in">
+                <div className="w-80 border-l border-gray-200 dark:border-white/5 p-6 flex flex-col h-full overflow-y-auto overflow-x-hidden bg-gray-50/50 dark:bg-[#111827]/40 space-y-6 shrink-0 animate-fade-in">
                     {/* Perfil do Contato */}
                     <div className="text-center space-y-2 pb-4 border-b border-gray-200 dark:border-white/5">
                         <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto flex items-center justify-center text-white text-xl font-bold">
@@ -1541,7 +1831,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-800 dark:text-white">
-                                {selectedConvo.contact_name || 'Contato'}
+                                {selectedConvo.contact_name ? getFirstName(selectedConvo.contact_name) : 'Contato'}
                             </h4>
                             <p className="text-xs text-gray-500 dark:text-gray-400">{selectedConvo.phone}</p>
                             <div className="flex justify-center pt-1.5">
@@ -1554,6 +1844,25 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                 </span>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Atribuição de Atendente */}
+                    <div className="space-y-2 pb-4 border-b border-gray-200 dark:border-white/5">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            <FiUser size={14} />
+                            <span>Atribuído a</span>
+                        </div>
+                        <select
+                            value={selectedConvo.assigned_user_id || ''}
+                            disabled={isAssigning}
+                            onChange={(e) => handleAssignConversation(e.target.value ? Number(e.target.value) : null)}
+                            className="w-full px-3 py-1.5 bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg border border-gray-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
+                        >
+                            <option value="">Ninguém atribuído</option>
+                            {availableAgents.map(agent => (
+                                <option key={agent.id} value={agent.id}>{agent.full_name}</option>
+                            ))}
+                        </select>
                     </div>
 
                     {/* Marcadores / Etiquetas */}
@@ -1648,7 +1957,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
 
                             {/* Dropdown flutuante com as opções */}
                             {isTagDropdownOpen && (
-                                <div className="absolute z-20 w-full mt-1 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto custom-scrollbar py-1">
+                                <div className="absolute z-20 w-full mt-1 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto overflow-x-hidden custom-scrollbar py-1">
                                     {/* Opções filtradas */}
                                     {(availableLabels || [])
                                         .filter(label => 
@@ -1672,7 +1981,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                         className="w-2 h-2 rounded-full shrink-0" 
                                                         style={{ backgroundColor: labelColor }}
                                                     />
-                                                    {label}
+                                                    <span className="truncate flex-1">{label}</span>
                                                 </button>
                                             );
                                         })

@@ -1,12 +1,3 @@
-# ========== ESTÁGIO 1: Build do Frontend (React/Vite) ==========
-FROM node:20-alpine as frontend-build
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm install
-COPY frontend/ ./
-# Ignorar erro de lint no build se houver, para garantir que não pare
-RUN npm run build
-
 # ========== ESTÁGIO 2: Builder Python (Compilação) ==========
 FROM python:3.11-slim as backend-builder
 
@@ -41,8 +32,8 @@ COPY backend/ .
 # Criar diretórios necessários (logs é montado como volume persistente)
 RUN mkdir -p /app/static/dist && mkdir -p /app/static/uploads && mkdir -p /app/logs
 
-# Copiar build do frontend
-COPY --from=frontend-build /app/frontend/dist /app/static/dist
+# Copiar build do frontend diretamente do host
+COPY frontend/dist /app/static/dist
 
 # --- FIX ENTRYPOINT ---
 # Copiamos explicitamente e renomeamos para garantir que não conflite com pastas

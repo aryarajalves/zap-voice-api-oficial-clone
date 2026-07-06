@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiEyeOff, FiEye, FiCopy, FiImage, FiUpload, FiShield, FiAlertCircle, FiZap } from 'react-icons/fi';
+import { FiEyeOff, FiEye, FiCopy, FiImage, FiUpload, FiShield, FiAlertCircle, FiZap, FiX } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { resolveUrl, WEBHOOK_BASE_URL, META_APP_ID, META_CONFIG_ID, API_URL } from '../../../config';
 import { handleMetaEmbeddedSignupHelper } from '../utils/whatsAppTabUtils';
@@ -59,6 +59,67 @@ const WhatsAppTab = ({
     const { activeClient } = useClient();
     const [testingToken, setTestingToken] = React.useState(false);
     const [testResult, setTestResult] = React.useState(null);
+
+    // Estados e hooks para seleção de etiquetas na janela de 24h
+    const [availableLabels, setAvailableLabels] = React.useState([]);
+    const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const dropdownRef = React.useRef(null);
+
+    React.useEffect(() => {
+        const fetchAllLabels = async () => {
+            if (!activeClient) return;
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_URL}/chat/labels/details`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'X-Client-ID': String(activeClient.id)
+                    }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setAvailableLabels(data);
+                }
+            } catch (err) {
+                console.error("Erro ao buscar etiquetas em WhatsAppTab:", err);
+            }
+        };
+        fetchAllLabels();
+    }, [activeClient]);
+
+    React.useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleAddLabel = (labelName) => {
+        const current = formData.WA_WINDOW_CLOSED_REMOVE_LABELS
+            ? formData.WA_WINDOW_CLOSED_REMOVE_LABELS.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+        if (!current.includes(labelName)) {
+            const newLabels = [...current, labelName].join(',');
+            handleChange({ target: { name: 'WA_WINDOW_CLOSED_REMOVE_LABELS', value: newLabels } });
+        }
+        setSearchQuery('');
+    };
+
+    const handleRemoveLabel = (labelName) => {
+        const current = formData.WA_WINDOW_CLOSED_REMOVE_LABELS
+            ? formData.WA_WINDOW_CLOSED_REMOVE_LABELS.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+        const newLabels = current.filter(l => l !== labelName).join(',');
+        handleChange({ target: { name: 'WA_WINDOW_CLOSED_REMOVE_LABELS', value: newLabels } });
+    };
+
+    const selectedLabels = formData.WA_WINDOW_CLOSED_REMOVE_LABELS
+        ? formData.WA_WINDOW_CLOSED_REMOVE_LABELS.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
 
     const handleTestToken = async () => {
         const token = formData.WA_ACCESS_TOKEN;
@@ -519,6 +580,106 @@ const WhatsAppTab = ({
                                     Configure esses dados no Painel da Meta em <b>WhatsApp &gt; Configuração &gt; Webhook</b>. 
                                     Certifique-se de assinar o campo <b>messages</b> para receber as interações dos seus leads.
                                 </p>
+                            </div>
+                        </div>
+
+                        {/* Janela de 24 Horas */}
+                        <div className="space-y-4 md:col-span-2 mt-4 p-5 bg-purple-50/30 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-900/30 shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <FiAlertCircle className="text-purple-500 w-5 h-5" />
+                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide">Janela de 24 Horas</h4>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 gap-5 mt-3">
+                                <div className="space-y-1.5 relative" ref={dropdownRef}>
+                                    <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">
+                                        Selecione as etiquetas a serem removidas quando a janela fechar
+                                    </label>
+                                    
+                                    {/* Container de Seleção Premium */}
+                                    <div 
+                                        className="w-full bg-white dark:bg-[#1f2937]/50 border border-gray-300 dark:border-white/10 rounded-xl p-2.5 flex flex-wrap gap-2 cursor-text focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-purple-500 transition-all min-h-[42px]"
+                                        onClick={() => setIsDropdownOpen(true)}
+                                    >
+                                        {/* Badges dos marcadores selecionados */}
+                                        {selectedLabels.map(lbl => {
+                                            const match = availableLabels.find(al => al.name.toLowerCase() === lbl.toLowerCase());
+                                            const bgColor = match?.color || '#8B5CF6';
+                                            return (
+                                                <span 
+                                                    key={lbl}
+                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white shadow-sm"
+                                                    style={{ backgroundColor: bgColor }}
+                                                >
+                                                    {lbl}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRemoveLabel(lbl);
+                                                        }}
+                                                        className="hover:bg-black/20 rounded p-0.5 transition-colors"
+                                                    >
+                                                        <FiX size={10} />
+                                                    </button>
+                                                </span>
+                                            );
+                                        })}
+                                        
+                                        {/* Input de Busca */}
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => {
+                                                setSearchQuery(e.target.value);
+                                                setIsDropdownOpen(true);
+                                            }}
+                                            onFocus={() => setIsDropdownOpen(true)}
+                                            placeholder={selectedLabels.length === 0 ? "Clique para escolher marcadores..." : ""}
+                                            className="flex-1 min-w-[120px] bg-transparent text-xs text-gray-700 dark:text-gray-200 outline-none border-none p-0 focus:ring-0"
+                                        />
+                                    </div>
+                                    
+                                    {/* Dropdown de Opções */}
+                                    {isDropdownOpen && (
+                                        <div className="absolute z-30 w-full mt-1.5 bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl max-h-48 overflow-y-auto overflow-x-hidden custom-scrollbar py-1">
+                                            {availableLabels
+                                                .filter(lbl => 
+                                                    !selectedLabels.map(s => s.toLowerCase()).includes(lbl.name.toLowerCase()) &&
+                                                    lbl.name.toLowerCase().includes(searchQuery.toLowerCase())
+                                                )
+                                                .map(lbl => (
+                                                    <button
+                                                        key={lbl.id || lbl.name}
+                                                        type="button"
+                                                        onClick={() => handleAddLabel(lbl.name)}
+                                                        className="w-full text-left px-3.5 py-2 text-xs hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2.5 text-gray-700 dark:text-gray-300 font-medium transition-colors"
+                                                    >
+                                                        <span 
+                                                            className="w-2.5 h-2.5 rounded-full shrink-0" 
+                                                            style={{ backgroundColor: lbl.color || '#8B5CF6' }}
+                                                        />
+                                                        <span className="truncate flex-1">{lbl.name}</span>
+                                                    </button>
+                                                ))
+                                            }
+                                            
+                                            {/* Se não houver nada para selecionar */}
+                                            {availableLabels.filter(lbl => 
+                                                !selectedLabels.map(s => s.toLowerCase()).includes(lbl.name.toLowerCase()) &&
+                                                lbl.name.toLowerCase().includes(searchQuery.toLowerCase())
+                                            ).length === 0 && (
+                                                <div className="px-3.5 py-2 text-xs text-gray-400 dark:text-gray-500 italic text-center">
+                                                    Nenhum marcador disponível para selecionar.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">
+                                        Essas etiquetas serão automaticamente removidas da conversa no chat interno do ZapVoice quando a janela de 24 horas expirar.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>

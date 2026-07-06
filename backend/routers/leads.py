@@ -53,7 +53,7 @@ def extract_ddi_ddd(raw_phone: Optional[str]):
 
 def _apply_common_lead_filters(query, search, event_type, product_name,
                                 tag, tag_mode, is_locked, has_bsud, date_from, date_to,
-                                imported_by_client_id, origin):
+                                imported_by_client_id, origin, exclude_tag=None):
     """Filtros compartilhados entre /leads, /leads/ddi-ddd-filters e afins."""
     if imported_by_client_id:
         query = query.filter(
@@ -102,6 +102,23 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
                 query = query.filter(and_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
             else:
                 query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+
+    if exclude_tag:
+        if isinstance(exclude_tag, str):
+            exclude_tag = [exclude_tag]
+        exclude_tags_filter = []
+        for t in exclude_tag:
+            if t:
+                parts = [x.strip() for x in t.split(",") if x.strip()]
+                exclude_tags_filter.extend(parts)
+        if exclude_tags_filter:
+            # Contato não pode ter NENHUMA das etiquetas excluídas (nem outra que já não tenha tags)
+            query = query.filter(
+                and_(*(
+                    or_(models.WebhookLead.tags.is_(None), ~models.WebhookLead.tags.ilike(f"%{t}%"))
+                    for t in exclude_tags_filter
+                ))
+            )
 
     if is_locked == 'true':
         query = query.filter(models.WebhookLead.is_locked == True)
@@ -293,6 +310,7 @@ def list_leads(
     product_name: Optional[str] = None,
     tag: Optional[List[str]] = Query(None),
     tag_mode: Optional[str] = "OR",
+    exclude_tag: Optional[List[str]] = Query(None),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     imported_by_client_id: Optional[int] = None,
@@ -309,6 +327,8 @@ def list_leads(
     """
     Retorna a lista de leads capturados via webhook, com filtros e busca.
     Filtros de data (date_from, date_to) aceitam formato ISO 8601 (YYYY-MM-DD).
+    'exclude_tag' remove da lista qualquer contato que possua ao menos uma das
+    etiquetas informadas (mesmo que também possua etiquetas de 'tag').
     """
     client_id = x_client_id if x_client_id else current_user.client_id
 
@@ -323,7 +343,8 @@ def list_leads(
 
     query = _apply_common_lead_filters(
         query, search, event_type, product_name, tag, tag_mode,
-        is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin
+        is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin,
+        exclude_tag=exclude_tag
     )
 
     # Filtro por DDI/DDD do telefone

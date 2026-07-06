@@ -479,13 +479,18 @@ async def delete_template_tag_global(
 @router.get("/labels")
 async def list_labels(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(require_user)
+    current_user: models.User = Depends(require_user),
+    db: Session = Depends(get_db)
 ):
     try:
         target_client_id = x_client_id if x_client_id else current_user.client_id
-        client = ChatwootClient(client_id=target_client_id)
-        labels = await client.get_labels()
-        return labels or []
+        labels = (
+            db.query(models.ChatLabel)
+            .filter(models.ChatLabel.client_id == target_client_id)
+            .order_by(models.ChatLabel.name)
+            .all()
+        )
+        return [{"id": l.id, "title": l.name, "color": l.color} for l in labels]
     except Exception as e:
         logger.error(f"Error listing labels: {e}")
         return []

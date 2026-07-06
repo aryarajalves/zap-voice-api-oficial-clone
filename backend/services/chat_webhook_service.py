@@ -25,10 +25,19 @@ def dispatch_webhook_in_thread(url: str, payload: dict, message_id: int):
                     logger.info(f"📥 [CHAT-WEBHOOK] Resposta do Webhook: Status {response.status_code}")
                     if 200 <= response.status_code < 300:
                         status = "success"
+                    elif response.status_code in [403, 404, 410]:
+                        status = "cancelled"
+                        error_msg = f"Webhook cancelado/desativado na outra plataforma (HTTP {response.status_code})"
                     else:
                         error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
             except Exception as http_err:
                 error_msg = str(http_err)
+                err_lower = error_msg.lower()
+                if "connection refused" in err_lower or "connect call failed" in err_lower or "connection closed" in err_lower:
+                    status = "cancelled"
+                    error_msg = f"Conexão recusada ou serviço desativado/cancelado na outra plataforma: {error_msg}"
+                else:
+                    status = "failed"
                 logger.error(f"❌ [CHAT-WEBHOOK] Falha ao despachar webhook para {url}: {http_err}")
 
             # Atualizar ChatMessage no banco

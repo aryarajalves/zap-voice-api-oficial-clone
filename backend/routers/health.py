@@ -42,23 +42,9 @@ async def check_instagram(insta_account_id, insta_token):
         return "timeout"
 
 async def check_chatwoot(cw_url, cw_token):
-    if not cw_url or not cw_token or cw_token == "123":
-        return "offline"
-    try:
-        # Normaliza a URL
-        clean_url = cw_url.rstrip('/')
-        if '/api/v1' not in clean_url:
-            clean_url += '/api/v1'
-        
-        async with httpx.AsyncClient() as client:
-            res = await client.get(
-                f"{clean_url}/profile",
-                headers={"api_access_token": cw_token},
-                timeout=3.0
-            )
-            return "online" if res.status_code == 200 else f"error ({res.status_code})"
-    except:
-        return "timeout"
+    # Chatwoot foi desativado na operação — não fazemos mais nenhuma
+    # requisição HTTP para ele (nem no health check).
+    return "disabled"
 
 async def check_storage(s):
     s3_url = s.get("S3_ENDPOINT_URL", "").split('#')[0].strip()

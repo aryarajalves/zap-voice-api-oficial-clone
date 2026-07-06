@@ -116,14 +116,19 @@ export default function useInstagramAutomation(activeClient) {
         setInstaWebhookSlug(data.INSTAGRAM_WEBHOOK_SLUG || '');
         setTokenRevelado('');
         setShowToken(false);
+        if (data.INSTAGRAM_ACCESS_TOKEN && data.INSTAGRAM_ACCOUNT_ID) {
+          fetchInstagramPosts(true);
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar configurações do Instagram:', err);
     }
   };
 
-  const fetchInstagramPosts = async () => {
+  const fetchInstagramPosts = async (forceHasToken = null) => {
     if (!activeClient) return;
+    const hasToken = forceHasToken !== null ? forceHasToken : tokenJaConfigurado;
+    if (!hasToken) return;
     setLoadingPosts(true);
     setPostsError('');
     try {
@@ -327,7 +332,6 @@ export default function useInstagramAutomation(activeClient) {
     fetchAutomations();
     fetchFunnels();
     fetchSettings();
-    fetchInstagramPosts();
   }, [activeClient]);
 
   useEffect(() => {

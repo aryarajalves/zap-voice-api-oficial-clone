@@ -1,0 +1,88 @@
+
+Está acontecendo algo diferente e sinto ...
+
+Está acontecendo algo diferente e sinto ...
+
+Está acontecendo algo diferente e sinto ...
+
+Está acontecendo algo diferente e sinto ...
+
+Está acontecendo algo diferente e sinto ...
+
+Está acontecendo algo diferente e sinto ...
+
+02/07/26 22:20:58 - services.scheduler - INFO - 🧹 [LOG CLEANUP] 23 linha(s) removidas do log (>7 dias).
+02/07/26 22:21:06 - zapvoice - INFO - Conectando Websocket Listener ao RabbitMQ...
+02/07/26 22:21:06 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...
+02/07/26 22:21:06 - rabbitmq_client - INFO - ✅ Conectado ao RabbitMQ e infraestrutura (filas/exchanges) validada!
+02/07/26 22:21:06 - rabbitmq_client - INFO - Escutando eventos de sistema (Realtime)
+02/07/26 22:21:15 - zapvoice - INFO - 🔌 Tentativa de conexão WS de origin: http://localhost:5176
+02/07/26 22:21:15 - zapvoice - INFO -  WebSocket conectado. Total: 1
+02/07/26 22:21:15 - WhatsAppClient - INFO - 🔍 [Meta API] Fetching templates for Client ID: 11 | WABA: 756775646695620 | Token: EAGBBRgYd9...
+02/07/26 22:21:17 - WhatsAppClient - INFO - 📊 [Meta API] Recebidos 7 templates da Meta.
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: combo_de_produtos | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: pix_gerado | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: carrinho_abandonado_cama | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: cartao_recusado | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: carrinho_abandonado_muito_alem | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: carrinho_abandonado_nuru | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: compra_aprovada | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [Meta API] Fetching templates for Client ID: 11 | WABA: 756775646695620 | Token: EAGBBRgYd9...
+02/07/26 22:21:17 - WhatsAppClient - INFO - 📊 [Meta API] Recebidos 7 templates da Meta.
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: combo_de_produtos | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: pix_gerado | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: carrinho_abandonado_cama | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: cartao_recusado | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: carrinho_abandonado_muito_alem | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: carrinho_abandonado_nuru | Status: APPROVED
+02/07/26 22:21:17 - WhatsAppClient - INFO - 🔍 [TEMPLATE_INSPECT] Name: compra_aprovada | Status: APPROVED
+02/07/26 22:21:28 - zapvoice - INFO - ⏰ [BACKUP-SCHEDULER] Task de backup agendado iniciada.
+02/07/26 23:00:01 - services.scheduler - INFO - 🔍 [STALE CLEANUP] Verificando funis pausados há mais de 24h...
+02/07/26 23:00:01 - services.scheduler - INFO - 🔍 [STALE CLEANUP] Verificando disparos travados há mais de 2h...
+02/07/26 23:00:01 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 1270: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2419: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3023: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2482: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2978: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2493: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2969: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3022: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2932: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2946: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3007: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2948: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2998: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2986: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2409: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3028: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2950: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2697: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2423: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2411: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2951: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3408: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2460: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3019: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2494: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2446: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2718: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2513: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2993: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2675: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2739: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2944: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2936: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3038: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3014: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2502: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2685: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3039: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2668: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2934: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2676: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2669: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2521: travado em processing por mais de 2h.
+02/07/26 23:00:02 - services.scheduler - INFO - 🔍 [STALE CLEANUP] Verificando mensagens presas na fila da Meta há mais de 24h...
+02/07/26 23:00:02 - services.scheduler - INFO - 🧹 [STALE CLEANUP] Limpeza concluída: 0 expirados, 43 travados, 0 presos na fila da Meta.
+02/07/26 23:21:36 - zapvoice - INFO - 🔌 Conexão WS encerrada: (1001, '')
+02/07/26 23:21:36 - zapvoice - INFO -  WebSocket desconectado. Total: 0

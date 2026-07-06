@@ -63,6 +63,33 @@ describe('VariableSelector', () => {
 
         expect(mockOnSelect).toHaveBeenCalledWith('{{var1}}');
     });
+
+    test('scroll wheel inside variable list does not propagate to parent (React Flow canvas)', async () => {
+        // Registra listener nativo no documento para simular o que o React Flow faz
+        const nativeParentWheelHandler = vi.fn();
+        document.addEventListener('wheel', nativeParentWheelHandler, { passive: false });
+
+        const { container } = render(
+            <GlobalVarsContext.Provider value={mockVars}>
+                <VariableSelector onSelect={mockOnSelect} />
+            </GlobalVarsContext.Provider>
+        );
+
+        fireEvent.click(screen.getByTitle('Inserir Variável'));
+        await screen.findByText('{{nome}}');
+
+        // Dispara evento wheel nativo no container da lista (igual ao que o browser faz)
+        const scrollContainer = container.querySelector('.max-h-60.overflow-y-auto');
+        expect(scrollContainer).toBeInTheDocument();
+
+        const wheelEvent = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true });
+        scrollContainer.dispatchEvent(wheelEvent);
+
+        // O evento NÃO deve ter atingido o listener nativo pai (comportamento do React Flow)
+        expect(nativeParentWheelHandler).not.toHaveBeenCalled();
+
+        document.removeEventListener('wheel', nativeParentWheelHandler);
+    });
 });
 
 describe('NodeHeader', () => {

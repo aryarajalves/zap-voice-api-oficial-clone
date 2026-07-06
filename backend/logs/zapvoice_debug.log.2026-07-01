@@ -1,0 +1,158 @@
+
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+01/07/26 22:40:44 - services.scheduler - INFO - 🧹 [LOG CLEANUP] 479 linha(s) removidas do log (>7 dias).
+01/07/26 22:40:52 - zapvoice - INFO - Conectando Websocket Listener ao RabbitMQ...
+01/07/26 22:40:52 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...
+01/07/26 22:40:52 - rabbitmq_client - INFO - ✅ Conectado ao RabbitMQ e infraestrutura (filas/exchanges) validada!
+01/07/26 22:40:52 - rabbitmq_client - INFO - Escutando eventos de sistema (Realtime)
+01/07/26 22:41:14 - zapvoice - INFO - 🔌 Tentativa de conexão WS de origin: http://localhost:5176
+01/07/26 22:41:14 - zapvoice - INFO -  WebSocket conectado. Total: 1
+01/07/26 22:41:14 - zapvoice - INFO - ⏰ [BACKUP-SCHEDULER] Task de backup agendado iniciada.
+01/07/26 22:41:14 - zapvoice - INFO - ⏰ [BACKUP-SCHEDULER] Disparando backup agendado (próximo era 2026-07-01T19:19:16.014753+00:00)...
+01/07/26 22:41:14 - zapvoice - INFO - 🔌 Conexão WS encerrada: (<CloseCode.ABNORMAL_CLOSURE: 1006>, '')
+01/07/26 22:41:14 - zapvoice - INFO - 🗄️ [BACKUP-JOB] Iniciando job de backup...
+01/07/26 22:41:14 - zapvoice - INFO -  WebSocket desconectado. Total: 0
+01/07/26 22:41:14 - zapvoice - INFO - 🗄️ [BACKUP] Iniciando backup do banco de dados...
+01/07/26 22:41:14 - zapvoice - INFO - 🗄️ [BACKUP] Executando pg_dump para zapvoice@zapvoice-postgres:5432...
+01/07/26 22:41:14 - zapvoice - INFO - 🔌 Tentativa de conexão WS de origin: http://localhost:5176
+01/07/26 22:41:14 - zapvoice - INFO -  WebSocket conectado. Total: 1
+01/07/26 22:41:15 - zapvoice - INFO - ✅ [BACKUP] pg_dump concluído. Tamanho: 3283.7 KB. Comprimindo...
+01/07/26 22:41:15 - zapvoice - INFO - ✅ [BACKUP] Compressão concluída. Tamanho final: 2810.0 KB. Enviando para S3...
+01/07/26 22:42:37 - zapvoice - INFO - 🔌 Conexão WS encerrada: (1001, '')
+01/07/26 22:42:37 - zapvoice - INFO -  WebSocket desconectado. Total: 0
+01/07/26 22:42:38 - zapvoice - INFO - 🔌 Tentativa de conexão WS de origin: http://localhost:5176
+01/07/26 22:42:38 - zapvoice - INFO -  WebSocket conectado. Total: 1
+01/07/26 22:42:38 - zapvoice - INFO - 🔌 Tentativa de conexão WS de origin: http://localhost:5176
+01/07/26 22:42:38 - zapvoice - INFO -  WebSocket conectado. Total: 2
+01/07/26 22:42:38 - zapvoice - INFO - 🔌 Conexão WS encerrada: (1006, None)
+01/07/26 22:42:38 - zapvoice - INFO -  WebSocket desconectado. Total: 1
+01/07/26 22:42:38 - zapvoice - INFO - 🔌 Tentativa de conexão WS de origin: http://localhost:5176
+01/07/26 22:42:38 - zapvoice - INFO -  WebSocket conectado. Total: 2
+01/07/26 23:00:01 - services.scheduler - INFO - 🔍 [STALE CLEANUP] Verificando funis pausados há mais de 24h...
+01/07/26 23:00:01 - services.scheduler - INFO - 🔍 [STALE CLEANUP] Verificando disparos travados há mais de 2h...
+01/07/26 23:00:01 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 1270: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3405: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3410: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3408: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 1188: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 1180: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3413: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2741: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 1272: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2740: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2534: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2742: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 3415: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - WARNING - 🧟 [REAPER] Falhando Trigger 2533: travado em processing por mais de 2h.
+01/07/26 23:00:02 - services.scheduler - INFO - 🔍 [STALE CLEANUP] Verificando mensagens presas na fila da Meta há mais de 24h...
+01/07/26 23:00:02 - services.scheduler - INFO - 🧹 [STALE CLEANUP] Limpeza concluída: 0 expirados, 14 travados, 0 presos na fila da Meta.
+01/07/26 23:00:48 - zapvoice - ERROR - ❌ [BACKUP-JOB] Falha no backup: Connect timeout on endpoint URL: "https://s3.us-west-004.backblazeb2.com/zap-voice/Raissa/ZapVoice/zapvoice/zapjords_backup_2026_07_01_22_41.dump.gz"
+01/07/26 23:01:48 - zapvoice - INFO - ⏰ [BACKUP-SCHEDULER] Disparando backup agendado (próximo era 2026-07-01T19:19:16.014753+00:00)...
+01/07/26 23:01:48 - zapvoice - INFO - 🗄️ [BACKUP-JOB] Iniciando job de backup...
+01/07/26 23:01:48 - zapvoice - INFO - 🗄️ [BACKUP] Iniciando backup do banco de dados...
+01/07/26 23:01:48 - zapvoice - INFO - 🗄️ [BACKUP] Executando pg_dump para zapvoice@zapvoice-postgres:5432...
+01/07/26 23:01:49 - zapvoice - INFO - ✅ [BACKUP] pg_dump concluído. Tamanho: 3294.0 KB. Comprimindo...
+01/07/26 23:01:49 - zapvoice - INFO - ✅ [BACKUP] Compressão concluída. Tamanho final: 2820.3 KB. Enviando para S3...
+01/07/26 23:19:39 - zapvoice - ERROR - ❌ [BACKUP-JOB] Falha no backup: Connect timeout on endpoint URL: "https://s3.us-west-004.backblazeb2.com/zap-voice/Raissa/ZapVoice/zapvoice/zapjords_backup_2026_07_01_23_01.dump.gz"
+01/07/26 23:20:39 - zapvoice - INFO - ⏰ [BACKUP-SCHEDULER] Disparando backup agendado (próximo era 2026-07-01T19:19:16.014753+00:00)...
+01/07/26 23:20:39 - zapvoice - INFO - 🗄️ [BACKUP-JOB] Iniciando job de backup...
+01/07/26 23:20:39 - zapvoice - INFO - 🗄️ [BACKUP] Iniciando backup do banco de dados...
+01/07/26 23:20:39 - zapvoice - INFO - 🗄️ [BACKUP] Executando pg_dump para zapvoice@zapvoice-postgres:5432...
+01/07/26 23:20:40 - zapvoice - INFO - ✅ [BACKUP] pg_dump concluído. Tamanho: 3294.0 KB. Comprimindo...
+01/07/26 23:20:40 - zapvoice - INFO - ✅ [BACKUP] Compressão concluída. Tamanho final: 2820.3 KB. Enviando para S3...
+01/07/26 23:40:48 - zapvoice - ERROR - ❌ [BACKUP-JOB] Falha no backup: Connect timeout on endpoint URL: "https://s3.us-west-004.backblazeb2.com/zap-voice/Raissa/ZapVoice/zapvoice/zapjords_backup_2026_07_01_23_20.dump.gz"
+01/07/26 23:41:48 - zapvoice - INFO - ⏰ [BACKUP-SCHEDULER] Disparando backup agendado (próximo era 2026-07-01T19:19:16.014753+00:00)...
+01/07/26 23:41:48 - zapvoice - INFO - 🗄️ [BACKUP-JOB] Iniciando job de backup...
+01/07/26 23:41:48 - zapvoice - INFO - 🗄️ [BACKUP] Iniciando backup do banco de dados...
+01/07/26 23:41:48 - zapvoice - INFO - 🗄️ [BACKUP] Executando pg_dump para zapvoice@zapvoice-postgres:5432...
+01/07/26 23:41:49 - zapvoice - INFO - ✅ [BACKUP] pg_dump concluído. Tamanho: 3294.0 KB. Comprimindo...
+01/07/26 23:41:49 - zapvoice - INFO - ✅ [BACKUP] Compressão concluída. Tamanho final: 2820.3 KB. Enviando para S3...
+02/07/26 07:43:11 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...
+02/07/26 07:43:11 - rabbitmq_client - ERROR - ❌ Erro ao conectar no RabbitMQ: [Errno 111] Connect call failed ('172.18.0.7', 5672). Tentando novamente em 5s...
+02/07/26 07:43:16 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...
+02/07/26 07:43:16 - rabbitmq_client - ERROR - ❌ Erro ao conectar no RabbitMQ: [Errno 111] Connect call failed ('172.18.0.7', 5672). Tentando novamente em 5s...
+02/07/26 07:43:21 - rabbitmq_client - INFO - Tentando conectar ao RabbitMQ em zapvoice-rabbit:5672 (amqp)...
+02/07/26 07:43:21 - rabbitmq_client - INFO - ✅ Conectado ao RabbitMQ e infraestrutura (filas/exchanges) validada!
+02/07/26 07:43:21 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_bulk_sends (prefetch: 1)
+02/07/26 07:43:21 - rabbitmq_client - INFO - Consumidor conectado na fila agent_memory_webhook_queue (prefetch: 1)
+02/07/26 07:43:21 - rabbitmq_client - INFO - Consumidor conectado na fila whatsapp_events (prefetch: 10)
+02/07/26 07:43:21 - rabbitmq_client - INFO - Consumidor conectado na fila zapvoice_funnel_executions (prefetch: 5)
+02/07/26 07:43:21 - rabbitmq_client - INFO - Consumidor conectado na fila chatwoot_private_messages (prefetch: 50)
+02/07/26 11:46:29 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 11:46:29 - WindowManager - INFO - ✨ [SYNC-TABLE] Contato 5585996123586 sincronizado com sucesso na tabela contatos_monitorados!
+02/07/26 11:46:29 - AIMemory - INFO - 🔗 [Webhook Memory] Payload: {'contact_phone': '5585996123586', 'contact_name': 'Aryaraj', 'phone': '5585996123586', 'name': 'Aryaraj', 'contact_id': 194450, 'template_name': 'Mensagem do Usuário', 'template_content': 'oie', 'Dono': 'usuario', 'is_button_click': False, 'timestamp': '2026-07-02T14:46:29.344258+00:00', 'client_id': 9, 'conta_id': 1, 'account_id': 1, 'chatwoot_account_id': 1, 'account': {'id': 1, 'conta_id': 1}, 'conta': {'id': 1}, 'trigger_id': None, 'node_id': None}
+02/07/26 11:46:29 - AIMemory - INFO - 🔗 [Webhook Memory] Publicando dados de 5585996123586 na fila para processamento assíncrono.
+02/07/26 11:46:29 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'agent_memory_webhook_queue'
+02/07/26 11:46:29 - rabbitmq_client - INFO - 📤 Mensagem enviada para fila: agent_memory_webhook_queue
+02/07/26 11:46:41 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 11:46:41 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 11:46:42 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 11:46:57 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 11:46:57 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 11:47:08 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:02:18 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:02:18 - WindowManager - INFO - ✨ [SYNC-TABLE] Contato 5585996123586 sincronizado com sucesso na tabela contatos_monitorados!
+02/07/26 12:02:18 - AIMemory - INFO - 🔗 [Webhook Memory] Payload: {'contact_phone': '5585996123586', 'contact_name': 'Aryaraj', 'phone': '5585996123586', 'name': 'Aryaraj', 'contact_id': 194450, 'template_name': 'Mensagem do Usuário', 'template_content': 'teste', 'Dono': 'usuario', 'is_button_click': False, 'timestamp': '2026-07-02T15:02:18.414309+00:00', 'client_id': 9, 'conta_id': 1, 'account_id': 1, 'chatwoot_account_id': 1, 'account': {'id': 1, 'conta_id': 1}, 'conta': {'id': 1}, 'trigger_id': None, 'node_id': None}
+02/07/26 12:02:18 - AIMemory - INFO - 🔗 [Webhook Memory] Publicando dados de 5585996123586 na fila para processamento assíncrono.
+02/07/26 12:02:18 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'agent_memory_webhook_queue'
+02/07/26 12:02:18 - rabbitmq_client - INFO - 📤 Mensagem enviada para fila: agent_memory_webhook_queue
+02/07/26 12:02:53 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:02:53 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:03:14 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:04:05 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:13:11 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:13:11 - WindowManager - INFO - ✨ [SYNC-TABLE] Contato 5585996123586 sincronizado com sucesso na tabela contatos_monitorados!
+02/07/26 12:13:11 - AIMemory - INFO - 🔗 [Webhook Memory] Payload: {'contact_phone': '5585996123586', 'contact_name': 'Aryaraj', 'phone': '5585996123586', 'name': 'Aryaraj', 'contact_id': 194450, 'template_name': 'Mensagem do Usuário', 'template_content': 'oie', 'Dono': 'usuario', 'is_button_click': False, 'timestamp': '2026-07-02T15:13:11.453036+00:00', 'client_id': 9, 'conta_id': 1, 'account_id': 1, 'chatwoot_account_id': 1, 'account': {'id': 1, 'conta_id': 1}, 'conta': {'id': 1}, 'trigger_id': None, 'node_id': None}
+02/07/26 12:13:11 - AIMemory - INFO - 🔗 [Webhook Memory] Publicando dados de 5585996123586 na fila para processamento assíncrono.
+02/07/26 12:13:11 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'agent_memory_webhook_queue'
+02/07/26 12:13:11 - rabbitmq_client - INFO - 📤 Mensagem enviada para fila: agent_memory_webhook_queue
+02/07/26 12:13:39 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:13:39 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:13:50 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:23:26 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:24:03 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:30:31 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:33:48 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:33:48 - WindowManager - INFO - ✨ [SYNC-TABLE] Contato 5522999843812 sincronizado com sucesso na tabela contatos_monitorados!
+02/07/26 12:33:53 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:33:54 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:34:03 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:40:44 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:40:44 - WindowManager - INFO - ✨ [SYNC-TABLE] Contato 5585996123586 sincronizado com sucesso na tabela contatos_monitorados!
+02/07/26 12:40:44 - AIMemory - INFO - 🔗 [Webhook Memory] Payload: {'contact_phone': '5585996123586', 'contact_name': 'Aryaraj', 'phone': '5585996123586', 'name': 'Aryaraj', 'contact_id': 194450, 'template_name': 'Mensagem do Usuário', 'template_content': 'oie', 'Dono': 'usuario', 'is_button_click': False, 'timestamp': '2026-07-02T15:40:44.335487+00:00', 'client_id': 9, 'conta_id': 1, 'account_id': 1, 'chatwoot_account_id': 1, 'account': {'id': 1, 'conta_id': 1}, 'conta': {'id': 1}, 'trigger_id': None, 'node_id': None}
+02/07/26 12:40:44 - AIMemory - INFO - 🔗 [Webhook Memory] Publicando dados de 5585996123586 na fila para processamento assíncrono.
+02/07/26 12:40:44 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'agent_memory_webhook_queue'
+02/07/26 12:40:44 - rabbitmq_client - INFO - 📤 Mensagem enviada para fila: agent_memory_webhook_queue
+02/07/26 12:43:15 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:43:15 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 12:53:56 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:38:39 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:38:39 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:38:39 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:39:38 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:39:38 - WindowManager - INFO - ✨ [SYNC-TABLE] Contato 5585996123586 sincronizado com sucesso na tabela contatos_monitorados!
+02/07/26 13:39:38 - AIMemory - INFO - 🔗 [Webhook Memory] Payload: {'contact_phone': '5585996123586', 'contact_name': 'Aryaraj', 'phone': '5585996123586', 'name': 'Aryaraj', 'contact_id': 194450, 'template_name': 'Mensagem do Usuário', 'template_content': 'oie', 'Dono': 'usuario', 'is_button_click': False, 'timestamp': '2026-07-02T16:39:38.810353+00:00', 'client_id': 9, 'conta_id': 1, 'account_id': 1, 'chatwoot_account_id': 1, 'account': {'id': 1, 'conta_id': 1}, 'conta': {'id': 1}, 'trigger_id': None, 'node_id': None}
+02/07/26 13:39:38 - AIMemory - INFO - 🔗 [Webhook Memory] Publicando dados de 5585996123586 na fila para processamento assíncrono.
+02/07/26 13:39:38 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'agent_memory_webhook_queue'
+02/07/26 13:39:38 - rabbitmq_client - INFO - 📤 Mensagem enviada para fila: agent_memory_webhook_queue
+02/07/26 13:40:05 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:40:05 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:40:07 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:43:56 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:43:56 - WindowManager - INFO - ✨ [SYNC-TABLE] Contato 5585996123586 sincronizado com sucesso na tabela contatos_monitorados!
+02/07/26 13:43:56 - AIMemory - INFO - 🔗 [Webhook Memory] Payload: {'contact_phone': '5585996123586', 'contact_name': 'Aryaraj', 'phone': '5585996123586', 'name': 'Aryaraj', 'contact_id': 194450, 'template_name': 'Mensagem do Usuário', 'template_content': 'teste', 'Dono': 'usuario', 'is_button_click': False, 'timestamp': '2026-07-02T16:43:56.430788+00:00', 'client_id': 9, 'conta_id': 1, 'account_id': 1, 'chatwoot_account_id': 1, 'account': {'id': 1, 'conta_id': 1}, 'conta': {'id': 1}, 'trigger_id': None, 'node_id': None}
+02/07/26 13:43:56 - AIMemory - INFO - 🔗 [Webhook Memory] Publicando dados de 5585996123586 na fila para processamento assíncrono.
+02/07/26 13:43:56 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'agent_memory_webhook_queue'
+02/07/26 13:43:56 - rabbitmq_client - INFO - 📤 Mensagem enviada para fila: agent_memory_webhook_queue
+02/07/26 13:44:23 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:44:23 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'
+02/07/26 13:44:26 - rabbitmq_client - INFO - ⚙️ [RABBITMQ] Acionando callback para fila 'whatsapp_events'

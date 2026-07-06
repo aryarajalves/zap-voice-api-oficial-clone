@@ -16,6 +16,7 @@ _last_cleanup_log: str | None = None
 _last_cleanup_history: str | None = None
 _last_cleanup_stale: str | None = None
 _last_bulk_crash_check: str | None = None  # controle por minuto
+_last_closed_window_cleanup: str | None = None
 
 async def run_log_file_cleanup():
     """Remove linhas antigas do zapvoice_debug.log com mais de LOG_RETENTION_DAYS dias."""
@@ -437,6 +438,91 @@ async def process_recurring_triggers(db, now_utc):
         )
         db.commit()
 
+async def run_closed_window_label_cleanup(db_session=None):
+    """
+    Remove etiquetas configuradas no WA_WINDOW_CLOSED_REMOVE_LABELS das conversas do chat interno
+    cuja janela de 24h foi fechada. Roda a cada minuto.
+    """
+    global _last_closed_window_cleanup
+    now_utc = datetime.now(timezone.utc)
+    minute_key = now_utc.strftime("%Y-%m-%d %H:%M")
+    
+    if _last_closed_window_cleanup == minute_key and db_session is None:
+        return
+        
+    db = db_session if db_session is not None else SessionLocal()
+    try:
+        # 1. Obter todas as configurações de etiquetas para remoção
+        configs = db.query(models.AppConfig).filter(
+            models.AppConfig.key == "WA_WINDOW_CLOSED_REMOVE_LABELS"
+        ).all()
+        
+        if not configs:
+            return
+            
+        safety_limit = now_utc - timedelta(hours=24)
+        
+        for config in configs:
+            client_id = config.client_id
+            val = config.value or ""
+            target_labels = [l.strip() for l in val.split(",") if l.strip()]
+            if not target_labels:
+                continue
+                
+            target_labels_lower = [tl.lower() for tl in target_labels]
+            
+            # Buscar conversas ativas do cliente
+            conversations = db.query(models.ChatConversation).filter(
+                models.ChatConversation.client_id == client_id,
+                models.ChatConversation.status == "open"
+            ).all()
+            
+            for convo in conversations:
+                # Verificar se a janela de 24h está fechada
+                last_msg_at = convo.last_contact_message_at
+                is_closed = False
+                if last_msg_at is None:
+                    is_closed = True
+                else:
+                    if last_msg_at.tzinfo is None:
+                        last_msg_at = last_msg_at.replace(tzinfo=timezone.utc)
+                    if last_msg_at < safety_limit:
+                        is_closed = True
+                        
+                if is_closed:
+                    convo_labels = convo.labels or []
+                    has_label_to_remove = False
+                    new_labels = []
+                    
+                    for lbl in convo_labels:
+                        if lbl.lower() in target_labels_lower:
+                            has_label_to_remove = True
+                        else:
+                            new_labels.append(lbl)
+                            
+                    if has_label_to_remove:
+                        convo.labels = new_labels
+                        db.commit()
+                        
+                        # Notifica o frontend via WebSocket usando RabbitMQ
+                        payload_ws = {
+                            "conversation_id": convo.id,
+                            "client_id": client_id,
+                            "labels": new_labels
+                        }
+                        await rabbitmq.publish_event("conversation_updated", payload_ws)
+                        logger.info(f"🧹 [LABEL-CLEANUP] Janela fechada para conversa {convo.id}. "
+                                    f"Etiquetas removidas do chat interno: {target_labels}")
+                                    
+    except Exception as e:
+        logger.error(f"❌ [LABEL-CLEANUP] Erro no ciclo de limpeza de etiquetas: {e}")
+        db.rollback()
+    finally:
+        if db_session is None:
+            db.close()
+        _last_closed_window_cleanup = minute_key
+
+
 async def scheduler_task():
     logger.info("Scheduler task started (RabbitMQ Mode)")
     while True:
@@ -508,6 +594,7 @@ async def scheduler_task():
             # Rodar limpezas de forma protegida
             try:
                 await run_bulk_crash_detection()   # a cada minuto — detecta bulk travado por queda do servidor
+                await run_closed_window_label_cleanup() # a cada minuto — remove etiquetas se janela 24h estiver fechada
                 await run_history_cleanup()
                 await run_stale_triggers_cleanup()
                 await run_log_file_cleanup()

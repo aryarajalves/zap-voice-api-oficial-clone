@@ -27,22 +27,13 @@ const TagContactsModal = ({ isOpen, onClose, selectedPhones, contacts, setContac
     if (!activeClient) return;
     setIsLoadingTags(true);
     try {
-      const [resLeads, resChatwoot] = await Promise.all([
-        fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id),
-        fetchWithAuth(`${API_URL}/chatwoot/labels`, {}, activeClient.id).catch(() => null)
-      ]);
+      const resLeads = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
       let leadsTags = [];
       if (resLeads && resLeads.ok) {
         const data = await resLeads.json();
         leadsTags = data.tags || [];
       }
       let chatwootTags = [];
-      if (resChatwoot && resChatwoot.ok) {
-        const data = await resChatwoot.json();
-        if (Array.isArray(data)) {
-          chatwootTags = data.map(item => item.title || item.name || '').filter(Boolean);
-        }
-      }
       const combined = Array.from(new Set([...leadsTags, ...chatwootTags]))
         .map(t => t.trim())
         .filter(Boolean)

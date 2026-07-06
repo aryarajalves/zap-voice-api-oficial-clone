@@ -41,8 +41,8 @@ class RequestContextMiddleware:
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true" and os.getenv("TESTING") != "true"
 
 # Valores de limite definidos diretamente no código
-RATE_LIMIT_READ = "100/minute"
-RATE_LIMIT_WRITE = "30/minute"
+RATE_LIMIT_READ = "1000/minute"
+RATE_LIMIT_WRITE = "300/minute"
 
 def get_dynamic_rate_limit() -> str:
     """

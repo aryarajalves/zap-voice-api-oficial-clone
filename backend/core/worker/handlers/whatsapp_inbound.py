@@ -237,6 +237,36 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                     logger.error(f"❌ [ACTIVATE_AGENT] Erro no pré-lookup: {e_pre}")
                     btn_activate_agent = False
 
+            # --- PRÉ-LOOKUP: Verificar se mensagem de TEXTO pertence a um funil com memória ativa ---
+            # Mensagens soltas (fora de qualquer funil em andamento) NUNCA devem ir para a memória.
+            # Só entram: (a) respostas dentro de um funil suspenso aguardando input, cujo nó tem
+            # sendToMemory ativo, ou (b) cliques de botão com activate_agent=True (já tratado acima).
+            text_memory_active = False
+            if not is_btn_pre and user_input:
+                try:
+                    phone_suffix_mem = from_phone[-8:] if len(from_phone) >= 8 else from_phone
+                    suspended_for_mem = db.query(models.ScheduledTrigger).filter(
+                        models.ScheduledTrigger.client_id == target_cid,
+                        or_(
+                            models.ScheduledTrigger.contact_phone == from_phone,
+                            models.ScheduledTrigger.contact_phone.like(f"%{phone_suffix_mem}")
+                        ),
+                        models.ScheduledTrigger.status == "suspended",
+                        models.ScheduledTrigger.current_node_id != None
+                    ).order_by(models.ScheduledTrigger.updated_at.desc()).first()
+                    if suspended_for_mem and suspended_for_mem.funnel and suspended_for_mem.funnel.steps:
+                        graph_mem = suspended_for_mem.funnel.steps
+                        nodes_mem = {str(n["id"]): n for n in graph_mem.get("nodes", [])}
+                        cur_node_mem = nodes_mem.get(suspended_for_mem.current_node_id)
+                        if cur_node_mem:
+                            text_memory_active = bool(cur_node_mem.get("data", {}).get("sendToMemory", True))
+                            logger.info(f"🧠 [MEMORY_CHECK] Funil suspenso (Trigger #{suspended_for_mem.id}) Nó {suspended_for_mem.current_node_id} sendToMemory={text_memory_active} para {from_phone}")
+                    if not suspended_for_mem:
+                        logger.info(f"🧠 [MEMORY_CHECK] Nenhum funil suspenso com memória ativa para {from_phone} — mensagem normal não será enviada à memória")
+                except Exception as e_mem_check:
+                    logger.error(f"❌ [MEMORY_CHECK] Erro ao verificar memória ativa para mensagem de texto: {e_mem_check}")
+                    text_memory_active = False
+
             # --- SALVAR NO CHAT LOCAL ---
             try:
                 chat_convo = db.query(models.ChatConversation).filter(
@@ -357,6 +387,9 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                         # Clique de botão com activate_agent=False → não notificar memória
                         if is_btn_pre and btn_activate_agent is False:
                             logger.info(f"⏭️ [MEMORIA-INBOUND] Botão '{user_input}' com activate_agent=False — memória inbound não notificada ({from_phone})")
+                        # Mensagem de texto solta (fora de funil com memória ativa) → não notificar memória
+                        elif not is_btn_pre and not text_memory_active:
+                            logger.info(f"⏭️ [MEMORIA-INBOUND] Mensagem '{user_input}' fora de funil com memória ativa — memória inbound não notificada ({from_phone})")
                         elif same_url:
                             logger.info(f"⏭️ [MEMORIA-INBOUND] CHAT_MESSAGES_WEBHOOK_URL == AGENT_MEMORY_WEBHOOK_URL — pulando memória inbound para evitar duplicata ({from_phone})")
                         else:

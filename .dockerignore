@@ -39,7 +39,7 @@ backend/sql_app.db
 # === Node.js ===
 node_modules
 frontend/node_modules
-frontend/dist
+# frontend/dist
 
 # === OS Files ===
 .DS_Store

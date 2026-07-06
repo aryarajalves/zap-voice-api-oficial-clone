@@ -91,9 +91,11 @@ const RecipientSelector = ({
                         setSaveTagsSearch={hook.setSaveTagsSearch}
                     />
                 ) : (
-                    <TagSelector 
+                    <TagSelector
                         selectedTags={hook.selectedTags}
                         setSelectedTags={hook.setSelectedTags}
+                        excludedTags={hook.excludedTags}
+                        setExcludedTags={hook.setExcludedTags}
                         tagMode={hook.tagMode}
                         setTagMode={hook.setTagMode}
                         availableTags={hook.availableTags}
