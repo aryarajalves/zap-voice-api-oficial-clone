@@ -82,7 +82,8 @@ export default function Integrations({ onNavigateToLeads, onNavigateToBulk, onNa
     webhookHistorySearch, setWebhookHistorySearch,
     isSavingJson, syncProgress, fetchHistory, handleResendWebhook, handleSyncHistory, handleSyncAllHistory,
     handleBulkResendHistory,
-    handleExportHistory, handleImportHistory, handleDeleteHistory, handleSaveJson
+    handleExportHistory, handleImportHistory, handleDeleteHistory, handleSaveJson,
+    handleUpdateCustomFieldsMapping
   } = useWebhookHistory(activeClient, fetchIntegrations);
 
   const {
@@ -98,6 +99,16 @@ export default function Integrations({ onNavigateToLeads, onNavigateToBulk, onNa
     fetchDispatches, handlePlayDispatch, handleDeleteDispatch, handleBulkDispatchPlay,
     handleBackfillCosts, fetchDispatchContacts, fetchChildren
   } = useDispatchHistory(activeClient);
+
+  const handleOpenHistory = (item) => {
+    setHistoryCurrentPage(1);
+    setWebhookHistoryStatusFilter('');
+    setWebhookHistoryMappingFilter('');
+    setWebhookHistorySearch('');
+    setHistoryIntegration(item);
+    setIsHistoryModalOpen(true);
+    fetchHistory(item.id, '', '');
+  };
 
   // WebSocket for real-time updates
   useEffect(() => {
@@ -563,7 +574,7 @@ export default function Integrations({ onNavigateToLeads, onNavigateToBulk, onNa
                       <FiPlay size={10} /> Disparos
                     </button>
                     <button
-                      onClick={() => { setHistoryIntegration(item); setIsHistoryModalOpen(true); fetchHistory(item.id); }}
+                      onClick={() => handleOpenHistory(item)}
                       className="shrink-0 text-[9px] font-black bg-blue-500/10 text-blue-500 px-2 py-1 rounded-md hover:bg-blue-500 hover:text-white transition-all flex items-center gap-1 uppercase tracking-tighter whitespace-nowrap"
                     >
                       <FiActivity size={10} /> Histórico
@@ -672,6 +683,7 @@ export default function Integrations({ onNavigateToLeads, onNavigateToBulk, onNa
         bulkResendProgress={bulkResendProgress}
         setBulkResendProgress={setBulkResendProgress}
         toast={toast} 
+        handleUpdateCustomFieldsMapping={handleUpdateCustomFieldsMapping}
       />
       <DispatchHistoryModal isOpen={isDispatchHistoryModalOpen} onClose={() => setIsDispatchHistoryModalOpen(false)} integration={dispatchIntegration} dispatchHistory={dispatchHistory} loadingDispatchHistory={loadingDispatchHistory} dispatchSearch={dispatchSearch} setDispatchSearch={setDispatchSearch} dispatchEventFilter={dispatchEventFilter} setDispatchEventFilter={setDispatchEventFilter} dispatchTypeFilter={dispatchTypeFilter} setDispatchTypeFilter={setDispatchTypeFilter} dispatchStatusFilter={dispatchStatusFilter} setDispatchStatusFilter={setDispatchStatusFilter} dispatchTemplateFilter={dispatchTemplateFilter} setDispatchTemplateFilter={setDispatchTemplateFilter} distinctTemplates={distinctTemplates} dispatchStartDate={dispatchStartDate} setDispatchStartDate={setDispatchStartDate} dispatchEndDate={dispatchEndDate} setDispatchEndDate={setDispatchEndDate} dispatchPage={dispatchPage} setDispatchPage={setDispatchPage} dispatchLimit={dispatchLimit} setDispatchLimit={setDispatchLimit} dispatchTotal={dispatchTotal} selectedDispatchIds={selectedDispatchIds} setSelectedDispatchIds={setSelectedDispatchIds} handleSelectAllDispatches={(e, list) => setSelectedDispatchIds(e.target.checked ? list.map(i => i.id) : [])} handleToggleSelectDispatch={(id) => setSelectedDispatchIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} handleBulkDispatchPlay={() => handleBulkDispatchPlay(dispatchIntegration.id)} handleBulkDispatchDelete={() => handleDeleteDispatch(dispatchIntegration.id, 'bulk', null, selectedDispatchIds)} handlePlayDispatch={(id) => handlePlayDispatch(id, dispatchIntegration.id)} handleCancelDispatch={() => {}} handleBackfillCosts={() => handleBackfillCosts(dispatchIntegration.id)} isBackfillingCosts={isBackfillingCosts} isBulkPlayingDispatches={isBulkPlayingDispatches} isPlaying={isPlaying} isCancelling={isCancelling} setSelectedDispatch={setSelectedDispatch} setIsPipelineModalOpen={setIsPipelineModalOpen} fetchDispatches={fetchDispatches} setConfirmDeleteDispatch={setConfirmDeleteDispatch} fetchChildren={fetchChildren} dispatchStats={dispatchStats} onNavigateToChat={(phone, name) => { setIsDispatchHistoryModalOpen(false); onNavigateToChat && onNavigateToChat(phone, name); }} />
       <TestWebhookModal isOpen={isTestModalOpen} onClose={() => setIsTestModalOpen(false)} integration={integrationToTest} onTest={handleRunTest} isTesting={isTesting} />

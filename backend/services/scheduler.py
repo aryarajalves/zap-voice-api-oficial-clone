@@ -353,12 +353,15 @@ async def process_recurring_triggers(db, now_utc):
             logger.info(f"🔍 Filtrando contatos da etiqueta no banco local pela tag: {rt.tag}")
             tag_contacts = []
             try:
-                from sqlalchemy import or_
+                from sqlalchemy import or_, func
                 tags_list = [t.strip() for t in rt.tag.split(",") if t.strip()]
                 if tags_list:
                     leads = db.query(models.WebhookLead).filter(
                         models.WebhookLead.client_id == rt.client_id,
-                        or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_list))
+                        or_(*(
+                            func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                            for t in tags_list
+                        ))
                     ).all()
                     tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
                     logger.info(f"📦 Banco local retornou {len(tag_contacts)} contatos com as tags '{tags_list}'")

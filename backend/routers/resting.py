@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from core.deps import get_db, get_current_user
 from core.permissions import require_premium, require_user
 from models import RestingContact, User, MessageStatus, ScheduledTrigger
@@ -291,3 +291,33 @@ def rest_bulk(
         "success_count": success_count,
         "already_resting_count": already_count
     }
+
+@router.delete("/by_phone/{phone}", status_code=status.HTTP_204_NO_CONTENT)
+def unrest_contact_by_phone(
+    phone: str,
+    current_user: User = Depends(require_premium),
+    db: Session = Depends(get_db),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+):
+    """
+    Remove contact from resting mode by phone number.
+    """
+    client_id = x_client_id if x_client_id else current_user.client_id
+    clean_phone = "".join(filter(str.isdigit, phone))
+    suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+
+    contact = db.query(RestingContact).filter(
+        RestingContact.client_id == client_id,
+        or_(
+            RestingContact.phone == clean_phone,
+            RestingContact.phone.like(f"%{suffix}")
+        )
+    ).first()
+
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contato em repouso não encontrado.")
+
+    db.delete(contact)
+    db.commit()
+    return None
+

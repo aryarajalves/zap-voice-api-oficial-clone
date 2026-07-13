@@ -76,6 +76,18 @@ async def handle_send_template_node(db, trigger, node, chatwoot, contact_phone, 
                 except Exception:
                     pass
 
+                tpl_media_url = None
+                if components:
+                    for comp in components:
+                        if str(comp.get("type", "")).lower() == "header":
+                            params = comp.get("parameters", [])
+                            for param in params:
+                                param_type = str(param.get("type", "")).lower()
+                                if param_type in ["image", "video", "document"]:
+                                    media_data = param.get(param_type, {})
+                                    if isinstance(media_data, dict):
+                                        tpl_media_url = media_data.get("link") or media_data.get("url")
+
                 content_val = template_body or f"[Template: {template_name}]"
                 new_ms = models.MessageStatus(
                     trigger_id=trigger.id,
@@ -84,106 +96,14 @@ async def handle_send_template_node(db, trigger, node, chatwoot, contact_phone, 
                     status='sent',
                     message_type='TEMPLATE',
                     content=content_val,
-                    publish_external_event=False
+                    publish_external_event=False,
+                    var5=tpl_media_url
                 )
                 new_ms.pending_private_note = f"{content_val}\n\n📢 Enviado via Template Ativo: {template_name}"
                 
                 db.add(new_ms)
                 trigger.total_sent = (trigger.total_sent or 0) + 1
                 db.commit()
-
-                # --- SINCRONIZAR COM O CHAT LOCAL ---
-                try:
-                    from rabbitmq_client import rabbitmq
-                    from datetime import datetime, timezone
-                    
-                    clean_phone = "".join(filter(str.isdigit, str(contact_phone)))
-                    if clean_phone:
-                        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-                        
-                        # Buscar conversa local
-                        chat_convo = db.query(models.ChatConversation).filter(
-                            models.ChatConversation.client_id == trigger.client_id,
-                            models.ChatConversation.phone.like(f"%{suffix}")
-                        ).first()
-                        
-                        if not chat_convo:
-                            chat_convo = models.ChatConversation(
-                                client_id=trigger.client_id,
-                                phone=clean_phone,
-                                contact_name=trigger.contact_name or clean_phone,
-                                status="open",
-                                unread_count=0
-                            )
-                            db.add(chat_convo)
-                            db.flush()
-                        
-                        # Registrar a mensagem do template
-                        tpl_media_url = None
-                        if components:
-                            for comp in components:
-                                if str(comp.get("type", "")).lower() == "header":
-                                    params = comp.get("parameters", [])
-                                    for param in params:
-                                        param_type = str(param.get("type", "")).lower()
-                                        if param_type in ["image", "video", "document"]:
-                                            media_data = param.get(param_type, {})
-                                            if isinstance(media_data, dict):
-                                                tpl_media_url = media_data.get("link") or media_data.get("url")
-
-                        chat_msg = models.ChatMessage(
-                            conversation_id=chat_convo.id,
-                            sender_type="user",
-                            message_type="template",
-                            content=content_val,
-                            wa_message_id=wamid,
-                            media_url=tpl_media_url
-                        )
-                        
-                        try:
-                            tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
-                                models.WhatsAppTemplateCache.name == template_name,
-                                models.WhatsAppTemplateCache.client_id == trigger.client_id
-                            ).first()
-                            if tpl_cache:
-                                meta = {}
-                                if tpl_cache.components:
-                                    header_comp = next((c for c in tpl_cache.components if c.get("type") == "HEADER"), None)
-                                    if header_comp:
-                                        meta["header_format"] = header_comp.get("format")
-                                        if header_comp.get("format") in ["IMAGE", "VIDEO", "DOCUMENT"]:
-                                            meta["media_type"] = header_comp.get("format").lower()
-                                    btn_comp = next((c for c in tpl_cache.components if c.get("type") == "BUTTONS"), None)
-                                    if btn_comp and btn_comp.get("buttons"):
-                                        meta["buttons"] = [b.get("text") for b in btn_comp["buttons"]]
-                                chat_msg.meta_data = meta
-                        except Exception:
-                            pass
-                            
-                        db.add(chat_msg)
-                        
-                        # Atualiza a conversa
-                        chat_convo.last_message_content = content_val
-                        chat_convo.unread_count = 0
-                        chat_convo.last_message_at = datetime.now(timezone.utc)
-                        db.commit()
-                        
-                        # Broadcast via WebSocket
-                        payload_ws = {
-                            "id": chat_msg.id,
-                            "conversation_id": chat_msg.conversation_id,
-                            "sender_type": chat_msg.sender_type,
-                            "message_type": chat_msg.message_type,
-                            "content": chat_msg.content,
-                            "media_url": chat_msg.media_url,
-                            "meta_data": chat_msg.meta_data,
-                            "timestamp": chat_msg.timestamp.isoformat() if chat_msg.timestamp else datetime.now(timezone.utc).isoformat(),
-                            "wa_message_id": chat_msg.wa_message_id,
-                            "client_id": trigger.client_id
-                        }
-                        await rabbitmq.publish_event("new_message", payload_ws)
-                except Exception as e_local:
-                    logger.error(f"❌ [CHAT-LOCAL] Erro ao sincronizar template localmente: {e_local}")
 
                 # Se não for envio em lote, aguarda sincronização de entrega para validar a porta Success/Fail
                 if not trigger.is_bulk:

@@ -283,11 +283,27 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                             if not content:
                                 content = f"[Template: {template_name}]"
                         
+                        tpl_media_url = None
+                        if meta.get("components"):
+                            for comp in meta["components"]:
+                                if str(comp.get("type", "")).lower() == "header":
+                                    params = comp.get("parameters", [])
+                                    for param in params:
+                                        param_type = str(param.get("type", "")).lower()
+                                        if param_type in ["image", "video", "document"]:
+                                            media_data = param.get(param_type, {})
+                                            if isinstance(media_data, dict):
+                                                tpl_media_url = media_data.get("link") or media_data.get("url")
+
+                        vars_dict = dict(meta.get("vars", {}))
+                        if tpl_media_url:
+                            vars_dict["var5"] = tpl_media_url
+
                         msg_status = models.MessageStatus(
                             trigger_id=trigger_id, message_id=message_id, phone_number=meta["phone"],
                             contact_name=meta.get("name") or "",
                             status='sent', message_type=msg_type, content=content, template_name=template_name,
-                            **meta["vars"]
+                            **vars_dict
                         )
                         db_msg.add(msg_status)
                         db_msg.commit()

@@ -7,7 +7,15 @@ import uuid
 @pytest.fixture
 def mock_db():
     with patch("routers.webhooks_public.SessionLocal") as mock:
-        yield mock()
+        db_instance = mock()
+        db_instance.reset_mock()
+        # Garante que side_effect e return_value do first sejam limpos
+        try:
+            db_instance.query.return_value.filter.return_value.first.side_effect = None
+            db_instance.query.return_value.filter.return_value.first.return_value = None
+        except Exception:
+            pass
+        yield db_instance
 
 @pytest.fixture
 def mock_rabbitmq():
@@ -327,4 +335,168 @@ async def test_webhook_product_filtering(mock_db, mock_rabbitmq):
     # mock_db query foi chamada com product_name == "Curso de Violão"
     # O filtro por product_name foi executado na primeira tentativa de busca de mapeamento
     # O backend retornou sucesso e o mapeamento específico mock_mapping_specific seria o correto
+
+
+@pytest.mark.asyncio
+async def test_webhook_deduplication_60s(mock_db):
+    """
+    Valida que webhooks concorrentes (dentro de 60 segundos) do mesmo contato e status
+    são deduplicados, incrementando duplicate_count no original e ignorando redundantes.
+    """
+    from routers.webhooks_public import GLOBAL_DEDUPLICATION_LOCKS
+    GLOBAL_DEDUPLICATION_LOCKS.clear()
+    mock_db.query = MagicMock()
+    mock_db.reset_mock()
+    
+    integration_id = uuid.uuid4()
+    
+    mock_integration = MagicMock()
+    mock_integration.id = integration_id
+    mock_integration.platform = "kiwify"
+    mock_integration.status = "active"
+    mock_integration.client_id = 1
+    mock_integration.name = "Kiwify Test"
+    mock_integration.custom_fields_mapping = None
+
+    mock_mapping = MagicMock()
+    mock_mapping.event_type = "compra_aprovada"
+    mock_mapping.is_active = True
+    mock_mapping.product_name = None
+    mock_mapping.manychat_active = False
+    mock_mapping.manychat_name = None
+    mock_mapping.chatwoot_label = []
+    mock_mapping.template_name = "test_template"
+    mock_mapping.delay_minutes = 0
+    mock_mapping.delay_seconds = 0
+    mock_mapping.variables_mapping = None
+    mock_mapping.cancel_events = None
+    mock_mapping.private_note = None
+    mock_mapping.template_id = None
+
+    # Configura o add do db para definir um id
+    def mock_add(obj, *args, **kwargs):
+        obj.id = 12345
+    mock_db.add.side_effect = mock_add
+
+    # Primeiro Envio (Cria histórico original)
+    mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_integration, # Identify Integration
+        mock_mapping      # Mapping
+    ]
+    
+    payload_body1 = b'{"order_status": "paid", "Customer": {"full_name": "Dedup User", "mobile": "5511999998888"}, "transaction_id": "tx_123"}'
+    mock_request1 = MagicMock()
+    mock_request1.method = "POST"
+    mock_request1.body = AsyncMock(return_value=payload_body1)
+    
+    bg_tasks = MagicMock()
+    
+    with patch("routers.webhooks_public.process_webhook_automation"), \
+         patch("routers.webhooks_public.upsert_webhook_lead"):
+        response1 = await receive_external_webhook(
+            integration_uuid=str(integration_id),
+            request=mock_request1,
+            background_tasks=bg_tasks,
+            db=mock_db
+        )
+        
+    assert response1.get("status") == "success", f"Response: {response1}"
+    history_id = response1.get("history_id")
+    assert history_id == 12345
+    
+    # Simula o registro original no banco
+    original_history = MagicMock()
+    original_history.id = history_id
+    original_history.duplicate_count = 0
+    
+    # Segundo Envio (Duplicado dentro da janela de 60s)
+    mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_integration, # Identify Integration
+        original_history  # Retornado ao buscar o histórico original para incrementar
+    ]
+    
+    payload_body2 = b'{"order_status": "paid", "Customer": {"full_name": "Dedup User", "mobile": "5511999998888"}, "transaction_id": "tx_456"}'
+    mock_request2 = MagicMock()
+    mock_request2.method = "POST"
+    mock_request2.body = AsyncMock(return_value=payload_body2) # mesmo contato, mas transação diferente -> cai na dedup de contato de 60s
+    
+    with patch("routers.webhooks_public.process_webhook_automation"), \
+         patch("routers.webhooks_public.upsert_webhook_lead"):
+        response2 = await receive_external_webhook(
+            integration_uuid=str(integration_id),
+            request=mock_request2,
+            background_tasks=bg_tasks,
+            db=mock_db
+        )
+        
+    assert response2.get("status") == "ignored"
+    assert response2.get("reason") == "duplicate_event_lock"
+    assert original_history.duplicate_count == 1
+
+
+@pytest.mark.asyncio
+async def test_webhook_sync_all_deduplication_retroactive(mock_db):
+    """
+    Valida que ao chamar o Sincronizar Tudo (sync_all_webhook_history)
+    históricos duplicados dentro de 60s são devidamente unificados e os excedentes deletados.
+    """
+    mock_db.query = MagicMock()
+    mock_db.reset_mock()
+    from routers.webhooks.history import sync_all_webhook_history
+    from datetime import datetime, timedelta, timezone
+    
+    integration_id = uuid.uuid4()
+    
+    mock_integration = MagicMock()
+    mock_integration.id = integration_id
+    mock_integration.platform = "kiwify"
+    mock_integration.client_id = 1
+    mock_integration.name = "Kiwify Sync Test"
+    
+    # Histórico 1 (Original)
+    h1 = MagicMock()
+    h1.id = 1001
+    h1.integration_id = integration_id
+    h1.payload = {"order_status": "paid", "Customer": {"mobile": "5511999997777"}}
+    h1.event_type = "compra_aprovada"
+    h1.created_at = datetime.now(timezone.utc) - timedelta(seconds=120)
+    h1.duplicate_count = 0
+    h1.processed_data = {}
+    h1.status = "processed"
+    h1.error_message = None
+    
+    # Histórico 2 (Duplicado a 10s do h1)
+    h2 = MagicMock()
+    h2.id = 1002
+    h2.integration_id = integration_id
+    h2.payload = {"order_status": "paid", "Customer": {"mobile": "5511999997777"}}
+    h2.event_type = "compra_aprovada"
+    h2.created_at = h1.created_at + timedelta(seconds=10)
+    h2.duplicate_count = 0
+    h2.processed_data = {}
+    h2.status = "ignored"
+    h2.error_message = None
+
+    # Mocks para queries do banco
+    mock_db.query.return_value.filter.return_value.first.return_value = mock_integration
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [h1, h2]
+    mock_db.query.return_value.filter.return_value.all.return_value = [] # mappings
+    
+    bg_tasks = MagicMock()
+    current_user = MagicMock()
+    
+    with patch("routers.webhooks.history.upsert_webhook_lead"), \
+         patch("routers.webhooks.history.logger"):
+        await sync_all_webhook_history(
+            integration_id=str(integration_id),
+            background_tasks=bg_tasks,
+            x_client_id=1,
+            db=mock_db,
+            current_user=current_user
+        )
+        
+    # h1 deve ter herdado a duplicidade de h2
+    assert h1.duplicate_count == 1
+    # h2 deve ter sido deletado
+    mock_db.delete.assert_called_once_with(h2)
 

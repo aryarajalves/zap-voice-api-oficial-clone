@@ -256,7 +256,18 @@ def test_webhook_automation_duplicity_prevention(db, client_obj):
     db.add(pre_existing_st)
     db.commit()
     
-    # 4. Criar Novo Histórico de Webhook para processamento
+    # 4. Criar WebhookHistory original (que de fato disparou o pre_existing_st)
+    first_history = models.WebhookHistory(
+        integration_id=integration.id,
+        event_type="compra_aprovada",
+        payload={"phone": "5511999991234", "name": "Tony Stark"},
+        status="processed"
+    )
+    db.add(first_history)
+    db.commit()
+    db.refresh(first_history)
+
+    # 5. Criar Novo Histórico de Webhook para processamento (o duplicado)
     history = models.WebhookHistory(
         integration_id=integration.id,
         event_type="compra_aprovada",
@@ -290,12 +301,14 @@ def test_webhook_automation_duplicity_prevention(db, client_obj):
             history_id=history.id
         ))
         
-    db.refresh(history)
-    
     # Validações
-    # O histórico deve ser ignorado devido à duplicidade
-    assert history.status == "ignored"
-    assert "Disparo duplicado evitado" in history.error_message
+    # O histórico duplicado (history) foi deletado pelo processador de duplicidade
+    history_in_db = db.query(models.WebhookHistory).filter(models.WebhookHistory.id == history.id).first()
+    assert history_in_db is None
+    
+    # O histórico original (first_history) deve ter o duplicate_count incrementado
+    db.refresh(first_history)
+    assert first_history.duplicate_count == 1
     
     # Contar total de ScheduledTriggers para este contato e template. Deve continuar sendo apenas 1 (o pré-existente)
     total_triggers = db.query(models.ScheduledTrigger).filter(

@@ -161,4 +161,47 @@ describe('useWebhookLeads Hook', () => {
     expect(result.current.customDateTo).toBe('');
     expect(result.current.page).toBe(0);
   });
+
+  it('reseta page ao mudar a busca (debounce) ou outros filtros', async () => {
+    const mockLeads = { items: [], total: 0 };
+    const mockFilters = { tags: [] };
+
+    fetchWithAuth.mockImplementation(async (url) => {
+      if (url.includes('/leads/filters')) {
+        return { ok: true, json: async () => mockFilters };
+      }
+      return { ok: true, json: async () => mockLeads };
+    });
+
+    const { result } = renderHook(() => useWebhookLeads(mockClient));
+    await vi.waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+
+    // Caso 1: Testar com busca
+    act(() => {
+      result.current.setPage(3);
+    });
+    expect(result.current.page).toBe(3);
+
+    act(() => {
+      result.current.setSearch('novo_termo');
+    });
+
+    // Como a busca tem debounce, aguardamos o timer de 600ms rodar
+    await vi.waitFor(() => {
+      expect(result.current.page).toBe(0);
+    }, { timeout: 1000 });
+
+    // Caso 2: Testar com outro filtro (ex: eventType)
+    act(() => {
+      result.current.setPage(2);
+    });
+    expect(result.current.page).toBe(2);
+
+    act(() => {
+      result.current.setEventType('purchase');
+    });
+
+    // O reset de outros filtros é imediato pelo useEffect
+    expect(result.current.page).toBe(0);
+  });
 });

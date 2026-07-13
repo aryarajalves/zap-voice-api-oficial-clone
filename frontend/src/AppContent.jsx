@@ -36,6 +36,7 @@ import TutorialPage from './pages/TutorialPage';
 import PageUnderConstruction from './components/PageUnderConstruction';
 import LogViewer from './pages/LogViewer';
 import ChatConversations from './pages/ChatConversations';
+import HumanAgents from './pages/HumanAgents';
 
 
 // Maps pages_status key → page display name (for under-construction screen)
@@ -124,6 +125,7 @@ export default function AppContent() {
                     {logic.currentView === 'tutorial' && 'Tutorial API Oficial'}
                     {logic.currentView === 'log_viewer' && 'Visualizador de Logs'}
                     {logic.currentView === 'chat_conversations' && 'Atendimento'}
+                    {logic.currentView === 'human_agents' && 'Atendente humano'}
                   </h1>
 
                   
@@ -221,6 +223,18 @@ export default function AppContent() {
               )}
               {logic.currentView === 'tutorial' && <TutorialPage />}
               {logic.currentView === 'log_viewer' && <LogViewer />}
+              {logic.currentView === 'human_agents' && (
+                <HumanAgents
+                  onNavigateToChat={(convo) => {
+                    logic.setCurrentView('chat_conversations');
+                    // Aguarda renderização para selecionar a conversa
+                    setTimeout(() => {
+                      const event = new CustomEvent('select-chat-convo', { detail: convo });
+                      window.dispatchEvent(event);
+                    }, 100);
+                  }}
+                />
+              )}
 
               
               {logic.currentView === 'bulk_sender' && (
@@ -342,7 +356,11 @@ export default function AppContent() {
         <div className="fixed inset-0 z-[100] flex flex-col bg-[#0f172a] animate-in fade-in duration-300">
           <ChatConversations
             onClose={() => logic.handleViewChange('bulk_sender')}
-            onNavigate={(view) => logic.handleViewChange(view)}
+            onNavigate={(view) => {
+              // webhook_integrations é mapeado para a view 'integrations' do sistema
+              const viewMap = { webhook_integrations: 'integrations' };
+              logic.handleViewChange(viewMap[view] || view);
+            }}
           />
         </div>
       )}

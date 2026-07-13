@@ -26,7 +26,10 @@ export const INITIAL_FORM_STATE = {
     INSTAGRAM_ACCESS_TOKEN: '',
     INSTAGRAM_WEBHOOK_SLUG: '',
     WEBHOOK_BASE_URL: '',
-    CHAT_MESSAGES_WEBHOOK_URL: ''
+    CHAT_MESSAGES_WEBHOOK_URL: '',
+    WA_HAS_AI_AGENT: false,
+    WA_HUMAN_LABEL: '',
+    WA_ROBO_LABEL: ''
 };
 
 export function useGeneralSettings(activeClient, refreshClients) {

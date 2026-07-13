@@ -64,20 +64,44 @@ async def upload_file(
             detail=f"Extensão '{ext}' não permitida. Aceitamos formatos de imagem, vídeo, áudio e documentos."
         )
 
-    # Validar Tamanho (Máximo 16MB para WhatsApp)
-    MAX_SIZE = 16 * 1024 * 1024 # 16MB
+    # Validar Tamanho por Tipo de Arquivo — limites da API Oficial do WhatsApp
+    LIMITS_BY_TYPE = {
+        "image":    5  * 1024 * 1024,  # 5 MB
+        "video":    16 * 1024 * 1024,  # 16 MB
+        "audio":    16 * 1024 * 1024,  # 16 MB
+        "document": 100 * 1024 * 1024, # 100 MB
+    }
+    LIMIT_LABELS = {
+        "image": "5 MB", "video": "16 MB", "audio": "16 MB", "document": "100 MB",
+    }
+
+    # Detectar tipo pelo content-type
+    ct = file.content_type or ""
+    if ct.startswith("image/"):
+        detected_type = "image"
+    elif ct.startswith("video/"):
+        detected_type = "video"
+    elif ct.startswith("audio/"):
+        detected_type = "audio"
+    else:
+        detected_type = "document"
+
+    max_size = LIMITS_BY_TYPE[detected_type]
     file.file.seek(0, os.SEEK_END)
     file_size = file.file.tell()
     file.file.seek(0)
-    
-    logger.info(f"⚖️ [UPLOAD_SIZE] Arquivo: {file.filename} | Tamanho: {file_size / 1024 / 1024:.2f} MB")
 
-    if file_size > MAX_SIZE:
-        logger.warning(f"⚠️ [UPLOAD_REJECTED] Arquivo muito grande: {file_size / 1024 / 1024:.2f} MB")
+    logger.info(f"⚖️ [UPLOAD_SIZE] Arquivo: {file.filename} | Tamanho: {file_size / 1024 / 1024:.2f} MB | Tipo: {detected_type}")
+
+    if file_size > max_size:
+        limit_label = LIMIT_LABELS[detected_type]
+        file_mb = f"{file_size / 1024 / 1024:.1f}"
+        logger.warning(f"⚠️ [UPLOAD_REJECTED] Arquivo muito grande: {file_mb} MB (limite para {detected_type}: {limit_label})")
         raise HTTPException(
             status_code=400,
-            detail=f"Arquivo muito grande ({file_size / 1024 / 1024:.2f}MB). O limite do WhatsApp é de 16MB."
+            detail=f"Arquivo muito grande ({file_mb} MB). O WhatsApp aceita {detected_type == 'image' and 'imagens' or detected_type == 'video' and 'vídeos' or detected_type == 'audio' and 'áudios' or 'documentos'} de até {limit_label}."
         )
+
 
     # Gerar nome único
     unique_name = f"{uuid.uuid4()}{ext}"

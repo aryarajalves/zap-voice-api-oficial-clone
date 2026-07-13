@@ -28,6 +28,8 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 07/07/2026 | Suporte à fila de Atendimento Humano | `chat_conversations` | `human_handover_at` | `backend/scripts/add_human_handover_column.py` |
+| 06/07/2026 | Consolidação de Duplicidades no Histórico | `webhook_history` | `duplicate_count` | `backend/scripts/add_duplicate_count_to_history.py` |
 | 19/06/2026 | Pasta de Backup customizada no S3 | `backup_config` | `s3_folder` | `backend/migrations/add_s3_folder_to_backup_config.py` |
 | 19/06/2026 | Suporte a agrupamento de múltiplos clientes sob Projetos compartilhado de Leads | `projects`, `clients`, `webhook_leads`, `contact_import_history` | `project_id`, `imported_by_client_id` | `scripts/database/migrate_add_projects.py` |
 | 17/06/2026 | Histórico de Importação de Contatos | `contact_import_history` | Tabela nova completa | `backend/scripts/database/create_import_history_table.py` |
@@ -74,6 +76,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 29/06/2026 | Janela de 24 horas no Chat Local | `chat_conversations` | `last_contact_message_at` | `backend/add_last_contact_message_at.py` |
 | 29/06/2026 | Chaves de API (Tokens de API) | `api_keys` | Tabela nova completa | `backend/scripts/create_api_keys_table.py` |
 | 30/06/2026 | Gestão de Etiquetas/Marcadores de Chat | `chat_labels` | Tabela nova completa | `backend/scripts/create_chat_labels_table.py` |
+| 09/07/2026 | Índice Composto para Paginação de Chat | `chat_messages` | Índice `idx_chat_messages_convo_time` nas colunas `(conversation_id, timestamp)` | `backend/add_composite_chat_index.py` |
 
 
 

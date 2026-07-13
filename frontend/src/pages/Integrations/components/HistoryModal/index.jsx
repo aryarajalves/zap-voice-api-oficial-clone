@@ -41,6 +41,7 @@ const HistoryModal = ({
   fetchHistory,
   bulkResendProgress,
   setBulkResendProgress,
+  handleUpdateCustomFieldsMapping,
 }) => {
   const [stressTestFilter, setStressTestFilter] = React.useState(false);
 
@@ -169,6 +170,8 @@ const HistoryModal = ({
                   setMaximizedJson={setMaximizedJson}
                   handleSyncHistory={handleSyncHistory}
                   isSyncing={isSyncing}
+                  integration={integration}
+                  handleUpdateCustomFieldsMapping={handleUpdateCustomFieldsMapping}
                 />
               ))}
 

@@ -193,8 +193,33 @@ async def register_bulk_send(
     db.refresh(trigger)
 
     if message_ids:
+        template_body = None
+        if template_name:
+            try:
+                tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+                    models.WhatsAppTemplateCache.name == template_name,
+                    models.WhatsAppTemplateCache.client_id == x_client_id
+                ).first()
+                if tpl_cache:
+                    template_body = tpl_cache.body
+            except Exception as e_cache:
+                from core.logger import setup_logger
+                setup_logger("Routers.Triggers.Bulk").error(f"Erro ao buscar template no cache: {e_cache}")
+
         for msg in message_ids:
-            ms = models.MessageStatus(trigger_id=trigger.id, message_id=msg.get("message_id"), phone_number=msg.get("phone"), status="sent")
+            raw_msg_id = msg.get("message_id")
+            clean_msg_id = raw_msg_id.replace("wamid.", "") if raw_msg_id else raw_msg_id
+            content_val = template_body or (f"[Template: {template_name}]" if template_name else None)
+            
+            ms = models.MessageStatus(
+                trigger_id=trigger.id,
+                message_id=clean_msg_id,
+                phone_number=msg.get("phone"),
+                status="sent",
+                message_type='TEMPLATE' if template_name else None,
+                template_name=template_name,
+                content=content_val
+            )
             db.add(ms)
             
     failed_numbers = payload.get("failed_numbers", [])

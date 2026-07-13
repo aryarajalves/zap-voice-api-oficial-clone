@@ -79,6 +79,52 @@ def test_list_leads_filter_by_tag(db: Session, mock_user: models.User):
     )
     assert result["total"] == 0
 
+def test_list_leads_exact_tag_matching(db: Session, mock_user: models.User):
+    # 1. Create leads with similar/nested tag names
+    lead1 = models.WebhookLead(
+        client_id=1,
+        name="Lead Exact",
+        phone="5511999999993",
+        tags="aryaraj, assiny-lead-checkout-populado"
+    )
+    lead2 = models.WebhookLead(
+        client_id=1,
+        name="Lead Nested",
+        phone="5511999999994",
+        tags="teste_aryaraj, other_tag"
+    )
+    db.add_all([lead1, lead2])
+    db.commit()
+
+    # 2. Filtering by 'aryaraj' should return only Lead Exact
+    result = list_leads(
+        tag="aryaraj",
+        x_client_id=1,
+        db=db,
+        current_user=mock_user
+    )
+    assert result["total"] == 1
+    assert result["items"][0].name == "Lead Exact"
+
+    # 3. Filtering by 'teste_aryaraj' should return only Lead Nested
+    result = list_leads(
+        tag="teste_aryaraj",
+        x_client_id=1,
+        db=db,
+        current_user=mock_user
+    )
+    assert result["total"] == 1
+    assert result["items"][0].name == "Lead Nested"
+
+    # 4. Filtering by substring 'ary' should return nothing
+    result = list_leads(
+        tag="ary",
+        x_client_id=1,
+        db=db,
+        current_user=mock_user
+    )
+    assert result["total"] == 0
+
 def test_get_lead_filters_includes_tags(db: Session, mock_user: models.User):
     # Create leads with tags
     lead1 = models.WebhookLead(client_id=1, name="L1", phone="1", tags="alpha, beta")

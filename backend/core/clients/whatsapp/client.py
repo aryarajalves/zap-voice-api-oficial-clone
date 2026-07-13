@@ -268,10 +268,23 @@ class WhatsAppClient:
                     continue
                 template_id = int(t["id"])
 
-                # Busca primeiro pelo ID exato
+                # Busca primeiro pelo ID exato e pelo client_id
                 existing = db.query(WhatsAppTemplateCache).filter(
-                    WhatsAppTemplateCache.id == template_id
+                    WhatsAppTemplateCache.id == template_id,
+                    WhatsAppTemplateCache.client_id == self.client_id
                 ).first()
+
+                # Impedir que o mesmo template da Meta de teste (compartilhado em dev)
+                # seja cadastrado no cliente ativo se ele já pertence a outro cliente ativo no banco local
+                if not existing:
+                    belongs_to_other = db.query(WhatsAppTemplateCache).filter(
+                        WhatsAppTemplateCache.id == template_id,
+                        WhatsAppTemplateCache.client_id != self.client_id
+                    ).first()
+                    if belongs_to_other:
+                        logger.info(f"🚫 [TEMPLATE-SYNC] Ignorando template '{t['name']}' para o Client {self.client_id} pois ele pertence ao Client {belongs_to_other.client_id}")
+                        incoming_ids.add(template_id)
+                        continue
 
                 # Se não encontrou pelo ID, busca pela constraint única (client_id, name, language)
                 # Isso cobre o caso onde a Meta regenerou o ID do mesmo template
@@ -283,12 +296,14 @@ class WhatsAppClient:
                     ).first()
 
                 if existing:
-                    # Atualiza todos os campos, incluindo o ID caso tenha mudado na Meta
+                    # Atualiza todos os campos, incluindo o ID caso tenha mudado na Meta e o client_id
                     existing.id = template_id
+                    existing.client_id = self.client_id
                     existing.name = t["name"]
                     existing.language = t["language"]
                     existing.body = t["body_text"]
                     existing.components = t["components"]
+                    existing.category = t.get("category", "MARKETING")
                 else:
                     db.add(WhatsAppTemplateCache(
                         id=template_id,
@@ -297,6 +312,7 @@ class WhatsAppClient:
                         language=t["language"],
                         body=t["body_text"],
                         components=t["components"],
+                        category=t.get("category", "MARKETING"),
                         is_archived=False,
                         is_pinned=False
                     ))

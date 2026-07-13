@@ -97,6 +97,15 @@ async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, emai
         "error": None
     }
 
+    clean_phone_digits = "".join(filter(str.isdigit, str(phone or "")))
+    if not clean_phone_digits:
+        logger.warning(f"Sincronização do ManyChat abortada para o cliente {client_id}: Telefone ausente ou inválido.")
+        result_status["status"] = "failed"
+        result_status["contact"]["status"] = "failed"
+        result_status["tag"]["status"] = "failed"
+        result_status["error"] = "Erro: Telefone ausente ou inválido no webhook recebido"
+        return result_status
+
     if not api_key or api_key == "seu_token_aqui":
         logger.warning(f"ManyChat API Key não configurada para o cliente {client_id}")
         result_status["status"] = "skipped"
@@ -196,9 +205,39 @@ async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, emai
                     
                     extended_variants = [p for p in phone_variants] + [f"+{p}" for p in phone_variants]
 
+                    # Buscar ID do campo customizado 'telefone_whatsapp'
+                    cf_id = None
+                    try:
+                        cf_resp = await client.get("https://api.manychat.com/fb/page/getCustomFields", headers=headers)
+                        if cf_resp.status_code == 200:
+                            custom_fields = cf_resp.json().get("data", [])
+                            for cf in custom_fields:
+                                if cf.get("name", "").lower() == "telefone_whatsapp":
+                                    cf_id = cf.get("id")
+                                    logger.info(f"MANYCHAT | Campo customizado 'telefone_whatsapp' encontrado com ID: {cf_id}")
+                                    break
+                    except Exception as cf_err:
+                        logger.error(f"Erro ao buscar campos customizados no ManyChat: {cf_err}")
+
                     # A. Tentar busca direta por múltiplos campos (Fallback rápido)
                     search_targets = extended_variants + [clean_phone_digits[2:]]
                     for p_var in search_targets:
+                        # 0. Tenta pelo campo customizado 'telefone_whatsapp' se localizado
+                        if cf_id:
+                            clean_p_var = p_var.replace("+", "")
+                            find_url_cf = f"https://api.manychat.com/fb/subscriber/findByCustomField?field_id={cf_id}&field_value={clean_p_var}"
+                            try:
+                                f_resp_cf = await client.get(find_url_cf, headers=headers)
+                                if f_resp_cf.status_code == 200:
+                                    subs_cf = f_resp_cf.json().get("data", [])
+                                    if subs_cf:
+                                        subscriber_id = subs_cf[0].get("id")
+                                        located_via_phone = True
+                                        logger.info(f"ID {subscriber_id} localizado via custom field 'telefone_whatsapp' ({clean_p_var})")
+                                        break
+                            except Exception as cf_search_err:
+                                logger.error(f"Erro ao buscar por custom field no ManyChat: {cf_search_err}")
+
                         # 1. Tenta pelo campo 'phone' padrão
                         find_url = f"https://api.manychat.com/fb/subscriber/findBySystemField?phone={p_var.replace('+', '%2B')}"
                         f_resp = await client.get(find_url, headers=headers)

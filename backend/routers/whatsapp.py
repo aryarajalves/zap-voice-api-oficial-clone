@@ -146,7 +146,7 @@ async def list_templates(
                 "id": str(ct.id),
                 "name": ct.name,
                 "language": ct.language,
-                "category": "MARKETING",
+                "category": ct.category or "MARKETING",
                 "status": "APPROVED",
                 "body_text": ct.body,
                 "components": ct.components or [],
@@ -193,6 +193,12 @@ async def list_templates(
         local_caches = db.query(models.WhatsAppTemplateCache).filter(
             models.WhatsAppTemplateCache.client_id == target_client_id
         ).all()
+        
+        # Filtro inteligente para exibir apenas templates associados ao cliente ativo (se houver cache cadastrado)
+        # nas telas de uso de templates (onde include_archived é False)
+        if not include_archived and local_caches:
+            local_cache_names = {lc.name for lc in local_caches}
+            templates = [t for t in templates if t.get("name") in local_cache_names]
         
         tags_map = {}
         pinned_map = {}
@@ -283,11 +289,12 @@ async def archive_template(
         if db_tpl.is_pinned:
             raise HTTPException(status_code=400, detail="Não é possível arquivar um template que está fixado no topo.")
             
-    # Verificar se o template está sendo utilizado em alguma integração de Webhook
+    # Verificar se o template está sendo utilizado em alguma integração de Webhook do mesmo cliente
     has_webhook = db.query(models.WebhookEventMapping).join(
         models.WebhookIntegration,
         models.WebhookEventMapping.integration_id == models.WebhookIntegration.id
     ).filter(
+        models.WebhookIntegration.client_id == target_client_id,
         (models.WebhookEventMapping.template_name == template_name) | 
         (models.WebhookEventMapping.followup_template_name == template_name)
     ).first()
@@ -300,8 +307,9 @@ async def archive_template(
             detail="Não é possível arquivar este template pois ele está sendo utilizado em uma ou mais integrações de webhook."
         )
 
-    # Verificar se o template está sendo utilizado em algum agendamento recorrente
+    # Verificar se o template está sendo utilizado em algum agendamento recorrente do mesmo cliente
     has_recurring = db.query(models.RecurringTrigger).filter(
+        models.RecurringTrigger.client_id == target_client_id,
         models.RecurringTrigger.template_name == template_name
     ).first()
     
@@ -700,11 +708,37 @@ async def send_template(
                     aggregator.total_sent = (aggregator.total_sent or 0) + 1
                     aggregator.updated_at = datetime.now(timezone.utc)
                     
+                    # Buscar corpo do template no cache local
+                    template_content = f"[Template: {template}]"
+                    try:
+                        tpl_cache = db_log.query(models.WhatsAppTemplateCache).filter(
+                            models.WhatsAppTemplateCache.client_id == target_client_id,
+                            models.WhatsAppTemplateCache.name == template
+                        ).first()
+                        if tpl_cache and tpl_cache.body:
+                            template_content = tpl_cache.body
+                            try:
+                                body_params = []
+                                for comp in (components or []):
+                                    if comp.get("type") == "body":
+                                        for param in comp.get("parameters", []):
+                                            if param.get("type") == "text":
+                                                body_params.append(str(param.get("text")))
+                                for idx, val in enumerate(body_params):
+                                    template_content = template_content.replace(f"{{{{{idx+1}}}}}", val)
+                            except Exception as e_replace:
+                                logger.error(f"Erro ao substituir variáveis do template no log: {e_replace}")
+                    except Exception as e_cache:
+                        logger.error(f"Erro ao buscar template cache: {e_cache}")
+
                     msg_status = models.MessageStatus(
                         trigger_id=aggregator.id,
-                        message_id=msg_id,
+                        message_id=msg_id.replace("wamid.", "") if msg_id else msg_id,
                         phone_number=clean_phone,
                         status='sent',
+                        message_type='TEMPLATE',
+                        template_name=template,
+                        content=template_content,
                         updated_at=datetime.now(timezone.utc)
                     )
                     db_log.add(msg_status)

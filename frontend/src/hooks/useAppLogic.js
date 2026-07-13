@@ -73,7 +73,8 @@ export function useAppLogic() {
                 setAppBranding({
                     name: data.APP_NAME || 'ZapVoice',
                     logo: data.APP_LOGO || null,
-                    logoSize: data.APP_LOGO_SIZE || 'medium'
+                    logoSize: data.APP_LOGO_SIZE || 'medium',
+                    WA_HAS_AI_AGENT: data.WA_HAS_AI_AGENT
                 });
             }
         } catch (err) {

@@ -151,16 +151,19 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         result['name'] = (
             get_val(["name"]) or get_val(["first_name"]) or get_val(["full_name"]) or 
             get_val(["nome"]) or get_val(["buyer_name"]) or get_val(["customer_name"]) or
+            get_val(["contact_name"]) or
             get_val(["data", "name"]) or get_val(["data", "customer", "name"])
         )
         result['email'] = (
             get_val(["email"]) or get_val(["email_address"]) or 
+            get_val(["contact_email"]) or
             get_val(["data", "email"]) or get_val(["customer", "email"])
         )
         result['phone'] = (
             get_val(["phone"]) or get_val(["telephone"]) or get_val(["cellphone"]) or 
             get_val(["whatsapp"]) or get_val(["phone_number"]) or get_val(["mobile"]) or
             get_val(["celular"]) or get_val(["telefone"]) or
+            get_val(["contact_phone"]) or get_val(["contact_phone_number"]) or
             get_val(["data", "phone"]) or get_val(["customer", "phone"]) or
             get_val(["fields", "whatsapp"]) or get_val(["form", "phone"])
         )
@@ -188,6 +191,8 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             payload.get("phone") or payload.get("phone_number") or payload.get("celular") or 
             payload.get("telefone") or payload.get("mobile") or payload.get("whatsapp") or
             payload.get("Telefone") or payload.get("Celular") or payload.get("Whatsapp") or
+            payload.get("contact_phone") or payload.get("contact_phone_number") or
+            payload.get("contact_whatsapp") or
             payload.get("WhatsApp") or
             payload.get("fields[phone][value]") or payload.get("fields[whatsapp][value]") or
             payload.get("fields[telefone][value]") or payload.get("fields[celular][value]") or
@@ -544,18 +549,47 @@ def extract_nested_custom_fields(payload: dict, mapping: dict) -> dict:
     custom_fields = {}
     if not mapping:
         return custom_fields
-    for field_name, json_path in mapping.items():
-        parts = str(json_path).split('.')
-        curr = payload
-        for p in parts:
-            if isinstance(curr, dict) and p in curr:
-                curr = curr[p]
-            else:
-                curr = None
-                break
-        if curr is not None:
-            custom_fields[field_name] = str(curr)
+    for field_name, json_paths_str in mapping.items():
+        if not json_paths_str:
+            continue
+        # Suporta múltiplos caminhos separados por vírgula como fallback
+        paths = [p.strip() for p in str(json_paths_str).split(',') if p.strip()]
+        for path in paths:
+            parts = path.split('.')
+            curr = payload
+            for p in parts:
+                if isinstance(curr, dict) and p in curr:
+                    curr = curr[p]
+                else:
+                    curr = None
+                    break
+            if curr is not None and str(curr).strip() != "":
+                custom_fields[field_name] = str(curr).strip()
+                break # Usou o primeiro fallback que deu certo, para
     return custom_fields
+
+def apply_custom_mapping_to_parsed_data(payload: dict, parsed_data: dict, custom_fields_mapping: dict) -> dict:
+    """
+    Aplica o mapeamento de campos customizados sobre os dados extraídos por padrão do payload do webhook.
+    Garante suporte a múltiplos fallbacks por campo e substituição robusta das variáveis principais.
+    """
+    final_vars = parsed_data.copy()
+    
+    # Adiciona resolução robusta padrão
+    final_vars["name"] = replace_variables_in_string("{{name}}", payload, parsed_data)
+    final_vars["phone"] = replace_variables_in_string("{{phone}}", payload, parsed_data)
+    final_vars["email"] = replace_variables_in_string("{{email}}", payload, parsed_data)
+
+    if custom_fields_mapping:
+        custom_vars = extract_nested_custom_fields(payload, custom_fields_mapping)
+        final_vars.update(custom_vars)
+        
+        # Sincroniza campos principais se foram mapeados customizados
+        for field in ["name", "phone", "email", "product_name", "price", "payment_method"]:
+            if field in custom_vars:
+                final_vars[field] = custom_vars[field]
+                
+    return final_vars
 
 def replace_variables_in_string(text: str, payload: dict, parsed_data: dict) -> str:
     """

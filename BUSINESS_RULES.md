@@ -126,6 +126,7 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
     - **Resposta**: Ambos. O sistema permitirá selecionar a unidade (minutos ou horas) na interface.
 - [x] [NOVO] Caso a execução seja considerada "atrasada" e siga para o caminho `late`, mas o usuário não tenha conectado nenhum nó a esta porta, o fluxo deve ser encerrado ou seguir pelo caminho `default` como fallback?
     - **Resposta**: Deve ser encerrado (o fluxo de automação é finalizado se a porta `late` não possuir nenhuma conexão).
+- [ ] [NOVO] Ao enviar uma mensagem manual ou por template a partir do Chat Local (ZapVoice), o sistema deve aplicar alguma etiqueta automaticamente ao contato? Se sim, qual etiqueta e sob quais condições?
 
 ## 📋 Histórico de Decisões
 As perguntas iniciais sobre regras de negócio foram todas respondidas e integradas às seções acima. O sistema segue o modelo de isolamento total entre clientes e automação robusta com retentativas configuradas.

@@ -14,6 +14,7 @@ logger = setup_logger("ChatWebhookService")
 # Thread pool ou thread isolada para evitar travar as transações síncronas do DB com requisições HTTP
 def dispatch_webhook_in_thread(url: str, payload: dict, message_id: int):
     def run():
+        import time
         db: Session = SessionLocal()
         try:
             logger.info(f"📤 [CHAT-WEBHOOK] Despachando evento para: {url}")
@@ -40,13 +41,22 @@ def dispatch_webhook_in_thread(url: str, payload: dict, message_id: int):
                     status = "failed"
                 logger.error(f"❌ [CHAT-WEBHOOK] Falha ao despachar webhook para {url}: {http_err}")
 
-            # Atualizar ChatMessage no banco
-            msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id).first()
+            # Esperar o commit da transação principal se necessário (máximo 5 tentativas)
+            msg = None
+            for _ in range(5):
+                msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id).first()
+                if msg:
+                    break
+                time.sleep(0.5)
+                db.rollback() # Limpa o cache da query/transação do SQLite/Postgres para ler o novo estado
+
             if msg:
                 msg.agentflow_webhook_status = status
                 msg.agentflow_webhook_error = error_msg
                 db.commit()
                 logger.info(f"💾 [CHAT-WEBHOOK] Log salvo no banco para a mensagem {message_id}: status={status}")
+            else:
+                logger.warning(f"⚠️ [CHAT-WEBHOOK] Mensagem {message_id} não encontrada no banco após timeout (transação principal não commitada?).")
         except Exception as db_err:
             logger.error(f"❌ [CHAT-WEBHOOK] Erro ao salvar status de log no banco: {db_err}")
         finally:
@@ -62,19 +72,21 @@ def after_message_insert(mapper, connection, target):
     """
     Listener do SQLAlchemy acionado sempre que um ChatMessage é inserido no banco.
     """
-    # Usar uma sessão temporária independente para buscar os relacionamentos e evitar erros de sessão ligada à transação original
-    db: Session = SessionLocal()
+    db = None
+    created_local_db = False
     try:
-        # 1. Buscar a conversa associada para pegar o client_id, telefone e nome
+        # Para obter o lead_id, bsud e a conversa, precisamos de uma sessão
+        from sqlalchemy.orm import Session
+        db = Session.object_session(target)
+        if not db:
+            db = SessionLocal()
+            created_local_db = True
+
+        # Buscar a conversa associada para pegar o client_id, telefone e nome
         convo = db.query(models.ChatConversation).filter(
             models.ChatConversation.id == target.conversation_id
         ).first()
-
         if not convo or not convo.client_id:
-            return
-
-        # Enviar apenas mensagens recebidas do cliente (contact)
-        if target.sender_type != "contact":
             return
 
         # Clique de botão com activate_agent=False → não despachar para o AgentFlow
@@ -107,10 +119,31 @@ def after_message_insert(mapper, connection, target):
         ).first()
         bsud = lead.bsud if lead else None
 
+        # Calcular metadados da janela de 24h
+        window_24h_data = None
+        if convo.last_contact_message_at:
+            from datetime import timedelta
+            last_contact_msg_at = convo.last_contact_message_at
+            if last_contact_msg_at.tzinfo is None:
+                last_contact_msg_at = last_contact_msg_at.replace(tzinfo=timezone.utc)
+
+            expiry = last_contact_msg_at + timedelta(hours=24)
+            now = datetime.now(timezone.utc)
+            remaining = int((expiry - now).total_seconds())
+            if remaining < 0:
+                remaining = 0
+
+            window_24h_data = {
+                "last_contact_message_at": last_contact_msg_at.isoformat(),
+                "expiry": expiry.isoformat(),
+                "remaining_seconds": remaining
+            }
+
         # 4. Montar o Payload rico
         payload = {
             "event": "message.created",
             "client_id": client_id,
+            "window_24h": window_24h_data,
             "message": {
                 "id": target.id,
                 "conversation_id": target.conversation_id,
@@ -120,13 +153,17 @@ def after_message_insert(mapper, connection, target):
                 "media_url": target.media_url,
                 "timestamp": target.timestamp.isoformat() if target.timestamp else datetime.now(timezone.utc).isoformat(),
                 "is_private": getattr(target, 'is_private', False),
-                "metadata": target.meta_data or {}
+                "metadata": {
+                    **(target.meta_data or {}),
+                    "window_24h": window_24h_data
+                }
             },
             "contact": {
                 "phone": convo.phone,
                 "name": convo.contact_name or convo.phone,
                 "bsud": bsud,
-                "labels": convo.labels or []
+                "labels": convo.labels or [],
+                "window_24h": window_24h_data
             }
         }
 
@@ -136,4 +173,5 @@ def after_message_insert(mapper, connection, target):
     except Exception as err:
         logger.error(f"❌ [CHAT-WEBHOOK-LISTENER] Erro ao preparar dados do webhook: {err}")
     finally:
-        db.close()
+        if created_local_db and db:
+            db.close()

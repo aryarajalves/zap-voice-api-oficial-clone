@@ -248,10 +248,12 @@ const LabelsTab = ({ user, activeClient }) => {
                         <span className="text-xs">Carregando marcadores...</span>
                     </div>
                 ) : labels.length === 0 ? (
-                    <div className="text-center py-10 bg-gray-50/30 dark:bg-white/2 p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/5">
-                        <FiTag className="mx-auto text-gray-300 dark:text-gray-600 mb-2" size={24} />
-                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Nenhuma etiqueta cadastrada.</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Utilize o formulário acima para criar.</p>
+                    <div className="text-center py-12 bg-slate-900/40 backdrop-blur-md p-8 rounded-2xl border border-dashed border-white/5 shadow-inner flex flex-col items-center justify-center gap-2">
+                        <div className="w-12 h-12 rounded-2xl bg-green-500/5 flex items-center justify-center border border-green-500/10 mb-2 shadow-lg shadow-green-500/5">
+                            <FiTag className="text-green-400" size={20} />
+                        </div>
+                        <p className="text-xs font-black uppercase text-slate-300 tracking-wider">Nenhum Marcador Criado</p>
+                        <p className="text-[10px] font-bold text-slate-500 max-w-[200px]">Crie o seu primeiro marcador utilizando o painel de cadastro acima.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">

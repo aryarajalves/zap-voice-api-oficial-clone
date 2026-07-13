@@ -478,3 +478,77 @@ def delete_webhook_integration(
             status_code=500,
             detail=f"Erro ao excluir integração do banco de dados: {str(delete_err)}"
         )
+
+@router.patch("/{integration_id}/custom-fields-mapping", summary="Atualizar apenas o mapeamento de campos customizados")
+def update_custom_fields_mapping(
+    integration_id: str,
+    mapping: dict,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    db_integration = db.query(models.WebhookIntegration).filter(
+        models.WebhookIntegration.id == uuid_obj,
+        models.WebhookIntegration.client_id == x_client_id
+    ).first()
+    
+    if not db_integration:
+        raise HTTPException(status_code=404, detail="Integration not found")
+
+    try:
+        db_integration.custom_fields_mapping = mapping
+        db.flush()
+        
+        from services.webhooks_utils import apply_custom_mapping_to_parsed_data, extract_nested_custom_fields, parse_webhook_payload
+        from services.leads import upsert_webhook_lead
+        
+        histories = db.query(models.WebhookHistory).filter(
+            models.WebhookHistory.integration_id == db_integration.id
+        ).all()
+        
+        for history in histories:
+            if not history.payload:
+                continue
+            try:
+                parsed_data = parse_webhook_payload(db_integration.platform, history.payload)
+                final_vars = apply_custom_mapping_to_parsed_data(history.payload, parsed_data, mapping)
+                custom_vars = extract_nested_custom_fields(history.payload, mapping) if mapping else {}
+                
+                # Atualiza processed_data
+                processed_dict = dict(history.processed_data or {})
+                processed_dict.update(final_vars)
+                processed_dict["custom_fields"] = custom_vars
+                processed_dict["name"] = final_vars.get("name")
+                processed_dict["phone"] = final_vars.get("phone")
+                processed_dict["email"] = final_vars.get("email")
+                processed_dict["product_name"] = final_vars.get("product_name")
+                processed_dict["price"] = final_vars.get("price")
+                processed_dict["payment_method"] = final_vars.get("payment_method")
+                
+                history.processed_data = processed_dict
+                
+                # Se o status era erro por falta de telefone e agora tem telefone, resolve!
+                if history.status == "error" and history.error_message and "Telefone" in str(history.error_message) and final_vars.get("phone"):
+                    history.status = "processed"
+                    history.error_message = None
+                
+                # Atualiza na base de contatos (leads) se houver telefone
+                if final_vars.get("phone"):
+                    upsert_webhook_lead(
+                        db, db_integration.client_id, db_integration.platform, final_vars,
+                        event_time=history.created_at, force_time=True, contact_save_fields=None
+                    )
+            except Exception as re_err:
+                logger.error(f"Error reprocessing history {history.id} on mapping update: {re_err}")
+        
+        db.commit()
+        return {"status": "success", "custom_fields_mapping": mapping}
+    except Exception as err:
+        db.rollback()
+        logger.error(f"Error updating custom fields mapping: {err}")
+        raise HTTPException(status_code=500, detail="Erro interno ao salvar mapeamento")

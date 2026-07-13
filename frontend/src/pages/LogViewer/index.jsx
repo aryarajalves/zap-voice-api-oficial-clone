@@ -479,10 +479,21 @@ export default function LogViewer() {
     };
 
     const handleDeleteDetail = (line) => {
+        const sig = getLineSignature(line.raw);
+        const matchCount = parsed.filter(l => getLineSignature(l.raw) === sig).length;
+        const messageNode = matchCount > 1 ? (
+            <span>
+                Apagar esta linha e todas as ocorrências idênticas permanentemente do log (inclusive no servidor)?{' '}
+                <br /><br />
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-400 font-black text-sm">
+                    ⚠️ {matchCount} ocorrências encontradas — todas serão apagadas.
+                </span>
+            </span>
+        ) : 'Apagar esta linha permanentemente do log? Apenas esta ocorrência foi encontrada no log atual.';
         askConfirm({
             title: 'Apagar esta linha',
-            message: 'Apagar esta linha (e todas as ocorrências iguais) permanentemente do log?',
-            confirmText: 'Apagar',
+            message: messageNode,
+            confirmText: matchCount > 1 ? `Apagar ${matchCount} linhas` : 'Apagar',
             isDangerous: true,
             onConfirm: () => deleteLines([line]),
         });

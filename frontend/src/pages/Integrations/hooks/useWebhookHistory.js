@@ -232,6 +232,34 @@ export function useWebhookHistory(activeClient, fetchIntegrations) {
     return false;
   };
 
+  const handleUpdateCustomFieldsMapping = async (integrationId, newMapping) => {
+    const loadingToast = toast.loading('Salvando mapeamento de campos...');
+    try {
+      const res = await fetchWithAuth(
+        `${API_URL}/webhook-integrations/${integrationId}/custom-fields-mapping`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newMapping)
+        },
+        activeClient.id
+      );
+      if (res.ok) {
+        toast.success('Mapeamento salvo com sucesso!', { id: loadingToast });
+        if (fetchIntegrations) fetchIntegrations(true);
+        return true;
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.detail || 'Falha ao salvar mapeamento', { id: loadingToast });
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro de conexão ao salvar mapeamento', { id: loadingToast });
+      return false;
+    }
+  };
+
   return {
     webhookHistory,
     setWebhookHistory,
@@ -261,6 +289,7 @@ export function useWebhookHistory(activeClient, fetchIntegrations) {
     handleExportHistory,
     handleImportHistory,
     handleDeleteHistory,
-    handleSaveJson
+    handleSaveJson,
+    handleUpdateCustomFieldsMapping
   };
 }

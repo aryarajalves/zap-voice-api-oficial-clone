@@ -230,6 +230,19 @@ async def sync_webhook_history(
 
     payload = history.payload
     parsed_data = parse_webhook_payload(integration.platform, payload)
+    from services.webhooks_utils import apply_custom_mapping_to_parsed_data, extract_nested_custom_fields
+    final_vars = apply_custom_mapping_to_parsed_data(payload, parsed_data, integration.custom_fields_mapping)
+    custom_vars = extract_nested_custom_fields(payload, integration.custom_fields_mapping) if integration.custom_fields_mapping else {}
+    
+    # Merge custom mapping outputs to parsed_data dict
+    parsed_data.update(final_vars)
+    parsed_data["custom_fields"] = custom_vars
+    parsed_data["name"] = final_vars.get("name")
+    parsed_data["phone"] = final_vars.get("phone")
+    parsed_data["email"] = final_vars.get("email")
+    parsed_data["product_name"] = final_vars.get("product_name")
+    parsed_data["price"] = final_vars.get("price")
+    parsed_data["payment_method"] = final_vars.get("payment_method")
     
     history.processed_data = parsed_data
     history.event_type = parsed_data.get("event_type", "").lower()
@@ -344,6 +357,68 @@ async def sync_all_webhook_history(
         models.WebhookHistory.integration_id == uuid_obj
     ).order_by(models.WebhookHistory.created_at.asc()).all()
 
+    # --- DEDUPLICAÇÃO E UNIFICAÇÃO RETROATIVA EM LOTE (SINCRONIZAR TUDO) ---
+    # Identifica e agrupa registros que ocorreram a menos de 60s do registro original do mesmo contato/evento
+    parsed_histories = []
+    for h in histories:
+        if not h.payload:
+            continue
+        try:
+            p_data = parse_webhook_payload(integration.platform, h.payload)
+            from services.webhooks_utils import apply_custom_mapping_to_parsed_data
+            f_vars = apply_custom_mapping_to_parsed_data(h.payload, p_data, integration.custom_fields_mapping)
+            phone = f_vars.get("phone")
+            evt = p_data.get("event_type", "").lower() if p_data.get("event_type") else "outros"
+            parsed_histories.append({
+                "history": h,
+                "phone": phone,
+                "event_type": evt,
+                "created_at": h.created_at
+            })
+        except Exception:
+            continue
+
+    to_delete = []
+    consolidated = []
+
+    for ph in parsed_histories:
+        h = ph["history"]
+        phone = ph["phone"]
+        evt = ph["event_type"]
+        created_at = ph["created_at"]
+
+        if not phone:
+            consolidated.append(h)
+            continue
+
+        # Procura se existe algum registro consolidado que seja do mesmo telefone, mesmo evento,
+        # e cuja diferença de tempo seja menor ou igual a 60 segundos
+        found_parent = None
+        for parent in consolidated:
+            parent_ph = next((x for x in parsed_histories if x["history"].id == parent.id), None)
+            if parent_ph and parent_ph["phone"] == phone and parent_ph["event_type"] == evt:
+                diff = abs((created_at - parent.created_at).total_seconds())
+                if diff <= 60:
+                    found_parent = parent
+                    break
+
+        if found_parent:
+            # Se achou um pai correspondente nos últimos 60 segundos, incrementa o contador e agenda deleção do atual
+            found_parent.duplicate_count = (found_parent.duplicate_count or 0) + (h.duplicate_count or 0) + 1
+            to_delete.append(h)
+        else:
+            consolidated.append(h)
+
+    # Executa a deleção física dos duplicados para limpar a interface e dados redundantes
+    if to_delete:
+        for h_del in to_delete:
+            db.delete(h_del)
+        db.commit()
+        logger.info(f"🧹 [SYNC-ALL-DEDUP] {len(to_delete)} registros de webhook duplicados unificados e deletados.")
+
+    # Prossegue o fluxo apenas com a lista de registros consolidados
+    histories = consolidated
+
     mappings = db.query(models.WebhookEventMapping).filter(
         models.WebhookEventMapping.integration_id == uuid_obj
     ).all()
@@ -363,6 +438,19 @@ async def sync_all_webhook_history(
         try:
             if not history.payload: continue
             parsed_data = parse_webhook_payload(integration.platform, history.payload)
+            from services.webhooks_utils import apply_custom_mapping_to_parsed_data, extract_nested_custom_fields
+            final_vars = apply_custom_mapping_to_parsed_data(history.payload, parsed_data, integration.custom_fields_mapping)
+            custom_vars = extract_nested_custom_fields(history.payload, integration.custom_fields_mapping) if integration.custom_fields_mapping else {}
+            
+            parsed_data.update(final_vars)
+            parsed_data["custom_fields"] = custom_vars
+            parsed_data["name"] = final_vars.get("name")
+            parsed_data["phone"] = final_vars.get("phone")
+            parsed_data["email"] = final_vars.get("email")
+            parsed_data["product_name"] = final_vars.get("product_name")
+            parsed_data["price"] = final_vars.get("price")
+            parsed_data["payment_method"] = final_vars.get("payment_method")
+            
             history.processed_data = parsed_data
             history.event_type = parsed_data.get("event_type", "").lower()
 

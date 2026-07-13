@@ -130,14 +130,27 @@ async def handle_funnel_execution(data: dict):
                         real_content = f"[Template: {trigger.template_name}]"
                         logger.warning(f"⚠️ [DIRECT] Template '{trigger.template_name}' não encontrado no cache. Usando nome como fallback.")
 
-                    # Registrar no histórico de mensagens com o conteúdo real
+                    tpl_media_url = None
+                    if trigger.template_components:
+                        for comp in trigger.template_components:
+                            if str(comp.get("type", "")).lower() == "header":
+                                params = comp.get("parameters", [])
+                                for param in params:
+                                    param_type = str(param.get("type", "")).lower()
+                                    if param_type in ["image", "video", "document"]:
+                                        media_data = param.get(param_type, {})
+                                        if isinstance(media_data, dict):
+                                            tpl_media_url = media_data.get("link") or media_data.get("url")
+
+                    # Registrar no histórico de mensagens com o conteúdo real e var5 contendo a URL da mídia
                     db.add(models.MessageStatus(
                         trigger_id=trigger.id,
                         message_id=msg_id,
                         phone_number=contact_phone,
                         status='sent',
                         message_type='TEMPLATE',
-                        content=real_content
+                        content=real_content,
+                        var5=tpl_media_url
                     ))
                     trigger.total_sent = (trigger.total_sent or 0) + 1
                     trigger.status = 'paused_waiting_delivery' if trigger.funnel_id else 'completed'
@@ -211,98 +224,6 @@ async def handle_funnel_execution(data: dict):
                     # 4. Se houver um Funil ZapVoice vinculado, aguardar confirmação de entrega
                     if trigger.funnel_id:
                         logger.info(f"⏳ [FUNIL-ZAPVOICE] Template enviado. Aguardando confirmação de entrega para iniciar o Funil {trigger.funnel_id}...")
-
-                    # --- SINCRONIZAÇÃO COM O CHAT LOCAL ---
-                    try:
-                        from rabbitmq_client import rabbitmq
-                        
-                        clean_phone = "".join(filter(str.isdigit, str(contact_phone)))
-                        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-                        
-                        # Buscar conversa local ZapVoice correspondente a este cliente com correspondência de 8 dígitos
-                        chat_convo = db.query(models.ChatConversation).filter(
-                            models.ChatConversation.client_id == client_id,
-                            models.ChatConversation.phone.like(f"%{suffix}")
-                        ).first()
-                        
-                        if not chat_convo:
-                            chat_convo = models.ChatConversation(
-                                client_id=client_id,
-                                phone=clean_phone,
-                                contact_name=trigger.contact_name or clean_phone,
-                                status="open",
-                                unread_count=0
-                            )
-                            db.add(chat_convo)
-                            db.flush()
-                            logger.info(f"🆕 [CHAT-LOCAL] Criada nova conversa local para {clean_phone} (Client: {client_id})")
-                        
-                        # Extrair metadados do template para exibição de mídias/botões
-                        meta_data = None
-                        try:
-                            if trigger.template_name:
-                                tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
-                                    models.WhatsAppTemplateCache.client_id == client_id,
-                                    models.WhatsAppTemplateCache.name == trigger.template_name
-                                ).first()
-                                if tpl_cache:
-                                    meta_data = {
-                                        "is_template": True,
-                                        "template_name": trigger.template_name,
-                                        "language": tpl_cache.language,
-                                        "header": None,
-                                        "buttons": []
-                                    }
-                                    if isinstance(tpl_cache.components, list):
-                                        for comp in tpl_cache.components:
-                                            comp_type = comp.get("type")
-                                            if comp_type == "HEADER":
-                                                meta_data["header"] = {
-                                                    "format": comp.get("format"),
-                                                    "text": comp.get("text")
-                                                }
-                                            elif comp_type == "BUTTONS":
-                                                btns = comp.get("buttons")
-                                                if isinstance(btns, list):
-                                                    for btn in btns:
-                                                        btn_text = btn.get("text")
-                                                        if btn_text:
-                                                            meta_data["buttons"].append(btn_text)
-                        except Exception as e_meta:
-                            logger.error(f"⚠️ [CHAT-LOCAL] Erro ao extrair metadados do template no funnel: {e_meta}")
-
-                        # Registrar a mensagem do template na timeline do chat local
-                        chat_message = models.ChatMessage(
-                            conversation_id=chat_convo.id,
-                            sender_type="user", # user = enviado pelo agente / sistema
-                            message_type="text",
-                            content=real_content,
-                            wa_message_id=msg_id,
-                            meta_data=meta_data
-                        )
-                        db.add(chat_message)
-                        
-                        chat_convo.last_message_content = real_content
-                        chat_convo.unread_count = 0
-                        chat_convo.last_message_at = datetime.now(timezone.utc)
-                        db.commit()
-                        logger.info(f"💾 [CHAT-LOCAL] Mensagem de template direta salva localmente (Convo ID: {chat_convo.id})")
-                        
-                        # Emitir evento para o WebSocket atualizar o frontend em tempo real
-                        payload_ws = {
-                            "id": chat_message.id,
-                            "conversation_id": chat_message.conversation_id,
-                            "sender_type": chat_message.sender_type,
-                            "message_type": chat_message.message_type,
-                            "content": chat_message.content,
-                            "timestamp": chat_message.timestamp.isoformat() if chat_message.timestamp else datetime.now(timezone.utc).isoformat(),
-                            "wa_message_id": chat_message.wa_message_id,
-                            "client_id": client_id,
-                            "meta_data": meta_data
-                        }
-                        asyncio.create_task(rabbitmq.publish_event("new_message", payload_ws))
-                    except Exception as e_chat_sync:
-                        logger.error(f"❌ [CHAT-LOCAL] Erro na sincronização direta de template: {e_chat_sync}")
 
                 else:
                     trigger.status = 'failed'

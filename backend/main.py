@@ -127,16 +127,16 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 app = FastAPI(
     title="ZapVoice API Oficial",
     version="4.0.5",
-    docs_url="/docs" if DEBUG else None,
+    docs_url=None,
     redoc_url="/redoc" if DEBUG else None,
     openapi_url="/openapi.json" if DEBUG else None,
     description="""
 ## 🚀 ZapVoice API v4.0.5
 
-Esta API fornece todo o backend para automação de mensagens no Chatwoot.
+Esta API fornece todo o backend para automação de mensagens no chat local do ZapVoice.
 
 ### Funcionalidades
-* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **3.9.5** do **ZapVoice**!
+* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **4.0.5** do **ZapVoice**!
 * **Agendamento Inteligente:** Otimização de filas e prevenção de bloqueios.
 
 ### Autenticação
@@ -280,6 +280,8 @@ app.include_router(logs.router, prefix="/api", tags=["Logs"])
 app.include_router(hot_leads.router, prefix="/api", tags=["HotLeads"])
 app.include_router(instagram.router, prefix="/api")
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
+from routers import chat_labels
+app.include_router(chat_labels.router, prefix="/api", tags=["Chat Labels"])
 app.include_router(api_keys.router, prefix="/api")
 
 # --- Fim dos Webhooks ---
@@ -666,6 +668,155 @@ def get_index_with_cache_busting():
         logger.error(f"Erro ao ler index.html para cache busting: {e}")
         return None
 
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    if not DEBUG:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
+    
+    from fastapi.responses import HTMLResponse
+    
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <link type="text/css" rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+    <link rel="shortcut icon" href="https://fastapi.tiangolo.com/img/favicon.png">
+    <title>ZapVoice API Oficial - Swagger UI</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #fafafa;
+        }
+        .swagger-ui .topbar {
+            background-color: #0f172a;
+        }
+        .category-select-container {
+            margin: 20px auto 10px auto;
+            max-width: 1460px;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: sans-serif;
+        }
+        .category-select-label {
+            font-weight: bold;
+            font-size: 14px;
+            color: #3b82f6;
+        }
+        .category-select {
+            padding: 8px 32px 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+            background-color: #ffffff;
+            color: #334155;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 8px center;
+            background-repeat: no-repeat;
+            background-size: 20px;
+            transition: all 0.2s;
+        }
+        .category-select:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+        }
+        .category-select:focus {
+            border-color: #3b82f6;
+        }
+    </style>
+    </head>
+    <body>
+    <div id="swagger-ui">
+    </div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+    <script>
+    window.onload = function() {
+        const ui = SwaggerUIBundle({
+            url: '/openapi.json',
+            dom_id: '#swagger-ui',
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIBundle.SwaggerUIStandalonePreset
+            ],
+            layout: "BaseLayout",
+            deepLinking: true,
+            showExtensions: true,
+            showCommonExtensions: true,
+            filter: true
+        });
+        window.ui = ui;
+
+        const interval = setInterval(() => {
+            const tags = document.querySelectorAll('.opblock-tag-section h4 a span');
+            if (tags.length > 0) {
+                clearInterval(interval);
+                
+                const filterContainer = document.createElement('div');
+                filterContainer.className = 'category-select-container';
+                
+                const label = document.createElement('span');
+                label.className = 'category-select-label';
+                label.innerText = 'Filtrar por Categoria:';
+                
+                const select = document.createElement('select');
+                select.className = 'category-select';
+                
+                const optionAll = document.createElement('option');
+                optionAll.value = 'all';
+                optionAll.innerText = 'Todas as Categorias';
+                select.appendChild(optionAll);
+                
+                const tagNames = Array.from(tags).map(el => el.innerText.trim());
+                const uniqueTags = [...new Set(tagNames)];
+                
+                uniqueTags.forEach(tag => {
+                    const opt = document.createElement('option');
+                    opt.value = tag;
+                    opt.innerText = tag;
+                    select.appendChild(opt);
+                });
+                
+                select.addEventListener('change', (e) => {
+                    const selected = e.target.value;
+                    const sections = document.querySelectorAll('.opblock-tag-section');
+                    sections.forEach(section => {
+                        const tagEl = section.querySelector('h4 a span');
+                        if (tagEl) {
+                            const currentTagName = tagEl.innerText.trim();
+                            if (selected === 'all' || currentTagName === selected) {
+                                section.style.display = 'block';
+                            } else {
+                                section.style.display = 'none';
+                            }
+                        }
+                    });
+                });
+                
+                filterContainer.appendChild(label);
+                filterContainer.appendChild(select);
+                
+                const wrapper = document.querySelector('.swagger-ui .wrapper');
+                if (wrapper) {
+                    wrapper.parentNode.insertBefore(filterContainer, wrapper.nextSibling);
+                }
+            }
+        }, 300);
+    }
+    </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html_content)
+
 @app.get("/")
 async def root():
     # Serve React App com Cache Busting Dinâmico
@@ -680,7 +831,7 @@ async def root():
         return response
     
     return {
-        "message": "ZapVoice Chatwoot API",
+        "message": "ZapVoice API",
         "docs": "/docs",
         "status": "online",
         "version": "4.0.5",

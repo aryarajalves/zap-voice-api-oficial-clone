@@ -25,6 +25,127 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
             db.close()
             return
             
+        message_record = db.query(models.MessageStatus).get(message_id)
+        if not message_record:
+            logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] MessageStatus {message_id} não encontrado.")
+            db.close()
+            return
+
+        # --- CRIAR CONVERSA E SALVAR TEMPLATE NO CHAT LOCAL APÓS ENTREGA ---
+        if message_record.message_type == 'TEMPLATE' or (message_record.template_name and str(message_record.template_name).strip()):
+            try:
+                # 1. Verificar se a mensagem de chat local já existe por wa_message_id
+                existing_chat_msg = db.query(models.ChatMessage).filter(
+                    models.ChatMessage.wa_message_id == msg_id
+                ).first()
+                
+                if not existing_chat_msg:
+                    clean_phone = "".join(filter(str.isdigit, str(phone)))
+                    suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                    
+                    # Buscar conversa local
+                    chat_convo = db.query(models.ChatConversation).filter(
+                        models.ChatConversation.client_id == trigger.client_id,
+                        models.ChatConversation.phone.like(f"%{suffix}")
+                    ).first()
+                    
+                    is_new_convo = False
+                    if not chat_convo:
+                        chat_convo = models.ChatConversation(
+                            client_id=trigger.client_id,
+                            phone=clean_phone,
+                            contact_name=trigger.contact_name or clean_phone,
+                            status="open",
+                            unread_count=0
+                        )
+                        db.add(chat_convo)
+                        db.flush()
+                        is_new_convo = True
+                        logger.info(f"🆕 [CHAT-LOCAL-POST-DELIVERY] Criada nova conversa local para {clean_phone} (Client: {trigger.client_id})")
+                    
+                    # Reconstruir metadados do template
+                    template_name = trigger.template_name or message_record.template_name
+                    if not template_name and message_record.content and message_record.content.startswith("[Template: "):
+                        template_name = message_record.content.replace("[Template: ", "").replace("]", "")
+                    
+                    meta_data = {
+                        "is_template": True,
+                        "template_name": template_name or "Desconhecido",
+                        "language": "pt_BR",
+                        "header": None,
+                        "buttons": []
+                    }
+                    
+                    if template_name:
+                        tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+                            models.WhatsAppTemplateCache.client_id == trigger.client_id,
+                            models.WhatsAppTemplateCache.name == template_name
+                        ).first()
+                        if tpl_cache:
+                            meta_data["language"] = tpl_cache.language
+                            if tpl_cache.components:
+                                header_comp = next((c for c in tpl_cache.components if c.get("type") == "HEADER"), None)
+                                if header_comp:
+                                    meta_data["header"] = {
+                                        "format": header_comp.get("format"),
+                                        "text": header_comp.get("text")
+                                    }
+                                btn_comp = next((c for c in tpl_cache.components if c.get("type") == "BUTTONS"), None)
+                                if btn_comp and btn_comp.get("buttons"):
+                                    meta_data["buttons"] = [b.get("text") for b in btn_comp["buttons"]]
+                    
+                    # Registrar a mensagem do template
+                    chat_message = models.ChatMessage(
+                        conversation_id=chat_convo.id,
+                        sender_type="user",
+                        message_type="template",
+                        content=message_record.content,
+                        wa_message_id=msg_id,
+                        media_url=message_record.var5, # tpl_media_url que salvamos no var5
+                        meta_data=meta_data
+                    )
+                    db.add(chat_message)
+                    
+                    # Atualiza a conversa
+                    chat_convo.last_message_content = message_record.content
+                    chat_convo.unread_count = 0
+                    chat_convo.last_message_at = datetime.now(timezone.utc)
+                    db.commit()
+                    logger.info(f"💾 [CHAT-LOCAL-POST-DELIVERY] Mensagem de template #{msg_id} salva localmente (Convo ID: {chat_convo.id})")
+                    
+                    # Emitir eventos WebSocket para tempo real
+                    from rabbitmq_client import rabbitmq
+                    
+                    if is_new_convo:
+                        payload_ws_convo = {
+                            "id": chat_convo.id,
+                            "client_id": trigger.client_id,
+                            "phone": chat_convo.phone,
+                            "contact_name": chat_convo.contact_name,
+                            "status": chat_convo.status,
+                            "unread_count": chat_convo.unread_count,
+                            "last_message_content": chat_convo.last_message_content,
+                            "last_message_at": chat_convo.last_message_at.isoformat() if chat_convo.last_message_at else None
+                        }
+                        await rabbitmq.publish_event("conversation_created", payload_ws_convo)
+                    
+                    payload_ws = {
+                        "id": chat_message.id,
+                        "conversation_id": chat_message.conversation_id,
+                        "sender_type": chat_message.sender_type,
+                        "message_type": chat_message.message_type,
+                        "content": chat_message.content,
+                        "media_url": chat_message.media_url,
+                        "meta_data": chat_message.meta_data,
+                        "timestamp": chat_message.timestamp.isoformat() if chat_message.timestamp else datetime.now(timezone.utc).isoformat(),
+                        "wa_message_id": chat_message.wa_message_id,
+                        "client_id": trigger.client_id
+                    }
+                    await rabbitmq.publish_event("new_message", payload_ws)
+                    
+            except Exception as e_chat_sync:
+                logger.error(f"❌ [CHAT-LOCAL-POST-DELIVERY] Erro ao sincronizar template localmente pós-entrega: {e_chat_sync}")
+
         is_bulk = False
         if trigger.is_bulk:
             is_bulk = True
@@ -35,12 +156,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
 
         if is_bulk:
             logger.info(f"⏭️ [DEFERRED_POST_DELIVERY] Trigger #{trigger_id} é um disparo em massa. Ignorando envio de nota privada.")
-            db.close()
-            return
-            
-        message_record = db.query(models.MessageStatus).get(message_id)
-        if not message_record:
-            logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] MessageStatus {message_id} não encontrado.")
             db.close()
             return
 
@@ -94,7 +209,8 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                 db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"status_{clean_id}"})
             
             message_record = db.query(models.MessageStatus).filter(
-                models.MessageStatus.message_id == clean_id
+                (models.MessageStatus.message_id == clean_id) |
+                (models.MessageStatus.message_id == msg_id)
             ).first()
             
             if not message_record and recipient:

@@ -183,7 +183,13 @@ async def update_settings(
         "INSTAGRAM_ACCOUNT_ID",
         "INSTAGRAM_WEBHOOK_SLUG",
         "CHAT_MESSAGES_WEBHOOK_URL",
-        "WA_WINDOW_CLOSED_REMOVE_LABELS"
+        "WA_WINDOW_CLOSED_REMOVE_LABELS",
+        "WA_HAS_AI_AGENT",
+        "WA_HUMAN_LABEL",
+        "WA_ROBO_LABEL",
+        "WA_AUTO_REPLY_ENABLED",
+        "WA_AUTO_REPLY_MESSAGE",
+        "WA_AUTO_REPLY_DELAY"
     }
     
     saved_count = 0

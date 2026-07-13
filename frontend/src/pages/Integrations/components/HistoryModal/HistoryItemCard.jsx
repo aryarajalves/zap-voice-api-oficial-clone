@@ -49,6 +49,17 @@ const translateError = (msg) => {
   return text;
 };
 
+const getFlatKeys = (obj, prefix = '') => {
+  if (!obj || typeof obj !== 'object') return [];
+  return Object.entries(obj).reduce((acc, [key, value]) => {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return [...acc, fullKey, ...getFlatKeys(value, fullKey)];
+    }
+    return [...acc, fullKey];
+  }, []);
+};
+
 const HistoryItemCard = ({
   item,
   selectedHistoryIds,
@@ -59,8 +70,51 @@ const HistoryItemCard = ({
   setEditJsonModal,
   setMaximizedJson,
   handleSyncHistory,
-  isSyncing
+  isSyncing,
+  integration,
+  handleUpdateCustomFieldsMapping
 }) => {
+  const [showMappingEditor, setShowMappingEditor] = React.useState(false);
+  const [mappingFields, setMappingFields] = React.useState(() => {
+    const custom = integration?.custom_fields_mapping || {};
+    return {
+      name: custom.name || '',
+      phone: custom.phone || '',
+      email: custom.email || '',
+      product_name: custom.product_name || '',
+      price: custom.price || '',
+      payment_method: custom.payment_method || '',
+    };
+  });
+
+  React.useEffect(() => {
+    if (integration?.custom_fields_mapping) {
+      setMappingFields({
+        name: integration.custom_fields_mapping.name || '',
+        phone: integration.custom_fields_mapping.phone || '',
+        email: integration.custom_fields_mapping.email || '',
+        product_name: integration.custom_fields_mapping.product_name || '',
+        price: integration.custom_fields_mapping.price || '',
+        payment_method: integration.custom_fields_mapping.payment_method || '',
+      });
+    }
+  }, [integration]);
+
+  const payloadKeys = React.useMemo(() => getFlatKeys(item?.payload), [item?.payload]);
+
+  const handleAddKeyToField = (field, keyToAdd) => {
+    const current = mappingFields[field] || '';
+    const parts = current.split(',').map(p => p.trim()).filter(Boolean);
+    if (!parts.includes(keyToAdd)) {
+      parts.push(keyToAdd);
+    }
+    setMappingFields(prev => ({ ...prev, [field]: parts.join(', ') }));
+  };
+
+  const getAvailableKeysForField = (fieldValue) => {
+    const parts = (fieldValue || '').split(',').map(p => p.trim()).filter(Boolean);
+    return payloadKeys.filter(k => !parts.includes(k));
+  };
   return (
     <div className="group relative border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-white dark:bg-[#1e293b]/40 hover:scale-[1.015] transition-all duration-300 hover:border-blue-500/50 dark:hover:border-blue-600/50 hover:shadow-2xl dark:hover:shadow-blue-900/10">
       <div className="p-5 flex justify-between items-center bg-gray-50/50 dark:bg-[#0f172a]/40 border-b border-gray-200 dark:border-white/5">
@@ -95,6 +149,11 @@ const HistoryItemCard = ({
           <span className="px-3 py-1 bg-blue-50 dark:bg-blue-400/5 rounded-full text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-400/10">
             {EVENT_TYPES.find(e => e.value === item.event_type)?.label || item.event_type || 'Evento não detectado'}
           </span>
+          {item.duplicate_count > 0 && (
+            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">
+              +{item.duplicate_count} Duplicidades Evitadas
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -159,16 +218,204 @@ const HistoryItemCard = ({
                 <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
                 Dados extraídos pelo Sistema
               </div>
-              <button
-                onClick={() => handleSyncHistory(item.id)}
-                disabled={isSyncing[item.id]}
-                className="text-[10px] bg-white dark:bg-[#1e293b] border border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-                title="Re-processar extração com as regras atuais"
-              >
-                <FiRefreshCw size={10} className={isSyncing[item.id] ? 'animate-spin' : ''} />
-                {isSyncing[item.id] ? 'Sincronizando...' : 'Sincronizar Dados'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const custom = integration?.custom_fields_mapping || {};
+                    setMappingFields({
+                      name: custom.name || '',
+                      phone: custom.phone || '',
+                      email: custom.email || '',
+                      product_name: custom.product_name || '',
+                      price: custom.price || '',
+                      payment_method: custom.payment_method || '',
+                    });
+                    setShowMappingEditor(!showMappingEditor);
+                  }}
+                  className="text-[10px] bg-white dark:bg-[#1e293b] border border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center gap-1.5 active:scale-95"
+                  title="Configurar mapeamento de campos personalizado"
+                >
+                  <FiSettings size={10} />
+                  Mapear Campos
+                </button>
+                <button
+                  onClick={() => handleSyncHistory(item.id)}
+                  disabled={isSyncing[item.id]}
+                  className="text-[10px] bg-white dark:bg-[#1e293b] border border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                  title="Re-processar extração com as regras atuais"
+                >
+                  <FiRefreshCw size={10} className={isSyncing[item.id] ? 'animate-spin' : ''} />
+                  {isSyncing[item.id] ? 'Sincronizando...' : 'Sincronizar Dados'}
+                </button>
+              </div>
             </div>
+
+            {showMappingEditor && (
+              <div className="mb-5 p-5 bg-slate-900/90 border border-white/10 rounded-2xl relative z-10 space-y-4 shadow-xl">
+                <div className="text-[10px] font-black uppercase text-blue-400 tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+                  <FiEdit2 size={12} /> Mapeamento Manual de Campos (Multi-fallbacks: separe chaves por vírgula)
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
+                  {/* Nome */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Campo de Nome</label>
+                    <input
+                      type="text"
+                      value={mappingFields.name}
+                      onChange={(e) => setMappingFields(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Ex: contact_name, name"
+                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
+                    />
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddKeyToField('name', e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
+                    >
+                      <option value="">+ Selecionar do JSON...</option>
+                      {getAvailableKeysForField(mappingFields.name).map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                  {/* Telefone */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Campo de Telefone</label>
+                    <input
+                      type="text"
+                      value={mappingFields.phone}
+                      onChange={(e) => setMappingFields(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="Ex: contact_phone, phone"
+                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
+                    />
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddKeyToField('phone', e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
+                    >
+                      <option value="">+ Selecionar do JSON...</option>
+                      {getAvailableKeysForField(mappingFields.phone).map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                  {/* E-mail */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Campo de E-mail</label>
+                    <input
+                      type="text"
+                      value={mappingFields.email}
+                      onChange={(e) => setMappingFields(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="Ex: contact_email, email"
+                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
+                    />
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddKeyToField('email', e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
+                    >
+                      <option value="">+ Selecionar do JSON...</option>
+                      {getAvailableKeysForField(mappingFields.email).map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                  {/* Produto */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Campo de Produto</label>
+                    <input
+                      type="text"
+                      value={mappingFields.product_name}
+                      onChange={(e) => setMappingFields(prev => ({ ...prev, product_name: e.target.value }))}
+                      placeholder="Ex: product_name, offer_name"
+                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
+                    />
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddKeyToField('product_name', e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
+                    >
+                      <option value="">+ Selecionar do JSON...</option>
+                      {getAvailableKeysForField(mappingFields.product_name).map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                  {/* Valor */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Campo de Valor</label>
+                    <input
+                      type="text"
+                      value={mappingFields.price}
+                      onChange={(e) => setMappingFields(prev => ({ ...prev, price: e.target.value }))}
+                      placeholder="Ex: price, charge_price"
+                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
+                    />
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddKeyToField('price', e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
+                    >
+                      <option value="">+ Selecionar do JSON...</option>
+                      {getAvailableKeysForField(mappingFields.price).map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                  {/* Método de Pagamento */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1">Método de Pagamento</label>
+                    <input
+                      type="text"
+                      value={mappingFields.payment_method}
+                      onChange={(e) => setMappingFields(prev => ({ ...prev, payment_method: e.target.value }))}
+                      placeholder="Ex: payment_type, method"
+                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
+                    />
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleAddKeyToField('payment_method', e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
+                    >
+                      <option value="">+ Selecionar do JSON...</option>
+                      {getAvailableKeysForField(mappingFields.payment_method).map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                  <button
+                    onClick={() => setShowMappingEditor(false)}
+                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const success = await handleUpdateCustomFieldsMapping(integration.id, mappingFields);
+                      if (success) {
+                        setShowMappingEditor(false);
+                      }
+                    }}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all shadow-md shadow-blue-500/20"
+                  >
+                    Salvar Regra
+                  </button>
+                </div>
+              </div>
+            )}
             {/* Banner Order Bump */}
             {(item.event_type === 'compra_aprovada_ob' || item.processed_data?.order_bump) && (
               <div className="mb-4 relative z-10 rounded-xl overflow-hidden border border-orange-500/30 bg-orange-500/5">
@@ -210,15 +457,36 @@ const HistoryItemCard = ({
                 <span className="font-bold text-blue-400 dark:text-blue-400 capitalize">{item.processed_data.platform || '-'}</span>
               </div>
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-400 dark:text-gray-400 font-medium">Nome:</span>
+                <span className="text-gray-400 dark:text-gray-400 font-medium flex items-center gap-1.5">
+                  Nome:
+                  {integration?.custom_fields_mapping?.name && (
+                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
+                      {integration.custom_fields_mapping.name}
+                    </span>
+                  )}
+                </span>
                 <span className="font-bold text-white dark:text-white">{item.processed_data.name || '-'}</span>
               </div>
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-500 dark:text-gray-500 font-medium">Telefone:</span>
+                <span className="text-gray-500 dark:text-gray-500 font-medium flex items-center gap-1.5">
+                  Telefone:
+                  {integration?.custom_fields_mapping?.phone && (
+                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
+                      {integration.custom_fields_mapping.phone}
+                    </span>
+                  )}
+                </span>
                 <span className="font-bold text-gray-800 dark:text-gray-200 tracking-tight">{item.processed_data.phone || '-'}</span>
               </div>
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-500 dark:text-gray-500 font-medium">E-mail:</span>
+                <span className="text-gray-500 dark:text-gray-500 font-medium flex items-center gap-1.5">
+                  E-mail:
+                  {integration?.custom_fields_mapping?.email && (
+                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
+                      {integration.custom_fields_mapping.email}
+                    </span>
+                  )}
+                </span>
                 <span className="font-bold text-gray-800 dark:text-gray-200 lowercase">{item.processed_data.email || '-'}</span>
               </div>
               {item.processed_data?.custom_fields?.CPF && (
@@ -240,7 +508,14 @@ const HistoryItemCard = ({
                 </div>
               )}
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
-                <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Produtos:</span>
+                <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap flex items-center gap-1.5">
+                  Produtos:
+                  {integration?.custom_fields_mapping?.product_name && (
+                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case animate-fade-in" title="Chave JSON mapeada">
+                      {integration.custom_fields_mapping.product_name}
+                    </span>
+                  )}
+                </span>
                 <div className="flex flex-col items-end gap-1.5 w-full pl-8">
                   {item.processed_data.items && item.processed_data.items.length > 0 ? (
                     item.processed_data.items.map((prod, idx) => (
@@ -278,7 +553,14 @@ const HistoryItemCard = ({
                 </div>
               )}
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-400 dark:text-gray-400 font-medium">Método:</span>
+                <span className="text-gray-400 dark:text-gray-400 font-medium flex items-center gap-1.5">
+                  Método:
+                  {integration?.custom_fields_mapping?.payment_method && (
+                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
+                      {integration.custom_fields_mapping.payment_method}
+                    </span>
+                  )}
+                </span>
                 <span className="font-bold text-white dark:text-white capitalize">
                   {(() => {
                     const METHOD_TRANSLATIONS = {
@@ -301,7 +583,14 @@ const HistoryItemCard = ({
                 </span>
               </div>
               <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-400 dark:text-gray-400 font-medium">Valor:</span>
+                <span className="text-gray-400 dark:text-gray-400 font-medium flex items-center gap-1.5">
+                  Valor:
+                  {integration?.custom_fields_mapping?.price && (
+                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
+                      {integration.custom_fields_mapping.price}
+                    </span>
+                  )}
+                </span>
                 <span className="font-bold text-green-400 dark:text-green-400">
                   {item.processed_data.price ? `R$ ${item.processed_data.price}` : 'R$ -'}
                 </span>
@@ -411,7 +700,7 @@ const HistoryItemCard = ({
                   <div className="text-[10px] text-blue-400 font-black uppercase mb-3 flex items-center justify-between tracking-widest relative z-10">
                     <div className="flex items-center gap-2">
                       <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
-                      Integrações Chatwoot
+                      Integração na Aba de Contatos (ZapVoice)
                     </div>
                   </div>
                   

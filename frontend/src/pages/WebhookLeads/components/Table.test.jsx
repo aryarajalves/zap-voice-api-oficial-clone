@@ -18,6 +18,8 @@ vi.mock('react-icons/fi', () => ({
   FiLock: () => <span data-testid="icon-lock" />,
   FiUnlock: () => <span data-testid="icon-unlock" />,
   FiDatabase: () => <span data-testid="icon-database" />,
+  FiSlash: () => <span data-testid="icon-slash" />,
+  FiSliders: () => <span data-testid="icon-sliders" />,
 }));
 
 vi.mock('react-hot-toast', () => ({

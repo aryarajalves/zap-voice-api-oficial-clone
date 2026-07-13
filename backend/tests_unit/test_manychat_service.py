@@ -137,3 +137,27 @@ def test_replace_empty_string():
     """String vazia retorna string vazia."""
     result = replace_variables_in_string("", PAYLOAD, PARSED)
     assert result == ""
+
+
+def test_sync_to_manychat_missing_phone():
+    """Testa se o serviço ManyChat aborta e retorna erro se o telefone estiver ausente ou vazio."""
+    client_id = 999
+    name = "User Test"
+    tag = "new_tag_123"
+
+    with patch("services.manychat.get_settings") as mock_settings:
+        mock_settings.return_value = {"MANYCHAT_API_KEY": "valid_token"}
+        
+        # Cenário 1: Telefone None
+        res_none = asyncio.run(sync_to_manychat(client_id, name, None, tag))
+        assert res_none["status"] == "failed"
+        assert "Telefone ausente" in res_none["error"]
+
+        # Cenário 2: Telefone string vazia
+        res_empty = asyncio.run(sync_to_manychat(client_id, name, "", tag))
+        assert res_empty["status"] == "failed"
+
+        # Cenário 3: Telefone sem dígitos numéricos
+        res_no_digits = asyncio.run(sync_to_manychat(client_id, name, "--", tag))
+        assert res_no_digits["status"] == "failed"
+

@@ -68,6 +68,7 @@ export function useWebhookLeads(activeClient) {
   
   // Filtros base
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [eventType, setEventType] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
   const [importedByClientId, setImportedByClientId] = useState('');
@@ -123,7 +124,7 @@ export function useWebhookLeads(activeClient) {
   const fetchLeads = useCallback(async (overrides = {}) => {
     if (!activeClient?.id) return;
     
-    const currentSearch = overrides.search !== undefined ? overrides.search : search;
+    const currentSearch = overrides.search !== undefined ? overrides.search : debouncedSearch;
     const currentEventType = overrides.eventType !== undefined ? overrides.eventType : eventType;
     const currentTags = overrides.tags !== undefined ? overrides.tags : selectedTags;
     const currentPage = overrides.page !== undefined ? overrides.page : page;
@@ -172,7 +173,7 @@ export function useWebhookLeads(activeClient) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient?.id, limit, search, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
+  }, [activeClient?.id, limit, debouncedSearch, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
 
   const fetchFilters = useCallback(async () => {
     if (!activeClient?.id) return;
@@ -193,7 +194,7 @@ export function useWebhookLeads(activeClient) {
   const fetchDdiDddOptions = useCallback(async (overrides = {}) => {
     if (!activeClient?.id) return;
 
-    const currentSearch = overrides.search !== undefined ? overrides.search : search;
+    const currentSearch = overrides.search !== undefined ? overrides.search : debouncedSearch;
     const currentEventType = overrides.eventType !== undefined ? overrides.eventType : eventType;
     const currentTags = overrides.tags !== undefined ? overrides.tags : selectedTags;
     const currentDatePreset = overrides.datePreset !== undefined ? overrides.datePreset : datePreset;
@@ -231,12 +232,31 @@ export function useWebhookLeads(activeClient) {
     } catch (err) {
       console.error(err);
     }
-  }, [activeClient?.id, search, eventType, selectedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter]);
+  }, [activeClient?.id, debouncedSearch, eventType, selectedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter]);
 
   // Reset de página ao mudar filtro de DDI/DDD/status de bloqueio
   const setFilterDdi = (val) => { setFilterDdiState(val); setPage(0); };
   const setFilterDdd = (val) => { setFilterDddState(val); setPage(0); };
   const setBlockStatusFilter = (val) => { setBlockStatusFilterState(val); setPage(0); };
+
+  // Reset de página ao mudar qualquer filtro para evitar páginas fantasmas/vazias
+  useEffect(() => {
+    setPage(0);
+  }, [
+    debouncedSearch,
+    eventType,
+    selectedTags,
+    importedByClientId,
+    origin,
+    lockedFilter,
+    bsudFilter,
+    filterDdi,
+    filterDdd,
+    blockStatusFilter,
+    datePreset,
+    customDateFrom,
+    customDateTo
+  ]);
 
   // Efeito para filtros instantâneos
   useEffect(() => {
@@ -247,7 +267,7 @@ export function useWebhookLeads(activeClient) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClient?.id, page, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
+  }, [activeClient?.id, page, debouncedSearch, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
 
   // Efeito exclusivo para recalcular as opções de DDI/DDD — não depende dos
   // próprios filtros de DDI/DDD nem de página/limite.
@@ -256,25 +276,16 @@ export function useWebhookLeads(activeClient) {
       fetchDdiDddOptions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClient?.id, eventType, selectedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter]);
+  }, [activeClient?.id, debouncedSearch, eventType, selectedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter]);
 
-  const lastSearch = useRef('');
-
-  // Efeito exclusivo para Busca com Debounce
+  // Efeito exclusivo para busca com debounce
   useEffect(() => {
-    if (search === lastSearch.current) return;
-    
     const timer = setTimeout(() => {
-      lastSearch.current = search;
-      if (activeClient?.id) {
-        fetchLeads({ search });
-        fetchDdiDddOptions({ search });
-      }
+      setDebouncedSearch(search);
     }, 600);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, activeClient?.id]);
+  }, [search]);
 
   const handleCleanTags = async () => {
     if (!activeClient) return;

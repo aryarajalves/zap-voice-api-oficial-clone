@@ -3,6 +3,7 @@ from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import SessionLocal
 from core.deps import get_current_user
 from core.permissions import require_premium, require_user, require_feature
@@ -396,7 +397,7 @@ async def trigger_recurring_manual(
             logger.warning(f"⚠️ [RECURRING TRIGGER] Fallback para banco local ao buscar etiqueta '{rt.tag}': {e}")
             leads = db.query(WebhookLead).filter(
                 WebhookLead.client_id == client_id,
-                WebhookLead.tags.ilike(f"%{rt.tag}%")
+                func.concat(',', func.replace(func.coalesce(WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{rt.tag.strip()},%")
             ).all()
             tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
         
@@ -464,7 +465,7 @@ async def get_recurring_contacts(
         try:
             leads = db.query(WebhookLead).filter(
                 WebhookLead.client_id == client_id,
-                WebhookLead.tags.ilike(f"%{record.tag}%")
+                func.concat(',', func.replace(func.coalesce(WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{record.tag.strip()},%")
             ).all()
             for lead in leads:
                 if lead.phone in live_phones:

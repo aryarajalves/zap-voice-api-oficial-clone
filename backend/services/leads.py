@@ -128,7 +128,31 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
 
         if lead:
             # Update existing lead metadata
-            lead.name = name or lead.name
+            # Impedir que nomes reais sejam sobrescritos por nomes genéricos das integrações (ex: Lead_3586)
+            is_generic = False
+            if name:
+                name_clean = str(name).strip()
+                import re
+                is_phone = re.match(r'^\d+$', name_clean) is not None
+                is_lead_pattern = name_clean.lower().startswith("lead_")
+                is_cliente_pattern = name_clean.lower().startswith("cliente_")
+                is_contato_pattern = name_clean.lower().startswith("contato_")
+                is_generic = is_phone or is_lead_pattern or is_cliente_pattern or is_contato_pattern
+            
+            # Só atualiza o nome se o novo nome não for genérico, ou se o nome atual do lead já for genérico
+            current_is_generic = False
+            if lead.name:
+                curr_clean = str(lead.name).strip()
+                import re
+                curr_phone = re.match(r'^\d+$', curr_clean) is not None
+                curr_lead_pattern = curr_clean.lower().startswith("lead_")
+                curr_cliente_pattern = curr_clean.lower().startswith("cliente_")
+                curr_contato_pattern = curr_clean.lower().startswith("contato_")
+                current_is_generic = curr_phone or curr_lead_pattern or curr_cliente_pattern or curr_contato_pattern
+
+            if name and (not is_generic or current_is_generic or not lead.name):
+                lead.name = name
+
             lead.email = email or lead.email
             lead.last_event_type = event_type or lead.last_event_type
             

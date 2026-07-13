@@ -98,6 +98,62 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
             return Response(content="Invalid JSON", status_code=400)
 
     # Injetar client_id associado no payload para consumo do Worker
+    # Se não foi resolvido pelo slug, tenta resolver dinamicamente pelo phone_number_id
+    if not slug:
+        try:
+            entry = payload.get("entry", [{}])[0]
+            change = entry.get("changes", [{}])[0]
+            value = change.get("value", {})
+            metadata = value.get("metadata", {})
+            phone_number_id = metadata.get("phone_number_id")
+            
+            if phone_number_id:
+                configs = db.query(models.AppConfig).join(
+                    models.Client, models.Client.id == models.AppConfig.client_id
+                ).filter(
+                    models.AppConfig.key == "WA_PHONE_NUMBER_ID",
+                    models.AppConfig.value == str(phone_number_id),
+                    models.Client.is_active == True
+                ).all()
+                
+                if configs:
+                    # Fallback inicial
+                    client_id = configs[0].client_id
+                    
+                    # Se houver duplicidade do mesmo número em mais de um cliente (ambiente de teste/configurações duplicadas)
+                    if len(configs) > 1:
+                        # Identificar número do contato remetente/destinatário
+                        from_phone = None
+                        messages = value.get("messages", [])
+                        statuses = value.get("statuses", [])
+                        if messages:
+                            from_phone = messages[0].get("from")
+                        elif statuses:
+                            from_phone = statuses[0].get("recipient_id")
+                        
+                        if from_phone:
+                            clean_phone = "".join(filter(str.isdigit, str(from_phone)))
+                            suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                            
+                            client_ids = [cfg.client_id for cfg in configs]
+                            # Tentar encontrar qual cliente possui uma conversa local para este telefone
+                            convo = db.query(models.ChatConversation).filter(
+                                models.ChatConversation.client_id.in_(client_ids),
+                                models.ChatConversation.phone.like(f"%{suffix}")
+                            ).order_by(models.ChatConversation.last_message_at.desc()).first()
+                            
+                            if convo:
+                                client_id = convo.client_id
+                                logger.info(f"🎯 [META] Colisão de multi-inquilinos resolvida por conversa ativa com {from_phone}: Client ID {client_id}")
+                            else:
+                                logger.info(f"🎯 [META] Colisão detectada mas nenhuma conversa ativa encontrada para {from_phone}. Usando primeiro cliente cadastrado: Client ID {client_id}")
+                        else:
+                            logger.info(f"🎯 [META] Colisão detectada e sem telefone para diferenciar. Usando Client ID {client_id}")
+                    else:
+                        logger.info(f"🎯 [META] Client ID resolvido de forma única pelo phone_number_id {phone_number_id}: {client_id}")
+        except Exception as e_resolve:
+            logger.error(f"⚠️ [META] Erro ao tentar resolver client_id pelo phone_number_id: {e_resolve}")
+
     if client_id:
         payload["client_id"] = client_id
 

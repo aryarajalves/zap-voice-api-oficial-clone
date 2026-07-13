@@ -70,5 +70,19 @@ def test_custom_field_sync_logic():
     assert parsed_data["phone"] == "5585987696383"
     assert parsed_data["name"] == "Mapeado Manualmente"
 
+def test_elementor_contact_prefixed_extraction():
+    payload = {
+        "contact_name": "Adrielle mendes leite",
+        "contact_email": "adriellemendesleite41@gmail.com",
+        "contact_phone": "(47) 99708-6243"
+    }
+    
+    parsed = parse_webhook_payload("Elementor", payload)
+    
+    assert parsed["name"] == "Adrielle mendes leite"
+    assert parsed["email"] == "adriellemendesleite41@gmail.com"
+    # Normalizado com DDI 55
+    assert parsed["phone"] == "5547997086243"
+
 if __name__ == "__main__":
     pytest.main([__file__])

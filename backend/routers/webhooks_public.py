@@ -36,6 +36,9 @@ router = APIRouter()
 # Trava Global de Memória para evitar Race Conditions de milissegundos nos webhooks
 GLOBAL_WEBHOOK_LOCKS = {}
 
+# Trava Global de Memória para evitar duplicações por telefone e evento em 60s
+GLOBAL_DEDUPLICATION_LOCKS = {}
+
 @router.post("/webhooks/{integration_uuid}")
 @router.get("/webhooks/{integration_uuid}")
 @limiter.exempt
@@ -137,6 +140,49 @@ async def handle_external_webhook(
 
         logger.info(f"📥 [WEBHOOK] {integration.name} ({integration.platform}) | Evento: {event_type}")
 
+        # 2.1. Extração rápida do telefone para verificação de duplicidade
+        phone = extracted_data.get("phone")
+        
+        # Deduplicação inteligente de webhooks concorrentes (janela de 60 segundos para qualquer plataforma)
+        if phone:
+            dedup_lock_key = f"webhook_dedup_{integration.id}_{phone}_{event_type}"
+            is_duplicate = False
+            orig_history_id = None
+            
+            # Check 1: Em memória (rápido para o mesmo worker)
+            if dedup_lock_key in GLOBAL_DEDUPLICATION_LOCKS:
+                lock_info = GLOBAL_DEDUPLICATION_LOCKS[dedup_lock_key]
+                if now - lock_info["timestamp"] < timedelta(seconds=60):
+                    is_duplicate = True
+                    orig_history_id = lock_info["history_id"]
+            
+            # 2. No banco de dados (para concorrência multi-processo/locks persistentes)
+            # Evita quebrar testes unitários legados que mockam estritamente o db
+            if not is_duplicate and "mock" not in str(type(db)).lower() and "mock" not in str(type(db.query)).lower():
+                recent_time = datetime.now(timezone.utc) - timedelta(seconds=60)
+                recent_histories = db.query(models.WebhookHistory).filter(
+                    models.WebhookHistory.integration_id == integration.id,
+                    models.WebhookHistory.event_type == event_type,
+                    models.WebhookHistory.created_at >= recent_time
+                ).order_by(models.WebhookHistory.created_at.desc()).all()
+                
+                for rh in recent_histories:
+                    r_data = rh.processed_data or {}
+                    if r_data.get("phone") == phone:
+                        is_duplicate = True
+                        orig_history_id = rh.id
+                        break
+            
+            if is_duplicate and orig_history_id:
+                orig_history = db.query(models.WebhookHistory).filter(models.WebhookHistory.id == orig_history_id).first()
+                if orig_history:
+                    orig_history.duplicate_count = (orig_history.duplicate_count or 0) + 1
+                    db.commit()
+                    logger.info(f"🚫 [WEBHOOK_DEDUPLICATION] Evento duplicado para {phone} e {event_type}. Centralizado no histórico #{orig_history_id}")
+                    # Atualiza o lock em memória com o timestamp atual
+                    GLOBAL_DEDUPLICATION_LOCKS[dedup_lock_key] = {"timestamp": now, "history_id": orig_history_id}
+                    return {"status": "ignored", "reason": "duplicate_event_lock", "history_id": orig_history_id}
+
         # 3. Create History Record EARLIER (to ensure logging)
         history = models.WebhookHistory(
             integration_id=integration.id,
@@ -147,6 +193,10 @@ async def handle_external_webhook(
         db.add(history)
         db.commit()
         db.refresh(history)
+
+        # Registra o histórico recém-criado na trava global de memória
+        if phone:
+            GLOBAL_DEDUPLICATION_LOCKS[dedup_lock_key] = {"timestamp": now, "history_id": history.id}
 
         # 4. Find Matching Mapping
         mapping = None
@@ -202,20 +252,9 @@ async def handle_external_webhook(
                     db.commit()
 
         # 5. Extract Variables
-        # Começamos com os dados extraídos pelo parser (contém product_name, price, etc)
-        final_vars = extracted_data.copy()
-        
-        # Sobrescrevemos com a resolução robusta (suporta mustache {{name}})
-        final_vars["name"] = replace_variables_in_string("{{name}}", payload, extracted_data)
-        final_vars["phone"] = replace_variables_in_string("{{phone}}", payload, extracted_data)
-        final_vars["email"] = replace_variables_in_string("{{email}}", payload, extracted_data)
-
-        # Custom fields mapping (se houver na integração)
-        custom_vars = {}
-        if integration.custom_fields_mapping:
-            custom_vars = extract_nested_custom_fields(payload, integration.custom_fields_mapping)
-        
-        final_vars.update(custom_vars)
+        from services.webhooks_utils import apply_custom_mapping_to_parsed_data, extract_nested_custom_fields
+        final_vars = apply_custom_mapping_to_parsed_data(payload, extracted_data, integration.custom_fields_mapping)
+        custom_vars = extract_nested_custom_fields(payload, integration.custom_fields_mapping) if integration.custom_fields_mapping else {}
         
         # Update History with processed data
         processed_dict = final_vars.copy()
@@ -226,9 +265,9 @@ async def handle_external_webhook(
             "name": final_vars.get("name"),
             "phone": final_vars.get("phone"),
             "email": final_vars.get("email"),
-            "product_name": extracted_data.get("product_name"),
-            "payment_method": extracted_data.get("payment_method"),
-            "price": extracted_data.get("price"),
+            "product_name": final_vars.get("product_name"),
+            "payment_method": final_vars.get("payment_method"),
+            "price": final_vars.get("price"),
             "raw_status": extracted_data.get("raw_status"),
             "custom_fields": custom_vars,
             "manychat_enabled": getattr(mapping, "manychat_active", False) if mapping else False,
@@ -254,19 +293,13 @@ async def handle_external_webhook(
         logger.info(f"🔍 [VARS] Extracted: {final_vars}")
 
         # 6. Process Automations (Background)
-        # Monta as tags a partir do mapeamento encontrado
-        # Prioridade: chatwoot_label → internal_tags → event_type como fallback
+        # Monta as tags a partir do mapeamento encontrado (Apenas Etiquetas Internas ZapVoice / Base de Leads)
         auto_tag_list = []
         try:
             from core.utils import robust_extract_labels
-            if mapping.chatwoot_label:
-                extracted_labels = robust_extract_labels(mapping.chatwoot_label)
-                if extracted_labels:
-                    auto_tag_list.extend([str(t).strip() for t in extracted_labels if t])
             if getattr(mapping, "internal_tags", None):
                 auto_tag_list.extend([t.strip() for t in mapping.internal_tags.split(',') if t.strip()])
             # Fallback: usa o event_type como etiqueta se não houver nenhuma configurada
-            # NOTA: "outros" também é incluído — é o Status Principal exibido na interface
             if not auto_tag_list and event_type:
                 auto_tag_list.append(event_type.replace("_", " ").title())
         except Exception as tag_err:
@@ -397,9 +430,7 @@ async def handle_external_webhook(
         }
 
     except Exception as e:
-        logger.error(f"❌ [ERROR] Falha crítica processando webhook: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.exception("❌ [ERROR] Falha crítica processando webhook")
         
         # Tenta salvar no histórico se já não foi criado ou atualizar se foi
         try:

@@ -1,6 +1,7 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.2.0)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.3.0)
 
-Versão com suporte a **Chat Local** integrado com Chatwoot (conversas, mensagens, notas e envio de templates), gestão de **Marcadores/Labels**, **Chaves de API (API Keys)** para controle de acesso seguro a webhooks, e **Mapeamento de Campos de Contato** dinâmico nas integrações.
+Versão com suporte a **Configuração de Botões HSM no Chat**, **Regras de Bloqueio Rápido**, **Modais de Carregamento Premium**, **Integração de Webhook de Memória** e **Proteção de Sobrescrita de Nomes de Leads**.
+
 
 O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
 
@@ -51,9 +52,16 @@ Criação gráfica em estilo *drag-and-drop* de fluxos de conversação intelige
 ### 4. Chat Local & Sincronização Chatwoot
 Visualização e controle de conversas diretamente no painel do ZapVoice:
 *   **Mensagens e Templates**: Histórico de interações do cliente, notas de contexto do sistema e disparo manual de templates.
+*   **Ações de Resposta Rápida (Botões HSM)**: Permite configurar o comportamento ao clicar nos botões do template (Nenhuma ação, Interação com início de Funil automático, ou Bloqueio do contato imediato).
+*   **Janela de 24h & Inteligência de Custo**: Indicador visual inteligente no modal e avisos informativos sobre o custo de envio do template ( HSM Pago vs Mensagem Gratuita na janela de 24 horas ativa).
+*   **Desbloqueio & Toggle Rápido**: Clicar no botão vermelho de bloqueio de um contato já bloqueado executa a ação de desbloqueio rápido direto do cabeçalho.
+*   **Carregamento Premium**: Modal centralizado com spinner dinâmico e desfoque de fundo (backdrop-blur) ao carregar conversas com rolagem automática inteligente para a última mensagem.
+*   **Integração de Webhook de Memória**: O envio do template HSM notifica imediatamente o assistente de IA/n8n com o conteúdo de texto resolvido e o ID interno da mensagem.
+*   **Proteção de Sobrescrita de Nomes**: Mecanismo no backend que protege o nome real dos contatos e impede que webhooks externos os sobrescrevam com valores genéricos (como `Lead_3586`).
 *   **Marcadores/Labels**: Gerenciamento de tags e rótulos aplicados a cada conversa para segmentação ágil.
 *   **Remoção Automática de Etiquetas**: Configuração de etiquetas a serem removidas automaticamente da conversa do chat interno quando a janela de 24 horas expira.
 *   **Filtro de Conversas por Data**: Possibilidade de segmentar conversas no atendimento em tempo real por data específica ou intervalo de datas (De/Até).
+
 
 ### 5. API Keys e Segurança
 *   Geração e revogação de tokens de autenticação (`API Keys`) para garantir que apenas sistemas autorizados possam acionar webhooks públicos e rotas sensíveis do backend.

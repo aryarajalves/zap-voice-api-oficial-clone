@@ -17,3 +17,15 @@
 ## [2026-06-30] Nova Coluna em webhook_event_mappings
 - Adicionada a coluna `button_actions` (JSON/JSONB) à tabela `webhook_event_mappings` para armazenar as configurações e comportamentos dos botões dos templates.
 - Script de Migração: `add_button_actions_to_mappings.py` sob a pasta `backend/scripts/database/`.
+
+## [2026-07-08] Alteração de Chave Primária em whatsapp_template_cache
+- Alterada a chave primária da tabela `whatsapp_template_cache` para ser uma chave composta por `(id, client_id)` para isolar templates de diferentes inquilinos compartilhando a mesma conta da Meta.
+- Script de Migração: `migrate_template_cache_pk.py` sob a pasta `backend/scripts/`.
+
+## [2026-07-08] Nova Coluna em whatsapp_template_cache
+- Adicionado mapeamento e coluna `category` (VARCHAR/String) na tabela `whatsapp_template_cache` para armazenar de forma persistente e isolada as categorias reais (marketing/utility) dos templates.
+- Script de Migração: `add_category_column.py` sob a pasta `backend/scripts/`.
+
+## [2026-07-09] Novo Índice Composto em chat_messages
+- Adicionado índice composto `idx_chat_messages_convo_time` na tabela `chat_messages` sobre as colunas `(conversation_id, timestamp)` para otimizar a paginação de mensagens de conversas ativas.
+- Script de Migração: `add_composite_chat_index.py` sob a pasta `backend/`.

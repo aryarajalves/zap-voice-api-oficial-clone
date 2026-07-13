@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Index
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
 from database import Base
 
@@ -20,9 +20,29 @@ class ChatConversation(Base):
     last_contact_message_at = Column(DateTime(timezone=True), nullable=True)
     pinned = Column(Boolean, default=False, nullable=False)
     private_note = Column(String, nullable=True)
+    human_handover_at = Column(DateTime(timezone=True), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    @validates('labels')
+    def validate_labels(self, key, value):
+        if not value:
+            return []
+        if not isinstance(value, list):
+            return value
+        unique_labels = []
+        seen = set()
+        for l in value:
+            if isinstance(l, str):
+                l_clean = l.strip()
+                l_lower = l_clean.lower()
+                if l_lower not in seen:
+                    seen.add(l_lower)
+                    unique_labels.append(l_clean)
+            else:
+                unique_labels.append(l)
+        return unique_labels
 
     # Relationships
     client = relationship("Client", backref="chat_conversations")
@@ -32,6 +52,9 @@ class ChatConversation(Base):
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
+    __table_args__ = (
+        Index('idx_chat_messages_convo_time', 'conversation_id', 'timestamp'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(Integer, ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False, index=True)

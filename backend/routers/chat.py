@@ -9,75 +9,14 @@ import models
 from core.clients.whatsapp.client import WhatsAppClient
 from datetime import datetime, timezone
 import os
+from chatwoot_client import ChatwootClient
 import httpx
 import mimetypes
 import tempfile
+from services.chat_media_service import upload_media_to_meta_from_url
 
 logger = setup_logger("ChatRouter")
 router = APIRouter()
-
-async def _upload_media_to_meta_from_url(wa_client: WhatsAppClient, media_url: str, media_type: str) -> Optional[str]:
-    """
-    Baixa a mídia de uma URL (resolvendo URLs internas do MinIO quando necessário)
-    e faz upload para a Meta, retornando o media_id.
-    Retorna None se falhar (neste caso, deve-se tentar enviar por link).
-    """
-    # Resolver URL interna do MinIO: substituir URL pública pelo hostname interno
-    internal_url = media_url
-    s3_public_url = os.getenv("S3_PUBLIC_URL", "")
-    s3_endpoint_url = os.getenv("S3_ENDPOINT_URL", "")
-    
-    if s3_public_url and s3_endpoint_url and s3_public_url in media_url:
-        # Substituir URL pública (localhost:9005) pela URL interna do container (zapvoice-minio:9000)
-        internal_url = media_url.replace(s3_public_url, s3_endpoint_url)
-        logger.info(f"🔄 [CHAT_MEDIA] Resolvendo URL interna do MinIO: {s3_public_url} -> {s3_endpoint_url}")
-    
-    # Determinar o tipo MIME correto
-    ext_map = {
-        "image": "image/jpeg",
-        "video": "video/mp4",
-        "audio": "audio/ogg",
-        "document": "application/pdf"
-    }
-    
-    try:
-        # Baixar o arquivo
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            logger.info(f"📥 [CHAT_MEDIA] Baixando arquivo de: {internal_url}")
-            r = await client.get(internal_url)
-            if r.status_code != 200:
-                logger.error(f"❌ [CHAT_MEDIA] Falha ao baixar arquivo ({r.status_code}): {internal_url}")
-                return None
-            
-            content = r.content
-            content_type = r.headers.get("content-type", "").split(";")[0].strip()
-            if not content_type or content_type == "application/octet-stream":
-                content_type = ext_map.get(media_type, "application/octet-stream")
-            
-            # Salvar em arquivo temporário
-            ext = mimetypes.guess_extension(content_type) or f".{media_type}"
-            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
-        
-        # Upload para a Meta
-        logger.info(f"📤 [CHAT_MEDIA] Fazendo upload para a Meta | tipo: {content_type}")
-        media_id = await wa_client.upload_media_to_meta(tmp_path, content_type)
-        
-        if media_id:
-            logger.info(f"✅ [CHAT_MEDIA] Upload para Meta bem-sucedido! media_id: {media_id}")
-        else:
-            logger.error(f"❌ [CHAT_MEDIA] Meta não retornou media_id")
-        
-        return media_id
-    except Exception as e:
-        logger.error(f"❌ [CHAT_MEDIA] Erro ao fazer upload para a Meta: {e}")
-        return None
-    finally:
-        try:
-            if 'tmp_path' in locals() and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        except: pass
 
 def get_client_id(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
@@ -133,6 +72,10 @@ async def list_conversations(
     has_note: Optional[bool] = None,  # só conversas com anotação privada preenchida
     start_date: Optional[str] = None,  # formato YYYY-MM-DD
     end_date: Optional[str] = None,    # formato YYYY-MM-DD
+    unread_only: Optional[bool] = None,
+    window_open_only: Optional[bool] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1),
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -145,6 +88,16 @@ async def list_conversations(
     # Filtro de Status
     if status != "all":
         query = query.filter(models.ChatConversation.status == status)
+
+    # Filtro: não lidas apenas
+    if unread_only:
+        query = query.filter(models.ChatConversation.unread_count > 0)
+
+    # Filtro: janela de 24h aberta apenas
+    if window_open_only:
+        from datetime import timedelta
+        limit_time = datetime.utcnow() - timedelta(hours=24)
+        query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
 
     # Filtro por Datas
     if start_date:
@@ -256,11 +209,23 @@ async def list_conversations(
             "block_status": block_type,  # None | "blocked" | "resting"
             "resting_until": resting_until.isoformat() if resting_until else None
         })
-    return result
+    total_count = len(result)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_result = result[start_idx:end_idx]
+
+    return {
+        "conversations": paginated_result,
+        "total_count": total_count,
+        "page": page,
+        "limit": limit
+    }
 
 @router.get("/chat/conversations/{conversation_id}/messages")
 async def list_messages(
     conversation_id: int,
+    limit: int = Query(50, ge=1),
+    before_id: Optional[int] = None,
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -276,9 +241,17 @@ async def list_messages(
     convo.unread_count = 0
     db.commit()
 
-    messages = db.query(models.ChatMessage).filter(
+    query = db.query(models.ChatMessage).filter(
         models.ChatMessage.conversation_id == conversation_id
-    ).order_by(models.ChatMessage.timestamp.asc()).all()
+    )
+
+    if before_id is not None:
+        query = query.filter(models.ChatMessage.id < before_id)
+
+    # Obter os mais recentes primeiro para limitar
+    messages = query.order_by(models.ChatMessage.timestamp.desc(), models.ChatMessage.id.desc()).limit(limit).all()
+    # Reverter em Python para retornar em ordem cronológica (asc)
+    messages.reverse()
 
     result = []
     for m in messages:
@@ -367,11 +340,6 @@ async def send_chat_message(
     )
     db.add(new_message)
 
-    # Atualizar dados da conversa
-    convo.last_message_content = f"🔒 Nota: {content}" if is_private else content
-    convo.unread_count = 0  # Resposta do agente ou nota zera mensagens não lidas
-    convo.last_message_at = datetime.now(timezone.utc)
-    
     db.commit()
 
     return {
@@ -383,6 +351,198 @@ async def send_chat_message(
         "content": new_message.content,
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
         "wa_message_id": new_message.wa_message_id
+    }
+
+@router.post("/chat/conversations/{conversation_id}/template")
+async def send_chat_template(
+    conversation_id: int,
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    template_name = payload.get("template_name")
+    language = payload.get("language", "pt_BR")
+    components = payload.get("components")
+    button_actions = payload.get("button_actions")  # ex: {"Texto Botão": {"type": "block"|"interaction", "funnel_id": 123}}
+
+    # --- Verificar janela de 24h para fins informativos (saber se o envio sairá grátis) ---
+    window_open = False
+    if convo.last_contact_message_at:
+        last_msg_time = convo.last_contact_message_at
+        if last_msg_time.tzinfo is None:
+            last_msg_time = last_msg_time.replace(tzinfo=timezone.utc)
+        diff = datetime.now(timezone.utc) - last_msg_time
+        window_open = diff.total_seconds() <= 24 * 3600
+
+    # Sempre envia como Template oficial para garantir que os botões interativos apareçam
+    cw = ChatwootClient(client_id=client_id)
+    logger.info(f"Sending chat template HSM '{template_name}' to {convo.phone} (window_open={window_open})")
+    result = await cw.send_template(convo.phone, template_name, language, components)
+
+    if not result or (isinstance(result, dict) and result.get("error")):
+        err_detail = result.get("detail") if result else "Sem resposta do WhatsApp"
+        raise HTTPException(status_code=500, detail=f"Erro Meta API: {err_detail}")
+
+    wa_msg_id = None
+    if isinstance(result, dict):
+        messages = result.get("messages", [])
+        if messages:
+            wa_msg_id = messages[0].get("id")
+            if wa_msg_id:
+                wa_msg_id = wa_msg_id.replace("wamid.", "")
+
+    sent_as_text = window_open  # Usaremos esta flag para indicar se o envio ocorreu de graça na janela
+
+
+
+
+    content = f"[Template: {template_name}]"
+    header_info = None
+    buttons_info = []
+
+    try:
+        tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+            models.WhatsAppTemplateCache.client_id == client_id,
+            models.WhatsAppTemplateCache.name == template_name
+        ).first()
+        if tpl_cache:
+            if tpl_cache.body:
+                content = tpl_cache.body
+            if components:
+                try:
+                    body_params = []
+                    for comp in components:
+                        if comp.get("type") == "body":
+                            for param in comp.get("parameters", []):
+                                if param.get("type") == "text":
+                                    body_params.append(str(param.get("text")))
+                    for idx, val in enumerate(body_params):
+                        content = content.replace(f"{{{{{idx+1}}}}}", val)
+                except Exception as e_replace:
+                    logger.error(f"Erro ao substituir variáveis do template: {e_replace}")
+            
+            if tpl_cache.components:
+                for comp in tpl_cache.components:
+                    comp_type = str(comp.get("type", "")).upper()
+                    if comp_type == "HEADER":
+                        h_format = comp.get("format", "TEXT")
+                        h_text = comp.get("text")
+                        header_info = {"format": h_format, "text": h_text}
+                    elif comp_type == "BUTTONS":
+                        for btn in comp.get("buttons", []):
+                            btn_text = btn.get("text")
+                            if btn_text:
+                                buttons_info.append(btn_text)
+    except Exception as e_cache:
+        logger.error(f"Erro ao buscar cache do template: {e_cache}")
+
+    meta_data = {
+        "is_template": True,
+        "template_name": template_name,
+        "header": header_info,
+        "buttons": buttons_info
+    }
+    if sent_as_text:
+        meta_data["is_free_message"] = True
+
+
+    new_message = models.ChatMessage(
+        conversation_id=convo.id,
+        sender_type="user",
+        user_id=current_user.id,
+        message_type="text",
+        content=content,
+        wa_message_id=wa_msg_id,
+        meta_data=meta_data
+    )
+    db.add(new_message)
+
+    # Reabre a janela de 24h (para fins de interface e exibição local)
+    convo.last_message_content = content
+    convo.unread_count = 0
+    db.commit()
+    db.refresh(new_message)
+
+    # Criar ScheduledTrigger para rastrear button_actions deste template
+    # Permite que o worker execute bloqueio ou disparo de funil quando o contato clicar em um botão
+    if button_actions:
+        try:
+            btn_trigger = models.ScheduledTrigger(
+                client_id=client_id,
+                funnel_id=None,
+                status='sent',
+                is_bulk=False,
+                contact_phone=convo.phone,
+                contact_name=convo.contact_name or '',
+                conversation_id=convo.id,
+                template_name=template_name,
+                button_actions=button_actions,
+                contacts_list=[{
+                    "id": str(convo.id),
+                    "meta": {"sender": {"name": convo.contact_name or '', "phone_number": convo.phone}}
+                }],
+                scheduled_time=datetime.now(timezone.utc)
+            )
+            db.add(btn_trigger)
+            db.commit()
+            logger.info(f"🎯 [CHAT_TEMPLATE] ScheduledTrigger criado (id={btn_trigger.id}) com button_actions para {convo.phone}: {list(button_actions.keys())}")
+        except Exception as e_btn:
+            logger.error(f"⚠️ [CHAT_TEMPLATE] Falha ao criar ScheduledTrigger para button_actions: {e_btn}")
+
+    # Disparar webhook de memória para o template enviado pelo Chat
+    try:
+        import asyncio
+        from services.ai_memory import notify_agent_memory_webhook
+        asyncio.create_task(notify_agent_memory_webhook(
+            client_id=client_id,
+            phone=convo.phone,
+            name=convo.contact_name or convo.phone,
+            template_name=template_name,
+            content=content,
+            internal_contact_id=new_message.id,
+            dono="agente"
+        ))
+    except Exception as e_mem:
+        logger.error(f"⚠️ [CHAT_TEMPLATE] Falha ao enviar para o webhook de memória: {e_mem}")
+
+    # Broadcast via WebSocket em tempo real para o frontend
+
+    try:
+        from rabbitmq_client import rabbitmq
+        payload_ws = {
+            "id": new_message.id,
+            "conversation_id": new_message.conversation_id,
+            "sender_type": new_message.sender_type,
+            "message_type": new_message.message_type,
+            "content": new_message.content,
+            "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
+            "wa_message_id": new_message.wa_message_id,
+            "meta_data": new_message.meta_data,
+            "client_id": client_id
+        }
+        await rabbitmq.publish_event("new_message", payload_ws)
+    except Exception as e_ws:
+        logger.error(f"Erro no broadcast de template enviado: {e_ws}")
+
+    return {
+        "id": new_message.id,
+        "conversation_id": new_message.conversation_id,
+        "sender_type": new_message.sender_type,
+        "user_id": new_message.user_id,
+        "message_type": new_message.message_type,
+        "content": new_message.content,
+        "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
+        "wa_message_id": new_message.wa_message_id,
+        "meta_data": new_message.meta_data,
+        "sent_as_text": sent_as_text  # True = enviado como texto livre (janela aberta), False = template HSM
     }
 
 @router.post("/chat/conversations/{conversation_id}/labels")
@@ -404,9 +564,46 @@ async def update_conversation_labels(
     if not isinstance(labels, list):
         raise HTTPException(status_code=400, detail="Etiquetas devem ser enviadas em formato de lista.")
 
+    old_labels = convo.labels or []
+    
+    # Adicionado: Definir human_handover_at se a etiqueta de humano foi colocada manualmente
+    from config_loader import get_setting
+    human_label = get_setting("WA_HUMAN_LABEL", "", client_id=client_id).strip()
+    if human_label:
+        clean_human_label = human_label.lower()
+        has_human_label = clean_human_label in [l.lower() for l in labels]
+        
+        # Se contiver a etiqueta e o human_handover_at estiver nulo, define
+        if has_human_label and not convo.human_handover_at:
+            convo.human_handover_at = datetime.now(timezone.utc)
+        # Se a etiqueta de humano foi removida, limpa a data
+        elif not has_human_label and convo.human_handover_at:
+            convo.human_handover_at = None
+
+    # Detectar adição e remoção de etiquetas para registrar no histórico
+    added = [l for l in labels if l not in old_labels]
+    removed = [l for l in old_labels if l not in labels]
+    
+    events = []
+    if added:
+        events.append(f"adicionou marcador(es): {', '.join(added)}")
+    if removed:
+        events.append(f"removeu marcador(es): {', '.join(removed)}")
+        
+    if events:
+        event_text = f"O atendente {current_user.full_name or current_user.email} " + " e ".join(events)
+        system_msg = models.ChatMessage(
+            conversation_id=conversation_id,
+            sender_type="system",
+            message_type="text",
+            content=event_text,
+            timestamp=datetime.now(timezone.utc)
+        )
+        db.add(system_msg)
+
     convo.labels = labels
     db.commit()
-    return {"status": "ok", "labels": convo.labels}
+    return {"status": "ok", "labels": convo.labels, "human_handover_at": convo.human_handover_at.isoformat() if convo.human_handover_at else None}
 
 @router.post("/chat/conversations/{conversation_id}/status")
 async def update_conversation_status(
@@ -447,13 +644,38 @@ async def assign_conversation(
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")
 
     user_id = payload.get("user_id")
+    old_assigned = convo.assigned_user.full_name if convo.assigned_user else None
+    
     if user_id is not None:
         target_user = db.query(models.User).filter(models.User.id == user_id).first()
         if not target_user:
             raise HTTPException(status_code=400, detail="Usuário não encontrado para atribuição.")
         convo.assigned_user_id = user_id
+        new_assigned = target_user.full_name
+        
+        # Registrar evento de atribuição
+        event_text = f"O atendente {current_user.full_name or current_user.email} atribuiu a conversa para {new_assigned}"
+        system_msg = models.ChatMessage(
+            conversation_id=conversation_id,
+            sender_type="system",
+            message_type="text",
+            content=event_text,
+            timestamp=datetime.now(timezone.utc)
+        )
+        db.add(system_msg)
     else:
         convo.assigned_user_id = None
+        if old_assigned:
+            # Registrar evento de remoção de atribuição
+            event_text = f"O atendente {current_user.full_name or current_user.email} removeu a atribuição de {old_assigned}"
+            system_msg = models.ChatMessage(
+                conversation_id=conversation_id,
+                sender_type="system",
+                message_type="text",
+                content=event_text,
+                timestamp=datetime.now(timezone.utc)
+            )
+            db.add(system_msg)
 
     db.commit()
     return {
@@ -480,257 +702,7 @@ async def mark_as_read(
     db.commit()
     return {"status": "ok"}
 
-class ChatLabelCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    color: str = Field("#3B82F6", max_length=7)
 
-class ChatLabelOut(BaseModel):
-    id: int
-    name: str
-    color: str
-    is_legacy: bool = False
-
-    class Config:
-        from_attributes = True
-
-@router.get("/chat/labels")
-async def list_chat_labels(
-    client_id: int = Depends(get_client_id),
-    db: Session = Depends(get_db)
-):
-    if not client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
-    
-    # 1. Obter etiquetas definidas globalmente no banco de dados
-    db_labels = db.query(models.ChatLabel).filter(
-        models.ChatLabel.client_id == client_id
-    ).all()
-    
-    unique_labels = set(label.name for label in db_labels)
-    
-    # 2. Obter etiquetas legadas extraídas dinamicamente de conversas ativas
-    convs = db.query(models.ChatConversation).filter(
-        models.ChatConversation.client_id == client_id,
-        models.ChatConversation.labels.isnot(None)
-    ).all()
-    
-    for c in convs:
-        if isinstance(c.labels, list):
-            for label in c.labels:
-                unique_labels.add(label)
-                
-    return sorted(list(unique_labels))
-
-@router.get("/chat/labels/details", response_model=List[ChatLabelOut])
-async def list_chat_labels_details(
-    client_id: int = Depends(get_client_id),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if not client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
-    
-    # 1. Obter etiquetas definidas no banco
-    db_labels = db.query(models.ChatLabel).filter(
-        models.ChatLabel.client_id == client_id
-    ).order_by(models.ChatLabel.created_at.desc()).all()
-    
-    registered_names = {label.name.lower(): label for label in db_labels}
-    
-    # 2. Obter etiquetas extraídas dinamicamente de conversas ativas
-    convs = db.query(models.ChatConversation).filter(
-        models.ChatConversation.client_id == client_id,
-        models.ChatConversation.labels.isnot(None)
-    ).all()
-    
-    legacy_labels = {}
-    for c in convs:
-        if isinstance(c.labels, list):
-            for label_name in c.labels:
-                name_clean = label_name.strip()
-                if not name_clean:
-                    continue
-                name_lower = name_clean.lower()
-                # Se não estiver cadastrado e ainda não foi listado na pilha legacy
-                if name_lower not in registered_names and name_lower not in legacy_labels:
-                    legacy_labels[name_lower] = {
-                        "id": 0,  # ID 0 indica que é dinâmico/legacy
-                        "name": name_clean,
-                        "color": "#64748B",  # Cor cinza ardósia neutra
-                        "is_legacy": True
-                    }
-    
-    # Unificar a lista (cadastrados primeiro, depois os dinâmicos/legacy)
-    result = []
-    for label in db_labels:
-        result.append({
-            "id": label.id,
-            "name": label.name,
-            "color": label.color,
-            "is_legacy": False
-        })
-    for legacy in legacy_labels.values():
-        result.append(legacy)
-        
-    return result
-
-@router.post("/chat/labels", response_model=ChatLabelOut)
-async def create_chat_label(
-    payload: ChatLabelCreate,
-    client_id: int = Depends(get_client_id),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if not client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
-        
-    label_name = payload.name.strip()
-    
-    # Verificar se etiqueta já existe com este nome para o cliente
-    exists = db.query(models.ChatLabel).filter(
-        models.ChatLabel.client_id == client_id,
-        models.ChatLabel.name.ilike(label_name)
-    ).first()
-    
-    if exists:
-        raise HTTPException(status_code=400, detail="Já existe um marcador com este nome.")
-        
-    try:
-        db_label = models.ChatLabel(
-            client_id=client_id,
-            name=label_name,
-            color=payload.color.strip()
-        )
-        db.add(db_label)
-        db.commit()
-        db.refresh(db_label)
-        return db_label
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Erro ao criar marcador: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno ao criar marcador.")
-
-@router.put("/chat/labels/{label_id}", response_model=ChatLabelOut)
-async def update_chat_label(
-    label_id: int,
-    payload: ChatLabelCreate,
-    client_id: int = Depends(get_client_id),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if not client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
-        
-    label_name = payload.name.strip()
-    
-    # 1. Se label_id for 0 (dinâmico/legacy), convertemos em um novo registro salvo no banco
-    if label_id == 0:
-        # Verificar se já existe cadastrada com este nome
-        exists = db.query(models.ChatLabel).filter(
-            models.ChatLabel.client_id == client_id,
-            models.ChatLabel.name.ilike(label_name)
-        ).first()
-        if exists:
-            # Se já existe, atualizamos apenas a cor
-            exists.color = payload.color.strip()
-            db.commit()
-            db.refresh(exists)
-            return exists
-            
-        db_label = models.ChatLabel(
-            client_id=client_id,
-            name=label_name,
-            color=payload.color.strip()
-        )
-        db.add(db_label)
-        db.commit()
-        db.refresh(db_label)
-        return db_label
-        
-    # 2. Se label_id > 0, atualizamos a etiqueta existente
-    db_label = db.query(models.ChatLabel).filter(
-        models.ChatLabel.id == label_id,
-        models.ChatLabel.client_id == client_id
-    ).first()
-    
-    if not db_label:
-        raise HTTPException(status_code=404, detail="Marcador não encontrado.")
-        
-    # Verificar se novo nome está em uso por outro marcador
-    duplicate = db.query(models.ChatLabel).filter(
-        models.ChatLabel.client_id == client_id,
-        models.ChatLabel.name.ilike(label_name),
-        models.ChatLabel.id != label_id
-    ).first()
-    
-    if duplicate:
-        raise HTTPException(status_code=400, detail="Já existe outro marcador com este nome.")
-        
-    try:
-        db_label.name = label_name
-        db_label.color = payload.color.strip()
-        db.commit()
-        db.refresh(db_label)
-        return db_label
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Erro ao atualizar marcador: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno ao atualizar marcador.")
-
-@router.delete("/chat/labels/{label_id}")
-async def delete_chat_label(
-    label_id: int,
-    name: Optional[str] = Query(None),
-    client_id: int = Depends(get_client_id),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if not client_id:
-        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
-        
-    label_name_to_remove = None
-    
-    if label_id > 0:
-        db_label = db.query(models.ChatLabel).filter(
-            models.ChatLabel.id == label_id,
-            models.ChatLabel.client_id == client_id
-        ).first()
-        
-        if not db_label:
-            raise HTTPException(status_code=404, detail="Marcador não encontrado.")
-            
-        label_name_to_remove = db_label.name
-        try:
-            db.delete(db_label)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            logger.error(f"❌ Erro ao excluir marcador do banco: {e}")
-            raise HTTPException(status_code=500, detail="Erro interno ao excluir marcador do banco.")
-    else:
-        # Exclusão de etiqueta legacy
-        if not name:
-            raise HTTPException(status_code=400, detail="Nome da etiqueta não fornecido para exclusão legacy.")
-        label_name_to_remove = name.strip()
-        
-    # Limpar a etiqueta de todas as conversas do cliente
-    if label_name_to_remove:
-        try:
-            convs = db.query(models.ChatConversation).filter(
-                models.ChatConversation.client_id == client_id,
-                models.ChatConversation.labels.isnot(None)
-            ).all()
-            for convo in convs:
-                if isinstance(convo.labels, list) and label_name_to_remove in convo.labels:
-                    convo.labels = [l for l in convo.labels if l != label_name_to_remove]
-            db.commit()
-            return {"status": "ok", "message": f"Marcador '{label_name_to_remove}' removido do banco e de todas as conversas."}
-        except Exception as e:
-            db.rollback()
-            logger.error(f"❌ Erro ao remover marcador das conversas: {e}")
-            raise HTTPException(status_code=500, detail="Erro interno ao desvincular marcador das conversas.")
-            
-    return {"status": "ok", "message": "Nenhuma ação realizada."}
 
 @router.get("/chat/media/{media_id}")
 async def proxy_whatsapp_media(
@@ -849,7 +821,17 @@ async def send_chat_media_message(
     # Para imagem/vídeo/documento: fazer upload para a Meta antes de enviar
     meta_media_id = None
     if m_type in ["image", "video", "document"]:
-        meta_media_id = await _upload_media_to_meta_from_url(wa_client, media_url, m_type)
+        meta_media_id = await upload_media_to_meta_from_url(wa_client, media_url, m_type)
+        if meta_media_id is None:
+            # Upload falhou — provavelmente arquivo acima do limite da Meta
+            LIMIT_LABELS = {"image": "5 MB", "video": "16 MB", "document": "100 MB"}
+            limit_label = LIMIT_LABELS.get(m_type, "16 MB")
+            logger.error(f"❌ [CHAT_MEDIA] Falha no upload para Meta (arquivo muito grande ou erro de API) | tipo: {m_type}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Não foi possível enviar a mídia. O arquivo pode ser muito grande para o WhatsApp (limite: {limit_label}) ou houve um erro na API da Meta."
+            )
+
 
     try:
         if m_type == "image":
@@ -1083,9 +1065,14 @@ async def delete_conversations_bulk(
     return {"status": "ok", "deleted_count": count}
 
 
+class ResendAgentFlowPayload(BaseModel):
+    content: Optional[str] = None
+
+
 @router.post("/chat/messages/{message_id}/resend-agentflow")
 async def resend_message_to_agentflow(
     message_id: int,
+    payload_data: Optional[ResendAgentFlowPayload] = None,
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1111,6 +1098,11 @@ async def resend_message_to_agentflow(
     if message.sender_type != "contact":
         raise HTTPException(status_code=400, detail="Apenas mensagens recebidas de contatos podem ser enviadas ao AgentFlow.")
         
+    # Se fornecido conteúdo modificado, atualizar no banco
+    if payload_data and payload_data.content is not None:
+        message.content = payload_data.content
+        db.commit()
+        
     # 4. Buscar webhook url
     webhook_url = get_setting("CHAT_MESSAGES_WEBHOOK_URL", "", client_id=client_id)
     if not webhook_url or not webhook_url.strip():
@@ -1123,9 +1115,30 @@ async def resend_message_to_agentflow(
     ).first()
     bsud = lead.bsud if lead else None
     
+    # Calcular metadados da janela de 24h
+    window_24h_data = None
+    if convo.last_contact_message_at:
+        from datetime import timedelta
+        last_contact_msg_at = convo.last_contact_message_at
+        if last_contact_msg_at.tzinfo is None:
+            last_contact_msg_at = last_contact_msg_at.replace(tzinfo=timezone.utc)
+            
+        expiry = last_contact_msg_at + timedelta(hours=24)
+        now = datetime.now(timezone.utc)
+        remaining = int((expiry - now).total_seconds())
+        if remaining < 0:
+            remaining = 0
+            
+        window_24h_data = {
+            "last_contact_message_at": last_contact_msg_at.isoformat(),
+            "expiry": expiry.isoformat(),
+            "remaining_seconds": remaining
+        }
+    
     payload = {
         "event": "message.created",
         "client_id": client_id,
+        "window_24h": window_24h_data,
         "message": {
             "id": message.id,
             "conversation_id": message.conversation_id,
@@ -1135,13 +1148,17 @@ async def resend_message_to_agentflow(
             "media_url": message.media_url,
             "timestamp": message.timestamp.isoformat() if message.timestamp else datetime.now(timezone.utc).isoformat(),
             "is_private": getattr(message, 'is_private', False),
-            "metadata": message.meta_data or {}
+            "metadata": {
+                **(message.meta_data or {}),
+                "window_24h": window_24h_data
+            }
         },
         "contact": {
             "phone": convo.phone,
             "name": convo.contact_name or convo.phone,
             "bsud": bsud,
-            "labels": convo.labels or []
+            "labels": convo.labels or [],
+            "window_24h": window_24h_data
         }
     }
     
@@ -1154,4 +1171,86 @@ async def resend_message_to_agentflow(
     dispatch_webhook_in_thread(webhook_url, payload, message.id)
     
     return {"status": "success", "detail": "Reenvio de webhook iniciado."}
+
+
+@router.get("/chat/human-conversations")
+async def list_human_conversations(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1),
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from config_loader import get_setting
+    human_label = get_setting("WA_HUMAN_LABEL", "", client_id=client_id).strip()
+    if not human_label:
+        return {"total": 0, "data": []}
+
+    # Buscar conversas que contenham a etiqueta de humano
+    conversations = db.query(models.ChatConversation).filter(
+        models.ChatConversation.client_id == client_id,
+        models.ChatConversation.status == "open"
+    ).all()
+
+    clean_human_label = human_label.lower()
+    human_convos = []
+    for c in conversations:
+        if isinstance(c.labels, list) and clean_human_label in [l.lower() for l in c.labels]:
+            handover_iso = c.human_handover_at.isoformat() if c.human_handover_at else c.last_message_at.isoformat() if c.last_message_at else None
+            human_convos.append({
+                "id": c.id,
+                "phone": c.phone,
+                "contact_name": c.contact_name or c.phone,
+                "human_handover_at": handover_iso,
+                "last_message_content": c.last_message_content,
+                "labels": c.labels
+            })
+
+    total = len(human_convos)
+    
+    # Paginar na memória (já que filtramos pós-query pela tag no campo JSON)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_convos = human_convos[start_idx:end_idx]
+
+    return {
+        "total": total,
+        "data": paginated_convos
+    }
+
+
+@router.post("/chat/conversations/{conversation_id}/finish-human-handover")
+async def finish_human_handover(
+    conversation_id: int,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    from config_loader import get_setting
+    human_label = get_setting("WA_HUMAN_LABEL", "", client_id=client_id).strip()
+    robo_label = get_setting("WA_ROBO_LABEL", "", client_id=client_id).strip()
+
+    current_labels = list(convo.labels or [])
+    
+    # Remover etiqueta humano
+    if human_label and human_label in current_labels:
+        current_labels.remove(human_label)
+    
+    # Adicionar etiqueta robo
+    if robo_label and robo_label not in current_labels:
+        current_labels.append(robo_label)
+        
+    convo.labels = current_labels
+    convo.human_handover_at = None
+    db.commit()
+
+    return {"status": "success", "labels": convo.labels}
+
 

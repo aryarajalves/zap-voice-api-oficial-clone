@@ -4,7 +4,7 @@ import csv
 import io
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc, cast, String, Text
+from sqlalchemy import or_, and_, desc, cast, String, Text, func
 from typing import Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -55,6 +55,11 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
                                 tag, tag_mode, is_locked, has_bsud, date_from, date_to,
                                 imported_by_client_id, origin, exclude_tag=None):
     """Filtros compartilhados entre /leads, /leads/ddi-ddd-filters e afins."""
+    if tag and not isinstance(tag, (list, str)):
+        tag = None
+    if exclude_tag and not isinstance(exclude_tag, (list, str)):
+        exclude_tag = None
+
     if imported_by_client_id:
         query = query.filter(
             or_(
@@ -99,9 +104,19 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
                 tags_filter.extend(parts)
         if tags_filter:
             if tag_mode == "AND":
-                query = query.filter(and_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+                query = query.filter(
+                    and_(*(
+                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                        for t in tags_filter
+                    ))
+                )
             else:
-                query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+                query = query.filter(
+                    or_(*(
+                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                        for t in tags_filter
+                    ))
+                )
 
     if exclude_tag:
         if isinstance(exclude_tag, str):
@@ -115,7 +130,10 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
             # Contato não pode ter NENHUMA das etiquetas excluídas (nem outra que já não tenha tags)
             query = query.filter(
                 and_(*(
-                    or_(models.WebhookLead.tags.is_(None), ~models.WebhookLead.tags.ilike(f"%{t}%"))
+                    or_(
+                        models.WebhookLead.tags.is_(None),
+                        ~func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                    )
                     for t in exclude_tags_filter
                 ))
             )
@@ -257,6 +275,7 @@ def clean_corrupted_tags(
     Sincroniza todos os contatos do cliente:
     - Corrige encoding dos nomes (mojibake) e aplica Title Case
     - Remove tags corrompidas (barras, aspas, JSON malformado)
+    - Unifica contatos duplicados com o mesmo telefone em um único registro
     """
     client_id = x_client_id if x_client_id else current_user.client_id
 
@@ -267,38 +286,203 @@ def clean_corrupted_tags(
     tags_removed = 0
     names_fixed = 0
     leads_affected = 0
+    leads_merged = 0
 
+    from collections import defaultdict
+    phone_groups = defaultdict(list)
+
+    # 1. Agrupar leads por telefone normalizado
     for lead in leads:
-        changed = False
+        if lead.phone:
+            clean_p = re.sub(r"\D", "", lead.phone)
+            if len(clean_p) >= 8:
+                phone_groups[clean_p].append(lead)
 
-        # --- Corrigir nome ---
-        if lead.name:
-            normalized = _normalize_name(lead.name)
-            if normalized != lead.name:
-                lead.name = normalized
-                names_fixed += 1
-                changed = True
+    # 2. Mesclar e remover duplicados
+    for clean_phone, group in phone_groups.items():
+        if len(group) > 1:
+            # Ordena por ID ascendente para obter o principal (mais antigo)
+            sorted_group = sorted(group, key=lambda x: x.id)
+            principal = sorted_group[0]
+            duplicados = sorted_group[1:]
 
-        # --- Limpar tags corrompidas ---
-        if lead.tags:
-            raw_tags = [t.strip() for t in lead.tags.split(',') if t.strip()]
-            clean_tags = [t for t in raw_tags if re.match(r'^[\w\s\-]+$', t, re.UNICODE)]
-            removed = len(raw_tags) - len(clean_tags)
-            if removed > 0:
-                lead.tags = ', '.join(clean_tags) if clean_tags else None
-                tags_removed += removed
-                changed = True
+            principal_changed = False
 
-        if changed:
-            leads_affected += 1
+            # --- Nome ---
+            for dup in duplicados:
+                if dup.name:
+                    if not principal.name or len(dup.name) > len(principal.name):
+                        principal.name = dup.name
+                        principal_changed = True
+
+            # --- E-mail ---
+            if not principal.email:
+                for dup in duplicados:
+                    if dup.email:
+                        principal.email = dup.email
+                        principal_changed = True
+                        break
+
+            # --- BSUD ---
+            if not principal.bsud:
+                for dup in duplicados:
+                    if dup.bsud:
+                        principal.bsud = dup.bsud
+                        principal_changed = True
+                        break
+
+            # --- Metadados de Venda ---
+            if not principal.product_name:
+                for dup in duplicados:
+                    if dup.product_name:
+                        principal.product_name = dup.product_name
+                        principal_changed = True
+                        break
+            if not principal.platform:
+                for dup in duplicados:
+                    if dup.platform:
+                        principal.platform = dup.platform
+                        principal_changed = True
+                        break
+            if not principal.payment_method:
+                for dup in duplicados:
+                    if dup.payment_method:
+                        principal.payment_method = dup.payment_method
+                        principal_changed = True
+                        break
+            if not principal.price:
+                for dup in duplicados:
+                    if dup.price:
+                        principal.price = dup.price
+                        principal_changed = True
+                        break
+
+            # --- Chatwoot e Projetos ---
+            if not principal.chatwoot_conversation_id:
+                for dup in duplicados:
+                    if dup.chatwoot_conversation_id:
+                        principal.chatwoot_conversation_id = dup.chatwoot_conversation_id
+                        principal_changed = True
+                        break
+            if not principal.chatwoot_account_id:
+                for dup in duplicados:
+                    if dup.chatwoot_account_id:
+                        principal.chatwoot_account_id = dup.chatwoot_account_id
+                        principal_changed = True
+                        break
+            if not principal.chatwoot_inbox_id:
+                for dup in duplicados:
+                    if dup.chatwoot_inbox_id:
+                        principal.chatwoot_inbox_id = dup.chatwoot_inbox_id
+                        principal_changed = True
+                        break
+            if not principal.project_id:
+                for dup in duplicados:
+                    if dup.project_id:
+                        principal.project_id = dup.project_id
+                        principal_changed = True
+                        break
+            if not principal.imported_by_client_id:
+                for dup in duplicados:
+                    if dup.imported_by_client_id:
+                        principal.imported_by_client_id = dup.imported_by_client_id
+                        principal_changed = True
+                        break
+
+            # --- total_events ---
+            for dup in duplicados:
+                principal.total_events = (principal.total_events or 1) + (dup.total_events or 1)
+                principal_changed = True
+
+            # --- variables ---
+            if not isinstance(principal.variables, dict):
+                principal.variables = {}
+            merged_vars = dict(principal.variables or {})
+            vars_changed = False
+            for dup in duplicados:
+                if isinstance(dup.variables, dict) and dup.variables:
+                    merged_vars.update(dup.variables)
+                    vars_changed = True
+            if vars_changed:
+                principal.variables = merged_vars
+                principal_changed = True
+
+            # --- last_event_at / last_event_type ---
+            most_recent = principal
+            for dup in duplicados:
+                if dup.last_event_at and (not most_recent.last_event_at or dup.last_event_at > most_recent.last_event_at):
+                    most_recent = dup
+            if most_recent != principal:
+                principal.last_event_at = most_recent.last_event_at
+                principal.last_event_type = most_recent.last_event_type
+                principal_changed = True
+
+            # --- Tags (Mesclagem e limpeza) ---
+            all_tags = []
+            if principal.tags:
+                all_tags.extend([t.strip() for t in principal.tags.split(',') if t.strip()])
+            for dup in duplicados:
+                if dup.tags:
+                    all_tags.extend([t.strip() for t in dup.tags.split(',') if t.strip()])
+
+            unique_tags = []
+            for t in all_tags:
+                if t not in unique_tags:
+                    unique_tags.append(t)
+
+            clean_tags = [t for t in unique_tags if re.match(r'^[\w\s\-]+$', t, re.UNICODE)]
+            new_tags_str = ', '.join(clean_tags) if clean_tags else None
+            
+            if new_tags_str != principal.tags:
+                principal.tags = new_tags_str
+                principal_changed = True
+
+            if principal_changed:
+                leads_affected += 1
+
+            # --- Remover os duplicados do banco ---
+            for dup in duplicados:
+                db.delete(dup)
+                leads_merged += 1
+
+        else:
+            # Processa normalização simples para contatos únicos
+            lead = group[0]
+            changed = False
+            if lead.name:
+                normalized = _normalize_name(lead.name)
+                if normalized != lead.name:
+                    lead.name = normalized
+                    names_fixed += 1
+                    changed = True
+
+            if lead.tags:
+                raw_tags = [t.strip() for t in lead.tags.split(',') if t.strip()]
+                clean_tags = [t for t in raw_tags if re.match(r'^[\w\s\-]+$', t, re.UNICODE)]
+                removed = len(raw_tags) - len(clean_tags)
+                if removed > 0:
+                    lead.tags = ', '.join(clean_tags) if clean_tags else None
+                    tags_removed += removed
+                    changed = True
+
+            if changed:
+                leads_affected += 1
 
     db.commit()
+    
+    # Mensagem informativa enriquecida
+    msg_detail = f"Sincronização concluída. "
+    if leads_merged > 0:
+        msg_detail += f"{leads_merged} contato(s) duplicado(s) unificado(s). "
+    msg_detail += f"{names_fixed} nome(s) corrigido(s) e {tags_removed} tag(s) limpa(s)."
+
     return {
         "status": "success",
         "leads_affected": leads_affected,
         "names_fixed": names_fixed,
         "tags_removed": tags_removed,
-        "message": f"Sincronização concluída: {names_fixed} nome(s) corrigido(s), {tags_removed} tag(s) removida(s) em {leads_affected} contato(s)."
+        "leads_merged": leads_merged,
+        "message": msg_detail
     }
 
 @router.get("/leads", response_model=schemas.WebhookLeadListResponse, summary="Listar Leads de Webhooks")
@@ -675,7 +859,12 @@ def export_leads_csv(
                     parts = [x.strip() for x in t.split(",") if x.strip()]
                     tags_filter.extend(parts)
             if tags_filter:
-                query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+                query = query.filter(
+                    or_(*(
+                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                        for t in tags_filter
+                    ))
+                )
 
         # Filtro de data (exportação também respeita o range selecionado)
         if date_from:
@@ -911,7 +1100,12 @@ def bulk_delete_all_leads(
     if request.tag:
         tags_filter = [x.strip() for t in request.tag for x in t.split(",") if x.strip()]
         if tags_filter:
-            query = query.filter(or_(*(models.WebhookLead.tags.ilike(f"%{t}%") for t in tags_filter)))
+            query = query.filter(
+                or_(*(
+                    func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                    for t in tags_filter
+                ))
+            )
 
     if request.date_from:
         try:
@@ -1389,10 +1583,13 @@ async def validate_contacts_for_bulk(
         window_map = {}
         if clean_phones_input:
             cached_windows = db.query(models.ContactWindow).filter(
-                models.ContactWindow.client_id == client_id,
-                models.ContactWindow.phone.in_(clean_phones_input)
+                models.ContactWindow.client_id == client_id
             ).all()
-            window_map = {w.phone: w for w in cached_windows}
+            for w in cached_windows:
+                clean_w_phone = "".join(filter(str.isdigit, str(w.phone)))
+                window_map[clean_w_phone] = w
+                if len(clean_w_phone) >= 8:
+                    window_map[clean_w_phone[-8:]] = w
 
         # 3. Sufixos bloqueados/em repouso
         blocked_suffixes = set()
@@ -1433,6 +1630,8 @@ async def validate_contacts_for_bulk(
                     status_data["last_activity"] = custom_entry["last_interaction"]
 
                 window_entry = window_map.get(clean_phone)
+                if not window_entry and len(clean_phone) >= 8:
+                    window_entry = window_map.get(clean_phone[-8:])
                 if window_entry:
                     status_data["exists"] = True
                     if not status_data["contact_name"]:

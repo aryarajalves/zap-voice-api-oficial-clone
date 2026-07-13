@@ -19,6 +19,7 @@ const TemplateSelectionSection = ({
     openExpansion
 }) => {
     const [selectedTag, setSelectedTag] = React.useState(null);
+    const [selectedCategory, setSelectedCategory] = React.useState('ALL'); // 'ALL', 'MARKETING', 'UTILITY'
 
     const allTags = React.useMemo(() => {
         if (!templates) return [];
@@ -67,6 +68,43 @@ const TemplateSelectionSection = ({
                                         onChange={(e) => setTemplateSearch(e.target.value)}
                                         onClick={(e) => e.stopPropagation()}
                                     />
+                                </div>
+
+                                <div className="flex items-center gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
+                                    <span className="text-[9px] font-black uppercase text-slate-500 mr-1 tracking-wider">Categoria:</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedCategory('ALL')}
+                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                            selectedCategory === 'ALL'
+                                                ? 'bg-green-500 text-slate-950 shadow-md shadow-green-500/20'
+                                                : 'bg-slate-850 text-slate-400 hover:bg-slate-750 hover:text-white'
+                                        }`}
+                                    >
+                                        Todos
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedCategory('MARKETING')}
+                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                            selectedCategory === 'MARKETING'
+                                                ? 'bg-green-500 text-slate-950 shadow-md shadow-green-500/20'
+                                                : 'bg-slate-850 text-slate-400 hover:bg-slate-750 hover:text-white'
+                                        }`}
+                                    >
+                                        📢 Marketing
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedCategory('UTILITY')}
+                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                            selectedCategory === 'UTILITY'
+                                                ? 'bg-green-500 text-slate-950 shadow-md shadow-green-500/20'
+                                                : 'bg-slate-850 text-slate-400 hover:bg-slate-750 hover:text-white'
+                                        }`}
+                                    >
+                                        🛠️ Utility
+                                    </button>
                                 </div>
 
                                 {allTags.length > 0 && (
@@ -119,7 +157,12 @@ const TemplateSelectionSection = ({
                                         if (t.status && t.status.toUpperCase() !== 'APPROVED' && t.status.toUpperCase() !== 'ACTIVE') return false;
                                         const matchesSearch = t.name.toLowerCase().includes((templateSearch || '').toLowerCase());
                                         const matchesTag = !selectedTag || (Array.isArray(t.tags) && t.tags.includes(selectedTag));
-                                        return matchesSearch && matchesTag;
+                                        
+                                        // Filtro de Categoria
+                                        const categoryVal = (t.category || getTemplateCategoryInfo(t.name, templates).type || '').toUpperCase();
+                                        const matchesCategory = selectedCategory === 'ALL' || categoryVal === selectedCategory;
+                                        
+                                        return matchesSearch && matchesTag && matchesCategory;
                                     })
                                     .map(t => (
                                         <div 

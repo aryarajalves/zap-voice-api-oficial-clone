@@ -55,8 +55,16 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             
             if last_st:
                 logger.warning(f"🚫 [AUTO_IDEMPOTENCY] Webhook #{history_id} ignorado. Trigger #{last_st.id} já criado recentemente para {phone}")
-                history.status = "ignored"
-                history.error_message = f"Duplicidade evitada (Trigger #{last_st.id})"
+                # Encontra o histórico original e incrementa duplicate_count
+                orig_history = db.query(models.WebhookHistory).filter(
+                    models.WebhookHistory.integration_id == history.integration_id,
+                    models.WebhookHistory.event_type == history.event_type,
+                    models.WebhookHistory.id != history.id
+                ).order_by(models.WebhookHistory.created_at.desc()).first()
+                if orig_history:
+                    current_count = orig_history.duplicate_count or 0
+                    orig_history.duplicate_count = current_count + 1
+                db.delete(history)
                 db.commit()
                 return
 
@@ -85,8 +93,16 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 
                 if existing_trigger:
                     logger.warning(f"🚫 [DUPLICITY_CHECK] Webhook #{history_id} ignorado. O lead {phone} já possui um disparo ativo/enviado para o template '{template_name}' nesta integração (Trigger #{existing_trigger.id}).")
-                    history.status = "ignored"
-                    history.error_message = f"Disparo duplicado evitado. Lead já possui disparo para este template nesta integração (Trigger #{existing_trigger.id})"
+                    # Encontra o histórico original e incrementa duplicate_count
+                    orig_history = db.query(models.WebhookHistory).filter(
+                        models.WebhookHistory.integration_id == history.integration_id,
+                        models.WebhookHistory.event_type == history.event_type,
+                        models.WebhookHistory.id != history.id
+                    ).order_by(models.WebhookHistory.created_at.desc()).first()
+                    if orig_history:
+                        current_count = orig_history.duplicate_count or 0
+                        orig_history.duplicate_count = current_count + 1
+                    db.delete(history)
                     db.commit()
                     return
             
@@ -101,8 +117,16 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 
                 if existing_trigger:
                     logger.warning(f"🚫 [DUPLICITY_CHECK] Webhook #{history_id} ignorado. O lead {phone} já possui um disparo ativo/enviado para o funil #{funnel_id} nesta integração (Trigger #{existing_trigger.id}).")
-                    history.status = "ignored"
-                    history.error_message = f"Disparo duplicado evitado. Lead já possui disparo para este funil nesta integração (Trigger #{existing_trigger.id})"
+                    # Encontra o histórico original e incrementa duplicate_count
+                    orig_history = db.query(models.WebhookHistory).filter(
+                        models.WebhookHistory.integration_id == history.integration_id,
+                        models.WebhookHistory.event_type == history.event_type,
+                        models.WebhookHistory.id != history.id
+                    ).order_by(models.WebhookHistory.created_at.desc()).first()
+                    if orig_history:
+                        current_count = orig_history.duplicate_count or 0
+                        orig_history.duplicate_count = current_count + 1
+                    db.delete(history)
                     db.commit()
                     return
 
@@ -113,16 +137,26 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             if phone and event_types_to_cancel:
                 logger.info(f"🛡️ SMART_CANCEL | Iniciando cancelamento para {phone} nos eventos: {event_types_to_cancel}")
                 
+                current_product = variables.get("product_name")
+                
                 # Busca disparos pendentes/enfileirados para este contato e eventos
-                pending_triggers = db.query(models.ScheduledTrigger).filter(
+                query_triggers = db.query(models.ScheduledTrigger).filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.ScheduledTrigger.contact_phone == phone,
                     models.ScheduledTrigger.status.in_(["pending", "queued"]),
                     models.ScheduledTrigger.event_type.in_(event_types_to_cancel)
-                ).all()
+                )
+                
+                # Filtra pelo mesmo produto se o produto estiver preenchido
+                if current_product:
+                    query_triggers = query_triggers.filter(
+                        models.ScheduledTrigger.product_name == current_product
+                    )
+                
+                pending_triggers = query_triggers.all()
                 
                 for pt in pending_triggers:
-                    logger.info(f"🚫 SMART_CANCEL | Cancelando trigger #{pt.id} (Evento: {pt.event_type})")
+                    logger.info(f"🚫 SMART_CANCEL | Cancelando trigger #{pt.id} (Evento: {pt.event_type}, Produto: {pt.product_name})")
                     pt.status = "cancelled"
                     pt.failure_reason = f"Interrompido pelo evento: {history.event_type}"
                 
@@ -131,7 +165,73 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                     logger.info(f"✅ SMART_CANCEL | {len(pending_triggers)} disparos cancelados com sucesso.")
 
         if not template_name and not funnel_id:
-            logger.info(f"AUTO_SKIP | Mapeamento #{mapping.id} sem template nem funil definido — disparo não criado.")
+            logger.info(f"AUTO_SKIP | Mapeamento #{mapping.id} sem template nem funil definido — aplicando etiquetas e salvando lead...")
+            
+            # 1. Monta tags internas (ZapVoice)
+            auto_tag_list = []
+            if getattr(mapping, "internal_tags", None):
+                auto_tag_list.extend([t.strip() for t in mapping.internal_tags.split(',') if t.strip()])
+            if not auto_tag_list and history.event_type:
+                auto_tag_list.append(history.event_type.replace("_", " ").title())
+            auto_tag = ", ".join(list(dict.fromkeys(auto_tag_list))) if auto_tag_list else None
+
+            # 2. Injeta metadados
+            integration = db.query(models.WebhookIntegration).filter_by(id=mapping.integration_id).first()
+            if integration:
+                variables["created_by_webhook"] = True
+                variables["webhook_name"] = integration.name
+
+                # 3. Sincroniza Lead (aba contatos)
+                if getattr(mapping, "update_contact_on_trigger", True):
+                    from services.leads import upsert_webhook_lead
+                    try:
+                        upsert_webhook_lead(
+                            db,
+                            client_id=client_id,
+                            platform=integration.platform,
+                            parsed_data=variables,
+                            tag=auto_tag,
+                            contact_save_fields=getattr(mapping, "contact_save_fields", None)
+                        )
+                    except Exception as lead_err:
+                        logger.error(f"Erro ao salvar lead no AUTO_SKIP: {lead_err}")
+
+            # 4. Aplica etiquetas locais de conversação (Chat Local)
+            if phone and getattr(mapping, "chatwoot_label", None):
+                try:
+                    clean_labels = robust_extract_labels(mapping.chatwoot_label)
+                    if clean_labels:
+                        suffix = phone[-8:] if len(phone) >= 8 else phone
+                        convo = db.query(models.ChatConversation).filter(
+                            models.ChatConversation.client_id == client_id,
+                            models.ChatConversation.phone.like(f"%{suffix}")
+                        ).first()
+                        if not convo:
+                            convo = models.ChatConversation(
+                                client_id=client_id,
+                                phone=phone,
+                                contact_name=variables.get("name") or phone,
+                                status="open",
+                                unread_count=0,
+                                labels=[]
+                            )
+                            db.add(convo)
+                            db.flush()
+                        
+                        current_labels = list(convo.labels) if isinstance(convo.labels, list) else []
+                        changed = False
+                        for lbl in clean_labels:
+                            if lbl not in current_labels:
+                                current_labels.append(lbl)
+                                changed = True
+                        if changed:
+                            convo.labels = current_labels
+                except Exception as label_err:
+                    logger.error(f"Erro ao aplicar etiquetas de chat no AUTO_SKIP: {label_err}")
+
+            history.status = "skipped"
+            history.error_message = f"AUTO_SKIP: Mapeamento #{mapping.id} sem template nem funil definido — disparo não criado."
+            db.commit()
             return
 
         # Extrai variáveis para o template

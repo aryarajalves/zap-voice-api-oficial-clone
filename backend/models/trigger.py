@@ -256,6 +256,7 @@ class WebhookHistory(Base):
     processed_data = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     status = Column(String, default="received")
     error_message = Column(String, nullable=True)
+    duplicate_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     integration = relationship("WebhookIntegration", back_populates="history")
@@ -264,12 +265,13 @@ class WhatsAppTemplateCache(Base):
     __tablename__ = "whatsapp_template_cache"
 
     id = Column(BigInteger, primary_key=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), primary_key=True, nullable=False, index=True)
     name = Column(String, index=True)
     language = Column(String)
     body = Column(Text, nullable=True)
     components = Column(JSON, nullable=True)
     tags = Column(Text, nullable=True)
+    category = Column(String, default="MARKETING", nullable=True)
     is_archived = Column(Boolean, default=False, nullable=False)
     is_pinned = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

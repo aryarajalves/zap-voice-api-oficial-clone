@@ -81,6 +81,7 @@ async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = No
             "conta_id": resolved_conta_id,
             "account_id": resolved_conta_id,
             "chatwoot_account_id": chatwoot_account_id,
+            "platform": "whatsapp" if (template_name == "Mensagem do Usuário" or dono == "usuario") else "outra",
             "account": {
                 "id": resolved_conta_id,
                 "conta_id": resolved_conta_id
