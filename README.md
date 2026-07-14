@@ -1,6 +1,7 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.3.0)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.4.0 — Versão Estável)
 
-Versão com suporte a **Configuração de Botões HSM no Chat**, **Regras de Bloqueio Rápido**, **Modais de Carregamento Premium**, **Integração de Webhook de Memória** e **Proteção de Sobrescrita de Nomes de Leads**.
+Versão estável com suporte a **Endpoint Público de Atualização de Contatos via API Key**, **Google Meet e Agendamento de Reuniões na Aba de Contatos**, **Configuração de Botões HSM no Chat**, **Regras de Bloqueio Rápido**, **Modais de Carregamento Premium**, **Integração de Webhook de Memória** e **Proteção de Sobrescrita de Nomes de Leads**.
+
 
 
 O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
@@ -112,6 +113,73 @@ Para automatizar disparos a partir de plataformas de vendas:
 1. Acesse a aba **Disparo em Massa** ou **Disparo Recorrente Criado**.
 2. Configure o template da Meta que deseja enviar e informe as variáveis dinâmicas (como `{{1}}` para o nome do lead).
 3. Defina os dias e horários para as recorrências e salve. O painel listará a contagem de contatos ativos e ignorados em tempo real.
+
+---
+
+## 🔌 API Pública — Atualização de Contatos
+
+O ZapVoice expõe um endpoint autenticado por **API Key** para integração com automações externas (n8n, Make, Zapier, etc.), permitindo atualizar dados de contatos diretamente da aba de contatos monitorados.
+
+### Endpoint
+
+```
+POST /api/contacts/{telefone}/update
+Authorization: Bearer zv_live_...
+Content-Type: application/json
+```
+
+### Payload (todos os campos são opcionais)
+
+```json
+{
+  "google_meet_link": "https://meet.google.com/abc-def-ghi",
+  "meeting_at": "2026-07-20T14:00:00-03:00",
+  "name": "João Silva",
+  "inbox_id": 3
+}
+```
+
+### Resposta
+
+```json
+{
+  "status": "success",
+  "message": "Contato 5511999990001 atualizado com sucesso.",
+  "updated_fields": ["google_meet_link", "meeting_at"],
+  "contact": {
+    "phone": "5511999990001",
+    "name": "João Silva",
+    "inbox_id": 3,
+    "google_meet_link": "https://meet.google.com/abc-def-ghi",
+    "meeting_at": "2026-07-20T14:00:00-03:00"
+  }
+}
+```
+
+### Como gerar uma API Key
+1. Acesse o dashboard ZapVoice → Menu lateral → **API Keys**
+2. Clique em **Gerar Nova Chave** e dê um nome descritivo
+3. Copie a chave gerada (ela só é exibida uma vez)
+4. Use no header: `Authorization: Bearer zv_live_...`
+
+> **Rate Limit:** 100 requisições por minuto por IP.
+
+---
+
+## 🗒️ Changelog
+
+### v4.4.0 — Versão Estável (2026-07-14)
+- ✅ **Endpoint público de atualização de contatos** (`POST /api/contacts/{phone}/update`) com autenticação por API Key e rate limit de 100 req/min
+- ✅ **Novos campos na aba de Contatos**: `google_meet_link` (link do Google Meet) e `meeting_at` (data/hora da reunião agendada)
+- ✅ **Migração online automática**: colunas adicionadas automaticamente em tabelas existentes sem necessidade de intervenção manual
+- ✅ **Script de migração manual** incluído: `backend/add_meeting_columns_to_contacts.py`
+
+### v4.3.0
+- Configuração de Botões HSM no Chat
+- Regras de Bloqueio Rápido
+- Modais de Carregamento Premium
+- Integração de Webhook de Memória
+- Proteção de Sobrescrita de Nomes de Leads
 
 ---
 

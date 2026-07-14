@@ -184,17 +184,31 @@ def sync_contact_to_custom_table(
         return
 
     try:
-        # 1. Garantir que a tabela existe
+        # 1. Garantir que a tabela existe com as colunas base
         create_sql = text(f"""
             CREATE TABLE IF NOT EXISTS {safe_table} (
                 phone VARCHAR(50) PRIMARY KEY,
                 name VARCHAR(255),
                 inbox_id INTEGER,
-                last_interaction_at TIMESTAMP WITH TIME ZONE
+                last_interaction_at TIMESTAMP WITH TIME ZONE,
+                google_meet_link TEXT,
+                meeting_at TIMESTAMP WITH TIME ZONE
             )
         """)
         db.execute(create_sql)
         db.commit()
+
+        # 1b. Garantir que colunas novas existam em tabelas já criadas anteriormente (migração online)
+        for col_name, col_type in [
+            ("google_meet_link", "TEXT"),
+            ("meeting_at", "TIMESTAMP WITH TIME ZONE"),
+        ]:
+            try:
+                db.execute(text(f'ALTER TABLE {safe_table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}'))
+                db.commit()
+            except Exception:
+                db.rollback()
+
         
         # 2. Executar o UPSERT (compatível com SQLite e PostgreSQL)
         upsert_sql = text(f"""

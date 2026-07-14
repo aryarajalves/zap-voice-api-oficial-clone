@@ -29,3 +29,10 @@
 ## [2026-07-09] Novo Índice Composto em chat_messages
 - Adicionado índice composto `idx_chat_messages_convo_time` na tabela `chat_messages` sobre as colunas `(conversation_id, timestamp)` para otimizar a paginação de mensagens de conversas ativas.
 - Script de Migração: `add_composite_chat_index.py` sob a pasta `backend/`.
+
+## [2026-07-14] Novas Colunas na Tabela de Contatos Monitorados
+- Adicionadas as colunas `google_meet_link` (TEXT) e `meeting_at` (TIMESTAMP WITH TIME ZONE) à tabela dinâmica de contatos (`contatos_monitorados` ou `SYNC_CONTACTS_TABLE`).
+- Estas colunas permitem associar reuniões do Google Meet aos contatos monitorados via o endpoint `POST /api/contacts/{phone}/update`.
+- A migração é aplicada automaticamente pelo `sync_contact_to_custom_table()` (com `ADD COLUMN IF NOT EXISTS`) e pelo router `contacts_public`.
+- Script de Migração Manual: `add_meeting_columns_to_contacts.py` sob a pasta `backend/`.
+

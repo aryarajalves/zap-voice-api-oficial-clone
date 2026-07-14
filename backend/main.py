@@ -284,7 +284,12 @@ from routers import chat_labels
 app.include_router(chat_labels.router, prefix="/api", tags=["Chat Labels"])
 app.include_router(api_keys.router, prefix="/api")
 
+# Router público para atualização de campos de contatos via API Key
+from routers.contacts_public import router as contacts_public_router
+app.include_router(contacts_public_router, prefix="/api", tags=["Contacts Public API"])
+
 # --- Fim dos Webhooks ---
+
 
 # Eventos de Inicialização
 @app.middleware("http")

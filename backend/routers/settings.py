@@ -299,6 +299,7 @@ def fetch_synced_contacts(
 ):
     """
     Busca os contatos salvos na tabela customizada do cliente com paginação.
+    Retorna todos os campos disponíveis, incluindo google_meet_link e meeting_at.
     """
     # O nome da tabela pode ser customizado via SYNC_CONTACTS_TABLE
     from config_loader import get_setting
@@ -313,26 +314,34 @@ def fetch_synced_contacts(
         total_result = db.execute(count_sql).scalar()
         total = total_result if total_result is not None else 0
         
-        # 2. Busca os dados paginados
-        sql = text(f"SELECT phone, name, inbox_id, last_interaction_at FROM {safe_table} ORDER BY last_interaction_at DESC LIMIT :limit OFFSET :skip")
+        # 2. Busca os dados paginados com todos os campos disponíveis
+        sql = text(f"""
+            SELECT phone, name, inbox_id, last_interaction_at,
+                   google_meet_link, meeting_at
+            FROM {safe_table}
+            ORDER BY last_interaction_at DESC NULLS LAST
+            LIMIT :limit OFFSET :skip
+        """)
         result = db.execute(sql, {"limit": limit, "skip": skip}).fetchall()
         
         contacts = []
         for row in result:
-            dt = row[3]
-            if dt:
-                # Se a data veio sem fuso horário do banco, forçamos UTC antes da exportação
+            def fmt_dt(dt):
+                if not dt:
+                    return None
+                if isinstance(dt, str):
+                    return dt  # SQLite retorna str, PostgreSQL retorna datetime
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=datetime.timezone.utc)
-                dt_str = dt.isoformat()
-            else:
-                dt_str = None
-                
+                return dt.isoformat()
+
             contacts.append({
                 "phone": row[0],
                 "name": row[1],
                 "inbox_id": row[2],
-                "last_interaction_at": dt_str
+                "last_interaction_at": fmt_dt(row[3]),
+                "google_meet_link": row[4] if len(row) > 4 else None,
+                "meeting_at": fmt_dt(row[5]) if len(row) > 5 else None,
             })
         
         return {"items": contacts, "total": total}
@@ -341,9 +350,14 @@ def fetch_synced_contacts(
         err_str = str(e).lower()
         if "does not exist" in err_str or "undefinedtable" in err_str:
             return {"items": [], "total": 0}
+        # Se for erro de coluna inexistente, a tabela ainda não foi migrada — retorna sem esses campos
+        if "column" in err_str and ("google_meet_link" in err_str or "meeting_at" in err_str):
+            logger.warning(f"⚠️ [SETTINGS] Colunas de reunião ainda não existem em {safe_table}. Execute a migração.")
+            return {"items": [], "total": 0}
             
-        print(f"❌ [SETTINGS] Erro ao buscar contatos da tabela {safe_table}: {e}")
+        logger.error(f"❌ [SETTINGS] Erro ao buscar contatos da tabela {safe_table}: {e}")
         return {"items": [], "total": 0}
+
 
 @router.get("/memory-logs")
 def fetch_memory_logs(

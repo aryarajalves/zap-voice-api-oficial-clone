@@ -58,6 +58,8 @@ pgdata/
 *.log
 app_logs.txt
 zapvoice_debug.log
+zapvoice_debug.log.*
+*.log.*
 baserow_debug.log
 test.png
 curl_output.txt
