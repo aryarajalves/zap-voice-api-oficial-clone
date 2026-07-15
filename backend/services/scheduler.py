@@ -703,10 +703,34 @@ async def process_calendar_reminders(db, now):
                             db.commit()
                             logger.info(f"✅ [SCHEDULER AGENDAMENTOS] Lembrete enviado com sucesso para {lead.phone}.")
                         else:
-                            err_msg = result.get("detail") if isinstance(result, dict) else "Erro desconhecido"
+                            err_msg = result.get("detail") if isinstance(result, dict) else (result.get("error") if isinstance(result, dict) else "Erro desconhecido")
                             logger.error(f"❌ [SCHEDULER AGENDAMENTOS] Falha no disparo de template para {lead.phone}: {err_msg}")
+                            # Registrar a falha no MessageStatus
+                            new_ms = models.MessageStatus(
+                                message_id=f"err_{lead.id}_{int(datetime.utcnow().timestamp())}",
+                                phone_number=lead.phone,
+                                status='failed',
+                                message_type='TEMPLATE',
+                                content=f"[Lembrete de Agendamento: {template_name}]",
+                                failure_reason=str(err_msg)
+                            )
+                            db.add(new_ms)
+                            lead.google_calendar_reminder_sent = True
+                            db.commit()
                     except Exception as ex:
                         logger.error(f"❌ [SCHEDULER AGENDAMENTOS] Erro ao disparar lembrete para {lead.phone}: {ex}")
+                        # Registrar a falha no MessageStatus
+                        new_ms = models.MessageStatus(
+                            message_id=f"err_exc_{lead.id}_{int(datetime.utcnow().timestamp())}",
+                            phone_number=lead.phone,
+                            status='failed',
+                            message_type='TEMPLATE',
+                            content=f"[Lembrete de Agendamento: {template_name}]",
+                            failure_reason=str(ex)
+                        )
+                        db.add(new_ms)
+                        lead.google_calendar_reminder_sent = True
+                        db.commit()
     except Exception as e:
         logger.error(f"❌ [SCHEDULER AGENDAMENTOS] Erro na rotina de processamento: {e}")
 
