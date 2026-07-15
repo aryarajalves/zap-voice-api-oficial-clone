@@ -348,6 +348,13 @@ def resume_stuck_imports():
 async def startup_event():
     logger.info("🚀 Iniciando ZapVoice API...")
 
+    # Inicia o worker de retry de webhooks em background
+    try:
+        from services.webhook_retry_worker import start_webhook_retry_worker
+        start_webhook_retry_worker()
+    except Exception as e:
+        logger.error(f"❌ Erro ao iniciar webhook retry worker: {e}")
+
     # Garantir que o schema do banco está atualizado (adiciona colunas novas se necessário)
     try:
         await asyncio.get_event_loop().run_in_executor(None, lambda: auto_migrate(engine))

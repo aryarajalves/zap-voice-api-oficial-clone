@@ -8,7 +8,7 @@ from slowapi.util import get_remote_address         # Pega o IP de quem fez a re
 from passlib.context import CryptContext            # Gerenciador de algoritmos de hash de senha
 from datetime import datetime, timedelta, timezone  # Manipulação de datas e fusos horários
 from typing import Optional                         # Permite parâmetros opcionais nas funções
-from jose import jwt               # Geração e validação de tokens JWT
+from jose import jwt, JWTError     # Geração e validação de tokens JWT
 
 logger = setup_logger("security")
 
@@ -44,6 +44,42 @@ RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true" a
 RATE_LIMIT_READ = "1000/minute"
 RATE_LIMIT_WRITE = "300/minute"
 
+def get_rate_limit_key(request: Request) -> str:
+    """
+    Identifica cada requisição pelo ID do usuário autenticado (extraído do JWT),
+    em vez de usar o IP da requisição.
+    
+    Isso é necessário porque em produção todos os clientes chegam através do mesmo
+    proxy reverso e compartilhariam o mesmo IP, derrubando o rate limit para todos
+    ao mesmo tempo.
+    
+    Fallback: se o token não existir ou for inválido, usa o IP como chave
+    (cobre endpoints públicos como /health e /login).
+    """
+    try:
+        # Tentar extrair do Authorization Header (Bearer token)
+        auth_header = request.headers.get("Authorization", "")
+        token = None
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+        
+        # Tentar extrair do X-API-Key Header (API Keys externas)
+        if not token:
+            token = request.headers.get("X-API-Key", "")
+
+        if token:
+            _secret = os.getenv("SECRET_KEY", "").strip('"').strip("'").strip()
+            payload = jwt.decode(token, _secret, algorithms=["HS256"])
+            user_email = payload.get("sub")
+            if user_email:
+                # Chave = email do usuário — único por sessão autenticada
+                return f"user:{user_email}"
+    except (JWTError, Exception):
+        pass
+    
+    # Fallback para IP — cobre rotas não autenticadas
+    return get_remote_address(request)
+
 def get_dynamic_rate_limit() -> str:
     """
     Retorna dinamicamente o rate limit correspondente ao método HTTP da requisição.
@@ -60,9 +96,9 @@ def get_dynamic_rate_limit() -> str:
         return RATE_LIMIT_READ
 
 limiter = Limiter(
-    key_func=get_remote_address,      # Identifica cada usuário pelo IP
-    default_limits=[get_dynamic_rate_limit],     # Limite dinâmico baseado no método HTTP
-    enabled=RATE_LIMIT_ENABLED        # Liga/desliga conforme a variável de ambiente
+    key_func=get_rate_limit_key,              # Identifica por usuário (JWT) em vez de IP
+    default_limits=[get_dynamic_rate_limit],  # Limite dinâmico baseado no método HTTP
+    enabled=RATE_LIMIT_ENABLED                # Liga/desliga conforme a variável de ambiente
 )
 
 # ── Configuração da Autenticação ──────────────────────────────────────────────

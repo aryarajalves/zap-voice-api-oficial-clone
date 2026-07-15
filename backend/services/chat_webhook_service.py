@@ -21,7 +21,7 @@ def dispatch_webhook_in_thread(url: str, payload: dict, message_id: int):
             status = "failed"
             error_msg = None
             try:
-                with httpx.Client(timeout=5.0) as client:
+                with httpx.Client(timeout=15.0) as client:
                     response = client.post(url, json=payload)
                     logger.info(f"📥 [CHAT-WEBHOOK] Resposta do Webhook: Status {response.status_code}")
                     if 200 <= response.status_code < 300:

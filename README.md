@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.6.1 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.6.2 — Versão Estável)
 
-Versão estável com suporte a **Visualização em Tempo Real (WhatsApp Bubble) de Lembretes de Agenda**, **Bloqueio de Rolagem (Scroll Lock) no Modal de Configurações**, **Rastreabilidade de Status de Disparo (Enviado, Entregue, Lido, Interagiu)**, **Sub-abas nas Configurações do WhatsApp**, **Mapeamento de Variáveis e Mídia em Lembretes de Agenda**, **Ações HSM nos Botões de Lembretes**, **Endpoint Público de Atualização de Contatos via API Key**, **Google Meet e Agendamento de Reuniões na Aba de Contatos**, **Configuração de Botões HSM no Chat**, **Regras de Bloqueio Rápido**, **Modais de Carregamento Premium**, **Integração de Webhook de Memória** e **Proteção de Sobrescrita de Nomes de Leads**.
+Versão estável com suporte a **Fila de Retentativa de Webhook (Retry Queue)**, **Aumento de Timeout de Disparo de Webhook**, **Rate Limiting por Sessão JWT de Usuário**, **Visualização em Tempo Real (WhatsApp Bubble) de Lembretes de Agenda**, **Bloqueio de Rolagem (Scroll Lock) no Modal de Configurações**, **Rastreabilidade de Status de Disparo (Enviado, Entregue, Lido, Interagiu)**, **Sub-abas nas Configurações do WhatsApp**, **Mapeamento de Variáveis e Mídia em Lembretes de Agenda**, **Ações HSM nos Botões de Lembretes**, **Endpoint Público de Atualização de Contatos via API Key**, **Google Meet e Agendamento de Reuniões na Aba de Contatos**, **Configuração de Botões HSM no Chat**, **Regras de Bloqueio Rápido**, **Modais de Carregamento Premium**, **Integração de Webhook de Memória** e **Proteção de Sobrescrita de Nomes de Leads**.
 
 
 

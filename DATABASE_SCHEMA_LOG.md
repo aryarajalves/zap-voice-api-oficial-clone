@@ -99,5 +99,28 @@ Sempre que o projeto for movido para um novo servidor:
    ```bash
    python backend/add_delay_columns.py
    python backend/add_var_columns_to_status.py
+   python backend/add_webhook_retry_columns.py
    # ... etc
    ```
+
+---
+
+## 📋 Migração: Colunas de Retry de Webhook (2026-07-15)
+
+**Tabela afetada:** `chat_messages`
+
+**Script:** `backend/add_webhook_retry_columns.py`
+
+**Novas colunas:**
+
+| Coluna | Tipo | Default | Descrição |
+|--------|------|---------|-----------|
+| `agentflow_retry_count` | `INTEGER` | `0` | Número de tentativas de reenvio do webhook já realizadas |
+| `agentflow_retry_at` | `TIMESTAMPTZ` | `NULL` | Timestamp do próximo retry agendado (backoff exponencial) |
+
+**Contexto:** Implementação do `webhook_retry_worker` — worker em background que reenvia automaticamente webhooks que falharam por timeout no servidor do AgentFlow. O timeout do envio original também foi aumentado de 5s para 15s.
+
+**Como aplicar em produção:**
+```bash
+docker exec zapvoice_app python /app/add_webhook_retry_columns.py
+```

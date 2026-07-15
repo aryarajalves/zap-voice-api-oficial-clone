@@ -71,6 +71,8 @@ class ChatMessage(Base):
     # Logs do Webhook de mensagens do AgentFlow
     agentflow_webhook_status = Column(String, nullable=True)
     agentflow_webhook_error = Column(String, nullable=True)
+    agentflow_retry_count = Column(Integer, default=0, nullable=True)  # Nº de tentativas de reenvio feitas
+    agentflow_retry_at = Column(DateTime(timezone=True), nullable=True)  # Próximo retry agendado
 
     # Relationships
     conversation = relationship("ChatConversation", back_populates="messages")
