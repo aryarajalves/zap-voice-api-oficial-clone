@@ -222,11 +222,8 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                 
                 if message_record:
                     logger.info(f"🔄 [STATUS_MATCH] Associando wamid {clean_id} ao MessageStatus ID {message_record.id} (anteriormente {message_record.message_id})")
-                    message_record.message_id = clean_id
-                    db.commit()
-            
-            if message_record:
-                trigger = db.query(models.ScheduledTrigger).get(message_record.trigger_id)
+                    message_record.message_id = clea            if message_record:
+                trigger = db.query(models.ScheduledTrigger).get(message_record.trigger_id) if message_record.trigger_id else None
                 old_status = message_record.status
                 
                 status_priority = {'sent': 1, 'delivered': 2, 'read': 3, 'failed': 0}
@@ -246,69 +243,70 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                         message_record.failure_reason = reason
                         
                         # Fallback assíncrono para BSUD caso o envio original para o número bruto tenha falhado
-                        is_bsud = str(message_record.phone_number).startswith("BR.")
-                        if not is_bsud:
-                            try:
-                                from sqlalchemy import or_
-                                clean_phone = ''.join(filter(str.isdigit, str(message_record.phone_number)))
-                                suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-                                lead = db.query(models.WebhookLead).filter(
-                                    models.WebhookLead.client_id == trigger.client_id,
-                                    or_(
-                                        models.WebhookLead.phone == clean_phone,
-                                        models.WebhookLead.phone.like(f"%{suffix}")
-                                    )
-                                ).first()
-                                if lead and lead.bsud:
-                                    # Verificar se já tentamos o BSUD neste trigger
-                                    already_tried = db.query(models.MessageStatus).filter(
-                                        models.MessageStatus.trigger_id == trigger.id,
-                                        models.MessageStatus.phone_number == lead.bsud
+                        if trigger:
+                            is_bsud = str(message_record.phone_number).startswith("BR.")
+                            if not is_bsud:
+                                try:
+                                    from sqlalchemy import or_
+                                    clean_phone = ''.join(filter(str.isdigit, str(message_record.phone_number)))
+                                    suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                                    lead = db.query(models.WebhookLead).filter(
+                                        models.WebhookLead.client_id == trigger.client_id,
+                                        or_(
+                                            models.WebhookLead.phone == clean_phone,
+                                            models.WebhookLead.phone.like(f"%{suffix}")
+                                        )
                                     ).first()
-                                    if not already_tried:
-                                        logger.info(f"🔄 [BSUD-FALLBACK-ASYNC] Falha no envio para o número normal {clean_phone}. Tentando BSUD '{lead.bsud}'...")
-                                        # Agendar o envio em background
-                                        async def send_async_fallback(tid, client_id, bsud_id, t_name, lang, components):
-                                            try:
-                                                from chatwoot_client import ChatwootClient
-                                                from database import SessionLocal
-                                                cw = ChatwootClient(client_id=client_id)
-                                                fallback_res = await cw.send_template(
-                                                    contact_phone=bsud_id,
-                                                    template_name=t_name,
-                                                    template_language=lang or "pt_BR",
-                                                    template_components=components
-                                                )
-                                                if fallback_res and not fallback_res.get("error"):
-                                                    new_wamid = (fallback_res.get("messages", [{}])[0].get("id") or fallback_res.get("id", "")).replace("wamid.", "")
-                                                    db_fallback = SessionLocal()
-                                                    new_ms = models.MessageStatus(
-                                                        trigger_id=tid,
-                                                        message_id=new_wamid,
-                                                        phone_number=bsud_id,
-                                                        contact_name=trigger.contact_name,
-                                                        status='sent',
-                                                        message_type='TEMPLATE',
-                                                        content=message_record.content,
-                                                        template_name=t_name
+                                    if lead and lead.bsud:
+                                        # Verificar se já tentamos o BSUD neste trigger
+                                        already_tried = db.query(models.MessageStatus).filter(
+                                            models.MessageStatus.trigger_id == trigger.id,
+                                            models.MessageStatus.phone_number == lead.bsud
+                                        ).first()
+                                        if not already_tried:
+                                            logger.info(f"🔄 [BSUD-FALLBACK-ASYNC] Falha no envio para o número normal {clean_phone}. Tentando BSUD '{lead.bsud}'...")
+                                            # Agendar o envio em background
+                                            async def send_async_fallback(tid, client_id, bsud_id, t_name, lang, components):
+                                                try:
+                                                    from chatwoot_client import ChatwootClient
+                                                    from database import SessionLocal
+                                                    cw = ChatwootClient(client_id=client_id)
+                                                    fallback_res = await cw.send_template(
+                                                        contact_phone=bsud_id,
+                                                        template_name=t_name,
+                                                        template_language=lang or "pt_BR",
+                                                        template_components=components
                                                     )
-                                                    db_fallback.add(new_ms)
-                                                    db_fallback.commit()
-                                                    db_fallback.close()
-                                                    logger.info(f"✅ [BSUD-FALLBACK-ASYNC] Fallback enviado com sucesso para {bsud_id}")
-                                            except Exception as ex:
-                                                logger.error(f"❌ [BSUD-FALLBACK-ASYNC] Erro ao disparar fallback: {ex}")
-                                        
-                                        asyncio.create_task(send_async_fallback(
-                                            trigger.id, 
-                                            trigger.client_id, 
-                                            lead.bsud, 
-                                            trigger.template_name, 
-                                            trigger.template_language,
-                                            trigger.template_components or []
-                                        ))
-                            except Exception as e_fallback:
-                                logger.error(f"❌ Erro no fluxo de fallback BSUD assíncrono: {e_fallback}")
+                                                    if fallback_res and not fallback_res.get("error"):
+                                                        new_wamid = (fallback_res.get("messages", [{}])[0].get("id") or fallback_res.get("id", "")).replace("wamid.", "")
+                                                        db_fallback = SessionLocal()
+                                                        new_ms = models.MessageStatus(
+                                                            trigger_id=tid,
+                                                            message_id=new_wamid,
+                                                            phone_number=bsud_id,
+                                                            contact_name=trigger.contact_name,
+                                                            status='sent',
+                                                            message_type='TEMPLATE',
+                                                            content=message_record.content,
+                                                            template_name=t_name
+                                                        )
+                                                        db_fallback.add(new_ms)
+                                                        db_fallback.commit()
+                                                        db_fallback.close()
+                                                        logger.info(f"✅ [BSUD-FALLBACK-ASYNC] Fallback enviado com sucesso para {bsud_id}")
+                                                except Exception as ex:
+                                                    logger.error(f"❌ [BSUD-FALLBACK-ASYNC] Erro ao disparar fallback: {ex}")
+                                            
+                                            asyncio.create_task(send_async_fallback(
+                                                trigger.id, 
+                                                trigger.client_id, 
+                                                lead.bsud, 
+                                                trigger.template_name, 
+                                                trigger.template_language,
+                                                trigger.template_components or []
+                                            ))
+                                except Exception as e_fallback:
+                                    logger.error(f"❌ Erro no fluxo de fallback BSUD assíncrono: {e_fallback}")
                     
                     if status == 'delivered' and not message_record.delivered_counted:
                         message_record.delivered_counted = True
@@ -338,7 +336,7 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                             message_record.meta_price_category = category
                             message_record.meta_price_brl = price_brl
                         else:
-                            if not trigger.is_free_message:
+                            if trigger and not trigger.is_free_message:
                                 price_brl = trigger.cost_per_unit or 0.35
                                 message_record.meta_price_brl = price_brl
                                 message_record.meta_price_category = "marketing"
@@ -347,100 +345,104 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                                 message_record.meta_price_brl = 0.0
                                 message_record.meta_price_category = "service"
                                 
-                        cost_to_add = price_brl
-                        paid_increment = 1 if price_brl > 0 else 0
-                        
-                        db.execute(
-                            text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :tid"),
-                            {"cost": cost_to_add, "paid": paid_increment, "tid": trigger.id}
-                        )
-                        if trigger.parent_id:
+                        if trigger:
+                            cost_to_add = price_brl
+                            paid_increment = 1 if price_brl > 0 else 0
+                            
                             db.execute(
-                                text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :pid"),
-                                {"cost": cost_to_add, "paid": paid_increment, "pid": trigger.parent_id}
+                                text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :tid"),
+                                {"cost": cost_to_add, "paid": paid_increment, "tid": trigger.id}
                             )
-
+                            if trigger.parent_id:
+                                db.execute(
+                                    text("UPDATE scheduled_triggers SET total_cost = COALESCE(total_cost, 0) + :cost, total_paid_templates = COALESCE(total_paid_templates, 0) + :paid WHERE id = :pid"),
+                                    {"cost": cost_to_add, "paid": paid_increment, "pid": trigger.parent_id}
+                                )
+ 
                     db.flush()
-                    # Recalcular as estatísticas de contatos únicos
-                    from services.triggers_service import reconcile_trigger_stats_logic
-                    await reconcile_trigger_stats_logic(trigger.id, trigger.client_id, db)
-                    if trigger.parent_id:
-                        await reconcile_trigger_stats_logic(trigger.parent_id, trigger.client_id, db)
-
-                    # Disparar webhook de memória para qualquer template entregue.
-                    # A verificação de URL configurada fica no próprio serviço ai_memory,
-                    # eliminando a dependência das flags is_bulk/publish_external_event.
-                    if trigger_delivered and (trigger.is_bulk or getattr(trigger, 'publish_external_event', False)):
-                        import services.ai_memory
-                        asyncio.create_task(services.ai_memory.notify_agent_memory_webhook(
-                            client_id=trigger.client_id,
-                            phone=message_record.phone_number,
-                            name=trigger.contact_name or message_record.phone_number,
-                            template_name=message_record.template_name or trigger.template_name or "Mensagem",
-                            content=message_record.content or "",
-                            trigger_id=trigger.id,
-                            internal_contact_id=message_record.id
-                        ))
-
+                    if trigger:
+                        # Recalcular as estatísticas de contatos únicos
+                        from services.triggers_service import reconcile_trigger_stats_logic
+                        await reconcile_trigger_stats_logic(trigger.id, trigger.client_id, db)
+                        if trigger.parent_id:
+                            await reconcile_trigger_stats_logic(trigger.parent_id, trigger.client_id, db)
+ 
+                        # Disparar webhook de memória para qualquer template entregue.
+                        # A verificação de URL configurada fica no próprio serviço ai_memory,
+                        # eliminando a dependência das flags is_bulk/publish_external_event.
+                        if trigger_delivered and (trigger.is_bulk or getattr(trigger, 'publish_external_event', False)):
+                            import services.ai_memory
+                            asyncio.create_task(services.ai_memory.notify_agent_memory_webhook(
+                                client_id=trigger.client_id,
+                                phone=message_record.phone_number,
+                                name=trigger.contact_name or message_record.phone_number,
+                                template_name=message_record.template_name or trigger.template_name or "Mensagem",
+                                content=message_record.content or "",
+                                trigger_id=trigger.id,
+                                internal_contact_id=message_record.id
+                            ))
+ 
                     db.commit()
-                    logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id})")
+                    logger.info(f"✅ [STATUS_UPDATE] Msg {clean_id} atualizada para {status} (Trigger {trigger.id if trigger else 'None'})")
                     
                     # Publicar progresso de bulk via WebSocket em tempo real
-                    trigger_to_notify = trigger
-                    if trigger.parent_id:
-                        parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
-                        if parent_trigger and parent_trigger.is_bulk:
-                            trigger_to_notify = parent_trigger
-                            
-                    if trigger_to_notify.is_bulk:
-                        try:
-                            db.refresh(trigger_to_notify)
-                            if trigger_to_notify.status in ['completed', 'failed', 'cancelled', 'aborted', 'processed']:
-                                ws_queue_count = 0
-                            else:
-                                # Calcular queue_count via SQL real (consistente com o modal de fila)
-                                try:
-                                    from sqlalchemy import func as sqlfunc
-                                    ttn_id = trigger_to_notify.id
-                                    subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(
-                                        models.MessageStatus.trigger_id == ttn_id
-                                    ).group_by(models.MessageStatus.phone_number).subquery()
-                                    ws_queue_count = db.query(models.MessageStatus).filter(
-                                        models.MessageStatus.id.in_(subq),
-                                        models.MessageStatus.status == 'sent',
-                                        models.MessageStatus.delivered_counted == False,
-                                        models.MessageStatus.read_counted == False
-                                    ).count()
-                                except Exception:
-                                    ws_queue_count = max(0, (trigger_to_notify.total_sent or 0) - (trigger_to_notify.total_delivered or 0) - (trigger_to_notify.total_failed or 0))
-                            await wah.rabbitmq.publish_event("bulk_progress", {
-                                "trigger_id": trigger_to_notify.id,
-                                "status": trigger_to_notify.status,
-                                "sent": trigger_to_notify.total_sent or 0,
-                                "total_sent": trigger_to_notify.total_sent or 0,
-                                "failed": trigger_to_notify.total_failed or 0,
-                                "total_failed": trigger_to_notify.total_failed or 0,
-                                "total_contacts": trigger_to_notify.total_contacts or 0,
-                                "total": trigger_to_notify.total_contacts or 0,
-                                "delivered": trigger_to_notify.total_delivered or 0,
-                                "total_delivered": trigger_to_notify.total_delivered or 0,
-                                "read": trigger_to_notify.total_read or 0,
-                                "total_read": trigger_to_notify.total_read or 0,
-                                "interactions": trigger_to_notify.total_interactions or 0,
-                                "total_interactions": trigger_to_notify.total_interactions or 0,
-                                "blocked": trigger_to_notify.total_blocked or 0,
-                                "total_blocked": trigger_to_notify.total_blocked or 0,
-                                "cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
-                                "total_cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
-                                "total_paid_templates": trigger_to_notify.total_paid_templates or 0,
-                                "queue_count": ws_queue_count
-                            })
-                        except Exception as ws_err:
-                            logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")
-
-                    if status in ('delivered', 'read'):
+                    if trigger:
+                        trigger_to_notify = trigger
+                        if trigger.parent_id:
+                            parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
+                            if parent_trigger and parent_trigger.is_bulk:
+                                trigger_to_notify = parent_trigger
+                                
+                        if trigger_to_notify.is_bulk:
+                            try:
+                                db.refresh(trigger_to_notify)
+                                if trigger_to_notify.status in ['completed', 'failed', 'cancelled', 'aborted', 'processed']:
+                                    ws_queue_count = 0
+                                else:
+                                    # Calcular queue_count via SQL real (consistente com o modal de fila)
+                                    try:
+                                        from sqlalchemy import func as sqlfunc
+                                        ttn_id = trigger_to_notify.id
+                                        subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(
+                                            models.MessageStatus.trigger_id == ttn_id
+                                        ).group_by(models.MessageStatus.phone_number).subquery()
+                                        ws_queue_count = db.query(models.MessageStatus).filter(
+                                            models.MessageStatus.id.in_(subq),
+                                            models.MessageStatus.status == 'sent',
+                                            models.MessageStatus.delivered_counted == False,
+                                            models.MessageStatus.read_counted == False
+                                        ).count()
+                                    except Exception:
+                                        ws_queue_count = max(0, (trigger_to_notify.total_sent or 0) - (trigger_to_notify.total_delivered or 0) - (trigger_to_notify.total_failed or 0))
+                                await wah.rabbitmq.publish_event("bulk_progress", {
+                                    "trigger_id": trigger_to_notify.id,
+                                    "status": trigger_to_notify.status,
+                                    "sent": trigger_to_notify.total_sent or 0,
+                                    "total_sent": trigger_to_notify.total_sent or 0,
+                                    "failed": trigger_to_notify.total_failed or 0,
+                                    "total_failed": trigger_to_notify.total_failed or 0,
+                                    "total_contacts": trigger_to_notify.total_contacts or 0,
+                                    "total": trigger_to_notify.total_contacts or 0,
+                                    "delivered": trigger_to_notify.total_delivered or 0,
+                                    "total_delivered": trigger_to_notify.total_delivered or 0,
+                                    "read": trigger_to_notify.total_read or 0,
+                                    "total_read": trigger_to_notify.total_read or 0,
+                                    "interactions": trigger_to_notify.total_interactions or 0,
+                                    "total_interactions": trigger_to_notify.total_interactions or 0,
+                                    "blocked": trigger_to_notify.total_blocked or 0,
+                                    "total_blocked": trigger_to_notify.total_blocked or 0,
+                                    "cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
+                                    "total_cost": float(trigger_to_notify.total_cost) if trigger_to_notify.total_cost else 0.0,
+                                    "total_paid_templates": trigger_to_notify.total_paid_templates or 0,
+                                    "queue_count": ws_queue_count
+                                })
+                            except Exception as ws_err:
+                                logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")
+ 
+                    if trigger and status in ('delivered', 'read'):
                         asyncio.create_task(wah.handle_deferred_post_delivery(trigger.id, message_record.id, status, msg_id, recipient))
                         
+                        if trigger.status == 'paused_waiting_delivery':           
                         if trigger.status == 'paused_waiting_delivery':
                             # Cenário A: Gatilho de Template com Funil ZapVoice Pendente
                             if trigger.template_name is not None and trigger.funnel_id is not None:

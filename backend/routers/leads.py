@@ -614,6 +614,22 @@ def list_leads(
         item.is_really_blocked = suffix in blocked_suffixes
         item.resting_expires_at = resting_suffix_map.get(suffix)
 
+        # Enriquecer com status de disparo de lembrete de agendamento se aplicável
+        if item.event_datetime:
+            latest_status = db.query(models.MessageStatus).filter(
+                models.MessageStatus.phone_number == item.phone,
+                models.MessageStatus.message_type == 'TEMPLATE'
+            ).order_by(desc(models.MessageStatus.id)).first()
+            if latest_status:
+                item.reminder_dispatch_status = latest_status.status
+                item.reminder_dispatch_interaction = latest_status.is_interaction
+            else:
+                item.reminder_dispatch_status = None
+                item.reminder_dispatch_interaction = False
+        else:
+            item.reminder_dispatch_status = None
+            item.reminder_dispatch_interaction = False
+
     return {
         "items": items,
         "total": total

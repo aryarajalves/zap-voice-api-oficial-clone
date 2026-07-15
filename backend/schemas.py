@@ -632,6 +632,8 @@ class WebhookLeadBase(BaseModel):
     # não confundir com is_locked, que é só proteção contra exclusão.
     is_really_blocked: bool = False
     resting_expires_at: Optional[datetime] = None
+    reminder_dispatch_status: Optional[str] = None
+    reminder_dispatch_interaction: Optional[bool] = False
 
     @field_validator('variables', mode='before')
     @classmethod

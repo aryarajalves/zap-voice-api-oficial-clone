@@ -3,7 +3,7 @@ import { useClient } from '../../contexts/ClientContext';
 import { fetchWithAuth } from '../../AuthContext';
 import { API_URL } from '../../config';
 import { toast } from 'react-hot-toast';
-import { FiCalendar, FiSearch, FiExternalLink, FiClock, FiChevronLeft, FiChevronRight, FiFilter, FiUserPlus } from 'react-icons/fi';
+import { FiCalendar, FiSearch, FiExternalLink, FiClock, FiChevronLeft, FiChevronRight, FiFilter, FiUserPlus, FiCheck, FiZap } from 'react-icons/fi';
 
 export default function AppointmentsPage() {
   const { activeClient } = useClient();
@@ -308,15 +308,54 @@ export default function AppointmentsPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        {lead.google_calendar_reminder_sent ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800/30 shadow-sm">
-                            Enviado
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/30 shadow-sm">
-                            Pendente
-                          </span>
-                        )}
+                        <div className="flex items-center justify-center gap-3">
+                          {lead.google_calendar_reminder_sent ? (
+                            <>
+                              {lead.reminder_dispatch_status === 'failed' ? (
+                                <span 
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800/30 shadow-sm"
+                                  title="O envio falhou no canal da Meta"
+                                >
+                                  Falhou
+                                </span>
+                              ) : lead.reminder_dispatch_interaction ? (
+                                <span 
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800/30 shadow-sm"
+                                  title="O cliente clicou em algum botão ou respondeu à mensagem!"
+                                >
+                                  <FiZap size={11} className="fill-current animate-bounce text-green-600 dark:text-green-400" /> Interagiu
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-lg border border-gray-200 dark:border-white/5">
+                                    {lead.reminder_dispatch_status === 'read' ? (
+                                      <span className="flex items-center mr-1">
+                                        <FiCheck className="text-blue-500" size={14} />
+                                        <FiCheck className="text-blue-500 -ml-2.5" size={14} />
+                                      </span>
+                                    ) : lead.reminder_dispatch_status === 'delivered' ? (
+                                      <span className="flex items-center mr-1">
+                                        <FiCheck className="text-gray-400 dark:text-gray-500" size={14} />
+                                        <FiCheck className="text-gray-400 dark:text-gray-500 -ml-2.5" size={14} />
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center mr-1">
+                                        <FiCheck className="text-gray-400 dark:text-gray-500" size={14} />
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] capitalize">
+                                      {lead.reminder_dispatch_status === 'read' ? 'Lido' : lead.reminder_dispatch_status === 'delivered' ? 'Entregue' : 'Disparado'}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/30 shadow-sm">
+                              Pendente
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

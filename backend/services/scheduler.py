@@ -688,7 +688,6 @@ async def process_calendar_reminders(db, now):
                             # Registra no MessageStatus
                             if wamid:
                                 new_ms = models.MessageStatus(
-                                    client_id=cl.id,
                                     message_id=wamid,
                                     phone_number=lead.phone,
                                     status='sent',

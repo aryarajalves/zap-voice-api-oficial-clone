@@ -62,3 +62,20 @@ def test_resolve_lead_variables():
     assert resolve_lead_variables("Nenhum match", lead_model) == "Nenhum match"
     assert resolve_lead_variables("", lead_model) == ""
 
+def test_webhook_lead_reminder_dispatch_fields():
+    lead_data = {
+        "id": 1,
+        "client_id": 1,
+        "name": "Maria Teste",
+        "phone": "5585999999999",
+        "email": "maria@teste.com",
+        "variables": {"key": "value"},
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+        "reminder_dispatch_status": "delivered",
+        "reminder_dispatch_interaction": True
+    }
+    lead = WebhookLead(**lead_data)
+    assert lead.reminder_dispatch_status == "delivered"
+    assert lead.reminder_dispatch_interaction is True
+
