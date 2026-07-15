@@ -527,6 +527,23 @@ async def run_closed_window_label_cleanup(db_session=None):
         _last_closed_window_cleanup = minute_key
 
 
+def resolve_lead_variables(val_raw: str, lead: models.WebhookLead) -> str:
+    if not val_raw:
+        return ""
+    name = lead.name or "Cliente"
+    phone = lead.phone or ""
+    email = lead.email or ""
+    event_dt_str = lead.event_datetime.strftime("%d/%m/%Y %H:%M") if lead.event_datetime else ""
+    calendar_link = lead.google_calendar_link or ""
+    
+    val = val_raw
+    val = val.replace("{name}", name)
+    val = val.replace("{phone}", phone)
+    val = val.replace("{email}", email)
+    val = val.replace("{event_datetime}", event_dt_str)
+    val = val.replace("{google_calendar_link}", calendar_link)
+    return val
+
 async def process_calendar_reminders(db, now):
     """
     Verifica contatos com agendamentos futuros e dispara o template configurado no cliente
@@ -548,6 +565,33 @@ async def process_calendar_reminders(db, now):
                 minutes = int(settings.get("APPOINTMENTS_REMINDER_MINUTES", "30"))
             except ValueError:
                 minutes = 30
+
+            # Carregar configurações adicionais de parâmetros e botões
+            params_str = settings.get("APPOINTMENTS_REMINDER_PARAMS", "{}")
+            buttons_str = settings.get("APPOINTMENTS_REMINDER_BUTTONS", "{}")
+            
+            import json
+            try:
+                reminder_params = json.loads(params_str) if params_str else {}
+            except Exception:
+                reminder_params = {}
+                
+            try:
+                reminder_buttons = json.loads(buttons_str) if buttons_str else {}
+            except Exception:
+                reminder_buttons = {}
+
+            # Buscar formato do cabeçalho do template no cache
+            tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+                models.WhatsAppTemplateCache.name == template_name,
+                models.WhatsAppTemplateCache.client_id == cl.id
+            ).first()
+            
+            header_format = None
+            if tpl_cache and tpl_cache.components:
+                h_comp = next((c for c in tpl_cache.components if c.get("type") == "HEADER"), None)
+                if h_comp:
+                    header_format = h_comp.get("format")
 
             # Encontrar contatos deste cliente com event_datetime configurado e lembrete ainda não enviado
             if cl.project_id:
@@ -572,15 +616,90 @@ async def process_calendar_reminders(db, now):
                 if diff_minutes <= minutes:
                     logger.info(f"⏰ [SCHEDULER AGENDAMENTOS] Disparando lembrete para {lead.name} ({lead.phone}). Faltam {diff_minutes:.1f} minutos.")
                     try:
+                        # Compilar components do template
+                        components = []
+                        
+                        # 1. Cabeçalho de mídia (IMAGE, VIDEO, DOCUMENT)
+                        if header_format in ["IMAGE", "VIDEO", "DOCUMENT"]:
+                            media_url = reminder_params.get("HEADER_0")
+                            if media_url:
+                                media_type = header_format.lower()
+                                components.append({
+                                    "type": "header",
+                                    "parameters": [
+                                        {
+                                            "type": media_type,
+                                            media_type: {
+                                                "link": media_url
+                                            }
+                                        }
+                                    ]
+                                })
+                        
+                        # 2. Variáveis do Cabeçalho (TEXT com variáveis)
+                        header_params = []
+                        h_idx = 1
+                        while f"HEADER_{h_idx}" in reminder_params:
+                            val_raw = reminder_params[f"HEADER_{h_idx}"]
+                            val_resolved = resolve_lead_variables(val_raw, lead)
+                            header_params.append({
+                                "type": "text",
+                                "text": val_resolved
+                            })
+                            h_idx += 1
+                        
+                        if header_params and header_format not in ["IMAGE", "VIDEO", "DOCUMENT"]:
+                            components.append({
+                                "type": "header",
+                                "parameters": header_params
+                            })
+                            
+                        # 3. Variáveis do Corpo
+                        body_params = []
+                        b_idx = 1
+                        while f"BODY_{b_idx}" in reminder_params:
+                            val_raw = reminder_params[f"BODY_{b_idx}"]
+                            val_resolved = resolve_lead_variables(val_raw, lead)
+                            body_params.append({
+                                "type": "text",
+                                "text": val_resolved
+                            })
+                            b_idx += 1
+                            
+                        if body_params:
+                            components.append({
+                                "type": "body",
+                                "parameters": body_params
+                            })
+
                         client = ChatwootClient(client_id=cl.id)
                         result = await client.send_template(
-                            phone_number=lead.phone,
+                            contact_phone=lead.phone,
                             template_name=template_name,
-                            language="pt_BR",
-                            components=[]
+                            template_language="pt_BR",
+                            template_components=components
                         )
                         
                         if result and not (isinstance(result, dict) and result.get("error")):
+                            # Criar MessageStatus para registrar o envio do template de agendamento e armazenar as button_actions
+                            raw_id = result["messages"][0].get("id") if isinstance(result, dict) and result.get("messages") else None
+                            wamid = raw_id.replace("wamid.", "") if raw_id else None
+                            
+                            # Registra no MessageStatus
+                            if wamid:
+                                new_ms = models.MessageStatus(
+                                    client_id=cl.id,
+                                    message_id=wamid,
+                                    phone_number=lead.phone,
+                                    status='sent',
+                                    message_type='TEMPLATE',
+                                    content=f"[Lembrete de Agendamento: {template_name}]",
+                                    # Armazenamos button_actions no MessageStatus ou ScheduledTrigger
+                                    # Para o inbound funcionar de forma transparente, criamos uma ScheduledTrigger de simulação ou salvamos as ações diretamente no ScheduledTrigger associado
+                                    # Para que o whatsapp_inbound.py resolva sem trigger_ref, já implementamos a consulta dinâmica de settings.APPOINTMENTS_REMINDER_BUTTONS diretamente lá.
+                                )
+                                db.add(new_ms)
+                                
                             lead.google_calendar_reminder_sent = True
                             db.commit()
                             logger.info(f"✅ [SCHEDULER AGENDAMENTOS] Lembrete enviado com sucesso para {lead.phone}.")

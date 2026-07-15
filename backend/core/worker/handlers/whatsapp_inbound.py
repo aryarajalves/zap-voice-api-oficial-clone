@@ -623,20 +623,40 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
 
 
                 # Aceita trigger_ref tanto via MessageStatus quanto via ChatMessage (templates do painel de Atendimento)
-                if is_button_click and user_input and trigger_ref:
-                    button_actions = getattr(trigger_ref, 'button_actions', None) or {}
-                    # Fallback: se button_actions está nulo, buscar em trigger anterior com mesmo template
-                    if not button_actions and trigger_ref.template_name:
-                        fallback_trigger = db.query(models.ScheduledTrigger).filter(
-                            models.ScheduledTrigger.client_id == trigger_ref.client_id,
-                            models.ScheduledTrigger.template_name == trigger_ref.template_name,
-                            models.ScheduledTrigger.button_actions.isnot(None)
-                        ).order_by(models.ScheduledTrigger.id.desc()).first()
-                        if fallback_trigger:
-                            button_actions = fallback_trigger.button_actions or {}
-                            logger.info(f"🔁 [BUTTON_ACTION_FALLBACK] button_actions nulo no Trigger {trigger_ref.id}, usando fallback do Trigger {fallback_trigger.id}")
+                if is_button_click and user_input:
                     btn_key = user_input.strip()
-                    action = button_actions.get(btn_key)
+                    action = None
+                    
+                    if trigger_ref:
+                        button_actions = getattr(trigger_ref, 'button_actions', None) or {}
+                        # Fallback: se button_actions está nulo, buscar em trigger anterior com mesmo template
+                        if not button_actions and trigger_ref.template_name:
+                            fallback_trigger = db.query(models.ScheduledTrigger).filter(
+                                models.ScheduledTrigger.client_id == trigger_ref.client_id,
+                                models.ScheduledTrigger.template_name == trigger_ref.template_name,
+                                models.ScheduledTrigger.button_actions.isnot(None)
+                            ).order_by(models.ScheduledTrigger.id.desc()).first()
+                            if fallback_trigger:
+                                button_actions = fallback_trigger.button_actions or {}
+                                logger.info(f"🔁 [BUTTON_ACTION_FALLBACK] button_actions nulo no Trigger {trigger_ref.id}, usando fallback do Trigger {fallback_trigger.id}")
+                        action = button_actions.get(btn_key)
+                    
+                    # Fallback para Lembretes de Agendamento (se não houver trigger_ref ou se a ação do botão não casar)
+                    if not action and target_cid:
+                        try:
+                            from config_loader import get_settings
+                            cl_settings = get_settings(client_id=target_cid)
+                            is_enabled = cl_settings.get("APPOINTMENTS_ENABLED") in (True, "true", "True")
+                            if is_enabled:
+                                buttons_str = cl_settings.get("APPOINTMENTS_REMINDER_BUTTONS", "{}")
+                                import json
+                                reminder_buttons = json.loads(buttons_str) if buttons_str else {}
+                                action = reminder_buttons.get(btn_key)
+                                if action:
+                                    logger.info(f"⏰ [BUTTON_ACTION_APPOINTMENT] Botão '{btn_key}' mapeado nas configurações de Agendamento do Client {target_cid}")
+                        except Exception as e_apt_btn:
+                            logger.error(f"❌ [BUTTON_ACTION_APPOINTMENT] Erro ao buscar botão de agendamento: {e_apt_btn}")
+                            
                     if action and action.get("type") in ("interaction", "block"):
                         action_type = action.get("type")
                         action_funnel_id = action.get("funnel_id")

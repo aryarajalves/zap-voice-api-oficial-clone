@@ -41,3 +41,24 @@ def test_webhook_lead_variables_validation_coercion():
     invalid_str_lead_data["variables"] = "invalid json string"
     lead = WebhookLead(**invalid_str_lead_data)
     assert lead.variables == {}
+
+def test_resolve_lead_variables():
+    from services.scheduler import resolve_lead_variables
+    from models import WebhookLead as ModelLead
+    
+    lead_model = ModelLead(
+        name="John Doe",
+        phone="5511999998888",
+        email="john@doe.com",
+        event_datetime=datetime(2026, 7, 20, 15, 30),
+        google_calendar_link="http://calendar.google.com/test"
+    )
+    
+    assert resolve_lead_variables("Olá {name}!", lead_model) == "Olá John Doe!"
+    assert resolve_lead_variables("Fone: {phone}", lead_model) == "Fone: 5511999998888"
+    assert resolve_lead_variables("E-mail: {email}", lead_model) == "E-mail: john@doe.com"
+    assert resolve_lead_variables("Horário: {event_datetime}", lead_model) == "Horário: 20/07/2026 15:30"
+    assert resolve_lead_variables("Link: {google_calendar_link}", lead_model) == "Link: http://calendar.google.com/test"
+    assert resolve_lead_variables("Nenhum match", lead_model) == "Nenhum match"
+    assert resolve_lead_variables("", lead_model) == ""
+
