@@ -11,6 +11,7 @@ import LabelSearchSelect from '../components/LabelSearchSelect';
 import WhatsAppProfileSection from '../components/WhatsAppProfileSection';
 import WebhookConfigSection from '../components/WebhookConfigSection';
 import WhatsAppAutoReplySection from '../components/WhatsAppAutoReplySection';
+import TemplatePreview from '../../BulkSender/common/TemplatePreview';
 
 const WhatsAppTab = ({
     user, formData, setFormData, handleChange, visibleFields, handleRevealSetting, copyToClipboard,
@@ -121,6 +122,54 @@ const WhatsAppTab = ({
             setButtonActions({});
         }
     }, [formData.APPOINTMENTS_REMINDER_TEMPLATE, formData.APPOINTMENTS_REMINDER_BUTTONS]);
+
+    React.useEffect(() => {
+        if (!formData.APPOINTMENTS_REMINDER_TEMPLATE || templates.length === 0) return;
+        const selectedTemplateObj = templates.find(t => t.name === formData.APPOINTMENTS_REMINDER_TEMPLATE);
+        if (!selectedTemplateObj) return;
+
+        const headerComp = selectedTemplateObj.components?.find(c => c.type === 'HEADER');
+        const bodyComp = selectedTemplateObj.components?.find(c => c.type === 'BODY');
+
+        const getVariables = (text) => {
+            if (!text) return [];
+            const matches = [...text.matchAll(/\{\{(\d+)\}\}/g)];
+            return matches.map(m => m[1]);
+        };
+
+        const headerTextVars = headerComp && headerComp.text ? getVariables(headerComp.text) : [];
+        const bodyTextVars = bodyComp && bodyComp.text ? getVariables(bodyComp.text) : [];
+
+        let currentParams = {};
+        if (formData.APPOINTMENTS_REMINDER_PARAMS) {
+            try {
+                currentParams = JSON.parse(formData.APPOINTMENTS_REMINDER_PARAMS);
+            } catch (e) {
+                currentParams = {};
+            }
+        }
+
+        let changed = false;
+        headerTextVars.forEach(vNum => {
+            const key = `HEADER_${vNum}`;
+            if (currentParams[key] === undefined) {
+                currentParams[key] = '{name}';
+                changed = true;
+            }
+        });
+
+        bodyTextVars.forEach(vNum => {
+            const key = `BODY_${vNum}`;
+            if (currentParams[key] === undefined) {
+                currentParams[key] = '{name}';
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            handleChange({ target: { name: 'APPOINTMENTS_REMINDER_PARAMS', value: JSON.stringify(currentParams) } });
+        }
+    }, [formData.APPOINTMENTS_REMINDER_TEMPLATE, templates, formData.APPOINTMENTS_REMINDER_PARAMS]);
 
     const handleParamChange = (key, value) => {
         const updated = { ...appointmentParams, [key]: value };
@@ -710,156 +759,189 @@ const WhatsAppTab = ({
                                         ];
 
                                         return (
-                                            <div className="space-y-4 pt-2">
-                                                {/* Media Uploader if template requires header media */}
-                                                {isMediaHeader && (
-                                                    <div className="pt-4 border-t border-gray-100 dark:border-white/5 mt-4">
-                                                        <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Upload de Mídia do Cabeçalho</label>
-                                                        <MediaHeaderUploader
-                                                            format={headerComp.format}
-                                                            templateParams={appointmentParams}
-                                                            handleParamChange={(key, val) => handleParamChange(key, val)}
-                                                        />
-                                                    </div>
-                                                )}
+                                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 border-t border-gray-100 dark:border-white/5 mt-4">
+                                                {/* Painel de Configurações do Template */}
+                                                <div className="lg:col-span-7 space-y-4">
+                                                    {/* Media Uploader if template requires header media */}
+                                                    {isMediaHeader && (
+                                                        <div className="space-y-1.5">
+                                                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Upload de Mídia do Cabeçalho</label>
+                                                            <MediaHeaderUploader
+                                                                format={headerComp.format}
+                                                                templateParams={appointmentParams}
+                                                                handleParamChange={(key, val) => handleParamChange(key, val)}
+                                                            />
+                                                        </div>
+                                                    )}
 
-                                                {/* Variable Mappings */}
-                                                {(headerTextVars.length > 0 || bodyTextVars.length > 0) && (
-                                                    <div className="pt-4 border-t border-gray-100 dark:border-white/5 mt-4 space-y-4">
-                                                        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300">Variáveis do Template</h4>
-                                                        
-                                                        {headerTextVars.map(vNum => {
-                                                            const paramKey = `HEADER_${vNum}`;
-                                                            const paramVal = appointmentParams[paramKey] || '';
-                                                            const isCustom = !['{name}', '{event_datetime}', '{google_calendar_link}'].includes(paramVal) && paramVal !== '';
-                                                            const selectVal = isCustom ? 'custom' : (paramVal || '{name}');
+                                                    {/* Variable Mappings */}
+                                                    {(headerTextVars.length > 0 || bodyTextVars.length > 0) && (
+                                                        <div className="space-y-4">
+                                                            <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300">Variáveis do Template</h4>
                                                             
-                                                            return (
-                                                                <div key={paramKey} className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
-                                                                    <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Variável do Cabeçalho {'{{' + vNum + '}}'}</label>
-                                                                    <div className="flex gap-2">
-                                                                        <select
-                                                                            value={selectVal}
-                                                                            onChange={(e) => {
-                                                                                const val = e.target.value;
-                                                                                if (val === 'custom') {
-                                                                                    handleParamChange(paramKey, '');
-                                                                                } else {
-                                                                                    handleParamChange(paramKey, val);
-                                                                                }
-                                                                            }}
-                                                                            className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
-                                                                        >
-                                                                            {VAR_OPTIONS.map(opt => (
-                                                                                <option key={opt.value} value={opt.value} className="bg-[#1e293b] text-white">{opt.label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                        {(selectVal === 'custom' || isCustom) && (
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder="Digite o valor..."
-                                                                                value={paramVal}
-                                                                                onChange={(e) => handleParamChange(paramKey, e.target.value)}
-                                                                                className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
-                                                                            />
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-
-                                                        {bodyTextVars.map(vNum => {
-                                                            const paramKey = `BODY_${vNum}`;
-                                                            const paramVal = appointmentParams[paramKey] || '';
-                                                            const isCustom = !['{name}', '{event_datetime}', '{google_calendar_link}'].includes(paramVal) && paramVal !== '';
-                                                            const selectVal = isCustom ? 'custom' : (paramVal || '{name}');
-                                                            
-                                                            return (
-                                                                <div key={paramKey} className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
-                                                                    <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Variável do Corpo {'{{' + vNum + '}}'}</label>
-                                                                    <div className="flex gap-2">
-                                                                        <select
-                                                                            value={selectVal}
-                                                                            onChange={(e) => {
-                                                                                const val = e.target.value;
-                                                                                if (val === 'custom') {
-                                                                                    handleParamChange(paramKey, '');
-                                                                                } else {
-                                                                                    handleParamChange(paramKey, val);
-                                                                                }
-                                                                            }}
-                                                                            className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
-                                                                        >
-                                                                            {VAR_OPTIONS.map(opt => (
-                                                                                <option key={opt.value} value={opt.value} className="bg-[#1e293b] text-white">{opt.label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                        {(selectVal === 'custom' || isCustom) && (
-                                                                            <input
-                                                                                type="text"
-                                                                                placeholder="Digite o valor..."
-                                                                                value={paramVal}
-                                                                                onChange={(e) => handleParamChange(paramKey, e.target.value)}
-                                                                                className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
-                                                                            />
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-
-                                                {/* Button Actions */}
-                                                {quickReplyButtons.length > 0 && (
-                                                    <div className="pt-4 border-t border-gray-100 dark:border-white/5 mt-4 space-y-4">
-                                                        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300">Ações dos Botões (Quick Replies)</h4>
-                                                        
-                                                        {quickReplyButtons.map(btnText => {
-                                                            const action = buttonActions[btnText] || { type: 'none', funnel_id: null };
-                                                            
-                                                            return (
-                                                                <div key={btnText} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-3">
-                                                                    <div className="flex justify-between items-center">
-                                                                        <span className="px-2.5 py-1 bg-white/10 rounded-xl text-xs font-bold text-white max-w-[180px] truncate">{btnText}</span>
-                                                                        <span className="text-[10px] text-gray-400 font-semibold uppercase">Botão Rápido</span>
-                                                                    </div>
-                                                                    
-                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                                        <div className="space-y-1">
-                                                                            <label className="text-[10px] uppercase font-bold text-gray-400">Tipo de Ação</label>
+                                                            {headerTextVars.map(vNum => {
+                                                                const paramKey = `HEADER_${vNum}`;
+                                                                const paramVal = appointmentParams[paramKey] || '';
+                                                                const isCustom = !['{name}', '{event_datetime}', '{google_calendar_link}'].includes(paramVal) && paramVal !== '';
+                                                                const selectVal = isCustom ? 'custom' : (paramVal || '{name}');
+                                                                
+                                                                return (
+                                                                    <div key={paramKey} className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
+                                                                        <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Variável do Cabeçalho {'{{' + vNum + '}}'}</label>
+                                                                        <div className="flex gap-2">
                                                                             <select
-                                                                                value={action.type}
-                                                                                onChange={(e) => handleButtonActionChange(btnText, { ...action, type: e.target.value, funnel_id: e.target.value === 'none' ? null : action.funnel_id })}
-                                                                                className="w-full p-2 border border-gray-300 dark:border-white/10 rounded-xl bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                                                value={selectVal}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value;
+                                                                                    if (val === 'custom') {
+                                                                                        handleParamChange(paramKey, '');
+                                                                                    } else {
+                                                                                        handleParamChange(paramKey, val);
+                                                                                    }
+                                                                                }}
+                                                                                className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
                                                                             >
-                                                                                <option value="none" className="bg-[#1e293b] text-white">Nenhuma</option>
-                                                                                <option value="interaction" className="bg-[#1e293b] text-white">Interação (Dispara Funil)</option>
-                                                                                <option value="block" className="bg-[#1e293b] text-white">Bloqueio</option>
+                                                                                {VAR_OPTIONS.map(opt => (
+                                                                                    <option key={opt.value} value={opt.value} className="bg-[#1e293b] text-white">{opt.label}</option>
+                                                                                ))}
                                                                             </select>
+                                                                            {(selectVal === 'custom' || isCustom) && (
+                                                                                <input
+                                                                                    type="text"
+                                                                                    placeholder="Digite o valor..."
+                                                                                    value={paramVal}
+                                                                                    onChange={(e) => handleParamChange(paramKey, e.target.value)}
+                                                                                    className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
+                                                                                />
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+
+                                                            {bodyTextVars.map(vNum => {
+                                                                const paramKey = `BODY_${vNum}`;
+                                                                const paramVal = appointmentParams[paramKey] || '';
+                                                                const isCustom = !['{name}', '{event_datetime}', '{google_calendar_link}'].includes(paramVal) && paramVal !== '';
+                                                                const selectVal = isCustom ? 'custom' : (paramVal || '{name}');
+                                                                
+                                                                return (
+                                                                    <div key={paramKey} className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
+                                                                        <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Variável do Corpo {'{{' + vNum + '}}'}</label>
+                                                                        <div className="flex gap-2">
+                                                                            <select
+                                                                                value={selectVal}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value;
+                                                                                    if (val === 'custom') {
+                                                                                        handleParamChange(paramKey, '');
+                                                                                    } else {
+                                                                                        handleParamChange(paramKey, val);
+                                                                                    }
+                                                                                }}
+                                                                                className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
+                                                                            >
+                                                                                {VAR_OPTIONS.map(opt => (
+                                                                                    <option key={opt.value} value={opt.value} className="bg-[#1e293b] text-white">{opt.label}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                            {(selectVal === 'custom' || isCustom) && (
+                                                                                <input
+                                                                                    type="text"
+                                                                                    placeholder="Digite o valor..."
+                                                                                    value={paramVal}
+                                                                                    onChange={(e) => handleParamChange(paramKey, e.target.value)}
+                                                                                    className="p-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none flex-1"
+                                                                                />
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Button Actions */}
+                                                    {quickReplyButtons.length > 0 && (
+                                                        <div className="space-y-4">
+                                                            <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300">Ações dos Botões (Quick Replies)</h4>
+                                                            
+                                                            {quickReplyButtons.map(btnText => {
+                                                                const action = buttonActions[btnText] || { type: 'none', funnel_id: null };
+                                                                
+                                                                return (
+                                                                    <div key={btnText} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-3">
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span className="px-2.5 py-1 bg-white/10 rounded-xl text-xs font-bold text-white max-w-[180px] truncate">{btnText}</span>
+                                                                            <span className="text-[10px] text-gray-400 font-semibold uppercase">Botão Rápido</span>
                                                                         </div>
                                                                         
-                                                                        {action.type !== 'none' && (
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                                             <div className="space-y-1">
-                                                                                <label className="text-[10px] uppercase font-bold text-gray-400">Selecionar Funil</label>
+                                                                                <label className="text-[10px] uppercase font-bold text-gray-400">Tipo de Ação</label>
                                                                                 <select
-                                                                                    value={action.funnel_id || ''}
-                                                                                    onChange={(e) => handleButtonActionChange(btnText, { ...action, funnel_id: e.target.value ? parseInt(e.target.value) : null })}
+                                                                                    value={action.type}
+                                                                                    onChange={(e) => handleButtonActionChange(btnText, { ...action, type: e.target.value, funnel_id: e.target.value === 'none' ? null : action.funnel_id })}
                                                                                     className="w-full p-2 border border-gray-300 dark:border-white/10 rounded-xl bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
                                                                                 >
-                                                                                    <option value="" className="bg-[#1e293b] text-white">— Nenhum funil —</option>
-                                                                                    {funnels.map(f => (
-                                                                                        <option key={f.id} value={f.id} className="bg-[#1e293b] text-white">{f.is_pinned ? '📌 ' : ''}{f.name}</option>
-                                                                                    ))}
+                                                                                    <option value="none" className="bg-[#1e293b] text-white">Nenhuma</option>
+                                                                                    <option value="interaction" className="bg-[#1e293b] text-white">Interação (Dispara Funil)</option>
+                                                                                    <option value="block" className="bg-[#1e293b] text-white">Bloqueio</option>
                                                                                 </select>
                                                                             </div>
-                                                                        )}
+                                                                            
+                                                                            {action.type !== 'none' && (
+                                                                                <div className="space-y-1">
+                                                                                    <label className="text-[10px] uppercase font-bold text-gray-400">Selecionar Funil</label>
+                                                                                    <select
+                                                                                        value={action.funnel_id || ''}
+                                                                                        onChange={(e) => handleButtonActionChange(btnText, { ...action, funnel_id: e.target.value ? parseInt(e.target.value) : null })}
+                                                                                        className="w-full p-2 border border-gray-300 dark:border-white/10 rounded-xl bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                                                    >
+                                                                                        <option value="" className="bg-[#1e293b] text-white">— Nenhum funil —</option>
+                                                                                        {funnels.map(f => (
+                                                                                            <option key={f.id} value={f.id} className="bg-[#1e293b] text-white">{f.is_pinned ? '📌 ' : ''}{f.name}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Coluna da direita: Live Preview do WhatsApp Bubble */}
+                                                <div className="lg:col-span-5 space-y-2">
+                                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Visualização em Tempo Real</label>
+                                                    {(() => {
+                                                        const mappedParams = {};
+                                                        Object.entries(appointmentParams).forEach(([k, v]) => {
+                                                            const match = k.match(/^(HEADER|BODY)_(\d+)$/);
+                                                            if (match) {
+                                                                const type = match[1];
+                                                                const index = parseInt(match[2]);
+                                                                if (index > 0) {
+                                                                    mappedParams[`${type}_${index - 1}`] = v;
+                                                                } else {
+                                                                    mappedParams[k] = v;
+                                                                }
+                                                            } else {
+                                                                mappedParams[k] = v;
+                                                            }
+                                                        });
+                                                        return (
+                                                            <div className="sticky top-2">
+                                                                <TemplatePreview 
+                                                                    template={selectedTemplateObj} 
+                                                                    params={mappedParams}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </div>
                                         );
                                     })()}
