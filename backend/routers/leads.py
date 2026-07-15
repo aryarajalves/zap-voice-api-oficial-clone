@@ -505,6 +505,7 @@ def list_leads(
     filter_ddd: Optional[str] = None,
     block_status: Optional[str] = None,  # 'blocked' (bloqueio real) | 'resting' (repouso temporário) | None (todos)
     has_appointment: Optional[str] = None,  # 'true' | 'false' | None (todos)
+    appointment_status: Optional[str] = None,  # 'pending' | 'occurred' | None (todos)
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("leads"))
@@ -535,6 +536,10 @@ def list_leads(
     # Filtro de Agendamentos
     if has_appointment == 'true':
         query = query.filter(models.WebhookLead.event_datetime.isnot(None))
+        if appointment_status == 'pending':
+            query = query.filter(models.WebhookLead.event_datetime >= datetime.utcnow())
+        elif appointment_status == 'occurred':
+            query = query.filter(models.WebhookLead.event_datetime < datetime.utcnow())
     elif has_appointment == 'false':
         query = query.filter(models.WebhookLead.event_datetime.is_(None))
 

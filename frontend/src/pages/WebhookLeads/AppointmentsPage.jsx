@@ -3,7 +3,7 @@ import { useClient } from '../../contexts/ClientContext';
 import { fetchWithAuth } from '../../AuthContext';
 import { API_URL } from '../../config';
 import { toast } from 'react-hot-toast';
-import { FiCalendar, FiSearch, FiExternalLink, FiClock, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiCalendar, FiSearch, FiExternalLink, FiClock, FiChevronLeft, FiChevronRight, FiFilter, FiUserPlus } from 'react-icons/fi';
 
 export default function AppointmentsPage() {
   const { activeClient } = useClient();
@@ -12,6 +12,9 @@ export default function AppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(''); // '' | 'pending' | 'occurred'
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(10);
   const [now, setNow] = useState(new Date());
@@ -34,6 +37,15 @@ export default function AppointmentsPage() {
       if (debouncedSearch) {
         url += `&search=${encodeURIComponent(debouncedSearch)}`;
       }
+      if (statusFilter) {
+        url += `&appointment_status=${statusFilter}`;
+      }
+      if (dateFrom) {
+        url += `&date_from=${dateFrom}`;
+      }
+      if (dateTo) {
+        url += `&date_to=${dateTo}`;
+      }
       const res = await fetchWithAuth(url, {}, activeClient.id);
       if (res.ok) {
         const data = await res.json();
@@ -46,7 +58,7 @@ export default function AppointmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeClient?.id, page, limit, debouncedSearch]);
+  }, [activeClient?.id, page, limit, debouncedSearch, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchAppointments();
@@ -59,6 +71,14 @@ export default function AppointmentsPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(0);
+  };
 
   // Helper to format remaining time
   const getRemainingTime = (eventDateStr) => {
@@ -119,19 +139,86 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
-      {/* Control Bar (Search & Filter) */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white dark:bg-[#1e293b] p-5 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm">
-        <div className="relative w-full md:w-96">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-            <FiSearch />
-          </span>
-          <input
-            type="text"
-            placeholder="Buscar por nome ou telefone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white placeholder-gray-400 text-sm font-medium"
-          />
+      {/* Control Bar (Search, Status Filter, Date Filters) */}
+      <div className="flex flex-col gap-4 bg-white dark:bg-[#1e293b] p-6 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm">
+        <div className="flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-white/5">
+          <FiFilter className="text-blue-500" />
+          <span className="text-xs uppercase tracking-wider font-bold text-gray-400">Filtros e Busca</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+          {/* Text Search */}
+          <div className="md:col-span-4 space-y-1.5">
+            <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">Pesquisar Contato</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                <FiSearch />
+              </span>
+              <input
+                type="text"
+                placeholder="Nome ou telefone..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white placeholder-gray-400 text-sm font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Status Dropdown */}
+          <div className="md:col-span-3 space-y-1.5">
+            <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">Status Ocorrência</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+              className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white text-sm font-medium"
+            >
+              <option value="" className="bg-white dark:bg-[#1e293b]">Todos os Agendamentos</option>
+              <option value="pending" className="bg-white dark:bg-[#1e293b]">Pendentes / Não Ocorridos</option>
+              <option value="occurred" className="bg-white dark:bg-[#1e293b]">Realizados / Ocorridos</option>
+            </select>
+          </div>
+
+          {/* Date Range - From */}
+          <div className="md:col-span-2.5 space-y-1.5 flex-1">
+            <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">De (Criação)</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setPage(0);
+              }}
+              className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white text-sm font-medium"
+            />
+          </div>
+
+          {/* Date Range - To */}
+          <div className="md:col-span-2.5 space-y-1.5 flex-1">
+            <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">Até (Criação)</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setPage(0);
+              }}
+              className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white text-sm font-medium"
+            />
+          </div>
+
+          {/* Clear Filters Button */}
+          <div className="md:col-span-1">
+            <button
+              onClick={handleClearFilters}
+              className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl text-xs font-bold transition-all shadow border border-gray-200 dark:border-white/5 h-[42px] flex items-center justify-center cursor-pointer"
+              title="Limpar Filtros"
+            >
+              Limpar
+            </button>
+          </div>
         </div>
       </div>
 
@@ -148,7 +235,7 @@ export default function AppointmentsPage() {
               <FiCalendar size={32} />
             </div>
             <p className="text-gray-500 dark:text-gray-400 text-base font-semibold">Nenhum agendamento ativo encontrado.</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Contatos com link de data/hora de eventos serão listados aqui.</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Ajuste os filtros ou verifique se há contatos com dados de eventos.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -157,6 +244,7 @@ export default function AppointmentsPage() {
                 <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Contato</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Telefone</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Data de Criação</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Horário do Evento</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Tempo Restante</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Google Agenda</th>
@@ -167,6 +255,7 @@ export default function AppointmentsPage() {
                 {appointments.map((lead) => {
                   const countdown = getRemainingTime(lead.event_datetime);
                   const eventTime = new Date(lead.event_datetime).toLocaleString('pt-BR');
+                  const createdAtTime = new Date(lead.created_at).toLocaleString('pt-BR');
                   
                   // Label badge styling classes
                   let badgeClass = "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300";
@@ -188,6 +277,12 @@ export default function AppointmentsPage() {
                         {lead.phone}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 font-medium">
+                        <span className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-xs">
+                          <FiUserPlus className="text-indigo-400" />
+                          {createdAtTime}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 font-semibold">
                         <span className="flex items-center gap-1.5">
                           <FiClock className="text-blue-500" />
                           {eventTime}
