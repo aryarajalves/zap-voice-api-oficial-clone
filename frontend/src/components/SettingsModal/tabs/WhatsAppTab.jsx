@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiEyeOff, FiEye, FiCopy, FiZap, FiX } from 'react-icons/fi';
+import { FiEyeOff, FiEye, FiCopy, FiZap, FiX, FiCalendar } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { resolveUrl, WEBHOOK_BASE_URL, META_APP_ID, META_CONFIG_ID, API_URL } from '../../../config';
 import { handleMetaEmbeddedSignupHelper } from '../utils/whatsAppTabUtils';
@@ -33,6 +33,24 @@ const WhatsAppTab = ({
     const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const dropdownRef = React.useRef(null);
+
+    // Estado e useEffect para carregar templates oficiais
+    const [templates, setTemplates] = React.useState([]);
+    React.useEffect(() => {
+        const fetchTemplates = async () => {
+            if (!activeClient) return;
+            try {
+                const res = await fetchWithAuth(`${API_URL}/whatsapp/templates?include_paused=false`, {}, activeClient.id);
+                if (res.ok) {
+                    const data = await res.json();
+                    setTemplates(data || []);
+                }
+            } catch (err) {
+                console.error("Erro ao buscar templates em WhatsAppTab:", err);
+            }
+        };
+        fetchTemplates();
+    }, [activeClient]);
 
     React.useEffect(() => {
         const fetchAllLabels = async () => {
@@ -489,6 +507,76 @@ const WhatsAppTab = ({
                             formData={formData}
                             handleChange={handleChange}
                         />
+
+                        {/* Bloco de Configuração de Agendamentos de Evento (NOVO) */}
+                        <div className="bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-2xl p-5 md:p-6 space-y-5 transition-colors duration-200 mt-6 md:col-span-2">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500">
+                                    <FiCalendar size={20} />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white">Lembretes de Agendamento</h4>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500">Envie um lembrete (template oficial) de forma automática X minutos antes do horário agendado de um contato.</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                        Ativar agendamentos de lembrete
+                                    </span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            name="APPOINTMENTS_ENABLED"
+                                            checked={formData.APPOINTMENTS_ENABLED === true || formData.APPOINTMENTS_ENABLED === 'true'}
+                                            onChange={(e) => {
+                                                handleChange({ target: { name: 'APPOINTMENTS_ENABLED', value: e.target.checked } });
+                                            }}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-9 h-5 bg-gray-200 dark:bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+
+                                {(formData.APPOINTMENTS_ENABLED === true || formData.APPOINTMENTS_ENABLED === 'true') && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400">Template a ser disparado</label>
+                                            <select
+                                                name="APPOINTMENTS_REMINDER_TEMPLATE"
+                                                value={formData.APPOINTMENTS_REMINDER_TEMPLATE || ''}
+                                                onChange={handleChange}
+                                                className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white dark:bg-[#1f2937]/50 text-gray-900 dark:text-white text-xs font-medium"
+                                            >
+                                                <option value="">Selecione um template...</option>
+                                                {templates.map(t => (
+                                                    <option key={t.name} value={t.name}>{t.name} ({t.language})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400">Minutos antes do disparo</label>
+                                            <select
+                                                name="APPOINTMENTS_REMINDER_MINUTES"
+                                                value={formData.APPOINTMENTS_REMINDER_MINUTES || '30'}
+                                                onChange={handleChange}
+                                                className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white dark:bg-[#1f2937]/50 text-gray-900 dark:text-white text-xs font-medium"
+                                            >
+                                                <option value="5">5 minutos antes</option>
+                                                <option value="10">10 minutos antes</option>
+                                                <option value="15">15 minutos antes</option>
+                                                <option value="30">30 minutos antes</option>
+                                                <option value="45">45 minutos antes</option>
+                                                <option value="60">1 hora antes (60 min)</option>
+                                                <option value="120">2 horas antes (120 min)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
                     </div>
                 </div>

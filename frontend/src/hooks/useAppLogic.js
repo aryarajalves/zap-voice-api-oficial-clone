@@ -74,7 +74,8 @@ export function useAppLogic() {
                     name: data.APP_NAME || 'ZapVoice',
                     logo: data.APP_LOGO || null,
                     logoSize: data.APP_LOGO_SIZE || 'medium',
-                    WA_HAS_AI_AGENT: data.WA_HAS_AI_AGENT
+                    WA_HAS_AI_AGENT: data.WA_HAS_AI_AGENT,
+                    APPOINTMENTS_ENABLED: data.APPOINTMENTS_ENABLED
                 });
             }
         } catch (err) {

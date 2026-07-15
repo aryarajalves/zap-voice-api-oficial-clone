@@ -64,6 +64,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'chat_conversations', label: 'Atendimento', icon: FiMessageSquare, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'contatos' },
         { id: 'human_agents', label: 'Atendente humano', icon: FiUsers, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'contatos' },
         { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
+        { id: 'appointments', label: 'Agendamentos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
         { id: 'import_history', label: 'Histórico importação de contatos', icon: FiClock, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
         { id: 'blocked', label: 'Contatos Bloqueados', icon: FiSlash, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
 
@@ -125,6 +126,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                         'funnels': 'funnels',
                         'integrations': 'settings',
                         'leads': 'leads',
+                        'appointments': 'leads',
                         'import_history': 'leads',
                         'blocked': 'leads'
                     };
@@ -137,6 +139,12 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                         if (item.id === 'human_agents') {
                             const isAiAgentEnabled = appBranding?.WA_HAS_AI_AGENT === true || appBranding?.WA_HAS_AI_AGENT === 'true';
                             if (!isAiAgentEnabled) return false;
+                        }
+
+                        // Se for Agendamentos, só exibe se os agendamentos estiverem ativos nas configurações
+                        if (item.id === 'appointments') {
+                            const isAppointmentsEnabled = appBranding?.APPOINTMENTS_ENABLED === true || appBranding?.APPOINTMENTS_ENABLED === 'true';
+                            if (!isAppointmentsEnabled) return false;
                         }
 
                         // Se for a automação do Instagram e a env estiver desativada, oculta

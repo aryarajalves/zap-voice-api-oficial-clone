@@ -83,7 +83,12 @@ def upsert_lead_public(
         if "google_calendar_link" in payload_dict:
             lead.google_calendar_link = payload_dict["google_calendar_link"]
         if "event_datetime" in payload_dict:
-            lead.event_datetime = payload_dict["event_datetime"]
+            new_dt = payload_dict["event_datetime"]
+            if new_dt != lead.event_datetime:
+                lead.google_calendar_reminder_sent = False
+            lead.event_datetime = new_dt
+        if "google_calendar_reminder_sent" in payload_dict:
+            lead.google_calendar_reminder_sent = payload_dict["google_calendar_reminder_sent"]
         if "tags" in payload_dict:
             lead.tags = payload_dict["tags"]
         if "product_name" in payload_dict:

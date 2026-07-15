@@ -504,6 +504,7 @@ def list_leads(
     filter_ddi: Optional[str] = None,
     filter_ddd: Optional[str] = None,
     block_status: Optional[str] = None,  # 'blocked' (bloqueio real) | 'resting' (repouso temporário) | None (todos)
+    has_appointment: Optional[str] = None,  # 'true' | 'false' | None (todos)
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("leads"))
@@ -511,7 +512,7 @@ def list_leads(
     """
     Retorna a lista de leads capturados via webhook, com filtros e busca.
     Filtros de data (date_from, date_to) aceitam formato ISO 8601 (YYYY-MM-DD).
-    'exclude_tag' remove da lista qualquer contato que possua ao menos uma das
+    'exclude_tag' remove da lista qualquer contato que possua au menos uma das
     etiquetas informadas (mesmo que também possua etiquetas de 'tag').
     """
     client_id = x_client_id if x_client_id else current_user.client_id
@@ -530,6 +531,12 @@ def list_leads(
         is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin,
         exclude_tag=exclude_tag
     )
+
+    # Filtro de Agendamentos
+    if has_appointment == 'true':
+        query = query.filter(models.WebhookLead.event_datetime.isnot(None))
+    elif has_appointment == 'false':
+        query = query.filter(models.WebhookLead.event_datetime.is_(None))
 
     # Filtro por DDI/DDD do telefone
     if filter_ddi:
@@ -999,6 +1006,13 @@ def update_lead(
         update_data["phone"] = re.sub(r"\D", "", update_data["phone"])
         if len(update_data["phone"]) < 8:
              raise HTTPException(status_code=400, detail="Telefone inválido para atualização.")
+
+    # Se a data de agendamento for alterada, resetamos a flag do lembrete
+    if "event_datetime" in update_data:
+        new_dt = update_data["event_datetime"]
+        # Certifica-se de comparar objetos datetime cientes/ingênuos de fuso horário adequadamente
+        if new_dt != lead.event_datetime:
+            lead.google_calendar_reminder_sent = False
 
     for field, value in update_data.items():
         setattr(lead, field, value)

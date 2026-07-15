@@ -9,6 +9,7 @@ from rabbitmq_client import rabbitmq
 from core.logger import setup_logger
 from core.recurrent_logic import calculate_next_run
 from chatwoot_client import ChatwootClient
+from config_loader import get_settings
 
 logger = setup_logger(__name__)
 
@@ -526,6 +527,72 @@ async def run_closed_window_label_cleanup(db_session=None):
         _last_closed_window_cleanup = minute_key
 
 
+async def process_calendar_reminders(db, now):
+    """
+    Verifica contatos com agendamentos futuros e dispara o template configurado no cliente
+    quando faltar o tempo especificado (APPOINTMENTS_REMINDER_MINUTES).
+    """
+    try:
+        clients = db.query(models.Client).all()
+        for cl in clients:
+            settings = get_settings(client_id=cl.id)
+            enabled = settings.get("APPOINTMENTS_ENABLED")
+            if not enabled or str(enabled).lower() not in ("true", "yes", "1"):
+                continue
+
+            template_name = settings.get("APPOINTMENTS_REMINDER_TEMPLATE")
+            if not template_name:
+                continue
+
+            try:
+                minutes = int(settings.get("APPOINTMENTS_REMINDER_MINUTES", "30"))
+            except ValueError:
+                minutes = 30
+
+            # Encontrar contatos deste cliente com event_datetime configurado e lembrete ainda não enviado
+            if cl.project_id:
+                leads_query = db.query(models.WebhookLead).filter(
+                    models.WebhookLead.project_id == cl.project_id
+                )
+            else:
+                leads_query = db.query(models.WebhookLead).filter(
+                    models.WebhookLead.client_id == cl.id
+                )
+
+            leads_to_remind = leads_query.filter(
+                models.WebhookLead.event_datetime.isnot(None),
+                models.WebhookLead.google_calendar_reminder_sent == False,
+                models.WebhookLead.event_datetime >= now
+            ).all()
+
+            for lead in leads_to_remind:
+                time_diff = lead.event_datetime - now
+                diff_minutes = time_diff.total_seconds() / 60.0
+                
+                if diff_minutes <= minutes:
+                    logger.info(f"⏰ [SCHEDULER AGENDAMENTOS] Disparando lembrete para {lead.name} ({lead.phone}). Faltam {diff_minutes:.1f} minutos.")
+                    try:
+                        client = ChatwootClient(client_id=cl.id)
+                        result = await client.send_template(
+                            phone_number=lead.phone,
+                            template_name=template_name,
+                            language="pt_BR",
+                            components=[]
+                        )
+                        
+                        if result and not (isinstance(result, dict) and result.get("error")):
+                            lead.google_calendar_reminder_sent = True
+                            db.commit()
+                            logger.info(f"✅ [SCHEDULER AGENDAMENTOS] Lembrete enviado com sucesso para {lead.phone}.")
+                        else:
+                            err_msg = result.get("detail") if isinstance(result, dict) else "Erro desconhecido"
+                            logger.error(f"❌ [SCHEDULER AGENDAMENTOS] Falha no disparo de template para {lead.phone}: {err_msg}")
+                    except Exception as ex:
+                        logger.error(f"❌ [SCHEDULER AGENDAMENTOS] Erro ao disparar lembrete para {lead.phone}: {ex}")
+    except Exception as e:
+        logger.error(f"❌ [SCHEDULER AGENDAMENTOS] Erro na rotina de processamento: {e}")
+
+
 async def scheduler_task():
     logger.info("Scheduler task started (RabbitMQ Mode)")
     while True:
@@ -535,6 +602,9 @@ async def scheduler_task():
             
             # --- 1. PROCESS RECURRING TRIGGERS ---
             await process_recurring_triggers(db, now_utc)
+
+            # --- 1.2. PROCESS CALENDAR APPOINTMENTS REMINDERS ---
+            await process_calendar_reminders(db, now_utc)
 
             # --- 2. PROCESS PENDING ONE-OFF TRIGGERS ---
             pending_triggers = db.query(models.ScheduledTrigger).filter(

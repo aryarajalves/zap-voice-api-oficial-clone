@@ -623,6 +623,7 @@ class WebhookLeadBase(BaseModel):
     variables: Optional[Dict[str, Any]] = None
     google_calendar_link: Optional[str] = None
     event_datetime: Optional[datetime] = None
+    google_calendar_reminder_sent: bool = False
     imported_by_client_id: Optional[int] = None
     imported_by_name: Optional[str] = None
     project_id: Optional[int] = None
@@ -683,6 +684,7 @@ class WebhookLeadUpdate(BaseModel):
     variables: Optional[Dict[str, Any]] = None
     google_calendar_link: Optional[str] = None
     event_datetime: Optional[datetime] = None
+    google_calendar_reminder_sent: Optional[bool] = None
     product_name: Optional[str] = None
     payment_method: Optional[str] = None
     price: Optional[str] = None
@@ -693,6 +695,7 @@ class WebhookLeadPublicUpsert(BaseModel):
     email: Optional[str] = None
     google_calendar_link: Optional[str] = None
     event_datetime: Optional[datetime] = None
+    google_calendar_reminder_sent: Optional[bool] = False
     tags: Optional[str] = None
     product_name: Optional[str] = None
     payment_method: Optional[str] = None

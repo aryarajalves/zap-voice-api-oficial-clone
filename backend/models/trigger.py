@@ -320,6 +320,7 @@ class WebhookLead(Base):
 
     google_calendar_link = Column(String, nullable=True)
     event_datetime = Column(DateTime(timezone=True), nullable=True)
+    google_calendar_reminder_sent = Column(Boolean, default=False, nullable=False, server_default="false")
 
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     imported_by_client_id = Column(Integer, ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)

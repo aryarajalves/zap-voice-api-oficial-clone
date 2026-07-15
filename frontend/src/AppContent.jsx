@@ -25,6 +25,7 @@ import Monitoring from './pages/Monitoring';
 import Integrations from './pages/Integrations';
 import WebhookLeads from './pages/WebhookLeads';
 import ImportHistoryPage from './pages/WebhookLeads/ImportHistoryPage';
+import AppointmentsPage from './pages/WebhookLeads/AppointmentsPage';
 import Financial from './pages/Financial';
 import RecurringSchedules from './components/RecurringSchedules';
 import VisualFlowBuilder from './components/VisualFlowBuilder';
@@ -117,6 +118,7 @@ export default function AppContent() {
                     {logic.currentView === 'integrations' && 'Integrações Webhook'}
                     {logic.currentView === 'financial' && 'Financeiro'}
                     {logic.currentView === 'leads' && 'Webhook Leads'}
+                    {logic.currentView === 'appointments' && 'Agendamentos'}
                     {logic.currentView === 'import_history' && 'Histórico de Importação de Contatos'}
                     {logic.currentView === 'stress_test' && 'Teste de Escala'}
                     {logic.currentView === 'backup_db' && 'Backup Banco'}
@@ -192,6 +194,11 @@ export default function AppContent() {
                     onNavigateToDispatchHistory={() => logic.setCurrentView('history')}
                     onNavigateToChat={() => logic.setCurrentView('chat_conversations')}
                   />
+                </PageGuard>
+              )}
+              {logic.currentView === 'appointments' && (
+                <PageGuard pageKey="leads" pagesStatus={logic.user?.pages_status}>
+                  <AppointmentsPage />
                 </PageGuard>
               )}
               {logic.currentView === 'import_history' && (

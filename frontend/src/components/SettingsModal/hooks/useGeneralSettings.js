@@ -29,7 +29,10 @@ export const INITIAL_FORM_STATE = {
     CHAT_MESSAGES_WEBHOOK_URL: '',
     WA_HAS_AI_AGENT: false,
     WA_HUMAN_LABEL: '',
-    WA_ROBO_LABEL: ''
+    WA_ROBO_LABEL: '',
+    APPOINTMENTS_ENABLED: false,
+    APPOINTMENTS_REMINDER_MINUTES: '30',
+    APPOINTMENTS_REMINDER_TEMPLATE: ''
 };
 
 export function useGeneralSettings(activeClient, refreshClients) {

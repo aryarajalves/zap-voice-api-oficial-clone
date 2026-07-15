@@ -189,7 +189,10 @@ async def update_settings(
         "WA_ROBO_LABEL",
         "WA_AUTO_REPLY_ENABLED",
         "WA_AUTO_REPLY_MESSAGE",
-        "WA_AUTO_REPLY_DELAY"
+        "WA_AUTO_REPLY_DELAY",
+        "APPOINTMENTS_ENABLED",
+        "APPOINTMENTS_REMINDER_MINUTES",
+        "APPOINTMENTS_REMINDER_TEMPLATE"
     }
     
     saved_count = 0
