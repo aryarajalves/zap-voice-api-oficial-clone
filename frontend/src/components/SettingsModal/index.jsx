@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { FiX, FiSettings, FiBook, FiLayout, FiSmartphone, FiCpu, FiInstagram, FiKey, FiTag } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 
@@ -18,6 +19,21 @@ import LabelsTab from './tabs/LabelsTab';
 
 const SettingsModal = ({ isOpen, onClose, onSaved }) => {
     const logic = useSettingsLogic(isOpen, onClose, onSaved);
+
+    useEffect(() => {
+        const mainEl = document.querySelector('main');
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+            if (mainEl) mainEl.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+            if (mainEl) mainEl.style.overflow = 'auto';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+            if (mainEl) mainEl.style.overflow = 'auto';
+        };
+    }, [isOpen]);
 
     if (!isOpen) return null;
 

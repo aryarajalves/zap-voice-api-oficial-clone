@@ -636,11 +636,30 @@ async def process_calendar_reminders(db, now):
                                     ]
                                 })
                         
+                        # Detectar variáveis exigidas no cabeçalho e corpo via Regex
+                        import re
+                        header_vars_needed = 0
+                        body_vars_needed = 0
+                        if tpl_cache and tpl_cache.components:
+                            for c in tpl_cache.components:
+                                comp_type = c.get("type", "").upper()
+                                comp_text = c.get("text", "")
+                                if comp_type == "HEADER" and c.get("format") == "TEXT" and comp_text:
+                                    matches = re.findall(r"\{\{(\d+)\}\}", comp_text)
+                                    if matches:
+                                        header_vars_needed = max(int(m) for m in matches)
+                                elif comp_type == "BODY" and comp_text:
+                                    matches = re.findall(r"\{\{(\d+)\}\}", comp_text)
+                                    if matches:
+                                        body_vars_needed = max(int(m) for m in matches)
+
                         # 2. Variáveis do Cabeçalho (TEXT com variáveis)
                         header_params = []
                         h_idx = 1
-                        while f"HEADER_{h_idx}" in reminder_params:
-                            val_raw = reminder_params[f"HEADER_{h_idx}"]
+                        while h_idx <= header_vars_needed or f"HEADER_{h_idx}" in reminder_params:
+                            val_raw = reminder_params.get(f"HEADER_{h_idx}")
+                            if not val_raw:
+                                val_raw = "{name}" if h_idx == 1 else ""
                             val_resolved = resolve_lead_variables(val_raw, lead)
                             header_params.append({
                                 "type": "text",
@@ -657,8 +676,10 @@ async def process_calendar_reminders(db, now):
                         # 3. Variáveis do Corpo
                         body_params = []
                         b_idx = 1
-                        while f"BODY_{b_idx}" in reminder_params:
-                            val_raw = reminder_params[f"BODY_{b_idx}"]
+                        while b_idx <= body_vars_needed or f"BODY_{b_idx}" in reminder_params:
+                            val_raw = reminder_params.get(f"BODY_{b_idx}")
+                            if not val_raw:
+                                val_raw = "{name}" if b_idx == 1 else ""
                             val_resolved = resolve_lead_variables(val_raw, lead)
                             body_params.append({
                                 "type": "text",
@@ -693,9 +714,7 @@ async def process_calendar_reminders(db, now):
                                     status='sent',
                                     message_type='TEMPLATE',
                                     content=f"[Lembrete de Agendamento: {template_name}]",
-                                    # Armazenamos button_actions no MessageStatus ou ScheduledTrigger
-                                    # Para o inbound funcionar de forma transparente, criamos uma ScheduledTrigger de simulação ou salvamos as ações diretamente no ScheduledTrigger associado
-                                    # Para que o whatsapp_inbound.py resolva sem trigger_ref, já implementamos a consulta dinâmica de settings.APPOINTMENTS_REMINDER_BUTTONS diretamente lá.
+                                    var1=str(lead.client_id)
                                 )
                                 db.add(new_ms)
                                 

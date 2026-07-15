@@ -19,18 +19,14 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
     await asyncio.sleep(7)
     try:
         db = wah.SessionLocal()
-        trigger = db.query(models.ScheduledTrigger).get(trigger_id)
-        if not trigger:
-            logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] Trigger {trigger_id} não encontrado.")
-            db.close()
-            return
-            
         message_record = db.query(models.MessageStatus).get(message_id)
         if not message_record:
             logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] MessageStatus {message_id} não encontrado.")
             db.close()
             return
-
+            
+        trigger = db.query(models.ScheduledTrigger).get(trigger_id) if trigger_id else None
+        
         # --- CRIAR CONVERSA E SALVAR TEMPLATE NO CHAT LOCAL APÓS ENTREGA ---
         if message_record.message_type == 'TEMPLATE' or (message_record.template_name and str(message_record.template_name).strip()):
             try:
@@ -43,28 +39,35 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                     clean_phone = "".join(filter(str.isdigit, str(phone)))
                     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
                     
+                    # Tentar extrair o client_id
+                    client_id = trigger.client_id if trigger else (int(message_record.var1) if message_record.var1 else None)
+                    if not client_id:
+                        logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] client_id não encontrado para salvar chat local ({phone}).")
+                        db.close()
+                        return
+                        
                     # Buscar conversa local
                     chat_convo = db.query(models.ChatConversation).filter(
-                        models.ChatConversation.client_id == trigger.client_id,
+                        models.ChatConversation.client_id == client_id,
                         models.ChatConversation.phone.like(f"%{suffix}")
                     ).first()
                     
                     is_new_convo = False
                     if not chat_convo:
                         chat_convo = models.ChatConversation(
-                            client_id=trigger.client_id,
+                            client_id=client_id,
                             phone=clean_phone,
-                            contact_name=trigger.contact_name or clean_phone,
+                            contact_name=(trigger.contact_name if trigger else None) or message_record.contact_name or clean_phone,
                             status="open",
                             unread_count=0
                         )
                         db.add(chat_convo)
                         db.flush()
                         is_new_convo = True
-                        logger.info(f"🆕 [CHAT-LOCAL-POST-DELIVERY] Criada nova conversa local para {clean_phone} (Client: {trigger.client_id})")
+                        logger.info(f"🆕 [CHAT-LOCAL-POST-DELIVERY] Criada nova conversa local para {clean_phone} (Client: {client_id})")
                     
                     # Reconstruir metadados do template
-                    template_name = trigger.template_name or message_record.template_name
+                    template_name = message_record.template_name or (trigger.template_name if trigger else None)
                     if not template_name and message_record.content and message_record.content.startswith("[Template: "):
                         template_name = message_record.content.replace("[Template: ", "").replace("]", "")
                     
@@ -78,7 +81,7 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                     
                     if template_name:
                         tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
-                            models.WhatsAppTemplateCache.client_id == trigger.client_id,
+                            models.WhatsAppTemplateCache.client_id == client_id,
                             models.WhatsAppTemplateCache.name == template_name
                         ).first()
                         if tpl_cache:
@@ -222,7 +225,9 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                 
                 if message_record:
                     logger.info(f"🔄 [STATUS_MATCH] Associando wamid {clean_id} ao MessageStatus ID {message_record.id} (anteriormente {message_record.message_id})")
-                    message_record.message_id = clea            if message_record:
+                    message_record.message_id = clean_id
+            
+            if message_record:
                 trigger = db.query(models.ScheduledTrigger).get(message_record.trigger_id) if message_record.trigger_id else None
                 old_status = message_record.status
                 
@@ -367,18 +372,20 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                         if trigger.parent_id:
                             await reconcile_trigger_stats_logic(trigger.parent_id, trigger.client_id, db)
  
-                        # Disparar webhook de memória para qualquer template entregue.
-                        # A verificação de URL configurada fica no próprio serviço ai_memory,
-                        # eliminando a dependência das flags is_bulk/publish_external_event.
-                        if trigger_delivered and (trigger.is_bulk or getattr(trigger, 'publish_external_event', False)):
+                    # Disparar webhook de memória para qualquer template entregue.
+                    # A verificação de URL configurada fica no próprio serviço ai_memory,
+                    # eliminando a dependência das flags is_bulk/publish_external_event.
+                    if trigger_delivered:
+                        target_cid = trigger.client_id if trigger else (int(message_record.var1) if (message_record and message_record.var1) else None)
+                        if target_cid:
                             import services.ai_memory
                             asyncio.create_task(services.ai_memory.notify_agent_memory_webhook(
-                                client_id=trigger.client_id,
+                                client_id=target_cid,
                                 phone=message_record.phone_number,
-                                name=trigger.contact_name or message_record.phone_number,
-                                template_name=message_record.template_name or trigger.template_name or "Mensagem",
+                                name=(trigger.contact_name if trigger else None) or message_record.contact_name or message_record.phone_number,
+                                template_name=message_record.template_name or (trigger.template_name if trigger else None) or "Mensagem",
                                 content=message_record.content or "",
-                                trigger_id=trigger.id,
+                                trigger_id=trigger.id if trigger else None,
                                 internal_contact_id=message_record.id
                             ))
  
@@ -439,11 +446,10 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                             except Exception as ws_err:
                                 logger.error(f"⚠️ Erro ao publicar bulk_progress via WS: {ws_err}")
  
-                    if trigger and status in ('delivered', 'read'):
-                        asyncio.create_task(wah.handle_deferred_post_delivery(trigger.id, message_record.id, status, msg_id, recipient))
-                        
-                        if trigger.status == 'paused_waiting_delivery':           
-                        if trigger.status == 'paused_waiting_delivery':
+                    is_template_msg = message_record.message_type == 'TEMPLATE' or (message_record.template_name and str(message_record.template_name).strip())
+                    if (trigger or is_template_msg) and status in ('delivered', 'read'):
+                        asyncio.create_task(wah.handle_deferred_post_delivery(trigger.id if trigger else None, message_record.id, status, msg_id, recipient))
+                        if trigger and trigger.status == 'paused_waiting_delivery':
                             # Cenário A: Gatilho de Template com Funil ZapVoice Pendente
                             if trigger.template_name is not None and trigger.funnel_id is not None:
                                 child_exists = db.query(models.ScheduledTrigger).filter(

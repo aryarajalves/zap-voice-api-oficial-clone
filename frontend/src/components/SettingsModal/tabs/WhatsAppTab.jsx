@@ -759,9 +759,9 @@ const WhatsAppTab = ({
                                         ];
 
                                         return (
-                                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 border-t border-gray-100 dark:border-white/5 mt-4">
+                                            <div className="flex flex-col gap-6 pt-4 border-t border-gray-100 dark:border-white/5 mt-4">
                                                 {/* Painel de Configurações do Template */}
-                                                <div className="lg:col-span-7 space-y-4">
+                                                <div className="w-full space-y-4">
                                                     {/* Media Uploader if template requires header media */}
                                                     {isMediaHeader && (
                                                         <div className="space-y-1.5">
@@ -914,7 +914,7 @@ const WhatsAppTab = ({
                                                 </div>
 
                                                 {/* Coluna da direita: Live Preview do WhatsApp Bubble */}
-                                                <div className="lg:col-span-5 space-y-2">
+                                                <div className="w-full space-y-2 border-t border-gray-100 dark:border-white/5 pt-6">
                                                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Visualização em Tempo Real</label>
                                                     {(() => {
                                                         const mappedParams = {};
@@ -933,7 +933,7 @@ const WhatsAppTab = ({
                                                             }
                                                         });
                                                         return (
-                                                            <div className="sticky top-2">
+                                                            <div className="w-full">
                                                                 <TemplatePreview 
                                                                     template={selectedTemplateObj} 
                                                                     params={mappedParams}

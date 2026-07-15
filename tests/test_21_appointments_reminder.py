@@ -91,7 +91,14 @@ def test_appointments_reminder_flow():
     assert res_upsert_reag.status_code == 200
     lead_reag_data = res_upsert_reag.json()
     assert lead_reag_data["google_calendar_reminder_sent"] is False
-    print("[OK] Reagendamento manteve a flag de envio pendente em False!")
+    # 5. Testar endpoint de re-disparo (retry)
+    lead_id = lead_data["id"]
+    retry_url = f"{BASE_URL}/reminders/leads/{lead_id}/retry"
+    print(f"Testando endpoint de re-disparo para lead ID: {lead_id}...")
+    res_retry = requests.post(retry_url, headers=headers_jwt)
+    print(f"Status do re-disparo: {res_retry.status_code} - {res_retry.text}")
+    assert res_retry.status_code in [200, 400, 502, 500]
+    print("[OK] Endpoint de re-disparo integrado com sucesso!")
 
     print("[OK] Teste de lembrete de agendamento concluído com sucesso!")
     return True

@@ -3,7 +3,7 @@ import { useClient } from '../../contexts/ClientContext';
 import { fetchWithAuth } from '../../AuthContext';
 import { API_URL } from '../../config';
 import { toast } from 'react-hot-toast';
-import { FiCalendar, FiSearch, FiExternalLink, FiClock, FiChevronLeft, FiChevronRight, FiFilter, FiUserPlus, FiCheck, FiZap } from 'react-icons/fi';
+import { FiCalendar, FiSearch, FiExternalLink, FiClock, FiChevronLeft, FiChevronRight, FiFilter, FiUserPlus, FiCheck, FiZap, FiRotateCw } from 'react-icons/fi';
 
 export default function AppointmentsPage() {
   const { activeClient } = useClient();
@@ -18,6 +18,30 @@ export default function AppointmentsPage() {
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(20);
   const [now, setNow] = useState(new Date());
+  const [retryingIds, setRetryingIds] = useState({});
+
+  const handleRetryReminder = async (leadId) => {
+    if (!activeClient?.id) return;
+    setRetryingIds(prev => ({ ...prev, [leadId]: true }));
+    const loadingToast = toast.loading("Re-disparando lembrete...");
+    try {
+      const res = await fetchWithAuth(`${API_URL}/reminders/leads/${leadId}/retry`, {
+        method: 'POST'
+      }, activeClient.id);
+      if (res.ok) {
+        toast.success("Lembrete re-disparado com sucesso!", { id: loadingToast });
+        fetchAppointments();
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || "Falha ao re-disparar lembrete.", { id: loadingToast });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro de conexão ao re-disparar.", { id: loadingToast });
+    } finally {
+      setRetryingIds(prev => ({ ...prev, [leadId]: false }));
+    }
+  };
 
   // Debounce search
   useEffect(() => {
@@ -322,6 +346,15 @@ export default function AppointmentsPage() {
                                   {lead.reminder_dispatch_failure_reason}
                                 </span>
                               )}
+                              <button
+                                onClick={() => handleRetryReminder(lead.id)}
+                                disabled={retryingIds[lead.id]}
+                                className="mt-1 flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-800/50 transition-all border border-blue-500/20 active:scale-95 cursor-pointer shadow-sm"
+                                title="Re-disparar este lembrete imediatamente"
+                              >
+                                <FiRotateCw size={9} className={retryingIds[lead.id] ? "animate-spin mr-0.5" : "mr-0.5"} />
+                                {retryingIds[lead.id] ? "Enviando..." : "Re-disparar"}
+                              </button>
                             </div>
                           ) : lead.google_calendar_reminder_sent ? (
                             <>

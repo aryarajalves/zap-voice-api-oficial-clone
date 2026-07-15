@@ -73,7 +73,8 @@ from routers import (
     projects,       # Projetos compartilhados
     logs,           # Visualizador de logs (Super Admin)
     chat,            # Atendimento e Chat local
-    api_keys        # Gerenciamento de chaves de API (Tokens de API)
+    api_keys,        # Gerenciamento de chaves de API (Tokens de API)
+    reminders       # Lembretes de agendamento (Re-disparos de calendário)
 )
 
 # Webhooks de entrada (sistemas externos, gestão de eventos — Chatwoot removido)
@@ -283,6 +284,7 @@ app.include_router(chat.router, prefix="/api", tags=["Chat"])
 from routers import chat_labels
 app.include_router(chat_labels.router, prefix="/api", tags=["Chat Labels"])
 app.include_router(api_keys.router, prefix="/api")
+app.include_router(reminders.router, prefix="/api")
 
 # Router público para atualização de campos de contatos via API Key
 from routers.contacts_public import router as contacts_public_router
