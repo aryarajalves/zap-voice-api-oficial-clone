@@ -16,7 +16,7 @@ export default function AppointmentsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(0);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(20);
   const [now, setNow] = useState(new Date());
 
   // Debounce search
@@ -327,11 +327,32 @@ export default function AppointmentsPage() {
         )}
 
         {/* Pagination Footer */}
-        {!loading && totalPages > 1 && (
-          <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 dark:border-white/5 bg-gray-50/30 dark:bg-white/[0.01]">
-            <span className="text-xs text-gray-400">
-              Página <span className="font-bold">{page + 1}</span> de <span className="font-bold">{totalPages}</span> (Total: {total})
-            </span>
+        {!loading && total > 0 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-6 py-4 border-t border-gray-100 dark:border-white/5 bg-gray-50/30 dark:bg-white/[0.01]">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+              <span className="text-xs text-gray-400">
+                Página <span className="font-bold text-gray-700 dark:text-gray-300">{page + 1}</span> de <span className="font-bold text-gray-700 dark:text-gray-300">{totalPages || 1}</span> (Total: {total})
+              </span>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">Exibir</span>
+                <select
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value));
+                    setPage(0);
+                  }}
+                  className="p-1 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-300 text-xs font-semibold focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                >
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                </select>
+                <span className="text-xs text-gray-400">contatos</span>
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <button
                 disabled={page === 0}
@@ -341,7 +362,7 @@ export default function AppointmentsPage() {
                 <FiChevronLeft />
               </button>
               <button
-                disabled={page >= totalPages - 1}
+                disabled={page >= totalPages - 1 || totalPages <= 1}
                 onClick={() => setPage(p => p + 1)}
                 className="p-2 border border-gray-300 dark:border-white/10 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 text-gray-500 disabled:opacity-40 transition-all cursor-pointer"
               >
