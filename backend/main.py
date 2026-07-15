@@ -286,7 +286,9 @@ app.include_router(api_keys.router, prefix="/api")
 
 # Router público para atualização de campos de contatos via API Key
 from routers.contacts_public import router as contacts_public_router
+from routers.leads_public import router as leads_public_router
 app.include_router(contacts_public_router, prefix="/api", tags=["Contacts Public API"])
+app.include_router(leads_public_router, prefix="/api", tags=["Leads Public API"])
 
 # --- Fim dos Webhooks ---
 

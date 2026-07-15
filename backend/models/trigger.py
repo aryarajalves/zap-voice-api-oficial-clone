@@ -318,6 +318,9 @@ class WebhookLead(Base):
     is_locked = Column(Boolean, default=False, nullable=False, server_default="false")
     variables = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=dict)
 
+    google_calendar_link = Column(String, nullable=True)
+    event_datetime = Column(DateTime(timezone=True), nullable=True)
+
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     imported_by_client_id = Column(Integer, ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
 

@@ -621,6 +621,8 @@ class WebhookLeadBase(BaseModel):
     total_events: int = 1
     is_locked: bool = False
     variables: Optional[Dict[str, Any]] = None
+    google_calendar_link: Optional[str] = None
+    event_datetime: Optional[datetime] = None
     imported_by_client_id: Optional[int] = None
     imported_by_name: Optional[str] = None
     project_id: Optional[int] = None
@@ -679,6 +681,27 @@ class WebhookLeadUpdate(BaseModel):
     tags: Optional[str] = None
     is_locked: Optional[bool] = None
     variables: Optional[Dict[str, Any]] = None
+    google_calendar_link: Optional[str] = None
+    event_datetime: Optional[datetime] = None
+    product_name: Optional[str] = None
+    payment_method: Optional[str] = None
+    price: Optional[str] = None
+    platform: Optional[str] = None
+
+class WebhookLeadPublicUpsert(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    google_calendar_link: Optional[str] = None
+    event_datetime: Optional[datetime] = None
+    tags: Optional[str] = None
+    product_name: Optional[str] = None
+    payment_method: Optional[str] = None
+    price: Optional[str] = None
+    platform: Optional[str] = "public_api"
+    variables: Optional[Dict[str, Any]] = None
+
+    class Config:
+        extra = "ignore"
 
 class WebhookLeadListResponse(BaseModel):
     items: List[WebhookLead]

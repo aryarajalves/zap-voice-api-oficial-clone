@@ -28,6 +28,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 15/07/2026 | Suporte a Google Agenda nos contatos via API | `webhook_leads` | `google_calendar_link`, `event_datetime` | `backend/scripts/add_calendar_columns_to_leads.py` |
 | 07/07/2026 | Suporte à fila de Atendimento Humano | `chat_conversations` | `human_handover_at` | `backend/scripts/add_human_handover_column.py` |
 | 06/07/2026 | Consolidação de Duplicidades no Histórico | `webhook_history` | `duplicate_count` | `backend/scripts/add_duplicate_count_to_history.py` |
 | 19/06/2026 | Pasta de Backup customizada no S3 | `backup_config` | `s3_folder` | `backend/migrations/add_s3_folder_to_backup_config.py` |

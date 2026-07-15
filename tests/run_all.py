@@ -32,6 +32,7 @@ def main():
         "test_17_rbac_permissions.py",
         "test_18_instagram_automation.py",
         "test_19_instagram_permission.py",
+        "test_20_leads_public.py",
     ]
             
     success_count = 0
