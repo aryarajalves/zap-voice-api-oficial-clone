@@ -623,7 +623,7 @@ class WebhookLeadBase(BaseModel):
     variables: Optional[Dict[str, Any]] = None
     google_calendar_link: Optional[str] = None
     event_datetime: Optional[datetime] = None
-    google_calendar_reminder_sent: bool = False
+    google_calendar_reminder_sent: Optional[bool] = False
     imported_by_client_id: Optional[int] = None
     imported_by_name: Optional[str] = None
     project_id: Optional[int] = None

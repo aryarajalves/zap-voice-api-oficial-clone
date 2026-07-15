@@ -547,11 +547,11 @@ const WhatsAppTab = ({
                                                 name="APPOINTMENTS_REMINDER_TEMPLATE"
                                                 value={formData.APPOINTMENTS_REMINDER_TEMPLATE || ''}
                                                 onChange={handleChange}
-                                                className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white dark:bg-[#1f2937]/50 text-gray-900 dark:text-white text-xs font-medium"
+                                                className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium"
                                             >
-                                                <option value="">Selecione um template...</option>
+                                                <option value="" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">Selecione um template...</option>
                                                 {templates.map(t => (
-                                                    <option key={t.name} value={t.name}>{t.name} ({t.language})</option>
+                                                    <option key={t.name} value={t.name} className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">{t.name} ({t.language})</option>
                                                 ))}
                                             </select>
                                         </div>
@@ -562,15 +562,15 @@ const WhatsAppTab = ({
                                                 name="APPOINTMENTS_REMINDER_MINUTES"
                                                 value={formData.APPOINTMENTS_REMINDER_MINUTES || '30'}
                                                 onChange={handleChange}
-                                                className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white dark:bg-[#1f2937]/50 text-gray-900 dark:text-white text-xs font-medium"
+                                                className="w-full p-2.5 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white text-xs font-medium"
                                             >
-                                                <option value="5">5 minutos antes</option>
-                                                <option value="10">10 minutos antes</option>
-                                                <option value="15">15 minutos antes</option>
-                                                <option value="30">30 minutos antes</option>
-                                                <option value="45">45 minutos antes</option>
-                                                <option value="60">1 hora antes (60 min)</option>
-                                                <option value="120">2 horas antes (120 min)</option>
+                                                <option value="5" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">5 minutos antes</option>
+                                                <option value="10" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">10 minutos antes</option>
+                                                <option value="15" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">15 minutos antes</option>
+                                                <option value="30" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">30 minutos antes</option>
+                                                <option value="45" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">45 minutos antes</option>
+                                                <option value="60" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">1 hora antes (60 min)</option>
+                                                <option value="120" className="bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white">2 horas antes (120 min)</option>
                                             </select>
                                         </div>
                                     </div>
