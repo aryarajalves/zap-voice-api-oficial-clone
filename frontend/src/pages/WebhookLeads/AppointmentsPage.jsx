@@ -308,17 +308,24 @@ export default function AppointmentsPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-3">
-                          {lead.google_calendar_reminder_sent ? (
-                            <>
-                              {lead.reminder_dispatch_status === 'failed' ? (
-                                <span 
-                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800/30 shadow-sm"
-                                  title="O envio falhou no canal da Meta"
-                                >
-                                  Falhou
+                        <div className="flex flex-col items-center justify-center gap-1.5">
+                          {lead.reminder_dispatch_status === 'failed' ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <span 
+                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800/30 shadow-sm cursor-help"
+                                title={lead.reminder_dispatch_failure_reason || "O envio falhou no canal do WhatsApp."}
+                              >
+                                Falhou
+                              </span>
+                              {lead.reminder_dispatch_failure_reason && (
+                                <span className="text-[9px] text-red-400 dark:text-red-500 max-w-[150px] truncate block" title={lead.reminder_dispatch_failure_reason}>
+                                  {lead.reminder_dispatch_failure_reason}
                                 </span>
-                              ) : lead.reminder_dispatch_interaction ? (
+                              )}
+                            </div>
+                          ) : lead.google_calendar_reminder_sent ? (
+                            <>
+                              {lead.reminder_dispatch_interaction ? (
                                 <span 
                                   className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800/30 shadow-sm"
                                   title="O cliente clicou em algum botão ou respondeu à mensagem!"

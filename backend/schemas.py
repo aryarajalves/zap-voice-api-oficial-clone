@@ -634,6 +634,7 @@ class WebhookLeadBase(BaseModel):
     resting_expires_at: Optional[datetime] = None
     reminder_dispatch_status: Optional[str] = None
     reminder_dispatch_interaction: Optional[bool] = False
+    reminder_dispatch_failure_reason: Optional[str] = None
 
     @field_validator('variables', mode='before')
     @classmethod

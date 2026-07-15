@@ -623,12 +623,15 @@ def list_leads(
             if latest_status:
                 item.reminder_dispatch_status = latest_status.status
                 item.reminder_dispatch_interaction = latest_status.is_interaction
+                item.reminder_dispatch_failure_reason = latest_status.failure_reason
             else:
                 item.reminder_dispatch_status = None
                 item.reminder_dispatch_interaction = False
+                item.reminder_dispatch_failure_reason = None
         else:
             item.reminder_dispatch_status = None
             item.reminder_dispatch_interaction = False
+            item.reminder_dispatch_failure_reason = None
 
     return {
         "items": items,
