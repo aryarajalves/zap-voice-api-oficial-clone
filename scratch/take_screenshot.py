@@ -1,64 +1,130 @@
-import asyncio
-from playwright.async_api import async_playwright
 import os
+import time
+from playwright.sync_api import sync_playwright
 
-async def main():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        # set viewport size to 1280x800
-        context = await browser.new_context(viewport={"width": 1280, "height": 1000})
-        page = await context.new_page()
+def run():
+    print("Iniciando Playwright...")
+    with sync_playwright() as p:
+        # Launch chromium
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(viewport={"width": 1280, "height": 720})
+        page = context.new_page()
         
-        print("Navigating to login page...")
-        await page.goto("http://localhost:5176")
-        await page.wait_for_timeout(3000)
+        # Navigate to http://localhost:5176
+        print("Navegando para http://localhost:5176...")
+        page.goto("http://localhost:5176")
+        page.wait_for_timeout(2000)
         
-        # Check if already logged in or if we need to input credentials
-        if await page.query_selector('input[type="email"]'):
-            print("Logging in...")
-            await page.fill('input[type="email"]', "aryarajmarketing@gmail.com")
-            await page.fill('input[type="password"]', "123456")
-            await page.click('button[type="submit"]')
-            await page.wait_for_timeout(4000)
+        # Log in
+        print("Inserindo e-mail...")
+        page.fill("input[type='email']", "aryarajmarketing@gmail.com")
+        print("Inserindo senha...")
+        page.fill("input[type='password']", "123456")
+        
+        # Click login button
+        print("Clicando no botão de login...")
+        login_button = page.locator("button:has-text('Entrar')")
+        if login_button.count() == 0:
+            login_button = page.locator("button[type='submit']")
+        
+        login_button.click()
+        page.wait_for_timeout(4000)
+        
+        print("Verificando se logou...")
+        print("URL atual:", page.url)
+        
+        # Open Settings Modal
+        print("Abrindo Configurações...")
+        settings_btn = page.locator("button:has-text('Configurações')")
+        if settings_btn.count() > 0:
+            settings_btn.click()
+            page.wait_for_timeout(2000)
             
-        print("Current URL after login:", page.url)
+            # Click WhatsApp Tab
+            print("Clicando na aba WhatsApp...")
+            whatsapp_tab = page.locator("button:has-text('WhatsApp')")
+            if whatsapp_tab.count() > 0:
+                whatsapp_tab.first.click()
+                page.wait_for_timeout(2000)
+                
+                # Check if Lembretes de Agendamento section is visible and toggle checkbox if not checked
+                checkbox = page.locator("input[name='APPOINTMENTS_ENABLED']")
+                if checkbox.count() > 0:
+                    is_checked = checkbox.is_checked()
+                    print(f"Checkbox APPOINTMENTS_ENABLED está marcado? {is_checked}")
+                    if not is_checked:
+                        print("Marcando o checkbox...")
+                        # Click the label or wrapper or the checkbox itself ( SR-only check can be tricky, so click its label / parent wrapper )
+                        # Let's locate the toggle container
+                        toggle_switch = page.locator("input[name='APPOINTMENTS_ENABLED'] + div")
+                        if toggle_switch.count() > 0:
+                            toggle_switch.first.click()
+                        else:
+                            checkbox.check(force=True)
+                        page.wait_for_timeout(1000)
+                    
+                    # Also select a template if none is selected, just to prevent any validation issues
+                    template_select = page.locator("select[name='APPOINTMENTS_REMINDER_TEMPLATE']")
+                    if template_select.count() > 0 and template_select.is_visible():
+                        # Select first non-empty option
+                        template_select.select_option(index=1)
+                        page.wait_for_timeout(500)
+                
+                # Take a screenshot of settings page/tab to verify the "Lembretes de Agendamento" section
+                print("Salvando screenshot da aba WhatsApp...")
+                os.makedirs("scratch", exist_ok=True)
+                page.screenshot(path="scratch/whatsapp_settings.png")
+                
+                # Click Save (submit button)
+                print("Clicando em Salvar configurações...")
+                save_btn = page.locator("button[type='submit']:has-text('Salvar')")
+                if save_btn.count() == 0:
+                    save_btn = page.locator("button[type='submit']")
+                
+                if save_btn.count() > 0:
+                    save_btn.click()
+                    page.wait_for_timeout(3000)
         
-        # Click client selector dropdown button to ensure Fonte Oculta is selected
-        print("Checking active client...")
-        await page.wait_for_selector("div.relative.px-4.py-3")
-        active_client_text = await page.inner_text("div.relative.px-4.py-3")
-        print("Active Client Section text:", active_client_text)
-        
-        # Let's go to Disparo em Massa
-        print("Clicking Disparo em Massa...")
-        disparo_btn = await page.query_selector("button:has-text('Disparo em Massa')")
-        if not disparo_btn:
-            disparo_btn = await page.query_selector("a:has-text('Disparo em Massa')")
-        if not disparo_btn:
-            body_text = await page.evaluate("() => document.body.innerHTML")
-            # Click by text using locator
-            await page.get_by_text("Disparo em Massa").first.click()
+        # Navigate to Agendamentos
+        print("Clicando no menu item Agendamentos no Sidebar...")
+        agendamentos_link = page.locator("button:has-text('Agendamentos')")
+        if agendamentos_link.count() == 0:
+            agendamentos_link = page.locator("a:has-text('Agendamentos')")
+        if agendamentos_link.count() == 0:
+            agendamentos_link = page.locator("text='Agendamentos'")
+            
+        if agendamentos_link.count() > 0:
+            agendamentos_link.first.click()
+            page.wait_for_timeout(3000)
         else:
-            await disparo_btn.click()
-            
-        await page.wait_for_timeout(5000) # Wait longer for templates to load from API
+            print("Link não encontrado no menu lateral. Tentando recarregar a página...")
+            page.reload()
+            page.wait_for_timeout(3000)
+            agendamentos_link = page.locator("button:has-text('Agendamentos')")
+            if agendamentos_link.count() > 0:
+                agendamentos_link.first.click()
+                page.wait_for_timeout(3000)
+            else:
+                print("Ainda não encontrado no menu lateral. Tentando clicar no elemento pelo ID ou texto.")
+                
+        print("URL atual:", page.url)
         
-        # Open template selection dropdown
-        print("Opening template dropdown...")
-        dropdown_trigger = await page.query_selector("div.template-dropdown-container div")
-        if dropdown_trigger:
-            await dropdown_trigger.click()
-            print("Dropdown clicked!")
-            await page.wait_for_timeout(2000)
-        else:
-            print("Dropdown trigger not found!")
-            
-        # Take a beautiful screenshot showing the list of templates with 📌
-        screenshot_path = "C:\\Users\\aryar\\.gemini\\antigravity\\brain\\1ba7dfb9-feaa-4acf-a88a-40f740aba160\\pinned_template_in_bulksender_dropdown.png"
-        await page.screenshot(path=screenshot_path)
-        print(f"Screenshot successfully saved to {screenshot_path}")
+        # Take a screenshot of the appointments page.
+        screenshots_dir = "screenshots"
+        os.makedirs(screenshots_dir, exist_ok=True)
+        screenshot_path = os.path.join(screenshots_dir, "agendamentos_col_fixed.png")
         
-        await browser.close()
+        # Also copy it to C:\Users\aryar\.gemini\antigravity\browser_recordings if possible
+        recordings_dir = r"C:\Users\aryar\.gemini\antigravity\browser_recordings"
+        os.makedirs(recordings_dir, exist_ok=True)
+        recording_path = os.path.join(recordings_dir, "agendamentos_col_fixed.png")
+        
+        page.screenshot(path=screenshot_path, full_page=True)
+        page.screenshot(path=recording_path, full_page=True)
+        
+        print(f"Screenshots salvos com sucesso em:\n- {screenshot_path}\n- {recording_path}")
+        
+        browser.close()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()

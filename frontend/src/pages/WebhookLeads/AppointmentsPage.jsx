@@ -182,7 +182,7 @@ export default function AppointmentsPage() {
           </div>
 
           {/* Date Range - From */}
-          <div className="md:col-span-2.5 space-y-1.5 flex-1">
+          <div className="md:col-span-2 space-y-1.5 flex-1">
             <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">De (Criação)</label>
             <input
               type="date"
@@ -196,7 +196,7 @@ export default function AppointmentsPage() {
           </div>
 
           {/* Date Range - To */}
-          <div className="md:col-span-2.5 space-y-1.5 flex-1">
+          <div className="md:col-span-2 space-y-1.5 flex-1">
             <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 ml-1">Até (Criação)</label>
             <input
               type="date"
