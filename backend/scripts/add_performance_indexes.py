@@ -37,6 +37,19 @@ def upgrade():
     except Exception as e:
         db.rollback()
         print(f"❌ Erro ao criar índice em {safe_table}: {e}")
+
+    # 3. Índice na tabela 'scheduled_triggers' (Histórico de Disparos)
+    try:
+        print("⚡ Criando índice composto de performance para a tabela 'scheduled_triggers'...")
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_scheduled_triggers_perf_list 
+            ON scheduled_triggers (client_id, parent_id, created_at DESC)
+        """))
+        db.commit()
+        print("✅ Índice 'idx_scheduled_triggers_perf_list' criado/validado com sucesso!")
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro ao criar índice composto em scheduled_triggers: {e}")
         
     db.close()
     print("🎉 Aplicação de índices de performance finalizada!")

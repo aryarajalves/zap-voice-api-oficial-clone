@@ -28,7 +28,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
-| 16/07/2026 | Índices de performance para abas de Contatos e Chat | `contatos_monitorados`, `chat_conversations` | Índices `idx_contatos_monitorados_last_interaction` e composto `idx_chat_convo_client_status_time` | `backend/scripts/add_performance_indexes.py` |
+| 16/07/2026 | Índices de performance para abas de Contatos, Chat e Histórico de Disparos | `contatos_monitorados`, `chat_conversations`, `scheduled_triggers` | Índices `idx_contatos_monitorados_last_interaction`, composto `idx_chat_convo_client_status_time` e composto `idx_scheduled_triggers_perf_list` | `backend/scripts/add_performance_indexes.py` |
 | 15/07/2026 | Rastreamento de disparo de lembrete de agendamento | `webhook_leads` | `google_calendar_reminder_sent` | `backend/scripts/add_reminder_sent_column.py` |
 | 15/07/2026 | Suporte a Google Agenda nos contatos via API | `webhook_leads` | `google_calendar_link`, `event_datetime` | `backend/scripts/add_calendar_columns_to_leads.py` |
 | 07/07/2026 | Suporte à fila de Atendimento Humano | `chat_conversations` | `human_handover_at` | `backend/scripts/add_human_handover_column.py` |
