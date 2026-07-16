@@ -298,9 +298,10 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
 
             # --- SALVAR NO CHAT LOCAL ---
             try:
+                suffix_inb = from_phone[-8:] if len(from_phone) >= 8 else from_phone
                 chat_convo = db.query(models.ChatConversation).filter(
                     models.ChatConversation.client_id == target_cid,
-                    models.ChatConversation.phone == from_phone
+                    models.ChatConversation.phone.like(f"%{suffix_inb}")
                 ).first()
                 
                 if not chat_convo:

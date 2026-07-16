@@ -54,18 +54,35 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                     
                     is_new_convo = False
                     if not chat_convo:
+                        # Se houver etiquetas no trigger (disparo), associá-las à nova conversa
+                        convo_labels = []
+                        if trigger and trigger.chatwoot_label:
+                            from core.utils import robust_extract_labels
+                            convo_labels = robust_extract_labels(trigger.chatwoot_label)
+
                         chat_convo = models.ChatConversation(
                             client_id=client_id,
                             phone=clean_phone,
                             contact_name=(trigger.contact_name if trigger else None) or message_record.contact_name or clean_phone,
                             status="open",
-                            unread_count=0
+                            unread_count=0,
+                            labels=convo_labels
                         )
                         db.add(chat_convo)
                         db.flush()
                         is_new_convo = True
-                        logger.info(f"🆕 [CHAT-LOCAL-POST-DELIVERY] Criada nova conversa local para {clean_phone} (Client: {client_id})")
-                    
+                        logger.info(f"🆕 [CHAT-LOCAL-POST-DELIVERY] Criada nova conversa local para {clean_phone} com etiquetas {convo_labels} (Client: {client_id})")
+                    else:
+                        # Se a conversa local já existia, mas o trigger (disparo) tem novas etiquetas, faz o merge delas
+                        if trigger and trigger.chatwoot_label:
+                            from core.utils import robust_extract_labels
+                            new_labels = robust_extract_labels(trigger.chatwoot_label)
+                            if new_labels:
+                                current_labels = list(chat_convo.labels or [])
+                                updated_labels = list(set(current_labels + new_labels))
+                                chat_convo.labels = updated_labels
+                                logger.info(f"🏷️ [CHAT-LOCAL-POST-DELIVERY] Mescladas etiquetas {new_labels} na conversa local existente {chat_convo.id}")
+
                     # Reconstruir metadados do template
                     template_name = message_record.template_name or (trigger.template_name if trigger else None)
                     if not template_name and message_record.content and message_record.content.startswith("[Template: "):
@@ -145,6 +162,23 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                         "client_id": trigger.client_id
                     }
                     await rabbitmq.publish_event("new_message", payload_ws)
+                else:
+                    # Se a mensagem local já existia, apenas aplicamos/mesclamos as etiquetas na conversa local
+                    clean_phone = "".join(filter(str.isdigit, str(phone)))
+                    suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+                    chat_convo = db.query(models.ChatConversation).filter(
+                        models.ChatConversation.client_id == client_id,
+                        models.ChatConversation.phone.like(f"%{suffix}")
+                    ).first()
+                    if chat_convo and trigger and trigger.chatwoot_label:
+                        from core.utils import robust_extract_labels
+                        new_labels = robust_extract_labels(trigger.chatwoot_label)
+                        if new_labels:
+                            current_labels = list(chat_convo.labels or [])
+                            updated_labels = list(set(current_labels + new_labels))
+                            chat_convo.labels = updated_labels
+                            db.commit()
+                            logger.info(f"🏷️ [CHAT-LOCAL-POST-DELIVERY] Mescladas etiquetas {new_labels} na conversa local pré-existente {chat_convo.id}")
                     
             except Exception as e_chat_sync:
                 logger.error(f"❌ [CHAT-LOCAL-POST-DELIVERY] Erro ao sincronizar template localmente pós-entrega: {e_chat_sync}")
