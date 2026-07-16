@@ -418,6 +418,8 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                         
                         if is_btn_pre and btn_activate_agent is False:
                             logger.info(f"⏭️ [MEMORIA-INBOUND] Botão '{user_input}' com activate_agent=False — memória inbound não notificada ({from_phone})")
+                        elif is_btn_pre and btn_activate_agent is True:
+                            logger.info(f"⏭️ [MEMORIA-INBOUND] Botão '{user_input}' com activate_agent=True — enviado apenas para o AgentFlow/Chat Webhook, pulando memória ({from_phone})")
                         elif not is_btn:
                             logger.info(f"⏭️ [MEMORIA-INBOUND] Mensagem comum do usuário '{user_input}' — pulando memória inbound ({from_phone})")
                         elif same_url:

@@ -72,10 +72,10 @@ async def test_whatsapp_inbound_text_message_does_not_dispatch_memory_webhook():
 
 
 @pytest.mark.asyncio
-async def test_whatsapp_inbound_button_message_dispatches_memory_webhook():
+async def test_whatsapp_inbound_button_message_with_activate_agent_skips_memory_webhook():
     """
-    Testa que ao receber um clique de botão (inbound),
-    o sistema agenda o envio do webhook de memória.
+    Testa que ao receber um clique de botão (inbound) com activate_agent=True,
+    o webhook de memória NÃO é enviado para evitar duplicata com o AgentFlow.
     """
     db_mock = MagicMock()
     db_mock.bind = MagicMock()
@@ -84,7 +84,12 @@ async def test_whatsapp_inbound_button_message_dispatches_memory_webhook():
     # Criar mock do chat_convo retornado pela query local do DB
     mock_chat_convo = MagicMock()
     mock_chat_convo.id = 31
+    mock_chat_convo.button_actions = {
+        "Quero entrar na aula": {"activate_agent": True}
+    }
+    mock_chat_convo.template_name = "TemplateX"
     db_mock.query.return_value.filter.return_value.first.return_value = mock_chat_convo
+    db_mock.query.return_value.get.return_value = mock_chat_convo
 
     messages = [
         {
@@ -110,7 +115,7 @@ async def test_whatsapp_inbound_button_message_dispatches_memory_webhook():
         if key == "AGENT_MEMORY_WEBHOOK_URL":
             return "https://agentebacktarcira.aryaraj.shop/webhooks/memory/memoria"
         if key == "CHAT_MESSAGES_WEBHOOK_URL":
-            return "" # Diferente para não pular por duplicata
+            return ""
         return default
 
     # Mocks do ChatwootClient
@@ -127,11 +132,5 @@ async def test_whatsapp_inbound_button_message_dispatches_memory_webhook():
         # Como roda via asyncio.create_task, aguardamos o event loop processar a task em background
         await asyncio.sleep(0.1)
         
-        # Garante que notify_agent_memory_webhook foi chamado para o clique de botão
-        mock_notify_webhook.assert_called_once()
-        call_kwargs = mock_notify_webhook.call_args.kwargs
-        assert call_kwargs["phone"] == "5511999998888"
-        assert call_kwargs["content"] == "Quero entrar na aula"
-        assert call_kwargs["template_name"] == "Clique de Botão"
-        assert call_kwargs["dono"] == "usuario"
-        assert call_kwargs["is_button_click"] is True
+        # Garante que notify_agent_memory_webhook NÃO foi chamado para o clique de botão com activate_agent=True
+        mock_notify_webhook.assert_not_called()
