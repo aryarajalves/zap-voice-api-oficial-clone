@@ -54,3 +54,7 @@ def test_pin_conversation_requires_auth():
 def test_note_conversation_requires_auth():
     response = client.post("/api/chat/conversations/1/note", json={"private_note": "Nota teste"})
     assert response.status_code in [401, 403]
+
+def test_urgent_conversation_requires_auth():
+    response = client.post("/api/chat/conversations/1/urgent", json={"urgent": True})
+    assert response.status_code in [401, 403]

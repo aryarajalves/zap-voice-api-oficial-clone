@@ -62,6 +62,51 @@ async def list_chat_agents(
         for a in agents
     ]
 
+@router.post("/chat/conversations/get-or-create")
+async def get_or_create_conversation(
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    phone = payload.get("phone")
+    contact_name = payload.get("contact_name") or payload.get("name") or "Lead"
+    if not phone:
+        raise HTTPException(status_code=400, detail="Telefone é obrigatório")
+
+    clean_phone = "".join(filter(str.isdigit, str(phone)))
+    last8 = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+
+    all_convos = db.query(models.ChatConversation).filter(
+        models.ChatConversation.client_id == client_id
+    ).all()
+
+    convo = None
+    for c in all_convos:
+        c_phone_digits = "".join(filter(str.isdigit, str(c.phone or "")))
+        if c_phone_digits == clean_phone or (len(c_phone_digits) >= 8 and c_phone_digits[-8:] == last8):
+            convo = c
+            break
+
+    if not convo:
+        convo = models.ChatConversation(
+            client_id=client_id,
+            phone=clean_phone,
+            contact_name=contact_name,
+            status="open"
+        )
+        db.add(convo)
+        db.commit()
+        db.refresh(convo)
+
+    return {
+        "id": convo.id,
+        "phone": convo.phone,
+        "contact_name": convo.contact_name,
+        "last_contact_message_at": convo.last_contact_message_at.isoformat() if convo.last_contact_message_at else None
+    }
+
+
 @router.get("/chat/conversations")
 async def list_conversations(
     tab: str = "todos",  # minha, nao_atribuida, todos
@@ -74,12 +119,19 @@ async def list_conversations(
     end_date: Optional[str] = None,    # formato YYYY-MM-DD
     unread_only: Optional[bool] = None,
     window_open_only: Optional[bool] = None,
+    urgent_only: Optional[bool] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1),
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Tratar objetos Query do FastAPI passados como default em testes
+    if not isinstance(page, int):
+        page = 1
+    if not isinstance(limit, int):
+        limit = 20
+
     if not client_id:
         raise HTTPException(status_code=400, detail="Client ID não fornecido.")
 
@@ -98,6 +150,10 @@ async def list_conversations(
         from datetime import timedelta
         limit_time = datetime.utcnow() - timedelta(hours=24)
         query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
+
+    # Filtro: urgentes apenas
+    if urgent_only:
+        query = query.filter(models.ChatConversation.urgent == True)
 
     # Filtro por Datas
     if start_date:
@@ -182,6 +238,24 @@ async def list_conversations(
             return "resting", resting_map[suffix]
         return None, None
 
+    # Buscar todos os triggers ativos do cliente para mapear o funil ativo
+    active_triggers = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.client_id == client_id,
+        models.ScheduledTrigger.status.in_(['queued', 'processing', 'paused_waiting_delivery', 'suspended'])
+    ).all()
+    active_funnels_map = {}
+    for t in active_triggers:
+        if t.funnel_id and t.contact_phone:
+            digits = "".join(filter(str.isdigit, t.contact_phone))
+            if len(digits) >= 8:
+                funnel = db.query(models.Funnel).get(t.funnel_id)
+                if funnel:
+                    active_funnels_map[digits[-8:]] = {
+                        "id": funnel.id,
+                        "name": funnel.name,
+                        "status": t.status
+                    }
+
     # Adicionar serialização simples
     result = []
     for c in conversations:
@@ -190,6 +264,10 @@ async def list_conversations(
         # Filtro por tipo de bloqueio (aplicado após calcular o status, pois depende do cruzamento de tabelas)
         if block_status and block_type != block_status:
             continue
+
+        digits = "".join(filter(str.isdigit, c.phone or ""))
+        suffix_key = digits[-8:] if len(digits) >= 8 else None
+        active_funnel = active_funnels_map.get(suffix_key) if suffix_key else None
 
         result.append({
             "id": c.id,
@@ -205,9 +283,11 @@ async def list_conversations(
             "labels": c.labels or [],
             "last_contact_message_at": c.last_contact_message_at.isoformat() if c.last_contact_message_at else None,
             "pinned": c.pinned,
+            "urgent": c.urgent,
             "private_note": c.private_note,
             "block_status": block_type,  # None | "blocked" | "resting"
-            "resting_until": resting_until.isoformat() if resting_until else None
+            "resting_until": resting_until.isoformat() if resting_until else None,
+            "active_funnel": active_funnel
         })
     total_count = len(result)
     start_idx = (page - 1) * limit
@@ -341,6 +421,24 @@ async def send_chat_message(
     db.add(new_message)
 
     db.commit()
+
+    if not is_private:
+        try:
+            from services.ai_memory import notify_agent_memory_webhook
+            import asyncio
+            asyncio.create_task(
+                notify_agent_memory_webhook(
+                    client_id=client_id,
+                    phone=convo.phone,
+                    name=convo.contact_name,
+                    template_name="Mensagem do Atendente",
+                    content=content,
+                    internal_contact_id=convo.id,
+                    dono="atendente"
+                )
+            )
+        except Exception as memory_err:
+            logger.error(f"Erro ao disparar webhook de memoria para mensagem de atendente: {memory_err}")
 
     return {
         "id": new_message.id,
@@ -981,6 +1079,107 @@ async def toggle_pin_conversation(
     return {"status": "ok", "pinned": convo.pinned}
 
 
+@router.post("/chat/conversations/{conversation_id}/urgent")
+async def toggle_urgent_conversation(
+    conversation_id: int,
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    urgent = payload.get("urgent", False)
+    convo.urgent = urgent
+    db.commit()
+    return {"status": "ok", "urgent": convo.urgent}
+
+
+@router.post("/chat/conversations/{conversation_id}/funnel")
+async def trigger_funnel_for_conversation(
+    conversation_id: int,
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    funnel_id = payload.get("funnel_id")
+    if not funnel_id:
+        raise HTTPException(status_code=400, detail="Funil não especificado.")
+
+    funnel = db.query(models.Funnel).filter(
+        models.Funnel.id == funnel_id,
+        models.Funnel.client_id == client_id
+    ).first()
+    if not funnel:
+        raise HTTPException(status_code=404, detail="Funil não encontrado.")
+
+    # Verificar se já existe execução ativa para este telefone
+    existing_active = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.client_id == client_id,
+        models.ScheduledTrigger.funnel_id == funnel_id,
+        models.ScheduledTrigger.contact_phone == convo.phone,
+        models.ScheduledTrigger.status.in_(['queued', 'processing', 'paused_waiting_delivery', 'suspended'])
+    ).first()
+
+    if existing_active:
+        raise HTTPException(status_code=400, detail="Este funil já está em execução para este contato.")
+
+    # Criar trigger de execução
+    trigger = models.ScheduledTrigger(
+        client_id=client_id,
+        funnel_id=funnel_id,
+        conversation_id=convo.id,
+        status='queued',
+        is_bulk=False,
+        contact_phone=convo.phone,
+        contact_name=convo.contact_name or convo.phone,
+        contacts_list=[{
+            "id": str(convo.id),
+            "meta": {"sender": {"name": convo.contact_name or convo.phone, "phone_number": convo.phone}}
+        }],
+        scheduled_time=datetime.now(timezone.utc)
+    )
+
+    db.add(trigger)
+    db.commit()
+    db.refresh(trigger)
+
+    # Disparar no RabbitMQ imediatamente
+    from rabbitmq_client import rabbitmq
+    try:
+        await rabbitmq.publish("zapvoice_funnel_executions", {
+            "trigger_id": trigger.id,
+            "funnel_id": funnel_id,
+            "contact_phone": convo.phone
+        })
+        trigger.status = 'processing'
+        db.commit()
+    except Exception as e:
+        logger.error(f"Erro ao publicar execução manual de funil: {e}")
+        pass
+
+    return {
+        "status": "ok",
+        "trigger_id": trigger.id,
+        "funnel_id": funnel_id,
+        "funnel_name": funnel.name,
+        "trigger_status": trigger.status
+    }
+
+
 @router.post("/chat/conversations/{conversation_id}/note")
 async def update_conversation_note(
     conversation_id: int,
@@ -1051,13 +1250,133 @@ async def delete_conversations_bulk(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    ids = payload.get("ids", [])
-    if not ids:
-        raise HTTPException(status_code=400, detail="Nenhum ID fornecido.")
-    deleted = db.query(models.ChatConversation).filter(
-        models.ChatConversation.id.in_(ids),
-        models.ChatConversation.client_id == client_id
-    ).all()
+    select_all_pages = payload.get("select_all_pages", False)
+    if select_all_pages:
+        query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
+        
+        tab = payload.get("tab", "todos")
+        status = payload.get("status", "open")
+        search = payload.get("search")
+        label = payload.get("label")
+        block_status = payload.get("block_status")
+        has_note = payload.get("has_note")
+        start_date = payload.get("start_date")
+        end_date = payload.get("end_date")
+        unread_only = payload.get("unread_only")
+        window_open_only = payload.get("window_open_only")
+
+        # Filtro de Status
+        if status != "all":
+            query = query.filter(models.ChatConversation.status == status)
+
+        # Filtro: não lidas apenas
+        if unread_only:
+            query = query.filter(models.ChatConversation.unread_count > 0)
+
+        # Filtro: janela de 24h aberta apenas
+        if window_open_only:
+            from datetime import timedelta
+            limit_time = datetime.utcnow() - timedelta(hours=24)
+            query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
+
+        # Filtro por Datas
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                query = query.filter(models.ChatConversation.last_message_at >= start_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear start_date na exclusão bulk: {e_dt}")
+
+        if end_date:
+            try:
+                from datetime import time
+                end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time(23, 59, 59, 999999))
+                query = query.filter(models.ChatConversation.last_message_at <= end_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear end_date na exclusão bulk: {e_dt}")
+
+        # Filtro da Aba (Atribuição)
+        if tab == "minha":
+            query = query.filter(models.ChatConversation.assigned_user_id == current_user.id)
+        elif tab == "nao_atribuida":
+            query = query.filter(models.ChatConversation.assigned_user_id == None)
+
+        # Filtro de Busca (Nome, Telefone ou conteúdo de alguma mensagem)
+        if search:
+            search_term = f"%{search}%"
+            message_match = (
+                db.query(models.ChatMessage.id)
+                .filter(
+                    models.ChatMessage.conversation_id == models.ChatConversation.id,
+                    models.ChatMessage.content.ilike(search_term)
+                )
+                .exists()
+            )
+            query = query.filter(
+                models.ChatConversation.contact_name.ilike(search_term) |
+                models.ChatConversation.phone.ilike(search_term) |
+                message_match
+            )
+
+        # Filtro: só conversas com anotação privada preenchida
+        if has_note:
+            query = query.filter(
+                models.ChatConversation.private_note.isnot(None),
+                models.ChatConversation.private_note != ''
+            )
+
+        conversations = query.all()
+
+        # Filtro de Etiqueta/Marcador em Python (conforme listagem)
+        if label:
+            clean_label = label.strip().lower()
+            conversations = [
+                c for c in conversations
+                if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
+            ]
+
+        # Filtro de status de bloqueio em Python (conforme listagem)
+        if block_status:
+            now = datetime.utcnow()
+            blocked_entries = db.query(models.BlockedContact.phone).filter(
+                models.BlockedContact.client_id == client_id
+            ).all()
+            blocked_suffixes = {b.phone[-8:] for b in blocked_entries if b.phone and len(b.phone) >= 8}
+
+            resting_entries = db.query(models.RestingContact.phone, models.RestingContact.expires_at).filter(
+                models.RestingContact.client_id == client_id,
+                models.RestingContact.expires_at > now
+            ).all()
+            resting_map = {r.phone[-8:]: r.expires_at for r in resting_entries if r.phone and len(r.phone) >= 8}
+
+            def get_block_info(phone: Optional[str]):
+                digits = "".join(filter(str.isdigit, phone or ""))
+                if len(digits) < 8:
+                    return None, None
+                suffix = digits[-8:]
+                if suffix in blocked_suffixes:
+                    return "blocked", None
+                if suffix in resting_map:
+                    return "resting", resting_map[suffix]
+                return None, None
+
+            filtered_conversations = []
+            for c in conversations:
+                block_type, _ = get_block_info(c.phone)
+                if block_type == block_status:
+                    filtered_conversations.append(c)
+            conversations = filtered_conversations
+
+        deleted = conversations
+    else:
+        ids = payload.get("ids", [])
+        if not ids:
+            raise HTTPException(status_code=400, detail="Nenhum ID fornecido.")
+        deleted = db.query(models.ChatConversation).filter(
+            models.ChatConversation.id.in_(ids),
+            models.ChatConversation.client_id == client_id
+        ).all()
+
     count = len(deleted)
     for convo in deleted:
         db.delete(convo)

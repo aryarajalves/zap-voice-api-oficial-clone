@@ -28,6 +28,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 21/07/2026 | Marcação de Urgência no Contato | `chat_conversations` | `urgent` | `backend/scripts/database/add_chat_urgent_column.py` |
 | 16/07/2026 | Índices de performance para abas de Contatos, Chat e Histórico de Disparos | `contatos_monitorados`, `chat_conversations`, `scheduled_triggers` | Índices `idx_contatos_monitorados_last_interaction`, composto `idx_chat_convo_client_status_time` e composto `idx_scheduled_triggers_perf_list` | `backend/scripts/add_performance_indexes.py` |
 | 15/07/2026 | Rastreamento de disparo de lembrete de agendamento | `webhook_leads` | `google_calendar_reminder_sent` | `backend/scripts/add_reminder_sent_column.py` |
 | 15/07/2026 | Suporte a Google Agenda nos contatos via API | `webhook_leads` | `google_calendar_link`, `event_datetime` | `backend/scripts/add_calendar_columns_to_leads.py` |
@@ -80,6 +81,8 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 | 29/06/2026 | Chaves de API (Tokens de API) | `api_keys` | Tabela nova completa | `backend/scripts/create_api_keys_table.py` |
 | 30/06/2026 | Gestão de Etiquetas/Marcadores de Chat | `chat_labels` | Tabela nova completa | `backend/scripts/create_chat_labels_table.py` |
 | 09/07/2026 | Índice Composto para Paginação de Chat | `chat_messages` | Índice `idx_chat_messages_convo_time` nas colunas `(conversation_id, timestamp)` | `backend/add_composite_chat_index.py` |
+| 21/07/2026 | Página de Captura e Checkout Presell | `checkout_configs`, `checkout_leads` | Tabelas completas de configuração e leads capturados | `backend/create_checkout_presell_tables.py` |
+| 21/07/2026 | Título da Aba do Navegador no Checkout | `checkout_configs` | `page_tab_title` | `sync_postgres_schema.py` |
 
 
 
@@ -125,3 +128,23 @@ Sempre que o projeto for movido para um novo servidor:
 ```bash
 docker exec zapvoice_app python /app/add_webhook_retry_columns.py
 ```
+
+## 📋 Migração: Coluna de Urgência no Chat (2026-07-21)
+
+**Tabela afetada:** `chat_conversations`
+
+**Script:** `backend/scripts/database/add_chat_urgent_column.py`
+
+**Novas colunas:**
+
+| Coluna | Tipo | Default | Descrição |
+|--------|------|---------|-----------|
+| `urgent` | `BOOLEAN` | `FALSE` | Indica se o contato está marcado como urgente |
+
+**Contexto:** Funcionalidade solicitada para marcar contatos com um marcador/ícone visual de urgência no Painel de Atendimento, auxiliando o controle de acompanhamento futuro.
+
+**Como aplicar em produção:**
+```bash
+docker exec zapvoice_app python /app/scripts/database/add_chat_urgent_column.py
+```
+

@@ -28,5 +28,15 @@ export const ERROR_EXPLANATIONS = {
         titulo: "Contato Bloqueado Internamente",
         descricao: "O destinatário foi inserido na lista interna de exclusão (Blacklist/Opt-out) para não receber novos disparos.",
         acao: "Respeite a privacidade do contato. O ZapVoice bloqueou o envio automaticamente. Não envie mensagens manualmente por outros meios para evitar denúncias."
+    },
+    "Erro Meta 131050: Unable to deliver the message. This recipient has chosen to stop receiving marketing messages on WhatsApp from your business": {
+        titulo: "Mensagens de Marketing Recusadas",
+        descricao: "O destinatário optou por não receber mensagens de marketing/divulgação da sua empresa no WhatsApp.",
+        acao: "O WhatsApp/Meta não permite enviar mensagens de marketing para este contato. Evite novos envios promocionais para este número para preservar a saúde da sua linha."
+    },
+    "Erro Meta 130472: User's number is part of an experiment": {
+        titulo: "Número em Experimento da Meta",
+        descricao: "O número de telefone do destinatário faz parte de um grupo de testes ou experimento interno do próprio WhatsApp/Meta.",
+        acao: "Este bloqueio é imposto diretamente pela Meta. Evite reenviar mensagens repetidamente para este contato para não comprometer a qualidade do seu número."
     }
 };

@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../AuthContext';
 import { API_URL } from '../../config';
 
-export function useChatEngine({ activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, selectedConvo, setSelectedConvo }) {
+export function useChatEngine({ activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterUrgent, selectedConvo, setSelectedConvo }) {
     const [conversations, setConversations] = useState([]);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -31,7 +31,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
     // Resetar para a página 1 ao alterar filtros
     useEffect(() => {
         setPage(1);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, filterUnread, filterWindowOpen]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, filterUnread, filterWindowOpen, filterUrgent]);
     
     // Preview de mídia antes do envio
     const [mediaPreview, setMediaPreview] = useState(null);
@@ -98,6 +98,9 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
             }
             if (filterWindowOpen) {
                 url.searchParams.append('window_open_only', 'true');
+            }
+            if (filterUrgent) {
+                url.searchParams.append('urgent_only', 'true');
             }
             const res = await fetchWithAuth(url.toString(), {}, activeClient.id);
             if (res.ok) {
@@ -318,6 +321,38 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         }
     };
 
+    const handleTriggerFunnel = async (funnelId) => {
+        if (!selectedConvo || isSending) return false;
+        setIsSending(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/funnel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ funnel_id: funnelId })
+            }, activeClient.id);
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(`Funil "${data.funnel_name}" iniciado com sucesso!`);
+                setSelectedConvo(prev => prev ? { 
+                    ...prev, 
+                    active_funnel: { id: data.funnel_id, name: data.funnel_name, status: data.trigger_status } 
+                } : prev);
+                await loadConversations();
+                return true;
+            } else {
+                const errData = await res.json();
+                toast.error(errData.detail || 'Erro ao iniciar funil.');
+                return false;
+            }
+        } catch (err) {
+            toast.error('Erro de conexão ao iniciar funil.');
+            return false;
+        } finally {
+            setIsSending(false);
+        }
+    };
+
     return {
         conversations, setConversations,
         messages, setMessages,
@@ -366,6 +401,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         totalConvos,
         hasMoreMessages,
         isLoadingMoreMessages,
-        loadMoreMessages
+        loadMoreMessages,
+        handleTriggerFunnel
     };
 }

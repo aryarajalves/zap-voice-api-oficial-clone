@@ -7,6 +7,13 @@
     <script>
       (function() {
         try {
+          const pathname = window.location.pathname;
+          if (pathname.startsWith('/c/')) {
+            const slug = pathname.replace('/c/', '').split('/')[0].split('?')[0];
+            const cachedTitle = sessionStorage.getItem('checkout_title_' + slug);
+            document.write('<title>' + (cachedTitle || 'Aplicação Mentoria') + '</title>');
+            return;
+          }
           const savedBranding = localStorage.getItem('appBranding');
           if (savedBranding) {
             const branding = JSON.parse(savedBranding);

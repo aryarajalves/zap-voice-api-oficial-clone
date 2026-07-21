@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe } from 'react-icons/fi';
-import { BsPinAngle, BsPinAngleFill, BsJournalText } from 'react-icons/bs';
+import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe, FiMaximize2 } from 'react-icons/fi';
+import { BsPinAngle, BsPinAngleFill, BsJournalText, BsExclamationCircle, BsExclamationCircleFill } from 'react-icons/bs';
 import { fetchWithAuth } from '../AuthContext';
 import { API_URL } from '../config';
 import { useClient } from '../contexts/ClientContext';
@@ -10,6 +10,8 @@ import { getFirstName } from '../utils/nameFormatter';
 
 // Subcomponentes modularizados
 import MediaPreviewModal from './ChatConversations/MediaPreviewModal';
+import MaximizedInputModal from './ChatConversations/MaximizedInputModal';
+import TriggerFunnelModal from './ChatConversations/TriggerFunnelModal';
 import DeleteConvoModal from './ChatConversations/DeleteConvoModal';
 import ResendAgentflowModal from './ChatConversations/ResendAgentflowModal';
 import SendTemplateModal from './ChatConversations/SendTemplateModal';
@@ -34,12 +36,16 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [filterWindowOpen, setFilterWindowOpen] = React.useState(false); // só conversas com janela 24h aberta
     const [filterUnread, setFilterUnread] = React.useState(false); // só conversas com mensagem não lida
     const [filterHasNote, setFilterHasNote] = React.useState(false); // só conversas com anotação privada preenchida
+    const [filterUrgent, setFilterUrgent] = React.useState(false); // só conversas com marcação de urgência
     const [filterBlockStatus, setFilterBlockStatus] = React.useState(null); // null | 'blocked' | 'resting'
     const [filterStartDate, setFilterStartDate] = React.useState('');
     const [filterEndDate, setFilterEndDate] = React.useState('');
     const [activeFilterTab, setActiveFilterTab] = React.useState(null); // null | 'marcador' | 'status' | 'bloqueio'
     const [showRightSidebar, setShowRightSidebar] = React.useState(true); // fechar/abrir barra lateral direita
     const [showTemplateModal, setShowTemplateModal] = React.useState(false);
+    const [isMaximizedInputOpen, setIsMaximizedInputOpen] = React.useState(false);
+    const [showFunnelModal, setShowFunnelModal] = React.useState(false);
+    const [selectAllPages, setSelectAllPages] = React.useState(false);
 
     const engine = useChatEngine({
         activeClient,
@@ -53,9 +59,20 @@ export default function ChatConversations({ onClose, onNavigate }) {
         filterEndDate,
         filterUnread,
         filterWindowOpen,
+        filterUrgent,
         selectedConvo,
         setSelectedConvo
     });
+
+    React.useEffect(() => {
+        if (engine.selectedConvoIds.length === 0) {
+            setSelectAllPages(false);
+        }
+    }, [engine.selectedConvoIds]);
+
+    React.useEffect(() => {
+        setSelectAllPages(false);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen]);
 
     const formatTime = (isoString) => {
         if (!isoString) return '';
@@ -390,6 +407,27 @@ export default function ChatConversations({ onClose, onNavigate }) {
         }
     };
 
+    const handleToggleUrgent = async () => {
+        if (!selectedConvo) return;
+        const newUrgent = !selectedConvo.urgent;
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/urgent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ urgent: newUrgent })
+            }, activeClient.id);
+
+            if (res.ok) {
+                setSelectedConvo(prev => ({ ...prev, urgent: newUrgent }));
+                engine.setConversations(prev => prev.map(c => c.id === selectedConvo.id ? { ...c, urgent: newUrgent } : c));
+                toast.success(newUrgent ? 'Contato marcado como urgente!' : 'Marcação de urgência removida.');
+                engine.loadConversations();
+            }
+        } catch (err) {
+            toast.error('Erro ao atualizar marcação de urgência.');
+        }
+    };
+
     const handleResendToAgentFlow = async (messageId, editedContent) => {
         if (!activeClient) return;
         try {
@@ -518,21 +556,50 @@ export default function ChatConversations({ onClose, onNavigate }) {
     };
 
     const handleDeleteSelectedConversations = async () => {
-        if (!engine.selectedConvoIds.length) return;
+        if (!engine.selectedConvoIds.length && !selectAllPages) return;
+        
+        const payload = selectAllPages ? {
+            select_all_pages: true,
+            tab: activeTab,
+            status: statusFilter,
+            search: searchQuery || undefined,
+            label: selectedLabelFilter || undefined,
+            block_status: filterBlockStatus || undefined,
+            has_note: filterHasNote || undefined,
+            start_date: filterStartDate || undefined,
+            end_date: filterEndDate || undefined,
+            unread_only: filterUnread || undefined,
+            window_open_only: filterWindowOpen || undefined
+        } : {
+            ids: engine.selectedConvoIds
+        };
+
+        const toastId = toast.loading(selectAllPages ? 'Deletando todas as conversas selecionadas...' : 'Deletando conversas selecionadas...');
         try {
             const res = await fetchWithAuth(`${API_URL}/chat/conversations`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: engine.selectedConvoIds })
+                body: JSON.stringify(payload)
             }, activeClient?.id);
             if (res.ok) {
-                engine.setConversations(prev => prev.filter(c => !engine.selectedConvoIds.includes(c.id)));
-                if (engine.selectedConvoIds.includes(selectedConvo?.id)) setSelectedConvo(null);
-                engine.setSelectedConvoIds([]);
-                toast.success('Conversas deletadas.');
+                if (selectAllPages) {
+                    engine.setConversations([]);
+                    setSelectedConvo(null);
+                    engine.setSelectedConvoIds([]);
+                    setSelectAllPages(false);
+                    engine.loadConversations(true);
+                } else {
+                    engine.setConversations(prev => prev.filter(c => !engine.selectedConvoIds.includes(c.id)));
+                    if (engine.selectedConvoIds.includes(selectedConvo?.id)) setSelectedConvo(null);
+                    engine.setSelectedConvoIds([]);
+                }
+                toast.success('Conversas deletadas com sucesso!', { id: toastId });
+            } else {
+                const errData = await res.json();
+                toast.error(errData.detail || 'Erro ao deletar conversas.', { id: toastId });
             }
         } catch {
-            toast.error('Erro ao deletar.');
+            toast.error('Erro ao deletar.', { id: toastId });
         } finally {
             engine.setConfirmDeleteConvos(null);
         }
@@ -547,7 +614,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
             engine.loadAvailableLabels();
         }, 5000);
         return () => clearInterval(convoInterval);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterUrgent]);
 
     useEffect(() => {
         if (!selectedConvo) return;
@@ -619,7 +686,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
         <DeleteConvoModal
             isOpen={!!engine.confirmDeleteConvos}
             isBulk={engine.confirmDeleteConvos === 'bulk'}
-            selectedCount={engine.selectedConvoIds.length}
+            selectedCount={selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}
+            selectAllPages={selectAllPages}
             onClose={() => { engine.setConfirmDeleteConvos(null); engine.setDeletingConvoId(null); }}
             onConfirm={engine.confirmDeleteConvos === 'bulk' ? handleDeleteSelectedConversations : () => handleDeleteConversation(engine.deletingConvoId)}
         />
@@ -770,18 +838,30 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         )}
 
                         {activeFilterTab === 'status' && (
-                             <div className="px-4 pb-3 flex gap-2">
+                             <div className="px-4 pb-3 flex gap-1.5">
                                  <button
                                      onClick={() => setFilterWindowOpen(!filterWindowOpen)}
-                                     className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold ${filterWindowOpen ? 'bg-green-500/10 text-green-400' : 'text-gray-400'}`}
+                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterWindowOpen ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Janela 24h
                                  </button>
                                  <button
                                      onClick={() => setFilterUnread(!filterUnread)}
-                                     className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold ${filterUnread ? 'bg-emerald-500/10 text-emerald-400' : 'text-gray-400'}`}
+                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterUnread ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Não lidas
+                                 </button>
+                                 <button
+                                     onClick={() => setFilterHasNote(!filterHasNote)}
+                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterHasNote ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                 >
+                                     Com anotações
+                                 </button>
+                                 <button
+                                     onClick={() => setFilterUrgent(!filterUrgent)}
+                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterUrgent ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                 >
+                                     Urgentes
                                  </button>
                              </div>
                          )}
@@ -857,27 +937,54 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                  onClick={() => {
                                      const allIds = visibleConversations.map(c => c.id);
                                      const allSelected = allIds.every(id => engine.selectedConvoIds.includes(id));
-                                     engine.setSelectedConvoIds(allSelected ? [] : allIds);
+                                     if (allSelected) {
+                                         engine.setSelectedConvoIds(prev => prev.filter(id => !allIds.includes(id)));
+                                         setSelectAllPages(false);
+                                     } else {
+                                         engine.setSelectedConvoIds(prev => [...new Set([...prev, ...allIds])]);
+                                     }
                                  }}
                                  className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 font-medium transition-colors"
                              >
                                  <input
                                      type="checkbox"
                                      readOnly
-                                     checked={visibleConversations.length > 0 && visibleConversations.every(c => engine.selectedConvoIds.includes(c.id))}
+                                     checked={visibleConversations.length > 0 && (selectAllPages || visibleConversations.every(c => engine.selectedConvoIds.includes(c.id)))}
                                      className="rounded border-gray-300 text-blue-600 pointer-events-none"
                                  />
                                  Selecionar todas
                              </button>
-                             {engine.selectedConvoIds.length > 0 && (
+                             {(selectAllPages || engine.selectedConvoIds.length > 0) && (
                                  <button
                                      onClick={() => engine.setConfirmDeleteConvos('bulk')}
                                      className="ml-auto flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold transition border border-red-500/20"
                                  >
                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                     Deletar ({engine.selectedConvoIds.length})
+                                     Deletar ({selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length})
                                  </button>
                              )}
+                         </div>
+                     )}
+                      {visibleConversations.length > 0 && (selectAllPages || visibleConversations.every(c => engine.selectedConvoIds.includes(c.id))) && engine.totalConvos > visibleConversations.length && (
+                         <div className="px-4 py-2 border-b border-blue-500/20 bg-blue-500/10 dark:bg-blue-500/5 text-xs text-gray-700 dark:text-gray-300 flex items-center justify-between shrink-0">
+                             {selectAllPages ? (
+                                 <span>Todos os <strong>{engine.totalConvos}</strong> contatos de todas as páginas estão selecionados.</span>
+                             ) : (
+                                 <span>Todos os <strong>{visibleConversations.length}</strong> contatos desta página estão selecionados.</span>
+                             )}
+                             <button
+                                 onClick={() => {
+                                     if (selectAllPages) {
+                                         engine.setSelectedConvoIds([]);
+                                         setSelectAllPages(false);
+                                     } else {
+                                         setSelectAllPages(true);
+                                     }
+                                 }}
+                                 className="text-blue-500 hover:text-blue-600 font-semibold transition"
+                             >
+                                 {selectAllPages ? `Deselecionar todos os ${engine.totalConvos} contatos` : `Selecionar todos os ${engine.totalConvos} contatos`}
+                             </button>
                          </div>
                      )}
 
@@ -885,7 +992,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                      <div className="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-white/5">
                          {visibleConversations.map(convo => {
                              const isSelected = selectedConvo?.id === convo.id;
-                             const isChecked = engine.selectedConvoIds.includes(convo.id);
+                             const isChecked = selectAllPages || engine.selectedConvoIds.includes(convo.id);
                              const initials = (convo.contact_name || convo.phone || 'C')
                                  .split(' ')
                                  .map(w => w[0])
@@ -909,7 +1016,13 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                          checked={isChecked}
                                          onChange={e => {
                                              e.stopPropagation();
-                                             engine.setSelectedConvoIds(prev => isChecked ? prev.filter(id => id !== convo.id) : [...prev, convo.id]);
+                                             if (selectAllPages) {
+                                                 setSelectAllPages(false);
+                                                 const pageIdsExceptThis = visibleConversations.map(c => c.id).filter(id => id !== convo.id);
+                                                 engine.setSelectedConvoIds(pageIdsExceptThis);
+                                             } else {
+                                                 engine.setSelectedConvoIds(prev => isChecked ? prev.filter(id => id !== convo.id) : [...prev, convo.id]);
+                                             }
                                          }}
                                          onClick={e => e.stopPropagation()}
                                          className="rounded border-gray-300 text-blue-600 shrink-0 cursor-pointer"
@@ -923,8 +1036,9 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                          </div>
                                          <div className="flex-1 min-w-0">
                                              <div className="flex justify-between items-baseline mb-1 pr-8">
-                                                 <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate pr-2 flex items-center gap-1">
-                                                     {convo.pinned && <BsPinAngleFill className="text-blue-500 rotate-45 shrink-0" size={12} />}
+                                                 <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate pr-2 flex items-center gap-1.5">
+                                                     {convo.pinned && <BsPinAngleFill className="text-blue-500 rotate-45 shrink-0" size={12} title="Fixada" />}
+                                                     {convo.urgent && <BsExclamationCircleFill className="text-red-500 shrink-0 animate-pulse" size={12} title="Urgente" />}
                                                      {convo.contact_name ? getFirstName(convo.contact_name) : convo.phone}
                                                  </h4>
                                                  <span className="text-[10px] text-gray-400 shrink-0">{formatTime(convo.last_message_at)}</span>
@@ -1079,6 +1193,28 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     </button>
 
                                     <button
+                                        onClick={handleToggleUrgent}
+                                        title={selectedConvo.urgent ? "Remover urgência" : "Marcar como urgente"}
+                                        className={`p-2 rounded-xl border transition-all ${
+                                            selectedConvo.urgent
+                                            ? 'bg-red-600 text-white border-transparent'
+                                            : 'bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        {selectedConvo.urgent ? <BsExclamationCircleFill size={16} /> : <BsExclamationCircle size={16} />}
+                                    </button>
+
+                                    {engine.timeLeft24h !== 'Janela Fechada' && (
+                                        <button
+                                            onClick={() => setShowFunnelModal(true)}
+                                            title="Disparar Funil"
+                                            className="p-2 rounded-xl border bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                                        >
+                                            <FiLayers size={16} />
+                                        </button>
+                                    )}
+
+                                    <button
                                         onClick={() => {
                                             if (selectedConvo.block_status === 'blocked' || selectedConvo.block_status === 'resting') {
                                                 handleUnblockContact();
@@ -1129,6 +1265,31 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Banner do Funil Ativo */}
+                            {selectedConvo.active_funnel && (
+                                <div className="bg-blue-600/10 border-b border-blue-500/20 px-6 py-2.5 flex items-center justify-between text-xs text-blue-400 font-medium">
+                                    <div className="flex items-center gap-2">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                        </span>
+                                        <span>
+                                            Funil em execução para este contato: <strong>{selectedConvo.active_funnel.name}</strong> 
+                                            <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/20 text-blue-300 uppercase">
+                                                {selectedConvo.active_funnel.status === 'queued' ? 'Aguardando' : 
+                                                 selectedConvo.active_funnel.status === 'processing' ? 'Processando' : 
+                                                 selectedConvo.active_funnel.status === 'suspended' ? 'Pausado (Aguardando resposta)' : 
+                                                 selectedConvo.active_funnel.status === 'paused_waiting_delivery' ? 'Aguardando entrega' : 
+                                                 selectedConvo.active_funnel.status}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-400">
+                                        Atualiza automaticamente
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Mensagens */}
                             <div
@@ -1403,6 +1564,18 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     </button>
                                 )}
 
+                                {!engine.isRecording && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMaximizedInputOpen(true)}
+                                        disabled={engine.isSending || engine.timeLeft24h === 'Janela Fechada'}
+                                        className="p-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl transition-all flex items-center justify-center shrink-0 disabled:opacity-50 disabled:pointer-events-none"
+                                        title="Maximizar campo de texto"
+                                    >
+                                        <FiMaximize2 size={18} />
+                                    </button>
+                                )}
+
                                 {engine.isRecording ? (
                                     /* Estado de gravação ativa */
                                     <div className="flex-1 flex items-center gap-3 px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -1507,7 +1680,36 @@ export default function ChatConversations({ onClose, onNavigate }) {
                     />
                 )}
             </div>
+
+            {/* Modal Maximizado */}
+            {selectedConvo && (
+                <MaximizedInputModal
+                    isOpen={isMaximizedInputOpen}
+                    onClose={() => setIsMaximizedInputOpen(false)}
+                    value={engine.newMessage}
+                    onChange={engine.setNewMessage}
+                    onSend={async (e) => {
+                        if (!engine.newMessage.trim() || engine.isSending) return;
+                        await engine.handleSendMessage(e);
+                        setIsMaximizedInputOpen(false);
+                    }}
+                    isSending={engine.isSending}
+                    contactName={selectedConvo.contact_name || selectedConvo.phone}
+                />
+            )}
+            {/* Modal de Disparo de Funil */}
+            {selectedConvo && (
+                <TriggerFunnelModal
+                    isOpen={showFunnelModal}
+                    onClose={() => setShowFunnelModal(false)}
+                    onTrigger={async (funnelId) => {
+                        const success = await engine.handleTriggerFunnel(funnelId);
+                        if (success) setShowFunnelModal(false);
+                    }}
+                    isTriggering={engine.isSending}
+                />
+            )}
         </div>
-        </>
-    );
+    </>
+);
 }

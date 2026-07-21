@@ -38,5 +38,16 @@ export const resolveUrl = (url) => {
     return `${baseUrl}${normalizedUrl}`;
 };
 
+/**
+ * Helper para construir endpoints da API
+ */
+export const getApiUrl = (path = '') => {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    if (cleanPath.startsWith('/api/')) {
+        return `${API_URL}${cleanPath.replace('/api', '')}`;
+    }
+    return `${API_URL}${cleanPath}`;
+};
+
 console.log('Environment Config Loaded:', { API_URL, WS_URL, WEBHOOK_BASE_URL, META_APP_ID, META_CONFIG_ID, source: window._env_ ? 'runtime (window._env_)' : 'build-time (import.meta.env)' });
 

@@ -19,6 +19,7 @@ class ChatConversation(Base):
     labels = Column(JSON, default=list)  # Lista de strings: ["importante", "suporte", etc]
     last_contact_message_at = Column(DateTime(timezone=True), nullable=True)
     pinned = Column(Boolean, default=False, nullable=False)
+    urgent = Column(Boolean, default=False, nullable=False)
     private_note = Column(String, nullable=True)
     human_handover_at = Column(DateTime(timezone=True), nullable=True)
     

@@ -6,6 +6,7 @@ import ProtectedRoute from './ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import InviteRegister from './pages/InviteRegister';
 import PublicTutorial from './pages/PublicTutorial';
+import PublicCheckoutPage from './pages/PublicCheckoutPage';
 import { Toaster } from 'react-hot-toast';
 
 /**
@@ -13,12 +14,13 @@ import { Toaster } from 'react-hot-toast';
  * Atua como o ponto de entrada da aplicação React, configurando todos os 
  * provedores de contexto necessários (Tema, Autenticação, Cliente)
  * e protegendo o conteúdo principal via ProtectedRoute.
- * Também intercepta a rota de convites públicos.
+ * Também intercepta a rota de convites públicos e checkout presell.
  */
 function App() {
   const pathname = window.location.pathname;
   const isInvite = pathname.startsWith('/invite/');
   const isHelp = pathname.startsWith('/help/');
+  const isCheckout = pathname.startsWith('/c/');
 
   if (isInvite) {
     const token = pathname.replace('/invite/', '').split('/')[0];
@@ -36,6 +38,18 @@ function App() {
       <ThemeProvider>
         <Toaster position="top-right" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
         <PublicTutorial slug={slug} />
+      </ThemeProvider>
+    );
+  }
+
+  if (isCheckout) {
+    const slug = pathname.replace('/c/', '').split('/')[0].split('?')[0];
+    const cachedTitle = typeof window !== 'undefined' ? sessionStorage.getItem(`checkout_title_${slug}`) : null;
+    document.title = cachedTitle || 'Aplicação Mentoria';
+
+    return (
+      <ThemeProvider>
+        <PublicCheckoutPage slug={slug} />
       </ThemeProvider>
     );
   }

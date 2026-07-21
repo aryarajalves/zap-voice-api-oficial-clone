@@ -29,6 +29,7 @@ from .trigger import (
 from .uploaded_media import UploadedMedia
 from .api_key import ApiKey
 from .chat_label import ChatLabel
+from .checkout_presell import CheckoutConfig, CheckoutLead
 
 # This allows importing all models from the models package
 __all__ = [
@@ -70,5 +71,7 @@ __all__ = [
     "UploadedMedia",
     "ChatConversation",
     "ChatMessage",
-    "ApiKey"
+    "ApiKey",
+    "CheckoutConfig",
+    "CheckoutLead"
 ]

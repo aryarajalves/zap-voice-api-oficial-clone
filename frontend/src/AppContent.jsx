@@ -38,12 +38,13 @@ import PageUnderConstruction from './components/PageUnderConstruction';
 import LogViewer from './pages/LogViewer';
 import ChatConversations from './pages/ChatConversations';
 import HumanAgents from './pages/HumanAgents';
-
+import CheckoutPresellPage from './pages/CheckoutPresellPage';
 
 // Maps pages_status key → page display name (for under-construction screen)
 const PAGE_NAMES = {
   bulk_sender:          'Disparo em Massa',
   recurring_schedules:  'Disparo Recorrente',
+  pagina_captura:       'Checkout Prepopulado',
   schedules:            'Agenda de Disparos',
   history:              'Histórico de Disparos',
   hot_leads:            'Leads Quentes',
@@ -214,6 +215,16 @@ export default function AppContent() {
               {logic.currentView === 'recurring_schedules' && (
                 <PageGuard pageKey="schedules" pagesStatus={logic.user?.pages_status}>
                   <RecurringSchedules />
+                </PageGuard>
+              )}
+              {logic.currentView === 'pagina_captura' && (
+                <PageGuard pageKey="pagina_captura" pagesStatus={logic.user?.pages_status}>
+                  <CheckoutPresellPage onNavigateToChat={(contact) => {
+                    logic.setCurrentView('chat_conversations');
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('select-chat-convo', { detail: contact }));
+                    }, 100);
+                  }} />
                 </PageGuard>
               )}
               {logic.currentView === 'stress_test' && <StressTest onStartSuccess={() => logic.setCurrentView('history')} onNavigateToHistory={() => logic.setCurrentView('history')} onNavigateToIntegrations={() => logic.setCurrentView('integrations')} onNavigateToContacts={() => logic.setCurrentView('leads')} />}

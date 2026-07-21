@@ -52,6 +52,16 @@ export const ERROR_EXPLANATIONS = {
         titulo: "Limite de Requisições Excedido (Rate Limit)",
         descricao: "O WhatsApp/Meta ou o próprio servidor bloqueou temporariamente o envio porque a quantidade de mensagens disparadas em um curto intervalo de tempo excedeu os limites de segurança da API.",
         acao: "Evite disparar com concorrência muito alta sem delay. Aumente o tempo de delay (segundos) entre as mensagens nas configurações de disparo ou aguarde alguns minutos antes de tentar reenviar para estes contatos."
+    },
+    "MARKETING_OPT_OUT": {
+        titulo: "Mensagens de Marketing Recusadas",
+        descricao: "O destinatário optou por não receber mensagens de marketing/divulgação da sua empresa no WhatsApp.",
+        acao: "O WhatsApp/Meta não permite enviar mensagens de marketing para este contato. Evite novos envios promocionais para este número para preservar a saúde da sua linha."
+    },
+    "META_EXPERIMENT": {
+        titulo: "Número em Experimento da Meta",
+        descricao: "O número de telefone do destinatário faz parte de um grupo de testes ou experimento interno do próprio WhatsApp/Meta.",
+        acao: "Este bloqueio é imposto diretamente pela Meta. Evite reenviar mensagens repetidamente para este contato para não comprometer a qualidade do seu número."
     }
 };
 
@@ -61,6 +71,8 @@ export const getExplanationKey = (reason) => {
     if (reason.includes("132015") || reason.includes("paused due to low quality")) return "TEMPLATE_PAUSED";
     if (reason.includes("131049") || reason.includes("healthy ecosystem engagement")) return "INTEGRITY_BLOCK";
     if (reason.includes("131026") || reason.includes("undeliverable") || reason.includes("não entregável")) return "UNDELIVERABLE";
+    if (reason.includes("131050") || reason.toLowerCase().includes("stop receiving marketing messages") || reason.toLowerCase().includes("marketing messages from your business")) return "MARKETING_OPT_OUT";
+    if (reason.includes("130472") || reason.toLowerCase().includes("part of an experiment")) return "META_EXPERIMENT";
     if (reason.includes("(#2)") || reason.includes("service temporarily") || reason.includes("Serviço temporariamente")) return "SERVICE_UNAVAILABLE";
     if (reason.includes("131000") || reason.includes("something went wrong") || reason.includes("Algo deu errado")) return "SOMETHING_WENT_WRONG";
     if (reason.includes("Exclusão") || reason.includes("Bloqueado") || reason.includes("BLOCKED")) return "EXCLUSION_LIST";
