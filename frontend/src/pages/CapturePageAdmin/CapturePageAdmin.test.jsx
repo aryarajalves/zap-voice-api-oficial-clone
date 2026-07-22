@@ -5,7 +5,12 @@ import CapturePageAdmin from './index';
 
 // Mocks
 vi.mock('../../config', () => ({
-  API_URL: 'http://localhost:8000/api'
+  API_URL: 'http://localhost:8000/api',
+  getApiUrl: (path) => `http://localhost:8000/api${path.replace('/api', '')}`
+}));
+
+vi.mock('../../contexts/ClientContext', () => ({
+  useClient: () => ({ activeClient: { id: 1, name: 'Cliente Teste' } })
 }));
 
 vi.mock('react-hot-toast', () => ({

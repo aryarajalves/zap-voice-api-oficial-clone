@@ -4,14 +4,28 @@ import {
   FiCheckCircle, FiExternalLink, FiUsers, FiSettings, FiCheck, FiUpload, FiX
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { API_URL } from '../../config';
+import { API_URL, getApiUrl } from '../../config';
+import { useClient } from '../../contexts/ClientContext';
 
 export default function CapturePageAdmin() {
+  const { activeClient } = useClient();
   const [activeTab, setActiveTab] = useState('config'); // 'config' | 'leads'
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [uploadingBg, setUploadingBg] = useState(false);
+
+  const getHeaders = (isJson = true) => {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'X-Client-ID': String(activeClient?.id || 1)
+    };
+    if (isJson) {
+      headers['Content-Type'] = 'application/json';
+    }
+    return headers;
+  };
 
   // Config State
   const [formData, setFormData] = useState({
@@ -46,13 +60,13 @@ export default function CapturePageAdmin() {
   useEffect(() => {
     fetchConfig();
     fetchLeads();
-  }, []);
+  }, [activeClient?.id]);
 
   const fetchConfig = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/chat/capture-page/config`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      const res = await fetch(getApiUrl('/api/chat/capture-page/config'), {
+        headers: getHeaders(false)
       });
       if (res.ok) {
         const data = await res.json();
@@ -87,8 +101,8 @@ export default function CapturePageAdmin() {
     try {
       setLoadingLeads(true);
       const query = new URLSearchParams({ page: pageArg, limit: 15, search: searchArg });
-      const res = await fetch(`${API_URL}/chat/capture-page/leads?${query.toString()}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      const res = await fetch(getApiUrl(`/api/chat/capture-page/leads?${query.toString()}`), {
+        headers: getHeaders(false)
       });
       if (res.ok) {
         const data = await res.json();
@@ -107,12 +121,9 @@ export default function CapturePageAdmin() {
     e.preventDefault();
     try {
       setSaving(true);
-      const res = await fetch(`${API_URL}/chat/capture-page/config`, {
+      const res = await fetch(getApiUrl('/api/chat/capture-page/config'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
+        headers: getHeaders(true),
         body: JSON.stringify(formData)
       });
       const data = await res.json();
@@ -131,9 +142,9 @@ export default function CapturePageAdmin() {
   const handleDeleteLead = async () => {
     if (!leadToDelete) return;
     try {
-      const res = await fetch(`${API_URL}/chat/capture-page/leads/${leadToDelete.id}`, {
+      const res = await fetch(getApiUrl(`/api/chat/capture-page/leads/${leadToDelete.id}`), {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: getHeaders(false)
       });
       if (res.ok) {
         toast.success('Lead excluído!');
@@ -162,13 +173,9 @@ export default function CapturePageAdmin() {
       data.append('file', file);
 
       // Usar a rota genérica de uploads protegida por X-Client-ID
-      const clientId = localStorage.getItem('active_client_id') || '1';
-      const res = await fetch(`${API_URL}/upload`, {
+      const res = await fetch(getApiUrl('/api/upload'), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'X-Client-ID': clientId
-        },
+        headers: getHeaders(false),
         body: data
       });
 
@@ -281,7 +288,7 @@ export default function CapturePageAdmin() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Seção 1: Configuração do Link (Slug) */}
-            <div className="col-span-full bg-[#060a0f] p-4 rounded-xl border border-gray-800 space-y-3">
+            <div className="col-span-full bg-[#070d14] p-4 rounded-xl border border-gray-800/80 space-y-3">
               <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
                 <FiGlobe /> URL Pública & Slug
               </h3>
@@ -295,7 +302,7 @@ export default function CapturePageAdmin() {
                       required
                       value={formData.slug}
                       onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                      className="w-full bg-[#0d1622] border border-gray-700 text-white text-xs rounded-r-xl px-3 py-2.5 focus:border-emerald-500 outline-none"
+                      className="w-full bg-[#04080d] border border-gray-700 text-white text-xs rounded-r-xl px-3 py-2.5 focus:border-emerald-500 outline-none"
                       placeholder="masterclass"
                     />
                   </div>
@@ -306,7 +313,7 @@ export default function CapturePageAdmin() {
                     type="text"
                     value={formData.tag_name}
                     onChange={(e) => setFormData({ ...formData, tag_name: e.target.value })}
-                    className="w-full bg-[#0d1622] border border-gray-700 text-white text-xs rounded-xl px-3 py-2.5 focus:border-emerald-500 outline-none"
+                    className="w-full bg-[#04080d] border border-gray-700 text-white text-xs rounded-xl px-3 py-2.5 focus:border-emerald-500 outline-none"
                     placeholder="Página de Captura"
                   />
                 </div>
