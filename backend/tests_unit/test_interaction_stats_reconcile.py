@@ -99,3 +99,48 @@ def test_interaction_stats_reconcile_and_filter(client, auth_headers, db_session
     data = resp.json()
     assert len(data["items"]) == 1
     assert data["items"][0]["phone_number"] == "5585996123586"
+
+def test_interaction_stats_reconcile_excludes_blocked_via_button(client, auth_headers, db_session, client_obj):
+    parent_trigger = ScheduledTrigger(
+        client_id=client_obj.id,
+        status="completed",
+        is_bulk=True,
+        scheduled_time=datetime.now(timezone.utc)
+    )
+    db_session.add(parent_trigger)
+    db_session.commit()
+    db_session.refresh(parent_trigger)
+
+    # Contato 1: Interagiu de verdade
+    msg_interact = MessageStatus(
+        trigger_id=parent_trigger.id,
+        message_id="wamid_interact",
+        phone_number="5511999990001",
+        status="read",
+        is_interaction=True,
+        interaction_counted=True,
+        message_type="TEMPLATE",
+        timestamp=datetime.now(timezone.utc)
+    )
+    # Contato 2: Clicou em Bloquear (BLOCKED_VIA_BUTTON)
+    msg_block = MessageStatus(
+        trigger_id=parent_trigger.id,
+        message_id="wamid_block",
+        phone_number="5511999990002",
+        status="failed",
+        failure_reason="BLOCKED_VIA_BUTTON",
+        is_interaction=True,
+        interaction_counted=True,
+        message_type="TEMPLATE",
+        timestamp=datetime.now(timezone.utc)
+    )
+    db_session.add(msg_interact)
+    db_session.add(msg_block)
+    db_session.commit()
+
+    import asyncio
+    asyncio.run(reconcile_trigger_stats_logic(parent_trigger.id, client_obj.id, db_session))
+    db_session.refresh(parent_trigger)
+
+    assert parent_trigger.total_interactions == 1
+    assert parent_trigger.total_blocked == 1

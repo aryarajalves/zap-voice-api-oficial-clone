@@ -54,7 +54,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         phone_groups[phone].append(ms)
 
     for phone, group in phone_groups.items():
-        has_interaction = any((ms.is_interaction or ms.interaction_counted) for ms in group)
+        has_interaction = any((ms.is_interaction or ms.interaction_counted) and ms.failure_reason != 'BLOCKED_VIA_BUTTON' for ms in group)
         has_sent = any(ms.status in ['sent', 'delivered', 'read', 'interaction'] or ms.delivered_counted or ms.read_counted for ms in group)
         has_delivered = any(ms.status in ['delivered', 'read', 'interaction'] or ms.delivered_counted or ms.is_interaction for ms in group)
         # Mensagens só são lidas (read) se tiverem status 'read' ou 'interaction' (ou sinalização de read_counted), 
