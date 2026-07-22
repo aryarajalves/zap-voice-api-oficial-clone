@@ -289,10 +289,11 @@ app.include_router(reminders.router, prefix="/api")
 # Router público para atualização de campos de contatos via API Key
 from routers.contacts_public import router as contacts_public_router
 from routers.leads_public import router as leads_public_router
-from routers import checkout_presell
+from routers import checkout_presell, capture_page
 app.include_router(contacts_public_router, prefix="/api", tags=["Contacts Public API"])
 app.include_router(leads_public_router, prefix="/api", tags=["Leads Public API"])
 app.include_router(checkout_presell.router)
+app.include_router(capture_page.router, prefix="/api")
 
 # --- Fim dos Webhooks ---
 

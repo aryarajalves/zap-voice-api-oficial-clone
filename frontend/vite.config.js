@@ -9,6 +9,17 @@ export default defineConfig({
     port: 5173,
     watch: {
       usePolling: true
+    },
+    proxy: {
+      '/api': {
+        target: 'http://zapvoice_app:8000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://zapvoice_app:8000',
+        ws: true,
+        changeOrigin: true,
+      }
     }
   },
   test: {
@@ -18,3 +29,4 @@ export default defineConfig({
   },
   clearScreen: false,
 })
+

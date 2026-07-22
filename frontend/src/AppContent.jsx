@@ -39,6 +39,7 @@ import LogViewer from './pages/LogViewer';
 import ChatConversations from './pages/ChatConversations';
 import HumanAgents from './pages/HumanAgents';
 import CheckoutPresellPage from './pages/CheckoutPresellPage';
+import CapturePageAdmin from './pages/CapturePageAdmin';
 
 // Maps pages_status key → page display name (for under-construction screen)
 const PAGE_NAMES = {
@@ -215,6 +216,11 @@ export default function AppContent() {
               {logic.currentView === 'recurring_schedules' && (
                 <PageGuard pageKey="schedules" pagesStatus={logic.user?.pages_status}>
                   <RecurringSchedules />
+                </PageGuard>
+              )}
+              {logic.currentView === 'capture_page' && (
+                <PageGuard pageKey="capture_page" pagesStatus={logic.user?.pages_status}>
+                  <CapturePageAdmin />
                 </PageGuard>
               )}
               {logic.currentView === 'pagina_captura' && (
