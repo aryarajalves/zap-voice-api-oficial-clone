@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../AuthContext';
 import { API_URL } from '../../config';
 
-export function useChatEngine({ activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterUrgent, selectedConvo, setSelectedConvo }) {
+export function useChatEngine({ activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterUrgent, filterHasReplied, selectedConvo, setSelectedConvo }) {
     const [conversations, setConversations] = useState([]);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -31,7 +31,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
     // Resetar para a página 1 ao alterar filtros
     useEffect(() => {
         setPage(1);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, filterUnread, filterWindowOpen, filterUrgent]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, filterUnread, filterWindowOpen, filterUrgent, filterHasReplied]);
     
     // Preview de mídia antes do envio
     const [mediaPreview, setMediaPreview] = useState(null);
@@ -101,6 +101,9 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
             }
             if (filterUrgent) {
                 url.searchParams.append('urgent_only', 'true');
+            }
+            if (filterHasReplied) {
+                url.searchParams.append('has_replied', 'true');
             }
             const res = await fetchWithAuth(url.toString(), {}, activeClient.id);
             if (res.ok) {

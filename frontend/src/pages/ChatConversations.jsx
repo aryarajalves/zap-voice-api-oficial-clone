@@ -37,6 +37,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [filterUnread, setFilterUnread] = React.useState(false); // só conversas com mensagem não lida
     const [filterHasNote, setFilterHasNote] = React.useState(false); // só conversas com anotação privada preenchida
     const [filterUrgent, setFilterUrgent] = React.useState(false); // só conversas com marcação de urgência
+    const [filterHasReplied, setFilterHasReplied] = React.useState(false); // só contatos que enviaram pelo menos 1 mensagem
     const [filterBlockStatus, setFilterBlockStatus] = React.useState(null); // null | 'blocked' | 'resting'
     const [filterStartDate, setFilterStartDate] = React.useState('');
     const [filterEndDate, setFilterEndDate] = React.useState('');
@@ -60,6 +61,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
         filterUnread,
         filterWindowOpen,
         filterUrgent,
+        filterHasReplied,
         selectedConvo,
         setSelectedConvo
     });
@@ -569,7 +571,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
             start_date: filterStartDate || undefined,
             end_date: filterEndDate || undefined,
             unread_only: filterUnread || undefined,
-            window_open_only: filterWindowOpen || undefined
+            window_open_only: filterWindowOpen || undefined,
+            has_replied: filterHasReplied || undefined
         } : {
             ids: engine.selectedConvoIds
         };
@@ -614,7 +617,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
             engine.loadAvailableLabels();
         }, 5000);
         return () => clearInterval(convoInterval);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterUrgent]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterUrgent, filterHasReplied]);
 
     useEffect(() => {
         if (!selectedConvo) return;
@@ -804,7 +807,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         <div className="flex items-center px-4 py-2 gap-1.5">
                             {[
                                 { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!selectedLabelFilter },
-                                { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterUnread || filterHasNote },
+                                { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterUnread || filterHasNote || filterUrgent || filterHasReplied },
                                 { key: 'bloqueio', label: 'Bloqueio', icon: FiSlash, active: !!filterBlockStatus },
                                 { key: 'data', label: 'Data', icon: FiCalendar, active: !!filterStartDate || !!filterEndDate }
                             ].map(f => (
@@ -838,30 +841,37 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         )}
 
                         {activeFilterTab === 'status' && (
-                             <div className="px-4 pb-3 flex gap-1.5">
+                             <div className="px-4 pb-3 flex gap-1 flex-wrap">
                                  <button
                                      onClick={() => setFilterWindowOpen(!filterWindowOpen)}
-                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterWindowOpen ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterWindowOpen ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Janela 24h
                                  </button>
                                  <button
                                      onClick={() => setFilterUnread(!filterUnread)}
-                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterUnread ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterUnread ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Não lidas
                                  </button>
                                  <button
                                      onClick={() => setFilterHasNote(!filterHasNote)}
-                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterHasNote ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterHasNote ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
-                                     Com anotações
+                                     Anotações
                                  </button>
                                  <button
                                      onClick={() => setFilterUrgent(!filterUrgent)}
-                                     className={`flex-1 py-1.5 rounded-lg border text-[10px] font-semibold truncate ${filterUrgent ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterUrgent ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Urgentes
+                                 </button>
+                                 <button
+                                     onClick={() => setFilterHasReplied(!filterHasReplied)}
+                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterHasReplied ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     title="Filtrar contatos que enviaram pelo menos 1 mensagem"
+                                 >
+                                     Respondeu
                                  </button>
                              </div>
                          )}

@@ -120,6 +120,7 @@ async def list_conversations(
     unread_only: Optional[bool] = None,
     window_open_only: Optional[bool] = None,
     urgent_only: Optional[bool] = None,
+    has_replied: Optional[bool] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1),
     client_id: int = Depends(get_client_id),
@@ -154,6 +155,10 @@ async def list_conversations(
     # Filtro: urgentes apenas
     if urgent_only:
         query = query.filter(models.ChatConversation.urgent == True)
+
+    # Filtro: contatos que responderam/enviaram mensagem
+    if has_replied:
+        query = query.filter(models.ChatConversation.last_contact_message_at.isnot(None))
 
     # Filtro por Datas
     if start_date:
@@ -1264,6 +1269,7 @@ async def delete_conversations_bulk(
         end_date = payload.get("end_date")
         unread_only = payload.get("unread_only")
         window_open_only = payload.get("window_open_only")
+        has_replied = payload.get("has_replied")
 
         # Filtro de Status
         if status != "all":
@@ -1278,6 +1284,10 @@ async def delete_conversations_bulk(
             from datetime import timedelta
             limit_time = datetime.utcnow() - timedelta(hours=24)
             query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
+
+        # Filtro: contatos que responderam/enviaram mensagem
+        if has_replied:
+            query = query.filter(models.ChatConversation.last_contact_message_at.isnot(None))
 
         # Filtro por Datas
         if start_date:
