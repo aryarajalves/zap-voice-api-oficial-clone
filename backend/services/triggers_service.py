@@ -66,16 +66,9 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         latest_ms = max(group, key=lambda x: x.id)
         has_failed = latest_ms.status == 'failed' and latest_ms.failure_reason != 'BLOCKED_VIA_BUTTON'
 
-        # Um contato que está estritamente na fila (status 'sent' sem ter sido entregue nem lido)
-        # deve inflar o total de enviados (sent), mas NÃO de entregues (delivered) ou lidos (read)
-        is_strictly_in_queue = any(ms.status == 'sent' and not ms.delivered_counted and not ms.read_counted for ms in group)
-        
-        if is_strictly_in_queue:
-            if has_sent: sent += 1
-        else:
-            if has_sent: sent += 1
-            if has_delivered: delivered += 1
-            if has_read: read += 1
+        if has_sent: sent += 1
+        if has_delivered: delivered += 1
+        if has_read: read += 1
         
         if has_blocked: blocked += 1
         elif has_failed: failed += 1
