@@ -38,7 +38,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
 
     const categories = [
         { id: 'campanhas', label: 'Envios & Campanhas' },
-        { id: 'vendas', label: 'Vendas' },
+        { id: 'paginas', label: 'Criação de Páginas' },
         { id: 'automacao', label: 'Automação' },
         { id: 'contatos', label: 'Contatos' },
         { id: 'admin', label: 'Administração' }
@@ -48,12 +48,12 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         // Campanhas
         { id: 'bulk_sender', label: 'Disparo em Massa', icon: FiHome, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
         { id: 'recurring_schedules', label: 'Disparo Recorrente Criado', icon: FiClock, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
-        { id: 'pagina_captura', label: 'Checkout Prepopulado', icon: FiGlobe, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
         { id: 'schedules', label: 'Agenda de Disparos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
         { id: 'history', label: 'Histórico', icon: FiClock, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
-        
-        // Vendas
-        { id: 'hot_leads', label: 'Leads Quentes', icon: FiZap, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'vendas' },
+
+        // Criação de Páginas
+        { id: 'pagina_captura', label: 'Checkout Prepopulado', icon: FiGlobe, roles: ['super_admin', 'admin', 'premium'], category: 'paginas' },
+        { id: 'hot_leads', label: 'Leads Quentes', icon: FiZap, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'paginas' },
 
         // Automação
         { id: 'templates', label: 'Criar Template', icon: FiPlus, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },

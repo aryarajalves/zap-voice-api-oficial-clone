@@ -21,6 +21,8 @@ vi.mock('react-icons/fi', () => ({
   FiDatabase: () => <span />,
   FiInstagram: () => <span />,
   FiHelpCircle: () => <span />,
+  FiTerminal: () => <span />,
+  FiMessageSquare: () => <span />,
 }));
 
 vi.mock('./ClientSelector', () => ({
@@ -99,6 +101,13 @@ describe('Sidebar', () => {
     expect(screen.getByText('Meus Funis')).toBeInTheDocument();
     expect(screen.getByText('Histórico')).toBeInTheDocument();
     expect(screen.getByText('Monitoramento')).toBeInTheDocument();
+  });
+
+  it('exibe a categoria "Criação de Páginas" com os itens Checkout Prepopulado e Leads Quentes', () => {
+    render(<Sidebar {...baseProps} user={{ role: 'super_admin' }} />);
+    expect(screen.getByText('Criação de Páginas')).toBeInTheDocument();
+    expect(screen.getByText('Checkout Prepopulado')).toBeInTheDocument();
+    expect(screen.getByText('Leads Quentes')).toBeInTheDocument();
   });
 
   it('chama onViewChange ao clicar em item de menu', () => {
