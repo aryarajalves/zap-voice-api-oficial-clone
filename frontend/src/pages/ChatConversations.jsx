@@ -1688,9 +1688,9 @@ export default function ChatConversations({ onClose, onNavigate }) {
                     onClose={() => setIsMaximizedInputOpen(false)}
                     value={engine.newMessage}
                     onChange={engine.setNewMessage}
-                    onSend={async (e) => {
+                    onSend={async (e, options) => {
                         if (!engine.newMessage.trim() || engine.isSending) return;
-                        await engine.handleSendMessage(e);
+                        await engine.handleSendMessage(e, options);
                         setIsMaximizedInputOpen(false);
                     }}
                     isSending={engine.isSending}

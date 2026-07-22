@@ -250,7 +250,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         }
     };
 
-    const handleSendMessage = async (e) => {
+    const handleSendMessage = async (e, options = {}) => {
         if (e) e.preventDefault();
         if (!newMessage.trim() || !selectedConvo || isSending) return;
 
@@ -268,25 +268,63 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
                 setSelectedConvo(prev => ({ ...prev, status: 'open' }));
             }
 
-            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/messages`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: textToSend })
-            }, activeClient.id);
+            if (options?.splitLines) {
+                // Quebrar por linhas/parágrafos e filtrar vazios
+                const parts = textToSend.split('\n').map(p => p.trim()).filter(p => p !== '');
+                if (parts.length === 0) {
+                    setIsSending(false);
+                    return;
+                }
 
-            if (res.ok) {
-                const sentMsg = await res.json();
-                setMessages(prev => [...prev, sentMsg]);
-                setShouldScrollToBottom(true);
-                setConversations(prev => prev.map(c => 
-                    c.id === selectedConvo.id 
-                    ? { ...c, last_message_content: textToSend, last_message_at: new Date().toISOString(), status: 'open' } 
-                    : c
-                ));
+                // Enviar sequencialmente
+                for (let i = 0; i < parts.length; i++) {
+                    const contentPart = parts[i];
+                    const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/messages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: contentPart })
+                    }, activeClient.id);
+
+                    if (res.ok) {
+                        const sentMsg = await res.json();
+                        setMessages(prev => [...prev, sentMsg]);
+                        setShouldScrollToBottom(true);
+                        setConversations(prev => prev.map(c => 
+                            c.id === selectedConvo.id 
+                            ? { ...c, last_message_content: contentPart, last_message_at: new Date().toISOString(), status: 'open' } 
+                            : c
+                        ));
+                        
+                        // Pequeno atraso entre mensagens para garantir ordem de recebimento
+                        if (i < parts.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 800));
+                        }
+                    } else {
+                        const errData = await res.json();
+                        toast.error(errData.detail || `Erro ao enviar parte ${i + 1} da mensagem.`);
+                    }
+                }
             } else {
-                const errData = await res.json();
-                toast.error(errData.detail || 'Erro ao enviar mensagem.');
-                setNewMessage(textToSend);
+                const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: textToSend })
+                }, activeClient.id);
+
+                if (res.ok) {
+                    const sentMsg = await res.json();
+                    setMessages(prev => [...prev, sentMsg]);
+                    setShouldScrollToBottom(true);
+                    setConversations(prev => prev.map(c => 
+                        c.id === selectedConvo.id 
+                        ? { ...c, last_message_content: textToSend, last_message_at: new Date().toISOString(), status: 'open' } 
+                        : c
+                    ));
+                } else {
+                    const errData = await res.json();
+                    toast.error(errData.detail || 'Erro ao enviar mensagem.');
+                    setNewMessage(textToSend);
+                }
             }
         } catch (err) {
             toast.error('Erro de conexão ao enviar mensagem.');

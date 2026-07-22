@@ -114,12 +114,12 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     # Usa subquery max(id) por telefone igual ao modal — NÃO usa fórmula aritmética
     # porque as categorias se sobrepõem e podem gerar valor negativo.
     try:
-        from sqlalchemy import func as sqlfunc
+        from sqlalchemy import func as sqlfunc, select
         subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(
             models.MessageStatus.trigger_id.in_(all_trigger_ids)
         ).group_by(models.MessageStatus.phone_number).subquery()
         trigger.queue_count = db.query(models.MessageStatus).filter(
-            models.MessageStatus.id.in_(subq),
+            models.MessageStatus.id.in_(select(subq)),
             models.MessageStatus.status == 'sent',
             models.MessageStatus.delivered_counted == False,
             models.MessageStatus.read_counted == False

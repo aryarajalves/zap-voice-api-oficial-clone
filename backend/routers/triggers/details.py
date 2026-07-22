@@ -41,9 +41,9 @@ async def get_trigger_messages(
     all_trigger_ids = [trigger_id] + child_ids
     
     if trigger.is_bulk:
-        from sqlalchemy import func
+        from sqlalchemy import func, select
         subquery = db.query(func.max(models.MessageStatus.id)).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids)).group_by(models.MessageStatus.phone_number).subquery()
-        base_query = db.query(models.MessageStatus).filter(models.MessageStatus.id.in_(subquery))
+        base_query = db.query(models.MessageStatus).filter(models.MessageStatus.id.in_(select(subquery)))
     else:
         base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids))
     
