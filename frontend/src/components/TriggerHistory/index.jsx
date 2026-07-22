@@ -11,7 +11,7 @@ import ChildrenFunnelsModal from './components/ChildrenFunnelsModal';
 import BulkSummaryBar from './components/BulkSummaryBar';
 import ManualInteractionModal from './components/ManualInteractionModal';
 
-const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateToFunnels, onNavigateToChat, triggerType: initialTriggerTypeProp = 'all' }) => {
+const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateToFunnels, onNavigateToChat, triggerType: initialTriggerTypeProp = 'bulk' }) => {
     const {
         user, activeClient, triggers, loading, monitoringTrigger, setMonitoringTrigger,
         modalConfig, setModalConfig, contactsModal, setContactsModal, contactsFilter, setContactsFilter,

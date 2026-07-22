@@ -11,7 +11,7 @@ import { handleWebSocketMessage, fetchErrorsHelper, fetchChildrenHelper } from '
 import { getAvailableDdiDdd } from '../../../utils/dddInfo';
 
 
-export const useTriggerHistory = (refreshKey, initialTriggerType = 'all') => {
+export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
     const { activeClient } = useClient();
     const { user } = useAuth();
     
