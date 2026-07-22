@@ -122,6 +122,14 @@ export default function PublicCapturePage({ slugOverride }) {
 
     return (
       <div className="min-h-screen bg-[#060a0f] text-white flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
+        {/* Imagem de Fundo customizada */}
+        {config?.bg_image_url && (
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 opacity-40"
+            style={{ backgroundImage: `url(${config.bg_image_url})` }}
+          />
+        )}
+
         {/* Glow de fundo */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none" />
 
@@ -167,8 +175,8 @@ export default function PublicCapturePage({ slugOverride }) {
           className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
           style={{ backgroundImage: `url(${config.bg_image_url})` }}
         >
-          {/* Overlay escuro em gradiente para garantir leitura perfeita dos textos */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#060a0f] via-[#060a0f]/85 to-transparent" />
+          {/* Overlay suave para garantir leitura dos textos sem cobrir a imagem */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#060a0f]/90 via-[#060a0f]/60 to-[#060a0f]/30" />
         </div>
       )}
 
