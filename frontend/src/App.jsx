@@ -7,6 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import InviteRegister from './pages/InviteRegister';
 import PublicTutorial from './pages/PublicTutorial';
 import PublicCheckoutPage from './pages/PublicCheckoutPage';
+import PublicCapturePage from './pages/PublicCapturePage';
 import { Toaster } from 'react-hot-toast';
 
 /**
