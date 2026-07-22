@@ -28,6 +28,7 @@ class CapturePageConfigPayload(BaseModel):
     main_description: Optional[str] = "Cadastre seu melhor email para receber o link de acesso e garantir sua vaga no intensivo."
     email_placeholder: Optional[str] = "Seu melhor email"
     button_text: Optional[str] = "QUERO PARTICIPAR DO INTENSIVO!"
+    bg_image_url: Optional[str] = None
     footer_note: Optional[str] = "Seus dados estão seguros. Não enviamos spam."
     thank_you_title: Optional[str] = "Inscrição Confirmada!"
     thank_you_description: Optional[str] = "Entre no grupo VIP do WhatsApp para receber o link de acesso e os materiais exclusivos."
@@ -120,6 +121,7 @@ async def save_capture_page_config(
     config.main_description = payload.main_description or ""
     config.email_placeholder = payload.email_placeholder or "Seu melhor email"
     config.button_text = payload.button_text or "QUERO PARTICIPAR DO INTENSIVO!"
+    config.bg_image_url = payload.bg_image_url
     config.footer_note = payload.footer_note or "Seus dados estão seguros."
     config.thank_you_title = payload.thank_you_title or "Inscrição Confirmada!"
     config.thank_you_description = payload.thank_you_description or ""
@@ -237,6 +239,7 @@ async def get_public_capture_page(
         "main_description": config.main_description,
         "email_placeholder": config.email_placeholder,
         "button_text": config.button_text,
+        "bg_image_url": config.bg_image_url,
         "footer_note": config.footer_note,
         "thank_you_title": config.thank_you_title,
         "thank_you_description": config.thank_you_description,

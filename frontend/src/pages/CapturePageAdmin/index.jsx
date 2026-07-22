@@ -23,6 +23,7 @@ export default function CapturePageAdmin() {
     main_description: 'Cadastre seu melhor email para receber o link de acesso e garantir sua vaga no intensivo.',
     email_placeholder: 'Seu melhor email',
     button_text: 'QUERO PARTICIPAR DO INTENSIVO!',
+    bg_image_url: '',
     footer_note: 'Seus dados estão seguros. Não enviamos spam.',
     thank_you_title: 'Inscrição Confirmada!',
     thank_you_description: 'Entre no grupo VIP do WhatsApp para receber o link de acesso e os materiais exclusivos.',
@@ -64,6 +65,7 @@ export default function CapturePageAdmin() {
           main_description: data.main_description || '',
           email_placeholder: data.email_placeholder || 'Seu melhor email',
           button_text: data.button_text || 'QUERO PARTICIPAR DO INTENSIVO!',
+          bg_image_url: data.bg_image_url || '',
           footer_note: data.footer_note || 'Seus dados estão seguros.',
           thank_you_title: data.thank_you_title || 'Inscrição Confirmada!',
           thank_you_description: data.thank_you_description || '',
@@ -363,6 +365,17 @@ export default function CapturePageAdmin() {
                     placeholder="QUERO PARTICIPAR DO INTENSIVO!"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">URL da Imagem de Fundo (Opcional)</label>
+                <input
+                  type="text"
+                  value={formData.bg_image_url}
+                  onChange={(e) => setFormData({ ...formData, bg_image_url: e.target.value })}
+                  className="w-full bg-[#060a0f] border border-gray-800 text-white text-xs rounded-xl p-3 focus:border-emerald-500 outline-none font-mono"
+                  placeholder="https://exemplo.com/imagem-matriz.jpg"
+                />
               </div>
 
               <div>

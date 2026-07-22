@@ -158,82 +158,95 @@ export default function PublicCapturePage({ slugOverride }) {
     );
   }
 
-  // Visual Principal da Página de Captura (Inspirado no Design Dark/Neon Matrix da Imagem)
+  // Visual Principal da Página de Captura (Alinhado à esquerda com imagem de fundo Matrix/Neon)
   return (
-    <div className="min-h-screen bg-[#060a0f] text-white flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
-      {/* Glow Neon Superior */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-emerald-500/10 blur-[150px] rounded-full pointer-events-none" />
+    <div className="min-h-screen bg-[#060a0f] text-white flex flex-col justify-center p-6 sm:p-12 font-sans relative overflow-hidden">
+      {/* Imagem de Fundo customizada ou Padrão escuro */}
+      {config?.bg_image_url && (
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
+          style={{ backgroundImage: `url(${config.bg_image_url})` }}
+        >
+          {/* Overlay escuro em gradiente para garantir leitura perfeita dos textos */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#060a0f] via-[#060a0f]/85 to-transparent" />
+        </div>
+      )}
 
-      {/* Container Central com Borda Neon e Efeito Vibe Matrix */}
-      <div className="max-w-lg w-full bg-[#080d14]/95 backdrop-blur-2xl border border-emerald-500/30 p-8 sm:p-10 rounded-3xl shadow-[0_0_60px_rgba(16,185,129,0.12)] text-center relative z-10">
+      {/* Glow Neon de Fundo */}
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-emerald-500/10 blur-[160px] rounded-full pointer-events-none" />
 
-        {/* Headline em Destaque */}
+      {/* Container Principal com Conteúdo Alinhado à Esquerda (Assim como na Imagem de Referência) */}
+      <div className="max-w-md w-full relative z-10 space-y-6">
+
+        {/* Headline em Destaque (ex: INTENSIVO) */}
         {config?.headline && (
-          <h2 className="text-3xl sm:text-4xl font-black text-white tracking-widest uppercase mb-1">
+          <h2 className="text-4xl sm:text-5xl font-black text-white tracking-widest uppercase leading-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
             {config.headline}
           </h2>
         )}
 
         {/* Badge do Instrutor e Status AO VIVO */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <span className="text-sm font-semibold text-gray-300">
+        <div className="flex items-center gap-3">
+          <span className="text-base font-bold text-gray-200 drop-shadow">
             {config?.badge_text || 'Aulas do Miguel'}
           </span>
           {config?.badge_status && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-red-500/20 border border-red-500/40 text-red-400 uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-red-600/30 border border-red-500/50 text-red-400 uppercase tracking-wider shadow-lg">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
               {config.badge_status}
             </span>
           )}
         </div>
 
-        {/* Pill da Data do Evento com Borda Neon */}
+        {/* Pill da Data do Evento com Borda Neon Fluorescente */}
         {config?.event_date && (
-          <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 font-bold text-xs sm:text-sm mb-8 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+          <div className="inline-flex items-center gap-2.5 px-6 py-2.5 rounded-full bg-black/60 border border-emerald-500 text-emerald-400 font-extrabold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] backdrop-blur-md">
             <span>📅</span>
             <span>{config.event_date}</span>
           </div>
         )}
 
-        {/* Título Principal */}
-        <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white mb-3">
+        {/* Título Principal (ex: VOCÊ ESTÁ QUASE LÁ!) */}
+        <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white drop-shadow-md">
           {config?.main_title || 'VOCÊ ESTÁ QUASE LÁ!'}
         </h1>
 
-        {/* Descrição em Texto Verde Fluorescente */}
-        <p className="text-sm text-gray-300 leading-relaxed mb-8 max-w-md mx-auto">
+        {/* Descrição com destaque em Texto Verde Fluorescente */}
+        <p className="text-sm text-gray-300 leading-relaxed max-w-sm drop-shadow">
           {config?.main_description ? (
-            <span className="text-emerald-400 font-semibold">{config.main_description}</span>
+            <span>{config.main_description}</span>
           ) : (
-            'Cadastre seu melhor email para receber o link de acesso e garantir sua vaga no intensivo.'
+            <>
+              Cadastre seu melhor email para receber o link de acesso e <span className="text-emerald-400 font-bold">garantir sua vaga no intensivo.</span>
+            </>
           )}
         </p>
 
         {/* Mensagem de Erro de Validação */}
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs font-medium">
+          <div className="p-3.5 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-xs font-semibold backdrop-blur-md">
             {error}
           </div>
         )}
 
         {/* Formulário de Captura */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative">
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-sm">
+          <div>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={config?.email_placeholder || 'Seu melhor email'}
-              className="w-full bg-[#0d1622] border border-gray-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 text-white placeholder-gray-500 rounded-2xl px-5 py-4 text-center font-medium text-sm transition-all outline-none"
+              className="w-full bg-black/60 border border-gray-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40 text-white placeholder-gray-500 rounded-2xl px-5 py-4 font-medium text-sm transition-all outline-none backdrop-blur-md shadow-inner"
             />
           </div>
 
-          {/* Botão Neon Verde */}
+          {/* Botão Neon Verde Fluorescente */}
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-4 px-6 bg-emerald-500 hover:bg-emerald-400 text-black font-black rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all transform hover:scale-[1.02] active:scale-[0.98] uppercase text-sm tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 px-6 bg-[#00ff55] hover:bg-[#00e64d] text-black font-black rounded-2xl shadow-[0_0_30px_rgba(0,255,85,0.6)] transition-all transform hover:scale-[1.02] active:scale-[0.98] uppercase text-sm tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <span className="inline-flex items-center gap-2">
@@ -247,7 +260,7 @@ export default function PublicCapturePage({ slugOverride }) {
         </form>
 
         {/* Nota de Segurança e Privacidade */}
-        <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mt-6">
+        <div className="flex items-center gap-2 text-xs text-gray-400 max-w-sm drop-shadow">
           <span>🔒</span>
           <span>{config?.footer_note || 'Seus dados estão seguros. Não enviamos spam.'}</span>
         </div>

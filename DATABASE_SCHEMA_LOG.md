@@ -28,6 +28,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 22/07/2026 | Imagem de Fundo para Página de Captura | `capture_page_configs` | `bg_image_url` | `backend/add_bg_image_url_column.py` |
 | 22/07/2026 | Página de Captura Personalizável & Página de Obrigado | `capture_page_configs`, `capture_page_leads` | Tabelas completas de configuração, textos, link do WhatsApp e leads capturados | `backend/add_capture_page_tables.py` |
 | 21/07/2026 | Marcação de Urgência no Contato | `chat_conversations` | `urgent` | `backend/scripts/database/add_chat_urgent_column.py` |
 | 16/07/2026 | Índices de performance para abas de Contatos, Chat e Histórico de Disparos | `contatos_monitorados`, `chat_conversations`, `scheduled_triggers` | Índices `idx_contatos_monitorados_last_interaction`, composto `idx_chat_convo_client_status_time` e composto `idx_scheduled_triggers_perf_list` | `backend/scripts/add_performance_indexes.py` |

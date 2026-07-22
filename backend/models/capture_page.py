@@ -19,6 +19,7 @@ class CapturePageConfig(Base):
     main_description = Column(Text, default="Cadastre seu melhor email para receber o link de acesso e garantir sua vaga no intensivo.")
     email_placeholder = Column(String(150), default="Seu melhor email")
     button_text = Column(String(150), default="QUERO PARTICIPAR DO INTENSIVO!")
+    bg_image_url = Column(Text, nullable=True)
     footer_note = Column(String(250), default="Seus dados estão seguros. Não enviamos spam.")
 
     # Textos e Link da Página de Obrigado
