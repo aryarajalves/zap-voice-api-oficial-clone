@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   FiGlobe, FiSave, FiCopy, FiTrash2, FiSearch, 
-  FiCheckCircle, FiExternalLink, FiUsers, FiSettings, FiCheck
+  FiCheckCircle, FiExternalLink, FiUsers, FiSettings, FiCheck, FiUpload, FiX
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { API_URL } from '../../config';
@@ -11,6 +11,7 @@ export default function CapturePageAdmin() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [uploadingBg, setUploadingBg] = useState(false);
 
   // Config State
   const [formData, setFormData] = useState({
@@ -143,6 +144,47 @@ export default function CapturePageAdmin() {
       }
     } catch (err) {
       toast.error('Erro ao conectar com o servidor.');
+    }
+  };
+
+  const handleBgUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor, selecione um arquivo de imagem válido (PNG, JPG, WEBP).');
+      return;
+    }
+
+    try {
+      setUploadingBg(true);
+      const data = new FormData();
+      data.append('file', file);
+
+      // Usar a rota genérica de uploads protegida por X-Client-ID
+      const clientId = localStorage.getItem('active_client_id') || '1';
+      const res = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'X-Client-ID': clientId
+        },
+        body: data
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.detail || 'Erro ao realizar upload da imagem.');
+      }
+
+      const imageUrl = result.file_url || result.url;
+      setFormData(prev => ({ ...prev, bg_image_url: imageUrl }));
+      toast.success('Imagem de fundo enviada com sucesso!');
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Falha ao enviar imagem.');
+    } finally {
+      setUploadingBg(false);
     }
   };
 
@@ -368,14 +410,56 @@ export default function CapturePageAdmin() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">URL da Imagem de Fundo (Opcional)</label>
-                <input
-                  type="text"
-                  value={formData.bg_image_url}
-                  onChange={(e) => setFormData({ ...formData, bg_image_url: e.target.value })}
-                  className="w-full bg-[#060a0f] border border-gray-800 text-white text-xs rounded-xl p-3 focus:border-emerald-500 outline-none font-mono"
-                  placeholder="https://exemplo.com/imagem-matriz.jpg"
-                />
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Imagem de Fundo da Página (Upload)</label>
+                
+                {formData.bg_image_url ? (
+                  <div className="relative rounded-2xl overflow-hidden border border-emerald-500/40 bg-[#060a0f] p-3 flex items-center gap-4">
+                    <img 
+                      src={formData.bg_image_url} 
+                      alt="Fundo da Página" 
+                      className="w-20 h-14 object-cover rounded-xl border border-gray-800"
+                    />
+                    <div className="flex-1 truncate">
+                      <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                        <FiCheckCircle /> Imagem Carregada
+                      </p>
+                      <p className="text-[11px] text-gray-400 truncate font-mono">{formData.bg_image_url}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, bg_image_url: '' })}
+                      className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all"
+                      title="Remover Imagem"
+                    >
+                      <FiX />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative border-2 border-dashed border-gray-800 hover:border-emerald-500/50 rounded-2xl bg-[#060a0f] p-4 text-center transition-all">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBgUpload}
+                      disabled={uploadingBg}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+                    />
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center text-lg">
+                        {uploadingBg ? (
+                          <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <FiUpload />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-white">
+                          {uploadingBg ? 'Fazemdo Upload...' : 'Clique para selecionar uma imagem do seu computador'}
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">PNG, JPG, WEBP até 10MB</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
