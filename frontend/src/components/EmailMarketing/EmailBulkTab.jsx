@@ -1,9 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiZap, FiSend, FiTag, FiFileText, FiCheckCircle } from 'react-icons/fi';
+import { FiZap, FiSend, FiTag, FiFileText, FiCheckCircle, FiSearch, FiChevronDown } from 'react-icons/fi';
 import { API_URL } from '../../config';
 
 import { useClient } from '../../contexts/ClientContext';
+
+// Componente de Dropdown com Campo de Busca (Pesquisável em Tempo Real)
+function SearchableTemplateSelect({ templates, selectedId, onSelect }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const selectedTemplate = templates.find(t => String(t.id) === String(selectedId));
+
+  const filteredTemplates = templates.filter(t => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (t.name && t.name.toLowerCase().includes(q)) ||
+      (t.subject && t.subject.toLowerCase().includes(q))
+    );
+  });
+
+  return (
+    <div className="relative w-full">
+      {/* Botão de Seleção do Dropdown */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white font-semibold flex items-center justify-between shadow-sm focus:ring-2 focus:ring-blue-500 transition-all text-left"
+      >
+        <span className="truncate">
+          {selectedTemplate ? (
+            <>✉️ <strong className="font-bold">{selectedTemplate.name}</strong> <span className="text-xs text-gray-400 font-normal">(Assunto: {selectedTemplate.subject})</span></>
+          ) : (
+            <span className="text-gray-400 font-normal">Selecione um template...</span>
+          )}
+        </span>
+        <FiChevronDown className={`ml-2 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Painel do Dropdown com Campo de Busca em Tempo Real */}
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in">
+          {/* Campo de Texto para Pesquisa */}
+          <div className="p-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-slate-900/80 flex items-center gap-2">
+            <FiSearch className="text-gray-400 text-sm ml-1 shrink-0" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Digite o nome ou assunto do e-mail..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent text-xs text-gray-800 dark:text-white border-none focus:outline-none focus:ring-0 placeholder-gray-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-xs text-gray-400 hover:text-gray-200 px-1 font-bold"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Lista de Opções Filtradas */}
+          <div className="max-h-56 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
+            {filteredTemplates.length === 0 ? (
+              <div className="p-3 text-xs text-center text-gray-400 italic">
+                Nenhum template encontrado para "{searchQuery}"
+              </div>
+            ) : (
+              filteredTemplates.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(t.id);
+                    setIsOpen(false);
+                    setSearchQuery('');
+                  }}
+                  className={`w-full px-3 py-2.5 text-left text-xs hover:bg-blue-500/10 dark:hover:bg-blue-500/20 transition-all flex flex-col gap-0.5 ${
+                    String(t.id) === String(selectedId)
+                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold'
+                      : 'text-gray-700 dark:text-gray-200'
+                  }`}
+                >
+                  <div className="font-bold flex items-center gap-1.5">
+                    <span>✉️</span>
+                    <span>{t.name}</span>
+                  </div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 font-normal truncate">
+                    Assunto: {t.subject}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function EmailBulkTab({ onNavigateHistory }) {
   const { activeClient } = useClient();
@@ -103,7 +202,7 @@ export default function EmailBulkTab({ onNavigateHistory }) {
             />
           </div>
 
-          {/* Seleção do Template */}
+          {/* Seleção do Template com Filtro de Pesquisa Pesquisável */}
           <div>
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
               Selecione o Template de E-mail *
@@ -113,19 +212,14 @@ export default function EmailBulkTab({ onNavigateHistory }) {
                 Nenhum template cadastrado. Vá até a aba <b>Templates</b> para criar seu primeiro modelo de e-mail.
               </div>
             ) : (
-              <select
-                value={formData.template_id}
-                onChange={e => setFormData({ ...formData, template_id: parseInt(e.target.value) })}
-                className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white font-semibold"
-              >
-                {templates.map(t => (
-                  <option key={t.id} value={t.id}>
-                    ✉️ {t.name} (Assunto: {t.subject})
-                  </option>
-                ))}
-              </select>
+              <SearchableTemplateSelect
+                templates={templates}
+                selectedId={formData.template_id}
+                onSelect={(id) => setFormData(prev => ({ ...prev, template_id: id }))}
+              />
             )}
           </div>
+
 
           {/* Filtro por Etiqueta da Aba de Contatos */}
           <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-gray-100 dark:border-gray-800 space-y-2">
