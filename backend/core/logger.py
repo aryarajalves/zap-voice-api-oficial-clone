@@ -7,9 +7,17 @@ from logging.handlers import TimedRotatingFileHandler
 
 # Pasta dedicada para logs — mapeada para um volume Docker persistente
 # (/app/logs) para não perder o histórico quando os containers reiniciam.
-LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+try:
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR, exist_ok=True)
+except Exception:
+    pass
 LOG_FILE_PATH = os.path.join(LOG_DIR, "zapvoice_debug.log")
+
+
+
+
 
 def br_time_converter(*args):
     """Converte o timestamp para o fuso horário de Brasília (GMT-3)"""
@@ -75,19 +83,22 @@ def setup_logger(name: str = "zapvoice", level: str = "INFO") -> logging.Logger:
     console_handler.setFormatter(ColoredFormatter())
     logger.addHandler(console_handler)
     
-    # Handler para arquivo com rotação diária — mantém os últimos 7 dias
-    # Roda à meia-noite e apaga automaticamente arquivos com mais de 7 dias
-    file_handler = TimedRotatingFileHandler(
-        LOG_FILE_PATH,
-        when="midnight",       # Rotaciona todo dia à meia-noite
-        interval=1,
-        backupCount=7,         # Mantém apenas os últimos 7 arquivos (7 dias)
-        encoding="utf-8",
-        atTime=None,
-    )
-    file_handler.setLevel(log_level)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt='%d/%m/%y %H:%M:%S'))
-    logger.addHandler(file_handler)
+    # Handler para arquivo com rotação diária
+    try:
+        file_handler = TimedRotatingFileHandler(
+            LOG_FILE_PATH,
+            when="midnight",       # Rotaciona todo dia à meia-noite
+            interval=1,
+            backupCount=7,         # Mantém apenas os últimos 7 arquivos (7 dias)
+            encoding="utf-8",
+            atTime=None,
+        )
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt='%d/%m/%y %H:%M:%S'))
+        logger.addHandler(file_handler)
+    except Exception as err:
+        pass
+
     
     return logger
 

@@ -88,7 +88,34 @@ async def send_single_email(config, to_email: str, subject: str, body_html: str,
             logger.error(f"❌ [EMAIL-SES] Erro ao enviar via Amazon SES: {e_ses}")
             return {"success": False, "error": f"Amazon SES: {str(e_ses)}"}
 
-    # 3. SMTP CUSTOMIZADO (ou Fallback SMTP da SES)
+    # 3. ENVIO DIRETO / SENDMAIL LOCAL (SEM CREDENCIAIS SMTP)
+    elif provider in ("direct", "sendmail", "local"):
+        try:
+            domain = to_email.split("@")[-1]
+            import dns.resolver
+            try:
+                records = dns.resolver.resolve(domain, 'MX')
+                mx_record = str(records[0].exchange).rstrip('.')
+            except Exception:
+                mx_record = domain  # Fallback direto pro domínio se o DNS falhar
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = sender_header
+            msg["To"] = to_email
+            msg.attach(MIMEText(body_html, "html", "utf-8"))
+
+            # Envia diretamente na porta 25 do servidor MX de destino
+            server = smtplib.SMTP(mx_record, 25, timeout=15)
+            server.sendmail(from_email, [to_email], msg.as_string())
+            server.quit()
+            logger.info(f"📧 [EMAIL-DIRECT] E-mail enviado diretamente para {to_email} via MX {mx_record}")
+            return {"success": True, "message_id": f"direct_{to_email}"}
+        except Exception as e_direct:
+            logger.error(f"❌ [EMAIL-DIRECT] Erro no envio direto: {e_direct}")
+            return {"success": False, "error": f"Envio Direto: {str(e_direct)}"}
+
+    # 4. SMTP CUSTOMIZADO (ou Fallback SMTP da SES)
     else:
         smtp_host = config.smtp_host
         smtp_port = config.smtp_port or 587
@@ -123,3 +150,4 @@ async def send_single_email(config, to_email: str, subject: str, body_html: str,
         except Exception as e_smtp:
             logger.error(f"❌ [EMAIL-SMTP] Erro ao enviar via SMTP: {e_smtp}")
             return {"success": False, "error": f"SMTP: {str(e_smtp)}"}
+

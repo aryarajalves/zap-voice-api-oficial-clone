@@ -144,7 +144,7 @@ export default function EmailConfigTab() {
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Selecione o Provedor
             </label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, provider: 'ses' })}
@@ -155,7 +155,7 @@ export default function EmailConfigTab() {
                 }`}
               >
                 <div>
-                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2 text-sm">
                     ⚡ Amazon SES
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -174,7 +174,7 @@ export default function EmailConfigTab() {
                 }`}
               >
                 <div>
-                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2 text-sm">
                     🚀 Resend
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -193,7 +193,7 @@ export default function EmailConfigTab() {
                 }`}
               >
                 <div>
-                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2 text-sm">
                     ⚙️ SMTP Customizado
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -201,8 +201,28 @@ export default function EmailConfigTab() {
                   </p>
                 </div>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, provider: 'direct' })}
+                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                  formData.provider === 'direct'
+                    ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30'
+                    : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900/50 hover:border-gray-300'
+                }`}
+              >
+                <div>
+                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2 text-sm">
+                    ✉️ Envio Direto (Sem SMTP)
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Envio grátis pelo servidor. Pode ir para caixa de SPAM.
+                  </p>
+                </div>
+              </button>
             </div>
           </div>
+
 
           {/* Dados do Remetente */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-gray-100 dark:border-gray-800">
@@ -365,6 +385,24 @@ export default function EmailConfigTab() {
             </div>
           )}
 
+          {/* Campos Específicos: Envio Direto / Sendmail Local */}
+          {formData.provider === 'direct' && (
+            <div className="p-4 bg-purple-500/10 rounded-xl border border-purple-500/20 space-y-2">
+              <h4 className="text-sm font-bold text-purple-400 flex items-center gap-1.5">
+                <FiMail /> Envio Direto via Servidor Local (Sem SMTP)
+              </h4>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Nesta modalidade, o ZapVoice faz a entrega do e-mail conectando-se diretamente ao servidor de destino (como Gmail ou Outlook) na porta 25.
+              </p>
+              <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 mt-2">
+                <FiAlertCircle className="shrink-0 text-base" />
+                <span>
+                  <strong>Atenção:</strong> Não é necessário digitar senhas ou hosts. Porém, e-mails enviados sem registros SPF/DKIM configurados no seu domínio podem ir direto para a <strong>caixa de SPAM</strong> dos contatos.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Botões de Ação */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
             <button
@@ -388,7 +426,8 @@ export default function EmailConfigTab() {
 
       {/* Modal de Teste de E-mail */}
       {isTestModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full border border-gray-100 dark:border-white/10 shadow-2xl space-y-4">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
               <FiMail className="text-blue-500" /> Enviar E-mail de Teste

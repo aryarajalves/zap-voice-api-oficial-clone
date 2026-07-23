@@ -147,8 +147,21 @@ def test_save_email_config_resend(app_client, auth_headers):
     assert resp.json()["status"] == "success"
 
 
+def test_save_email_config_direct(app_client, auth_headers):
+    """Deve salvar configuração de Envio Direto (Sem SMTP) com sucesso."""
+    payload = {
+        "provider": "direct",
+        "from_email": "noreply@empresa.com",
+        "from_name": "Empresa Direta"
+    }
+    resp = app_client.post("/api/email/config", json=payload, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
+
+
 def test_save_email_config_smtp(app_client, auth_headers):
     """Deve salvar configuração de SMTP customizado com sucesso."""
+
     payload = {
         "provider": "smtp",
         "smtp_host": "smtp.empresa.com",
