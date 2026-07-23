@@ -33,6 +33,40 @@ async def reconcile_trigger_stats(
         "data": result
     }
 
+@router.post("/{trigger_id}/sync-dynamic-label", summary="Sincronizar contatos da etiqueta dinâmica agora")
+async def sync_dynamic_label(
+    trigger_id: int,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id, client_id=client_id).first()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo não encontrado.")
+
+    if not getattr(trigger, "is_dynamic_label", False):
+        return {"status": "ignored", "message": "Este disparo não é por etiqueta dinâmica", "total_contacts": trigger.total_contacts or 0}
+
+    from chatwoot_client import ChatwootClient
+    from services.bulk import refresh_dynamic_label_contacts
+
+    chatwoot = ChatwootClient(client_id=client_id)
+    new_contacts = await refresh_dynamic_label_contacts(trigger, chatwoot)
+    if new_contacts is not None:
+        trigger.contacts_list = new_contacts
+        trigger.total_contacts = len(new_contacts)
+        db.commit()
+        db.refresh(trigger)
+        await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger.id, "status": trigger.status, "client_id": client_id})
+
+    return {
+        "status": "success",
+        "message": f"Contatos da etiqueta atualizados ({trigger.total_contacts} contatos).",
+        "total_contacts": trigger.total_contacts or 0
+    }
+
+
 @router.post("/backfill-sent-as", summary="Preencher sent_as histórico")
 def backfill_sent_as(
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),

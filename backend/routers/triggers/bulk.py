@@ -315,10 +315,13 @@ async def schedule_bulk_send(
         private_message_delay=payload.get("private_message_delay", 5),
         private_message_concurrency=payload.get("private_message_concurrency", 1),
         chatwoot_label=payload.get("chatwoot_label"),
-        button_actions=payload.get("button_actions")
+        button_actions=payload.get("button_actions"),
+        is_dynamic_label=payload.get("is_dynamic_label", False),
+        dynamic_label_name=payload.get("dynamic_label_name")
     )
     db.add(trigger)
     db.commit()
+
 
     remove_failures_id = payload.get("remove_failures_from_trigger_id")
     if remove_failures_id:

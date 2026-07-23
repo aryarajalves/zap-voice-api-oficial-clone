@@ -17,27 +17,35 @@ export default function PublicCapturePage({ slugOverride }) {
 
   useEffect(() => {
     let activeSlug = slugOverride;
+    let thankYouMode = false;
+
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+
+    if (path.includes('/obrigado') || hash.includes('/obrigado')) {
+      thankYouMode = true;
+      setIsThankYou(true);
+    }
+
     if (!activeSlug) {
-      const hash = window.location.hash; // e.g. #/p/masterclass or #/p/masterclass/obrigado
-      if (hash.startsWith('#/p/')) {
-        const parts = hash.replace('#/p/', '').split('/');
-        activeSlug = parts[0];
-        if (parts[1] === 'obrigado') {
-          setIsThankYou(true);
-        }
+      if (path.length > 1 && !path.startsWith('/p/')) {
+        activeSlug = path.replace('/', '').split('/')[0];
+      } else if (hash.startsWith('#/')) {
+        const cleanHash = hash.replace('#/p/', '').replace('#/', '');
+        activeSlug = cleanHash.split('/')[0];
       }
     }
 
     if (activeSlug) {
       setSlug(activeSlug);
-      fetchPublicConfig(activeSlug);
+      fetchPublicConfig(activeSlug, thankYouMode);
     } else {
       setLoading(false);
       setError('Página não encontrada.');
     }
   }, [slugOverride]);
 
-  const fetchPublicConfig = async (targetSlug) => {
+  const fetchPublicConfig = async (targetSlug, thankYouMode = false) => {
     try {
       setLoading(true);
       setError('');
@@ -47,8 +55,14 @@ export default function PublicCapturePage({ slugOverride }) {
       }
       const data = await res.json();
       setConfig(data);
-      if (data.main_title) {
+
+      // Definir título da aba do navegador dinamicamente
+      if (thankYouMode && data.thank_you_title) {
+        document.title = data.thank_you_title;
+      } else if (data.main_title) {
         document.title = data.main_title;
+      } else if (data.headline) {
+        document.title = data.headline;
       }
     } catch (err) {
       console.error(err);
@@ -81,7 +95,11 @@ export default function PublicCapturePage({ slugOverride }) {
 
       setThankYouData(data);
       setIsThankYou(true);
-      window.location.hash = `#/p/${slug}/obrigado`;
+      if (window.location.pathname.length > 1) {
+        window.history.pushState({}, '', `/${slug}/obrigado`);
+      } else {
+        window.location.hash = `#/${slug}/obrigado`;
+      }
     } catch (err) {
       console.error(err);
       setError(err.message || 'Erro ao processar. Tente novamente.');
@@ -121,17 +139,9 @@ export default function PublicCapturePage({ slugOverride }) {
     const btnText = thankYouData?.whatsapp_button_text || config?.whatsapp_button_text || "ENTRAR NO GRUPO DO WHATSAPP";
 
     return (
-      <div className="min-h-screen bg-[#060a0f] text-white flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
-        {/* Imagem de Fundo customizada */}
-        {config?.bg_image_url && (
-          <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0 opacity-40"
-            style={{ backgroundImage: `url(${config.bg_image_url})` }}
-          />
-        )}
-
-        {/* Glow de fundo */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="min-h-screen bg-[#0b1017] text-white flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
+        {/* Glow suave e discreto no centro */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/5 blur-[140px] rounded-full pointer-events-none" />
 
         <div className="max-w-md w-full bg-[#091119]/90 backdrop-blur-2xl border border-emerald-500/30 p-8 rounded-3xl shadow-[0_0_50px_rgba(16,185,129,0.15)] text-center relative z-10">
           {/* Ícone Check Animado */}
@@ -169,14 +179,14 @@ export default function PublicCapturePage({ slugOverride }) {
   // Visual Principal da Página de Captura (Alinhado à esquerda com imagem de fundo Matrix/Neon)
   return (
     <div className="min-h-screen bg-[#060a0f] text-white flex flex-col justify-center p-6 sm:p-12 font-sans relative overflow-hidden">
-      {/* Imagem de Fundo customizada ou Padrão escuro */}
+      {/* Imagem de Fundo customizada cobrindo 100% da tela */}
       {config?.bg_image_url && (
         <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
+          className="fixed inset-0 w-full h-full bg-cover bg-center bg-no-repeat z-0"
           style={{ backgroundImage: `url(${config.bg_image_url})` }}
         >
-          {/* Overlay suave para garantir leitura dos textos sem cobrir a imagem */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#060a0f]/90 via-[#060a0f]/60 to-[#060a0f]/30" />
+          {/* Overlay em gradiente escuro profissional para equilibrar o contraste e não estourar a imagem */}
+          <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-gray-950/70 to-gray-950/40" />
         </div>
       )}
 

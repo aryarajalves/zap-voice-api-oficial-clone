@@ -39,7 +39,11 @@ function App() {
   const isHelp = currentPath.startsWith('/help/');
   const isCheckout = currentPath.startsWith('/c/');
   const isCapturePath = currentPath.startsWith('/p/');
-  const isCaptureHash = currentHash.startsWith('#/p/');
+  const isCaptureHash = currentHash.startsWith('#/p/') || (currentHash.startsWith('#/') && !currentHash.startsWith('#/login') && !currentHash.startsWith('#/dashboard') && !currentHash.startsWith('#/funnels') && !currentHash.startsWith('#/bulk') && !currentHash.startsWith('#/schedules') && !currentHash.startsWith('#/integrations') && !currentHash.startsWith('#/settings') && !currentHash.startsWith('#/users') && !currentHash.startsWith('#/logs') && !currentHash.startsWith('#/financial') && !currentHash.startsWith('#/checkout-presell') && !currentHash.startsWith('#/capture-page') && !currentHash.startsWith('#/blocked') && !currentHash.startsWith('#/hot-leads'));
+
+  // Rota limpa via Pathname (ex: /masterclass ou /masterclass/obrigado)
+  const isReservedPath = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads'].includes(currentPath);
+  const isCleanPathCapture = !isReservedPath && !isInvite && !isHelp && !isCheckout && !isCapturePath && currentPath.length > 1;
 
   if (isInvite) {
     const token = currentPath.replace('/invite/', '').split('/')[0];
@@ -73,12 +77,16 @@ function App() {
     );
   }
 
-  if (isCapturePath || isCaptureHash) {
+  if (isCapturePath || isCaptureHash || isCleanPathCapture) {
     let slug = '';
-    if (isCapturePath) {
+    if (isCleanPathCapture) {
+      slug = currentPath.replace('/', '').split('/')[0].split('?')[0];
+    } else if (isCapturePath) {
       slug = currentPath.replace('/p/', '').split('/')[0].split('?')[0];
-    } else {
+    } else if (currentHash.startsWith('#/p/')) {
       slug = currentHash.replace('#/p/', '').split('/')[0].split('?')[0];
+    } else {
+      slug = currentHash.replace('#/', '').split('/')[0].split('?')[0];
     }
 
     return (

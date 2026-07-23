@@ -12,8 +12,14 @@ const SchedulingSection = ({
     setRecurrenceTime,
     recurrenceDayOfMonth,
     setRecurrenceDayOfMonth,
-    scheduledTime
+    scheduledTime,
+    isDynamicLabel,
+    setIsDynamicLabel,
+    selectionMetadata,
+    selectedChatwootLabels
 }) => {
+
+
     return (
         <div className="space-y-6">
             <div className={`p-6 rounded-[2.5rem] border-2 transition-all shadow-lg group/recurrence ${isRecurring ? 'bg-blue-500/5 border-blue-500/30' : 'bg-slate-800/40 border-white/5 hover:border-white/10'}`}>
@@ -138,7 +144,7 @@ const SchedulingSection = ({
             </div>
 
             {!isRecurring && (
-                <div className="px-2">
+                <div className="px-2 space-y-4">
                     <div className="p-6 bg-slate-800/40 border border-white/5 rounded-[2.5rem] group/input focus-within:border-emerald-500/50 transition-all shadow-lg">
                         <label className="block text-[9px] font-black text-slate-400 uppercase mb-4 tracking-[0.2em] group-hover/input:text-slate-200 transition-colors flex items-center gap-2">
                             <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
@@ -146,20 +152,68 @@ const SchedulingSection = ({
                             </div>
                             Agendamento para o Futuro
                         </label>
-                        <div className="bg-black/40 p-4 rounded-2xl border border-white/5 shadow-inner">
+                        <div className="bg-black/40 p-4 rounded-2xl border border-white/5 shadow-inner space-y-3">
                             <input
                                 type="datetime-local"
-                                className="w-full bg-transparent outline-none font-bold text-lg text-white placeholder:text-slate-800 cursor-pointer"
+                                className="w-full bg-transparent outline-none font-bold text-base sm:text-lg text-white placeholder:text-slate-800 cursor-pointer"
                                 value={scheduledTime}
                                 onChange={(e) => setScheduledTime(e.target.value)}
                                 min={new Date().toISOString().slice(0, 16)}
                             />
+                            {scheduledTime && (
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduledTime('')}
+                                    className="w-full py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-950/20 active:scale-98"
+                                    title="Remover agendamento para disparar imediatamente"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                    Remover Agendamento (Disparar Agora)
+                                </button>
+                            )}
                         </div>
+
+
+                        {!scheduledTime && (
+                            <p className="mt-2 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5 px-1">
+                                <span>⚡</span> Disparo Imediato: O envio começará assim que você clicar em "Iniciar Disparo em Massa".
+                            </p>
+                        )}
+
+
+                        {(selectionMetadata?.mode === 'tag' || selectionMetadata?.tag || (selectedChatwootLabels && selectedChatwootLabels.length > 0)) && (
+                            <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-between transition-all shadow-inner">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black text-white">Atualizar contatos da etiqueta no disparo 🔄</p>
+                                        <p className="text-[10px] font-medium text-slate-300 leading-relaxed">
+                                            Re-consulta o Chatwoot no momento exato do envio para incluir novos leads que entrarem na etiqueta
+                                        </p>
+                                    </div>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={isDynamicLabel !== false}
+                                    onChange={(e) => setIsDynamicLabel && setIsDynamicLabel(e.target.checked)}
+                                    className="w-5 h-5 accent-emerald-500 rounded cursor-pointer flex-shrink-0"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
+
             )}
         </div>
     );
 };
+
 
 export default SchedulingSection;

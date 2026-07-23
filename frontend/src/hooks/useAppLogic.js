@@ -110,7 +110,11 @@ export function useAppLogic() {
 
     useEffect(() => {
         if (appBranding.name) {
-            document.title = appBranding.name;
+            // Não sobrescrever o título da aba se estivermos em uma rota de página pública
+            const isPublicPage = window.location.pathname.startsWith('/p/') || window.location.hash.startsWith('#/p/') || (window.location.pathname.length > 1 && !['/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads'].includes(window.location.pathname));
+            if (!isPublicPage) {
+                document.title = appBranding.name;
+            }
             try {
                 localStorage.setItem('appBranding', JSON.stringify(appBranding));
             } catch (e) {

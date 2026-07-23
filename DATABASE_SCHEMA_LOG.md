@@ -147,6 +147,41 @@ docker exec zapvoice_app python /app/add_webhook_retry_columns.py
 
 **Como aplicar em produção:**
 ```bash
-docker exec zapvoice_app python /app/scripts/database/add_chat_urgent_column.py
+
+## 📋 Migração: Agendamento Dinâmico de Etiquetas (2026-07-23)
+
+**Tabela afetada:** `scheduled_triggers`
+
+**Script:** `backend/scripts/add_dynamic_label_columns.py`
+
+**Novas colunas:**
+
+| Coluna | Tipo | Default | Descrição |
+|--------|------|---------|-----------|
+| `is_dynamic_label` | `BOOLEAN` | `FALSE` | Indica se o agendamento busca contatos atualizados da etiqueta no momento do disparo |
+| `dynamic_label_name` | `VARCHAR` | `NULL` | Nome da etiqueta a ser re-consultada no Chatwoot no momento do disparo |
+
+**Contexto:** Permite que agendamentos por etiquetas re-consultem o Chatwoot no horário do envio e incluam automaticamente novos leads que entraram na etiqueta após a criação do agendamento.
+
+**Como aplicar em produção:**
+```bash
+| 23/07/2026 | Agendamento Dinâmico de Etiquetas | `scheduled_triggers` | `is_dynamic_label`, `dynamic_label_name` | `backend/scripts/add_dynamic_label_columns.py` |
+| 23/07/2026 | Módulo de E-mail Marketing (SES, Resend, SMTP) | `email_configs`, `email_templates`, `email_dispatches` | Tabelas completas de configuração de e-mail, modelos e disparos em massa | `backend/scripts/add_email_marketing_tables.py` |
+
+---
+
+## 📋 Migração: Módulo de E-mail Marketing (2026-07-23)
+
+**Tabelas criadas:** `email_configs`, `email_templates`, `email_dispatches`
+
+**Script:** `backend/scripts/add_email_marketing_tables.py`
+
+**Contexto:** Adição do módulo de E-mail Marketing integrado (Amazon SES, Resend, SMTP) com filtro por etiquetas da Aba de Contatos.
+
+**Como aplicar em produção:**
+```bash
+docker exec zapvoice_app python /app/scripts/add_email_marketing_tables.py
 ```
+
+
 

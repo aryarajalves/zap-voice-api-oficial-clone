@@ -8,12 +8,23 @@
       (function() {
         try {
           const pathname = window.location.pathname;
+          const hash = window.location.hash;
+          
           if (pathname.startsWith('/c/')) {
             const slug = pathname.replace('/c/', '').split('/')[0].split('?')[0];
             const cachedTitle = sessionStorage.getItem('checkout_title_' + slug);
             document.write('<title>' + (cachedTitle || 'Aplicação Mentoria') + '</title>');
             return;
           }
+
+          // Se for rota de captura pública (ex: /captulra ou /p/slug ou #/p/), não escrever título fixo ZapVoice
+          const isReserved = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads'].includes(pathname);
+          const isPublicCapture = pathname.startsWith('/p/') || hash.startsWith('#/p/') || (!isReserved && pathname.length > 1);
+          if (isPublicCapture) {
+            document.write('<title>Carregando...</title>');
+            return;
+          }
+
           const savedBranding = localStorage.getItem('appBranding');
           if (savedBranding) {
             const branding = JSON.parse(savedBranding);

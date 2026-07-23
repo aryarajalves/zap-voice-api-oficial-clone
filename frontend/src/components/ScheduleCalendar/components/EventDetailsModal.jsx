@@ -1,8 +1,9 @@
 import React from 'react';
-import { FiUsers, FiZap, FiClock, FiTrash2, FiEdit2, FiInfo } from 'react-icons/fi';
+import { FiUsers, FiZap, FiClock, FiTrash2, FiEdit2, FiInfo, FiRefreshCw } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../../AuthContext';
 import { API_URL } from '../../../config';
+
 
 const EventDetailsModal = ({
     selectedEvent,
@@ -97,6 +98,17 @@ const EventDetailsModal = ({
                                 </div>
                             </div>
 
+                            {selectedEvent.is_dynamic_label && (
+                                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/50 rounded-lg shadow-sm">
+                                    <label className="block text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 mb-1 tracking-wider italic font-black flex items-center gap-1">
+                                        <FiRefreshCw size={10} /> Agendamento Dinâmico por Etiqueta 🔄
+                                    </label>
+                                    <p className="text-xs text-emerald-700 dark:text-emerald-300 italic">
+                                        Novos leads da etiqueta &quot;{selectedEvent.dynamic_label_name || 'Chatwoot'}&quot; serão incluídos automaticamente no disparo.
+                                    </p>
+                                </div>
+                            )}
+
                             {selectedEvent.private_message && (
                                 <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/50 rounded-lg shadow-sm">
                                     <label className="block text-[10px] font-bold uppercase text-indigo-500 dark:text-indigo-400 mb-1 tracking-wider italic font-black flex items-center gap-1">
@@ -107,6 +119,7 @@ const EventDetailsModal = ({
                                     </p>
                                 </div>
                             )}
+
 
                             <div className="flex gap-2 pt-2">
                                 {['pending', 'queued', 'Queued'].includes(selectedEvent.status) && (

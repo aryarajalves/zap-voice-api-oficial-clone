@@ -126,7 +126,17 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
     - **Resposta**: Ambos. O sistema permitirá selecionar a unidade (minutos ou horas) na interface.
 - [x] [NOVO] Caso a execução seja considerada "atrasada" e siga para o caminho `late`, mas o usuário não tenha conectado nenhum nó a esta porta, o fluxo deve ser encerrado ou seguir pelo caminho `default` como fallback?
     - **Resposta**: Deve ser encerrado (o fluxo de automação é finalizado se a porta `late` não possuir nenhuma conexão).
+- [x] [NOVO] Ao agendar um disparo em massa utilizando Etiquetas, o sistema deve permitir uma opção para buscar dinamicamente os contatos atualizados da etiqueta no momento exato do disparo (capturando novos leads que entraram na etiqueta após a criação do agendamento)?
+    - **Resposta**: Sim. Ao marcar essa opção, no momento da execução o worker re-consulta o Chatwoot e inclui os novos contatos. No Histórico, o número total (🚀 Total) refletirá a contagem final atualizada no momento do envio. Na aba de Agendamentos, será exibido o indicador `🔄 Dinâmico (Etiqueta)` e a quantidade estimada/atualizada.
+
 - [ ] [NOVO] Ao enviar uma mensagem manual ou por template a partir do Chat Local (ZapVoice), o sistema deve aplicar alguma etiqueta automaticamente ao contato? Se sim, qual etiqueta e sob quais condições?
+- [x] [NOVO] **E-mail Marketing (Provedor):** O envio de e-mails deve suportar SMTP próprio configurado por cliente ou suporte a APIs nativas (Resend, SendGrid, Amazon SES)?
+    - **Resposta**: Suportar **Amazon SES** (Access Key + Secret Key), **Resend** (API Key) e **SMTP Customizado**.
+- [x] [NOVO] **E-mail Marketing (Editor):** O editor inicial de templates de e-mail deve ser Rich Text / HTML ou Drag-and-Drop visual?
+    - **Resposta**: Editor de Texto Versão 01 (Rich Text + HTML + Variáveis dinâmicas).
+- [x] [NOVO] **E-mail Marketing (Rastreamento):** Devemos incluir rastreamento de aberturas (Pixel transparent 1px) e cliques em links nos e-mails disparados?
+    - **Resposta**: Não precisa nesta fase inicial. Focar na entrega rápida e histórico simples.
+
 
 ## 📋 Histórico de Decisões
 As perguntas iniciais sobre regras de negócio foram todas respondidas e integradas às seções acima. O sistema segue o modelo de isolamento total entre clientes e automação robusta com retentativas configuradas.
@@ -134,5 +144,4 @@ As perguntas iniciais sobre regras de negócio foram todas respondidas e integra
 ---
 > 📋 **Documentação Atualizada:** Todas as pendências do BUSINESS_RULES.md foram sanadas.
 
-> 📋 **Perguntas novas adicionadas ao BUSINESS_RULES.md:** Herança de etiquetas do Chatwoot no funil filho e comportamento em caso de falha de envio do template pai.
-
+> 📋 **Perguntas novas adicionadas ao BUSINESS_RULES.md:** Suporte a E-mail Marketing (Provedor, Editor de E-mail e Rastreamento de Aberturas/Cliques).

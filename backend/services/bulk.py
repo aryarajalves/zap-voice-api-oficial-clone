@@ -37,26 +37,112 @@ def translate_meta_error(reason: str) -> str:
         return "(#80007) Limite de requisições excedido. Aumente o delay entre os disparos."
     return reason
 
+async def refresh_dynamic_label_contacts(init_trig, db = None, chatwoot = None) -> list:
+    """
+    Se o trigger estiver configurado como is_dynamic_label=True, busca a lista
+    de contatos mais recente da tabela de Contatos (WebhookLead - Aba de Contatos)
+    no banco de dados local para a etiqueta especificada (ex: 'aryaraj'), com fallback para o Chatwoot.
+    """
+    if not getattr(init_trig, "is_dynamic_label", False):
+        return None
+
+    label_name = getattr(init_trig, "dynamic_label_name", None)
+    if not label_name and init_trig.chatwoot_label:
+        if isinstance(init_trig.chatwoot_label, list) and len(init_trig.chatwoot_label) > 0:
+            label_name = init_trig.chatwoot_label[0]
+        elif isinstance(init_trig.chatwoot_label, str):
+            label_name = init_trig.chatwoot_label
+
+    if not label_name:
+        return None
+
+    clean_label = label_name.strip()
+    new_contacts = []
+    seen_phones = set()
+
+    # 1. Buscar primariamente na tabela de Contatos local (WebhookLead - Aba de Contatos)
+    if db is not None:
+        try:
+            from models import WebhookLead
+            from sqlalchemy import func
+
+            leads = db.query(WebhookLead).filter(
+                WebhookLead.client_id == init_trig.client_id,
+                func.concat(',', func.replace(func.coalesce(WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{clean_label},%")
+            ).all()
+
+            for l in leads:
+                if l.phone:
+                    phone_digits = "".join(filter(str.isdigit, str(l.phone)))
+                    if len(phone_digits) >= 8 and phone_digits not in seen_phones:
+                        seen_phones.add(phone_digits)
+                        new_contacts.append({
+                            "phone": phone_digits,
+                            "name": l.name or "",
+                            "email": l.email or ""
+                        })
+            if new_contacts:
+                logger.info(f"🔄 [DYNAMIC LABEL - ABA CONTATOS] Encontrados {len(new_contacts)} contatos locais com a etiqueta '{clean_label}' no trigger {init_trig.id}")
+        except Exception as e_local:
+            logger.error(f"⚠️ Erro ao consultar a Aba de Contatos para a etiqueta '{clean_label}': {e_local}")
+
+    # 2. Fallback / Suplemento Chatwoot se ativado e não encontrou no banco local
+    if not new_contacts and chatwoot is not None:
+        try:
+            cw_contacts = await chatwoot.get_contacts_by_label(clean_label)
+            if cw_contacts and isinstance(cw_contacts, list):
+                for c in cw_contacts:
+                    phone_raw = c.get("phone_number") or c.get("phone") or ""
+                    phone_digits = "".join(filter(str.isdigit, str(phone_raw)))
+                    if len(phone_digits) >= 8 and phone_digits not in seen_phones:
+                        seen_phones.add(phone_digits)
+                        new_contacts.append({
+                            "phone": phone_digits,
+                            "name": c.get("name") or "",
+                            "email": c.get("email") or ""
+                        })
+                if new_contacts:
+                    logger.info(f"🔄 [DYNAMIC LABEL - CHATWOOT] Encontrados {len(new_contacts)} contatos no Chatwoot com a etiqueta '{clean_label}'")
+        except Exception as e_cw:
+            logger.error(f"⚠️ Erro ao consultar Chatwoot para a etiqueta dinâmica '{clean_label}': {e_cw}")
+
+    return new_contacts if new_contacts else None
+
+async def sync_queued_dynamic_triggers(db, client_id: int):
+    """
+    Sincroniza os contatos de todos os disparos com is_dynamic_label=True no status 'queued'
+    para o client_id informado.
+    """
+    try:
+        queued_dynamic = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.client_id == client_id,
+            models.ScheduledTrigger.status == 'queued',
+            models.ScheduledTrigger.is_dynamic_label == True
+        ).all()
+
+        if not queued_dynamic:
+            return
+
+        from chatwoot_client import ChatwootClient
+        chatwoot = ChatwootClient(client_id=client_id)
+        changed = False
+
+        for trig in queued_dynamic:
+            new_contacts = await refresh_dynamic_label_contacts(trig, db=db, chatwoot=chatwoot)
+            if new_contacts is not None:
+                trig.contacts_list = new_contacts
+                trig.total_contacts = len(new_contacts)
+                changed = True
+
+        if changed:
+            db.commit()
+    except Exception as e:
+        logger.error(f"⚠️ Erro ao sincronizar contatos de disparos dinâmicos em fila: {e}")
+
 async def process_bulk_send(trigger_id: int, template_name: str, contacts: list, delay: int, concurrency: int, language: str = 'pt_BR', components: list = None, direct_message: str = None, direct_message_params: dict = None):
+
     logger.info(f"Starting BULK SEND {trigger_id} | Contacts: {len(contacts or [])} | Delay: {delay}s |  Concurrency: {concurrency} | Lang: {language} | DM: {bool(direct_message)}")
     
-    if not contacts:
-        db = SessionLocal()
-        try:
-            db.query(models.ScheduledTrigger).filter_by(id=trigger_id).update({
-                "status": "completed", "total_sent": 0, "total_failed": 0
-            })
-            db.commit()
-        finally:
-            db.close()
-        return
-
-    total = len(contacts)
-    sent_count = 0
-    failed_count = 0
-    concurrency = max(1, int(concurrency or 1))
-    delay = max(0, int(delay or 5))
-
     # Initialize tracking and client
     db_init = SessionLocal()
     try:
@@ -65,6 +151,21 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
              return logger.error(f"ScheduledTrigger {trigger_id} not found")
              
         chatwoot = ChatwootClient(client_id=init_trig.client_id)
+
+        # Se for um agendamento dinâmico por etiqueta, recarrega os contatos atualizados da Aba de Contatos (WebhookLead)
+        updated_dynamic_contacts = await refresh_dynamic_label_contacts(init_trig, db=db_init, chatwoot=chatwoot)
+        if updated_dynamic_contacts is not None:
+            contacts = updated_dynamic_contacts
+
+
+        if not contacts:
+            init_trig.status = "completed"
+            init_trig.total_sent = 0
+            init_trig.total_failed = 0
+            db_init.commit()
+            return
+
+        total = len(contacts)
         all_phones = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or '')) for c in contacts]
         
         init_trig.contacts_list = contacts
@@ -89,6 +190,7 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         db_init.commit()
     finally:
         db_init.close()
+
 
     # Pre-fetch template and interaction data
     template_body_cache = None

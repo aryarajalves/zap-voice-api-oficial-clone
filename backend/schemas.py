@@ -163,13 +163,17 @@ class ScheduledTrigger(ScheduledTriggerBase):
     chatwoot_contact_id: Optional[int] = Field(None, description="ID do contato no Chatwoot")
     chatwoot_account_id: Optional[int] = Field(None, description="ID da conta no Chatwoot")
     chatwoot_inbox_id: Optional[int] = Field(None, description="ID do inbox no Chatwoot")
+    is_dynamic_label: Optional[bool] = Field(False, description="Indica se o agendamento re-consulta contatos da etiqueta no momento do disparo")
+    dynamic_label_name: Optional[str] = Field(None, description="Nome da etiqueta a ser re-consultada no disparo")
 
-    @field_validator('is_pinned', mode='before')
+
+    @field_validator('is_pinned', 'is_dynamic_label', mode='before')
     @classmethod
-    def parse_is_pinned(cls, v):
+    def parse_boolean_fields(cls, v):
         if v is None:
             return False
         return bool(v)
+
 
     @field_validator('button_actions', mode='before')
     @classmethod

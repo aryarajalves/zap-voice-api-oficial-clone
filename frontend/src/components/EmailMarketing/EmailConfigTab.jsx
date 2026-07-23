@@ -1,0 +1,433 @@
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
+import { FiSave, FiSend, FiShield, FiCheckCircle, FiAlertCircle, FiKey, FiMail } from 'react-icons/fi';
+import { API_URL } from '../../config';
+
+import { useClient } from '../../contexts/ClientContext';
+
+export default function EmailConfigTab() {
+  const { activeClient } = useClient();
+  const [loading, setLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+
+  const [formData, setFormData] = useState({
+    provider: 'ses',
+    aws_access_key_id: '',
+    aws_secret_access_key: '',
+    aws_region: 'us-east-1',
+    resend_api_key: '',
+    smtp_host: '',
+    smtp_port: 587,
+    smtp_user: '',
+    smtp_password: '',
+    smtp_encryption: 'tls',
+    from_email: '',
+    from_name: 'ZapVoice'
+  });
+
+  const [isConfigured, setIsConfigured] = useState(false);
+
+  const getHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'X-Client-ID': activeClient?.id ? String(activeClient.id) : ''
+    };
+  };
+
+  useEffect(() => {
+    fetchConfig();
+  }, [activeClient]);
+
+  const fetchConfig = async () => {
+    if (!activeClient) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/email/config`, { headers: getHeaders() });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.configured && data.config) {
+          setIsConfigured(true);
+          setFormData(prev => ({
+            ...prev,
+            ...data.config,
+            aws_secret_access_key: '', // Não expor segredo
+            smtp_password: ''
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao carregar configuração de e-mail:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!formData.from_email) {
+      return toast.error("Por favor, preencha o E-mail de Remetente.");
+    }
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/email/config`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(formData)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Erro ao salvar configuração.");
+      }
+      toast.success("Configuração de e-mail salva com sucesso!");
+      setIsConfigured(true);
+    } catch (err) {
+      toast.error(err.message || "Erro ao salvar configuração.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!testEmail || !testEmail.includes('@')) {
+      return toast.error("Digite um e-mail de destino válido.");
+    }
+    try {
+      setTestLoading(true);
+      const res = await fetch(`${API_URL}/email/test`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ to_email: testEmail })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Erro ao enviar e-mail de teste.");
+      }
+      toast.success(data.message || "E-mail de teste enviado com sucesso!");
+      setIsTestModalOpen(false);
+      setTestEmail('');
+    } catch (err) {
+      toast.error(err.message || "Erro ao enviar e-mail de teste.");
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      <div className="bg-white dark:bg-slate-800/80 backdrop-blur-md p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-lg">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+              <FiShield className="text-blue-500" /> Provedor de Envio de E-mail
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Escolha e configure o serviço responsável por entregar seus e-mails marketing.
+            </p>
+          </div>
+          {isConfigured && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-xs font-semibold rounded-full">
+              <FiCheckCircle /> Ativo & Configurado
+            </span>
+          )}
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-6">
+          {/* Seletor de Provedor */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Selecione o Provedor
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, provider: 'ses' })}
+                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                  formData.provider === 'ses'
+                    ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30'
+                    : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900/50 hover:border-gray-300'
+                }`}
+              >
+                <div>
+                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    ⚡ Amazon SES
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Custo ultra baixo ($0.10 / 1.000 e-mails) e alta entregabilidade.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, provider: 'resend' })}
+                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                  formData.provider === 'resend'
+                    ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30'
+                    : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900/50 hover:border-gray-300'
+                }`}
+              >
+                <div>
+                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    🚀 Resend
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Configuração em 30 segundos usando apenas 1 API Key.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, provider: 'smtp' })}
+                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                  formData.provider === 'smtp'
+                    ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30'
+                    : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900/50 hover:border-gray-300'
+                }`}
+              >
+                <div>
+                  <div className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    ⚙️ SMTP Customizado
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Qualquer servidor próprio (Host, Porta, Usuário e Senha).
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Dados do Remetente */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-gray-100 dark:border-gray-800">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                E-mail do Remetente *
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="contato@seu-dominio.com.br"
+                value={formData.from_email}
+                onChange={e => setFormData({ ...formData, from_email: e.target.value })}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                Nome do Remetente
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: ZapVoice Equipe"
+                value={formData.from_name}
+                onChange={e => setFormData({ ...formData, from_name: e.target.value })}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* Campos Específicos: AMAZON SES */}
+          {formData.provider === 'ses' && (
+            <div className="space-y-4 p-4 bg-blue-500/5 rounded-xl border border-blue-500/20">
+              <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                <FiKey /> Configuração Amazon SES (AWS)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    AWS Access Key ID *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="AKIAIOSFODNN7EXAMPLE"
+                    value={formData.aws_access_key_id}
+                    onChange={e => setFormData({ ...formData, aws_access_key_id: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    AWS Secret Access Key {formData.has_aws_secret ? '(Mantida)' : '*'}
+                  </label>
+                  <input
+                    type="password"
+                    placeholder={formData.has_aws_secret ? '••••••••••••••••' : 'Digite a Secret Key'}
+                    value={formData.aws_secret_access_key}
+                    onChange={e => setFormData({ ...formData, aws_secret_access_key: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Região AWS (Default: us-east-1)
+                </label>
+                <select
+                  value={formData.aws_region}
+                  onChange={e => setFormData({ ...formData, aws_region: e.target.value })}
+                  className="w-full md:w-1/2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white"
+                >
+                  <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+                  <option value="us-east-2">US East (Ohio) - us-east-2</option>
+                  <option value="us-west-2">US West (Oregon) - us-west-2</option>
+                  <option value="sa-east-1">South America (São Paulo) - sa-east-1</option>
+                  <option value="eu-west-1">Europe (Ireland) - eu-west-1</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Campos Específicos: RESEND */}
+          {formData.provider === 'resend' && (
+            <div className="space-y-4 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
+              <h4 className="text-sm font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                <FiKey /> Configuração Resend API
+              </h4>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Resend API Key *
+                </label>
+                <input
+                  type="password"
+                  placeholder="re_123456789..."
+                  value={formData.resend_api_key}
+                  onChange={e => setFormData({ ...formData, resend_api_key: e.target.value })}
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Campos Específicos: SMTP */}
+          {formData.provider === 'smtp' && (
+            <div className="space-y-4 p-4 bg-slate-500/5 rounded-xl border border-slate-500/20">
+              <h4 className="text-sm font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <FiKey /> Configuração Servidor SMTP
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Servidor SMTP Host *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="smtp.seu-servidor.com"
+                    value={formData.smtp_host}
+                    onChange={e => setFormData({ ...formData, smtp_host: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Porta (587 / 465)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.smtp_port}
+                    onChange={e => setFormData({ ...formData, smtp_port: parseInt(e.target.value) || 587 })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white font-mono"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Usuário SMTP
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="seu_usuario"
+                    value={formData.smtp_user}
+                    onChange={e => setFormData({ ...formData, smtp_user: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Senha SMTP {formData.has_smtp_password ? '(Mantida)' : ''}
+                  </label>
+                  <input
+                    type="password"
+                    placeholder={formData.has_smtp_password ? '••••••••' : 'Digite a senha'}
+                    value={formData.smtp_password}
+                    onChange={e => setFormData({ ...formData, smtp_password: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-800 dark:text-white font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Botões de Ação */}
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={() => setIsTestModalOpen(true)}
+              className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-xl text-sm transition-all flex items-center gap-2"
+            >
+              <FiSend /> Testar Envio de E-mail
+            </button>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 disabled:opacity-50"
+            >
+              <FiSave /> {loading ? 'Salvando...' : 'Salvar Configuração'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Modal de Teste de E-mail */}
+      {isTestModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full border border-gray-100 dark:border-white/10 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+              <FiMail className="text-blue-500" /> Enviar E-mail de Teste
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Digite o e-mail que receberá a mensagem de teste para validar se o provedor está funcionando.
+            </p>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                E-mail de Destino
+              </label>
+              <input
+                type="email"
+                placeholder="seuemail@gmail.com"
+                value={testEmail}
+                onChange={e => setTestEmail(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setIsTestModalOpen(false)}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={testLoading}
+                onClick={handleTestEmail}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 disabled:opacity-50"
+              >
+                {testLoading ? 'Enviando...' : 'Enviar Teste'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

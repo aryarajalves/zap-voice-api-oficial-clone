@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram, FiHelpCircle, FiTerminal, FiMessageSquare } from 'react-icons/fi';
+import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram, FiHelpCircle, FiTerminal, FiMessageSquare, FiMail } from 'react-icons/fi';
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
@@ -47,6 +47,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
     const menuItems = [
         // Campanhas
         { id: 'bulk_sender', label: 'Disparo em Massa', icon: FiHome, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
+        { id: 'email_marketing', label: 'E-mail Marketing', icon: FiMail, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
         { id: 'recurring_schedules', label: 'Disparo Recorrente Criado', icon: FiClock, roles: ['super_admin', 'admin', 'premium'], category: 'campanhas' },
         { id: 'schedules', label: 'Agenda de Disparos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
         { id: 'history', label: 'Histórico', icon: FiClock, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },

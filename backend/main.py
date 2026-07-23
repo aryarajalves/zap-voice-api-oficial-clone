@@ -285,6 +285,9 @@ from routers import chat_labels
 app.include_router(chat_labels.router, prefix="/api", tags=["Chat Labels"])
 app.include_router(api_keys.router, prefix="/api")
 app.include_router(reminders.router, prefix="/api")
+from routers import email_marketing
+app.include_router(email_marketing.router, prefix="/api/email", tags=["Email Marketing"])
+
 
 # Router público para atualização de campos de contatos via API Key
 from routers.contacts_public import router as contacts_public_router

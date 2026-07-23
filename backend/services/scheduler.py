@@ -351,7 +351,7 @@ async def process_recurring_triggers(db, now_utc):
             final_contacts = [c for c in rt.contacts_list if c.get('phone') not in exclusions]
             
         if rt.tag:
-            logger.info(f"🔍 Filtrando contatos da etiqueta no banco local pela tag: {rt.tag}")
+            logger.info(f"🔍 Buscando contatos da etiqueta '{rt.tag}' na Aba de Contatos (WebhookLead) para a recorrência {rt.id}...")
             tag_contacts = []
             try:
                 from sqlalchemy import or_, func
@@ -364,17 +364,33 @@ async def process_recurring_triggers(db, now_utc):
                             for t in tags_list
                         ))
                     ).all()
-                    tag_contacts = [{"phone": l.phone, "name": l.name} for l in leads]
-                    logger.info(f"📦 Banco local retornou {len(tag_contacts)} contatos com as tags '{tags_list}'")
-                else:
-                    logger.info(f"📦 Nenhuma tag válida encontrada em '{rt.tag}'")
-            except Exception as e:
-                logger.error(f"❌ Erro ao buscar tag '{rt.tag}' no banco local: {e}")
+                    tag_contacts = [{"phone": "".join(filter(str.isdigit, str(l.phone))), "name": l.name or ""} for l in leads if l.phone]
+                    logger.info(f"📦 Aba de Contatos retornou {len(tag_contacts)} contatos com as tags '{tags_list}'")
+            except Exception as e_local:
+                logger.warning(f"⚠️ [RECURRING SCHEDULER] Erro ao consultar banco local para etiqueta '{rt.tag}': {e_local}")
+
+            if not tag_contacts:
+                try:
+                    chatwoot = ChatwootClient(client_id=rt.client_id)
+                    cw_contacts = await chatwoot.get_contacts_by_label(rt.tag)
+                    if cw_contacts and isinstance(cw_contacts, list):
+                        for c in cw_contacts:
+                            phone_raw = c.get("phone_number") or c.get("phone") or ""
+                            phone_digits = "".join(filter(str.isdigit, phone_raw))
+                            if len(phone_digits) >= 8:
+                                tag_contacts.append({"phone": phone_digits, "name": c.get("name") or ""})
+                        logger.info(f"📦 Chatwoot retornou {len(tag_contacts)} contatos com a etiqueta '{rt.tag}'")
+                except Exception as e_cw:
+                    logger.warning(f"⚠️ [RECURRING SCHEDULER] Fallback Chatwoot para etiqueta '{rt.tag}': {e_cw}")
+
+                except Exception as e:
+                    logger.error(f"❌ Erro ao buscar tag '{rt.tag}' no banco local: {e}")
             
             phones_in_list = {c.get('phone') for c in final_contacts}
             for tc in tag_contacts:
                 if tc['phone'] not in phones_in_list and tc['phone'] not in exclusions:
                     final_contacts.append(tc)
+
 
         if is_aborted:
             failure_reason = f"Disparo abortado: Limite de atraso (30 minutos) excedido. O disparo deveria ter ocorrido às {scheduled_time_utc.strftime('%H:%M:%S')} UTC, mas o scheduler executou às {now_utc.strftime('%H:%M:%S')} UTC ({int(delay_minutes)} minutos de atraso)."

@@ -49,7 +49,9 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [delayUnit, setDelayUnit] = useState("seconds");
     const [concurrency, setConcurrency] = useState(4); // Padrão solicitado: 4 jobs
     const [scheduledTime, setScheduledTime] = useState("");
+    const [isDynamicLabel, setIsDynamicLabel] = useState(true);
     const [isValidated, setIsValidated] = useState(false);
+
 
     // Exclusion List
     const [exclusionList, setExclusionList] = useState([]);
@@ -349,8 +351,11 @@ export const useBulkSender = (onViewChange, onSuccess) => {
                 private_message: sendPrivateMessage ? privateMessageText : null,
                 private_message_delay: privateMessageDelayUnit === 'minutes' ? privateMessageDelay * 60 : privateMessageDelay,
                 private_message_concurrency: privateMessageConcurrency,
-                button_actions: Object.keys(buttonActions).length > 0 ? buttonActions : null
+                button_actions: Object.keys(buttonActions).length > 0 ? buttonActions : null,
+                is_dynamic_label: !!(scheduledTime && isDynamicLabel && (selectionMetadata?.mode === 'tag' || (selectedChatwootLabels && selectedChatwootLabels.length > 0))),
+                dynamic_label_name: selectionMetadata?.tag || (selectedChatwootLabels && selectedChatwootLabels[0]) || null
             };
+
 
             let res;
             if (isRecurring) {
@@ -445,6 +450,8 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         privateMessageConcurrency, setPrivateMessageConcurrency, selectedChatwootLabels, setSelectedChatwootLabels,
         finalContacts, selectionMetadata, isSending, delaySeconds, setDelaySeconds,
         delayUnit, setDelayUnit, concurrency, setConcurrency, scheduledTime, setScheduledTime,
+        isDynamicLabel, setIsDynamicLabel,
+
         exclusionList, setExclusionList, exclusionMode, setExclusionMode, exclusionText, setExclusionText,
         exclusionAvailableTags, isLoadingExclusionTags, selectedExclusionTag, setSelectedExclusionTag,
         exclusionTagMode, setExclusionTagMode,

@@ -83,6 +83,10 @@ class ScheduledTrigger(Base):
     is_pinned = Column(Boolean, default=False, nullable=False, server_default="false")
     folder_id = Column(Integer, ForeignKey("trigger_folders.id", ondelete="SET NULL"), nullable=True, index=True)
 
+    is_dynamic_label = Column(Boolean, default=False, nullable=False, server_default="false")
+    dynamic_label_name = Column(String, nullable=True)
+
+
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     client = relationship("Client", back_populates="triggers")

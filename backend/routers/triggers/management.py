@@ -193,10 +193,17 @@ async def list_triggers(
         joinedload(models.ScheduledTrigger.folder)
     )
     client_id = x_client_id if x_client_id else current_user.client_id
+    try:
+        from services.bulk import sync_queued_dynamic_triggers
+        await sync_queued_dynamic_triggers(db, client_id)
+    except Exception as e_sync:
+        pass
+
     query = query.filter(models.ScheduledTrigger.client_id == client_id)
 
     # Sempre ocultar registros em processo de deleção suave (evita deadlocks visíveis)
     query = query.filter(models.ScheduledTrigger.status != 'deleted_pending')
+
 
     if pinned_only:
         query = query.filter(models.ScheduledTrigger.is_pinned == True)

@@ -40,8 +40,10 @@ import ChatConversations from './pages/ChatConversations';
 import HumanAgents from './pages/HumanAgents';
 import CheckoutPresellPage from './pages/CheckoutPresellPage';
 import CapturePageAdmin from './pages/CapturePageAdmin';
+import EmailMarketingMain from './components/EmailMarketing/EmailMarketingMain';
 
 // Maps pages_status key → page display name (for under-construction screen)
+
 const PAGE_NAMES = {
   bulk_sender:          'Disparo em Massa',
   recurring_schedules:  'Disparo Recorrente',
@@ -169,7 +171,9 @@ export default function AppContent() {
                   <BlockedContacts />
                 </PageGuard>
               )}
+              {logic.currentView === 'email_marketing' && <EmailMarketingMain />}
               {logic.currentView === 'users' && <Users />}
+
               {logic.currentView === 'schedules' && (
                 <PageGuard pageKey="schedules" pagesStatus={logic.user?.pages_status}>
                   <SchedulePage />

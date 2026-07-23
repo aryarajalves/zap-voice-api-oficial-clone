@@ -67,14 +67,17 @@ class ScheduleEventSchema(BaseModel):
     funnel_name: Optional[str] = None
     template_name: Optional[str] = None
     private_message: Optional[str] = None
+    is_dynamic_label: Optional[bool] = False
+    dynamic_label_name: Optional[str] = None
 
 class ScheduleUpdateSchema(BaseModel):
     new_start_time: datetime
 @router.get("/", response_model=List[ScheduleEventSchema])
-def get_schedules(
+async def get_schedules(
     start: datetime,
     end: datetime,
     x_client_id: Optional[str] = Header(None),
+
     db: Session = Depends(get_db),
     current_user: User = Depends(require_feature("schedules"))
 ):
@@ -96,6 +99,12 @@ def get_schedules(
         raise HTTPException(status_code=400, detail="X-Client-ID header missing")
 
     try:
+        try:
+            from services.bulk import sync_queued_dynamic_triggers
+            await sync_queued_dynamic_triggers(db, int(x_client_id))
+        except Exception as e_sync:
+            log(f"WARNING: erro ao sincronizar triggers dinamicos: {e_sync}")
+
         triggers = db.query(ScheduledTrigger).filter(
             ScheduledTrigger.client_id == int(x_client_id),
             ScheduledTrigger.scheduled_time >= start,
@@ -105,11 +114,12 @@ def get_schedules(
         
         log(f"QUERY: Found {len(triggers)} triggers")
 
+
         events = []
         for t in triggers:
             # Define Título e Tipo
             if t.is_bulk:
-                title = f"📢 Massa: {t.contact_name or 'Sem nome'}"
+                title = f"📢 Massa: {t.contact_name or t.template_name or 'Sem nome'}"
                 event_type = "bulk"
             else:
                 funnel = t.funnel
@@ -134,11 +144,14 @@ def get_schedules(
                 "contact_count": count,
                 "funnel_name": t.funnel.name if t.funnel else None,
                 "template_name": t.template_name,
-                "private_message": t.private_message
+                "private_message": t.private_message,
+                "is_dynamic_label": getattr(t, "is_dynamic_label", False),
+                "dynamic_label_name": getattr(t, "dynamic_label_name", None)
             })
         
         log(f"RESP: Returning {len(events)} events")
         return events
+
     except Exception as e:
         log(f"EXCEPTION: {str(e)}")
         log(traceback.format_exc())

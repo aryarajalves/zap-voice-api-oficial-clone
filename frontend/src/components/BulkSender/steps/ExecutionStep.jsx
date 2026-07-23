@@ -7,69 +7,74 @@ import { getTemplateCategoryInfo } from '../utils/templateUtils';
 
 const ExecutionStep = ({
     activeClient,
-    finalContacts,
+    finalContacts = [],
     setFinalContacts,
-    selectionMetadata,
+    selectionMetadata = {},
     setSelectionMetadata,
-    templateVariables,
-    isSending,
-    delaySeconds,
+    templateVariables = [],
+    isSending = false,
+    delaySeconds = 5,
     setDelaySeconds,
-    delayUnit,
+    delayUnit = 'seconds',
     setDelayUnit,
-    concurrency,
+    concurrency = 4,
     setConcurrency,
     handleSend,
     handleCopyFinalList,
-    exclusionList,
+    exclusionList = [],
     setExclusionList,
-    exclusionMode,
+    exclusionMode = 'manual',
     setExclusionMode,
-    exclusionText,
+    exclusionText = '',
     setExclusionText,
     handleSaveExclusion,
     add55ToExclusionText,
     handleExclusionFileUpload,
-    exclusionColSelector,
+    exclusionColSelector = false,
     setExclusionColSelector,
     exclusionCsvData,
     exclusionSelectedCol,
     setExclusionSelectedCol,
     confirmExclusionColumn,
-    selectedExclusionTag,
+    selectedExclusionTag = [],
     setSelectedExclusionTag,
-    exclusionTagMode,
+    exclusionTagMode = 'OR',
     setExclusionTagMode,
-    isLoadingExclusionTags,
-    exclusionAvailableTags,
+    isLoadingExclusionTags = false,
+    exclusionAvailableTags = [],
     loadExclusionContactsByTag,
     add55ToLoadedExclusionList,
-    isRecurring,
+    isRecurring = false,
     setIsRecurring,
     setScheduledTime,
-    recurrenceFrequency,
+    recurrenceFrequency = 'weekly',
     setRecurrenceFrequency,
-    recurrenceDaysOfWeek,
+    recurrenceDaysOfWeek = [],
     setRecurrenceDaysOfWeek,
-    recurrenceTime,
+    recurrenceTime = '09:00',
     setRecurrenceTime,
-    recurrenceDayOfMonth,
+    recurrenceDayOfMonth = '',
     setRecurrenceDayOfMonth,
-    scheduledTime,
+    scheduledTime = '',
+    isDynamicLabel = true,
+    setIsDynamicLabel,
+    selectedChatwootLabels = [],
     setStep,
-    templateButtons,
-    buttonActions,
+
+    templateButtons = [],
+    buttonActions = {},
     setButtonActions,
-    funnels,
-    selectedTemplate,
-    templates,
-    whatsappProfile
+    funnels = [],
+    selectedTemplate = '',
+    templates = [],
+    whatsappProfile = null
 }) => {
     const [showQualityWarningModal, setShowQualityWarningModal] = React.useState(false);
 
-    const categoryInfo = getTemplateCategoryInfo(selectedTemplate, templates || []);
-    const estimatedCost = finalContacts.length * categoryInfo.price;
-    const formatBRL = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const safeContacts = Array.isArray(finalContacts) ? finalContacts : [];
+    const categoryInfo = getTemplateCategoryInfo(selectedTemplate, templates || []) || { type: 'Outros', price: 0.10, key: 'OTHERS' };
+    const estimatedCost = safeContacts.length * (categoryInfo.price || 0);
+    const formatBRL = (val) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const handleSendWithQualityCheck = () => {
         // Se a qualidade for LOW (ou vermelha/ruim), abrimos o popup
@@ -134,9 +139,9 @@ const ExecutionStep = ({
                     <div className="flex items-center gap-6">
                         <div className="flex flex-col items-end">
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Selecionado</span>
-                            <span className="text-2xl font-black text-white tabular-nums">{finalContacts.length} <span className="text-blue-400 text-xs">Leads</span></span>
+                            <span className="text-2xl font-black text-white tabular-nums">{safeContacts.length} <span className="text-blue-400 text-xs">Leads</span></span>
                         </div>
-                        {finalContacts.length > 0 && categoryInfo.price > 0 && (
+                        {safeContacts.length > 0 && (categoryInfo?.price || 0) > 0 && (
                             <div className="flex flex-col items-end pl-6 border-l border-white/5">
                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Custo Estimado</span>
                                 <span className="text-2xl font-black text-amber-400 tabular-nums">{formatBRL(estimatedCost)}</span>
@@ -253,7 +258,13 @@ const ExecutionStep = ({
                             recurrenceDayOfMonth={recurrenceDayOfMonth}
                             setRecurrenceDayOfMonth={setRecurrenceDayOfMonth}
                             scheduledTime={scheduledTime}
+                            isDynamicLabel={isDynamicLabel}
+                            setIsDynamicLabel={setIsDynamicLabel}
+                            selectionMetadata={selectionMetadata}
+                            selectedChatwootLabels={selectedChatwootLabels}
                         />
+
+
 
                         <div className="flex flex-col gap-4 pt-6">
                             <button
