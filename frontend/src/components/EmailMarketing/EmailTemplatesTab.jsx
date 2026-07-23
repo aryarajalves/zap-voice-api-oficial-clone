@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiPlus, FiEdit2, FiTrash2, FiFileText, FiSave, FiX, FiTag } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiFileText, FiSave, FiX, FiTag, FiAlertTriangle } from 'react-icons/fi';
 import { API_URL } from '../../config';
 
 import { useClient } from '../../contexts/ClientContext';
@@ -11,6 +11,12 @@ export default function EmailTemplatesTab() {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
+
+  // Estado para Modal de Confirmação de Exclusão
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
 
   const [formData, setFormData] = useState({
     name: '',
@@ -100,21 +106,33 @@ export default function EmailTemplatesTab() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Deseja realmente excluir este template de e-mail?")) return;
+  const openDeleteModal = (template) => {
+    setTemplateToDelete(template);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
     try {
-      const res = await fetch(`${API_URL}/email/templates/${id}`, {
+      setDeleteLoading(true);
+      const res = await fetch(`${API_URL}/email/templates/${templateToDelete.id}`, {
         method: 'DELETE',
         headers: getHeaders()
       });
 
       if (!res.ok) throw new Error("Erro ao excluir template.");
-      toast.success("Template excluído com sucesso!");
+      toast.success("Template de e-mail excluído com sucesso!");
+      setIsDeleteModalOpen(false);
+      setTemplateToDelete(null);
       fetchTemplates();
     } catch (err) {
       toast.error(err.message || "Erro ao excluir template.");
+    } finally {
+      setDeleteLoading(false);
     }
+
   };
+
 
   const insertVariable = (varName) => {
     setFormData(prev => ({
@@ -172,11 +190,12 @@ export default function EmailTemplatesTab() {
                   <FiEdit2 /> Editar
                 </button>
                 <button
-                  onClick={() => handleDelete(t.id)}
+                  onClick={() => openDeleteModal(t)}
                   className="text-xs font-semibold text-red-500 hover:underline flex items-center gap-1"
                 >
                   <FiTrash2 /> Excluir
                 </button>
+
               </div>
             </div>
           ))}
@@ -275,6 +294,53 @@ export default function EmailTemplatesTab() {
           </div>
         </div>
       )}
+
+      {/* Modal de Confirmação de Exclusão (Padrão Premium: centralizado, backdrop escuro z-[99999], sem clique externo) */}
+      {isDeleteModalOpen && (
+
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full border border-gray-100 dark:border-white/10 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto text-xl border border-red-500/20">
+              <FiAlertTriangle />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                Excluir Template de E-mail
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Tem certeza que deseja remover o template <strong className="text-gray-700 dark:text-gray-200">"{templateToDelete?.name}"</strong>? Esta ação não poderá ser desfeita.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-semibold transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteTemplate}
+                disabled={deleteLoading}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-red-500/20 flex items-center gap-2"
+              >
+                {deleteLoading ? (
+                  <span>Excluindo...</span>
+                ) : (
+                  <>
+                    <FiTrash2 /> Confirmar Exclusão
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
