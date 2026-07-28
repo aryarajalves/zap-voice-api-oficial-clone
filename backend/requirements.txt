@@ -38,6 +38,9 @@ httpx==0.28.1            # Cliente HTTP assíncrono — usado para chamar APIs e
 httpcore==1.0.9          # Motor HTTP por baixo do httpx (dependência interna)
 h11==0.16.0              # Protocolo HTTP/1.1 (dependência interna)
 
+# === RESOLUÇÃO DNS E E-MAIL ===
+dnspython==2.7.0         # Resolução de registros MX DNS para envio direto de e-mail marketing
+
 # === VARIÁVEIS DE AMBIENTE ===
 python-dotenv==1.2.1     # Carrega variáveis do arquivo .env para o ambiente
 

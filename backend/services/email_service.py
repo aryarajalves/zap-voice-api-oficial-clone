@@ -21,10 +21,38 @@ async def send_single_email(config, to_email: str, subject: str, body_html: str,
     from_email = config.from_email
     sender_header = f"{from_name} <{from_email}>" if from_name else from_email
 
-    # Substituir variáveis dinâmicas de exemplo no corpo HTML e assunto
-    if recipient_name:
-        body_html = body_html.replace("{{nome}}", recipient_name).replace("{{1}}", recipient_name)
-        subject = subject.replace("{{nome}}", recipient_name).replace("{{1}}", recipient_name)
+    # Substituir variáveis dinâmicas do contato (suporta dict ou string com o nome)
+    rec_dict = recipient_name if isinstance(recipient_name, dict) else {"name": str(recipient_name or "")}
+    name_val = rec_dict.get("name") or rec_dict.get("nome") or ""
+    phone_val = rec_dict.get("phone") or rec_dict.get("telefone") or ""
+    prod_val = rec_dict.get("product_name") or rec_dict.get("produto") or ""
+    plat_val = rec_dict.get("platform") or rec_dict.get("plataforma") or ""
+    price_val = rec_dict.get("price") or rec_dict.get("valor") or ""
+    pay_val = rec_dict.get("payment_method") or rec_dict.get("forma_pagamento") or ""
+    tags_val = rec_dict.get("tags") or rec_dict.get("etiquetas") or ""
+
+    replacements = {
+        "{{nome}}": name_val,
+        "{{name}}": name_val,
+        "{{1}}": name_val,
+        "{{email}}": to_email,
+        "{{phone}}": phone_val,
+        "{{telefone}}": phone_val,
+        "{{produto}}": prod_val,
+        "{{product_name}}": prod_val,
+        "{{plataforma}}": plat_val,
+        "{{platform}}": plat_val,
+        "{{valor}}": price_val,
+        "{{price}}": price_val,
+        "{{forma_pagamento}}": pay_val,
+        "{{payment_method}}": pay_val,
+        "{{etiquetas}}": tags_val,
+        "{{tags}}": tags_val,
+    }
+
+    for key, val in replacements.items():
+        body_html = body_html.replace(key, str(val))
+        subject = subject.replace(key, str(val))
 
     # 1. RESEND (API HTTP)
     if provider == "resend":
@@ -92,11 +120,12 @@ async def send_single_email(config, to_email: str, subject: str, body_html: str,
     elif provider in ("direct", "sendmail", "local"):
         try:
             domain = to_email.split("@")[-1]
-            import dns.resolver
             try:
+                import dns.resolver
                 records = dns.resolver.resolve(domain, 'MX')
                 mx_record = str(records[0].exchange).rstrip('.')
-            except Exception:
+            except Exception as e_dns:
+                logger.warning(f"⚠️ [EMAIL-DIRECT] Resolução MX falhou ({e_dns}), usando fallback para '{domain}'")
                 mx_record = domain  # Fallback direto pro domínio se o DNS falhar
 
             msg = MIMEMultipart("alternative")

@@ -64,15 +64,15 @@ async def upload_file(
             detail=f"Extensão '{ext}' não permitida. Aceitamos formatos de imagem, vídeo, áudio e documentos."
         )
 
-    # Validar Tamanho por Tipo de Arquivo — limites da API Oficial do WhatsApp
+    # Validar Tamanho por Tipo de Arquivo — limites expandidos para E-mail Marketing e Sistema
     LIMITS_BY_TYPE = {
-        "image":    5  * 1024 * 1024,  # 5 MB
-        "video":    16 * 1024 * 1024,  # 16 MB
-        "audio":    16 * 1024 * 1024,  # 16 MB
-        "document": 100 * 1024 * 1024, # 100 MB
+        "image":    50  * 1024 * 1024, # 50 MB
+        "video":   250  * 1024 * 1024, # 250 MB
+        "audio":    50  * 1024 * 1024, # 50 MB
+        "document": 250 * 1024 * 1024, # 250 MB
     }
     LIMIT_LABELS = {
-        "image": "5 MB", "video": "16 MB", "audio": "16 MB", "document": "100 MB",
+        "image": "50 MB", "video": "250 MB", "audio": "50 MB", "document": "250 MB",
     }
 
     # Detectar tipo pelo content-type
@@ -99,7 +99,7 @@ async def upload_file(
         logger.warning(f"⚠️ [UPLOAD_REJECTED] Arquivo muito grande: {file_mb} MB (limite para {detected_type}: {limit_label})")
         raise HTTPException(
             status_code=400,
-            detail=f"Arquivo muito grande ({file_mb} MB). O WhatsApp aceita {detected_type == 'image' and 'imagens' or detected_type == 'video' and 'vídeos' or detected_type == 'audio' and 'áudios' or 'documentos'} de até {limit_label}."
+            detail=f"Arquivo muito grande ({file_mb} MB). O limite de tamanho permitido é de até {limit_label}."
         )
 
 

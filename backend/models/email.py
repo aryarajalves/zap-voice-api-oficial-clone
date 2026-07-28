@@ -69,3 +69,25 @@ class EmailDispatch(Base):
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class EmailInbound(Base):
+    __tablename__ = "email_inbounds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
+    dispatch_id = Column(Integer, ForeignKey("email_dispatches.id", ondelete="SET NULL"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("webhook_leads.id", ondelete="SET NULL"), nullable=True)
+
+    from_email = Column(String(255), nullable=False, index=True)
+    from_name = Column(String(255), nullable=True)
+    to_email = Column(String(255), nullable=True)
+    subject = Column(String(500), nullable=True)
+    body_text = Column(Text, nullable=True)
+    body_html = Column(Text, nullable=True)
+
+    provider = Column(String(50), default="generic", nullable=True)  # 'resend', 'ses', 'brevo', 'generic'
+    is_read = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Body
+from fastapi import APIRouter, Depends, HTTPException, Header, Body, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from pydantic import BaseModel, Field
@@ -7,6 +7,7 @@ import models, schemas
 from core.deps import get_current_user, get_db
 from services.email_service import send_single_email
 from core.logger import setup_logger
+from rabbitmq_client import rabbitmq
 
 logger = setup_logger("email_marketing_router")
 
@@ -39,7 +40,7 @@ class EmailBulkSendPayload(BaseModel):
     template_id: int
     title: str
     tag_name: Optional[str] = None
-    scheduled_time: Optional[str] = None
+    scheduled_at: Optional[str] = None  # ISO 8601 datetime string; se fornecido, agenda o disparo
 
 
 @router.get("/config", summary="Obter Configuração de E-mail do Cliente")
@@ -59,11 +60,13 @@ def get_email_config(
             "id": config.id,
             "provider": config.provider,
             "aws_access_key_id": config.aws_access_key_id,
+            "aws_secret_access_key": config.aws_secret_access_key or "",
             "aws_region": config.aws_region,
-            "resend_api_key": config.resend_api_key,
+            "resend_api_key": config.resend_api_key or "",
             "smtp_host": config.smtp_host,
             "smtp_port": config.smtp_port,
             "smtp_user": config.smtp_user,
+            "smtp_password": config.smtp_password or "",
             "smtp_encryption": config.smtp_encryption,
             "from_email": config.from_email,
             "from_name": config.from_name,
@@ -91,17 +94,20 @@ def save_email_config(
     config.from_email = payload.from_email
     config.from_name = payload.from_name
     
-    if payload.aws_access_key_id: config.aws_access_key_id = payload.aws_access_key_id
-    if payload.aws_secret_access_key: config.aws_secret_access_key = payload.aws_secret_access_key
-    if payload.aws_region: config.aws_region = payload.aws_region
+    if payload.aws_access_key_id is not None: config.aws_access_key_id = payload.aws_access_key_id
+    if payload.aws_secret_access_key is not None and payload.aws_secret_access_key != "":
+        config.aws_secret_access_key = payload.aws_secret_access_key
+    if payload.aws_region is not None: config.aws_region = payload.aws_region
     
-    if payload.resend_api_key: config.resend_api_key = payload.resend_api_key
+    if payload.resend_api_key is not None and payload.resend_api_key != "":
+        config.resend_api_key = payload.resend_api_key
     
-    if payload.smtp_host: config.smtp_host = payload.smtp_host
-    if payload.smtp_port: config.smtp_port = payload.smtp_port
-    if payload.smtp_user: config.smtp_user = payload.smtp_user
-    if payload.smtp_password: config.smtp_password = payload.smtp_password
-    if payload.smtp_encryption: config.smtp_encryption = payload.smtp_encryption
+    if payload.smtp_host is not None: config.smtp_host = payload.smtp_host
+    if payload.smtp_port is not None: config.smtp_port = payload.smtp_port
+    if payload.smtp_user is not None: config.smtp_user = payload.smtp_user
+    if payload.smtp_password is not None and payload.smtp_password != "":
+        config.smtp_password = payload.smtp_password
+    if payload.smtp_encryption is not None: config.smtp_encryption = payload.smtp_encryption
 
     db.commit()
     db.refresh(config)
@@ -249,20 +255,42 @@ async def create_bulk_email_dispatch(
             target_contacts.append({
                 "email": l.email,
                 "name": l.name or "",
-                "phone": l.phone or ""
+                "phone": l.phone or "",
+                "product_name": l.product_name or "",
+                "platform": l.platform or "",
+                "price": l.price or "",
+                "payment_method": l.payment_method or "",
+                "tags": l.tags or ""
             })
 
     if not target_contacts:
         raise HTTPException(status_code=400, detail="Nenhum contato com e-mail válido encontrado para os filtros selecionados.")
 
     # 2. Criar registro de disparo
+    is_scheduled = bool(payload.scheduled_at and str(payload.scheduled_at).strip())
+    scheduled_dt = None
+
+    if is_scheduled:
+        try:
+            # O input datetime-local do frontend envia "YYYY-MM-DDTHH:mm" no horário local (Brasília UTC-3).
+            # Para armazenar no banco em UTC correto, interpretamos como UTC-3 e convertemos para UTC.
+            raw = str(payload.scheduled_at).strip()
+            if len(raw) == 16:  # yyyy-MM-ddTHH:mm  (sem segundos)
+                raw += ":00"
+            if not raw.endswith("Z") and "+" not in raw and "-" not in raw[10:]:
+                raw += "-03:00"  # timezone de Brasília
+            scheduled_dt = datetime.fromisoformat(raw).astimezone(timezone.utc)
+        except Exception as parse_err:
+            raise HTTPException(status_code=400, detail=f"Formato de data/hora inválido: {parse_err}")
+
     dispatch = models.EmailDispatch(
         client_id=client_id,
         template_id=template.id,
         title=payload.title or f"E-mail: {template.name}",
         subject=template.subject,
         tag_name=payload.tag_name,
-        status="completed", # Processamento imediato síncrono/assíncrono
+        status="scheduled" if is_scheduled else "processing",
+        scheduled_time=scheduled_dt,
         total_contacts=len(target_contacts),
         total_sent=0,
         total_failed=0,
@@ -272,7 +300,17 @@ async def create_bulk_email_dispatch(
     db.commit()
     db.refresh(dispatch)
 
-    # 3. Processar o envio dos e-mails
+    # --- Se agendado, retornar sem enviar agora ---
+    if is_scheduled:
+        logger.info(f"📅 [EMAIL] Disparo {dispatch.id} agendado para {scheduled_dt} ({len(target_contacts)} contatos).")
+        return {
+            "status": "scheduled",
+            "message": f"Disparo agendado com sucesso para {scheduled_dt.strftime('%d/%m/%Y às %H:%M')} UTC! ({len(target_contacts)} destinatários)",
+            "dispatch_id": dispatch.id,
+            "scheduled_time": scheduled_dt.isoformat()
+        }
+
+    # 3. Processar o envio imediato dos e-mails
     sent_count = 0
     fail_count = 0
 
@@ -282,7 +320,7 @@ async def create_bulk_email_dispatch(
             to_email=c["email"],
             subject=template.subject,
             body_html=template.body_html,
-            recipient_name=c["name"]
+            recipient_name=c
         )
         if res.get("success"):
             sent_count += 1
@@ -305,10 +343,261 @@ async def create_bulk_email_dispatch(
 
 @router.get("/history", summary="Histórico de Disparos de E-mail")
 def list_email_history(
+    limit: int = Query(500, ge=1, le=1000),
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     client_id = x_client_id if x_client_id else current_user.client_id
-    history = db.query(models.EmailDispatch).filter_by(client_id=client_id).order_by(models.EmailDispatch.created_at.desc()).limit(100).all()
+    history = db.query(models.EmailDispatch).filter_by(client_id=client_id).order_by(models.EmailDispatch.created_at.desc()).limit(limit).all()
     return history
+
+
+@router.delete("/history/{dispatch_id}", summary="Excluir item do Histórico de Disparos")
+def delete_email_dispatch(
+    dispatch_id: int,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    dispatch = db.query(models.EmailDispatch).filter_by(id=dispatch_id, client_id=client_id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Registro de disparo não encontrado.")
+    
+    db.delete(dispatch)
+    db.commit()
+    return {"status": "success", "message": "Registro de disparo excluído com sucesso."}
+
+
+@router.get("/preview-recipients", summary="Pré-visualizar Destinatários de E-mail por Etiqueta")
+def preview_email_recipients(
+    tag_name: Optional[str] = Query(None),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    from sqlalchemy import func
+    client_id = x_client_id if x_client_id else current_user.client_id
+    query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
+    if tag_name and tag_name.strip():
+        tag_clean = tag_name.strip()
+        query = query.filter(
+            func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{tag_clean},%")
+        )
+    leads = query.all()
+    recipients = []
+    for l in leads:
+        if l.email and "@" in str(l.email).strip():
+            recipients.append({
+                "id": l.id,
+                "name": l.name or "Sem nome",
+                "email": l.email.strip(),
+                "phone": l.phone or "",
+                "tags": l.tags or ""
+            })
+    return {
+        "total_valid": len(recipients),
+        "recipients": recipients
+    }
+
+
+class ReplyEmailPayload(BaseModel):
+    subject: str
+    body_html: str
+
+
+@router.post("/status-webhook", summary="Webhook público para eventos de entrega da Brevo / SES / Resend")
+async def receive_email_status_event(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    # Eventos da Brevo vêm como objeto único ou lista
+    events = data if isinstance(data, list) else [data]
+
+    for ev in events:
+        event_name = (ev.get("event") or ev.get("type") or "").lower()
+        recipient = (ev.get("email") or ev.get("recipient") or "").strip().lower()
+        
+        # Identificar status
+        is_delivered = event_name in ("delivered", "request_delivered", "sent", "success")
+        is_failed = event_name in ("hard_bounce", "soft_bounce", "blocked", "invalid_email", "spam", "error")
+
+        if not recipient:
+            continue
+
+        logger.info(f"📩 [EMAIL WEBHOOK] Evento de e-mail recebido: {event_name} para {recipient}")
+
+        # Localizar o disparo recente que contém este destinatário
+        dispatches = db.query(models.EmailDispatch).order_by(models.EmailDispatch.created_at.desc()).limit(20).all()
+        target_dispatch = None
+
+        for d in dispatches:
+            contacts = d.contacts_list or []
+            for c in contacts:
+                if (c.get("email") or "").strip().lower() == recipient:
+                    target_dispatch = d
+                    if is_delivered:
+                        c["status"] = "delivered"
+                        c["delivered_at"] = datetime.now(timezone.utc).isoformat()
+                    elif is_failed:
+                        c["status"] = "failed"
+                        c["failure_reason"] = ev.get("reason") or ev.get("error") or event_name
+                    break
+            if target_dispatch:
+                d.contacts_list = contacts
+                db.commit()
+
+                # Notificar via WebSocket
+                try:
+                    from rabbitmq_client import rabbitmq
+                    await rabbitmq.publish_event("email_dispatch_updated", {
+                        "dispatch_id": d.id,
+                        "client_id": d.client_id,
+                        "status": d.status,
+                        "total_sent": d.total_sent,
+                        "total_failed": d.total_failed
+                    })
+                except Exception:
+                    pass
+                break
+
+    return {"status": "success", "processed": len(events)}
+
+
+@router.post("/inbound-webhook", summary="Webhook público para receber respostas de e-mail dos leads")
+async def receive_inbound_email(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    from_email = data.get("from_email") or data.get("from") or data.get("sender") or ""
+    if isinstance(from_email, dict):
+        from_email = from_email.get("email") or ""
+
+    if not from_email or "@" not in str(from_email):
+        raise HTTPException(status_code=400, detail="Remetente from_email não fornecido ou inválido")
+
+    from_email = str(from_email).strip().lower()
+    from_name = data.get("from_name") or data.get("name") or ""
+    to_email = data.get("to_email") or data.get("to") or ""
+    subject = data.get("subject") or data.get("title") or "Sem assunto"
+    body_text = data.get("body_text") or data.get("text") or ""
+    body_html = data.get("body_html") or data.get("html") or body_text
+    provider = data.get("provider") or "webhook"
+
+    lead = db.query(models.WebhookLead).filter(models.WebhookLead.email.ilike(from_email)).first()
+    client_id = lead.client_id if lead else 1
+    lead_id = lead.id if lead else None
+
+    last_dispatch = db.query(models.EmailDispatch).filter_by(client_id=client_id).order_by(models.EmailDispatch.created_at.desc()).first()
+    dispatch_id = last_dispatch.id if last_dispatch else None
+
+    inbound = models.EmailInbound(
+        client_id=client_id,
+        dispatch_id=dispatch_id,
+        lead_id=lead_id,
+        from_email=from_email,
+        from_name=from_name or (lead.name if lead else ""),
+        to_email=to_email,
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+        provider=provider,
+        is_read=False
+    )
+    db.add(inbound)
+    db.commit()
+    db.refresh(inbound)
+
+    logger.info(f"📥 [EMAIL_INBOUND] Resposta recebida de {from_email} (Lead: {lead_id}, Client: {client_id})")
+    return {"status": "success", "id": inbound.id, "message": "Resposta de e-mail registrada com sucesso"}
+
+
+@router.get("/inbounds", summary="Listar respostas de e-mail recebidas dos leads")
+def list_email_inbounds(
+    limit: int = Query(100, ge=1, le=500),
+    search: Optional[str] = Query(None),
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    query = db.query(models.EmailInbound).filter_by(client_id=client_id)
+
+    if search and search.strip():
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            (models.EmailInbound.from_email.ilike(s)) |
+            (models.EmailInbound.from_name.ilike(s)) |
+            (models.EmailInbound.subject.ilike(s))
+        )
+
+    inbounds = query.order_by(models.EmailInbound.created_at.desc()).limit(limit).all()
+    unread_count = db.query(models.EmailInbound).filter_by(client_id=client_id, is_read=False).count()
+
+    return {
+        "items": inbounds,
+        "total_unread": unread_count
+    }
+
+
+@router.put("/inbounds/{inbound_id}/read", summary="Marcar resposta de e-mail como lida")
+def mark_inbound_read(
+    inbound_id: int,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    inbound = db.query(models.EmailInbound).filter_by(id=inbound_id, client_id=client_id).first()
+    if not inbound:
+        raise HTTPException(status_code=404, detail="Resposta de e-mail não encontrada")
+
+    inbound.is_read = True
+    db.commit()
+    return {"status": "success", "message": "Resposta marcada como lida"}
+
+
+@router.post("/inbounds/{inbound_id}/reply", summary="Responder diretamente a uma resposta de e-mail")
+async def reply_inbound_email(
+    inbound_id: int,
+    payload: ReplyEmailPayload,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    inbound = db.query(models.EmailInbound).filter_by(id=inbound_id, client_id=client_id).first()
+    if not inbound:
+        raise HTTPException(status_code=404, detail="Resposta de e-mail não encontrada")
+
+    config = db.query(models.EmailConfig).filter_by(client_id=client_id).first()
+    if not config:
+        raise HTTPException(status_code=400, detail="Configuração de e-mail não encontrada.")
+
+    res = await send_single_email(
+        config=config,
+        to_email=inbound.from_email,
+        subject=payload.subject,
+        body_html=payload.body_html,
+        recipient_name=inbound.from_name or ""
+    )
+
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=res.get("error", "Erro ao enviar resposta"))
+
+    inbound.is_read = True
+    db.commit()
+
+    return {"status": "success", "message": f"Réplica enviada com sucesso para {inbound.from_email}!"}
+

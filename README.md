@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.6.3 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.6.4 — Versão Estável)
 
-Versão estável com suporte a **Página de Captura Personalizada com URLs Limpas (sem /p/ e sem #)**, **Título Dinâmico da Aba por Página (SEO)**, **Upload Local de Imagem de Fundo de Tela Inteira**, **Fila de Retentativa de Webhook (Retry Queue)**, **Aumento de Timeout de Disparo de Webhook**, **Rate Limiting por Sessão JWT de Usuário**, **Visualização em Tempo Real (WhatsApp Bubble) de Lembretes de Agenda**, **Bloqueio de Rolagem (Scroll Lock) no Modal de Configurações**, **Rastreabilidade de Status de Disparo (Enviado, Entregue, Lido, Interagiu)**, **Sub-abas nas Configurações do WhatsApp**, **Mapeamento de Variáveis e Mídia em Lembretes de Agenda**, **Ações HSM nos Botões de Lembretes**, **Endpoint Público de Atualização de Contatos via API Key**, **Google Meet e Agendamento de Reuniões na Aba de Contatos**, **Configuração de Botões HSM no Chat**, **Regras de Bloqueio Rápido**, **Modais de Carregamento Premium**, **Integração de Webhook de Memória** e **Proteção de Sobrescrita de Nomes de Leads**.
+Versão estável com suporte ao **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Página de Captura Personalizada com URLs Limpas**, **Upload Local de Imagem de Fundo de Tela Inteira**, **Fila de Retentativa de Webhook (Retry Queue)**, **Rate Limiting por Sessão JWT**, **Visualização em Tempo Real de Lembretes**, **Rastreabilidade de Status de Disparo** e **Sincronização com Worker em Container Separado**.
 
 
 

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { FiZap, FiFileText, FiShield, FiClock, FiMail } from 'react-icons/fi';
+import { FiZap, FiFileText, FiShield, FiClock, FiMail, FiMessageSquare } from 'react-icons/fi';
 import EmailConfigTab from './EmailConfigTab';
 import EmailTemplatesTab from './EmailTemplatesTab';
 import EmailBulkTab from './EmailBulkTab';
 import EmailHistoryTab from './EmailHistoryTab';
+import EmailInboundTab from './EmailInboundTab';
 
 export default function EmailMarketingMain() {
   const [activeTab, setActiveTab] = useState('bulk');
@@ -35,6 +36,17 @@ export default function EmailMarketingMain() {
             }`}
           >
             <FiZap /> Disparo em Massa
+          </button>
+
+          <button
+            onClick={() => setActiveTab('inbound')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'inbound'
+                ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'
+            }`}
+          >
+            <FiMessageSquare /> Respostas Recebidas
           </button>
 
           <button
@@ -75,6 +87,7 @@ export default function EmailMarketingMain() {
       {/* Conteúdo da Aba Ativa */}
       <div>
         {activeTab === 'bulk' && <EmailBulkTab onNavigateHistory={() => setActiveTab('history')} />}
+        {activeTab === 'inbound' && <EmailInboundTab />}
         {activeTab === 'templates' && <EmailTemplatesTab />}
         {activeTab === 'config' && <EmailConfigTab />}
         {activeTab === 'history' && <EmailHistoryTab />}

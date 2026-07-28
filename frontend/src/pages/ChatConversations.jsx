@@ -1273,6 +1273,15 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     >
                                         <FiSidebar size={16} />
                                     </button>
+
+                                    <button
+                                        onClick={() => setSelectedConvo(null)}
+                                        title="Fechar conversa"
+                                        aria-label="Fechar conversa"
+                                        className="p-2 rounded-xl border transition-all bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-800/30 flex items-center justify-center"
+                                    >
+                                        <FiX size={16} />
+                                    </button>
                                 </div>
                             </div>
 

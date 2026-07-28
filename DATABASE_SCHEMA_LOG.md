@@ -167,6 +167,7 @@ docker exec zapvoice_app python /app/add_webhook_retry_columns.py
 ```bash
 | 23/07/2026 | Agendamento Dinâmico de Etiquetas | `scheduled_triggers` | `is_dynamic_label`, `dynamic_label_name` | `backend/scripts/add_dynamic_label_columns.py` |
 | 23/07/2026 | Módulo de E-mail Marketing (SES, Resend, SMTP) | `email_configs`, `email_templates`, `email_dispatches` | Tabelas completas de configuração de e-mail, modelos e disparos em massa | `backend/scripts/add_email_marketing_tables.py` |
+| 24/07/2026 | Recebimento de Respostas de E-mail (Inbound) | `email_inbounds` | Tabela nova de captura de respostas de e-mail | `backend/scripts/database/create_email_inbounds_table.py` |
 
 ---
 

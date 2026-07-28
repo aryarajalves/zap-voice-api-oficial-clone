@@ -136,6 +136,7 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
     - **Resposta**: Editor de Texto Versão 01 (Rich Text + HTML + Variáveis dinâmicas).
 - [x] [NOVO] **E-mail Marketing (Rastreamento):** Devemos incluir rastreamento de aberturas (Pixel transparent 1px) e cliques em links nos e-mails disparados?
     - **Resposta**: Não precisa nesta fase inicial. Focar na entrega rápida e histórico simples.
+- [ ] [NOVO] **E-mail Marketing (Recebimento de Respostas / Inbound):** Devemos criar a aba **💬 Respostas Recebidas** no painel de E-mail Marketing para capturar via Webhook (Resend / Amazon SES / Cloudflare) e visualizar as respostas dos leads com opção de responder diretamente pelo ZapVoice?
 
 
 ## 📋 Histórico de Decisões
