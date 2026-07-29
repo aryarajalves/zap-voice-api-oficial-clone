@@ -170,15 +170,17 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                         models.ChatConversation.client_id == client_id,
                         models.ChatConversation.phone.like(f"%{suffix}")
                     ).first()
-                    if chat_convo and trigger and trigger.chatwoot_label:
-                        from core.utils import robust_extract_labels
-                        new_labels = robust_extract_labels(trigger.chatwoot_label)
-                        if new_labels:
-                            current_labels = list(chat_convo.labels or [])
-                            updated_labels = list(set(current_labels + new_labels))
-                            chat_convo.labels = updated_labels
-                            db.commit()
-                            logger.info(f"🏷️ [CHAT-LOCAL-POST-DELIVERY] Mescladas etiquetas {new_labels} na conversa local pré-existente {chat_convo.id}")
+                    if trigger and trigger.chatwoot_label:
+                        from services.chat_label_service import apply_webhook_labels
+                        apply_webhook_labels(
+                            db=db,
+                            client_id=client_id,
+                            phone=phone,
+                            raw_labels=trigger.chatwoot_label,
+                            source="Webhook / Disparo",
+                            contact_name=trigger.contact_name
+                        )
+
                     
             except Exception as e_chat_sync:
                 logger.error(f"❌ [CHAT-LOCAL-POST-DELIVERY] Erro ao sincronizar template localmente pós-entrega: {e_chat_sync}")

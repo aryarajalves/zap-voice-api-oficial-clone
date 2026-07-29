@@ -82,14 +82,146 @@ async def sync_to_manychat_and_update_history(client_id: int, name: str, phone: 
     except Exception as e:
         logger.error(f"MANYCHAT | Erro crítico na tarefa de fundo do ManyChat: {e}")
 
-async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, email: str = None) -> dict:
+import json
+
+def get_manychat_tokens(client_id: int) -> list:
     """
-    Sincroniza contato com ManyChat e adiciona etiqueta.
-    Retorna dicionário com o resultado da operação.
+    Retorna a lista de tokens do ManyChat configurados para o client_id.
+    Suporta formato JSON estruturado [ {"id": "...", "name": "...", "key": "..."}, ... ],
+    formato separado por vírgulas ou quebra de linha, ou token único legado.
     """
     settings = get_settings(client_id)
-    api_key = settings.get("MANYCHAT_API_KEY")
+    raw_keys = settings.get("MANYCHAT_API_KEYS")
+    raw_single = settings.get("MANYCHAT_API_KEY")
+
+    tokens = []
     
+    if raw_keys:
+        if isinstance(raw_keys, list):
+            for idx, item in enumerate(raw_keys):
+                if isinstance(item, dict) and item.get("key"):
+                    tokens.append({
+                        "id": str(item.get("id") or idx + 1),
+                        "name": item.get("name") or f"Conta {idx + 1}",
+                        "key": str(item.get("key")).strip()
+                    })
+                elif isinstance(item, str) and item.strip():
+                    tokens.append({
+                        "id": str(idx + 1),
+                        "name": f"Conta {idx + 1}",
+                        "key": item.strip()
+                    })
+        elif isinstance(raw_keys, str) and raw_keys.strip():
+            raw_str = raw_keys.strip()
+            if raw_str.startswith("[") and raw_str.endswith("]"):
+                try:
+                    parsed = json.loads(raw_str)
+                    if isinstance(parsed, list):
+                        for idx, item in enumerate(parsed):
+                            if isinstance(item, dict) and item.get("key"):
+                                tokens.append({
+                                    "id": str(item.get("id") or idx + 1),
+                                    "name": item.get("name") or f"Conta {idx + 1}",
+                                    "key": str(item.get("key")).strip()
+                                })
+                            elif isinstance(item, str) and item.strip():
+                                tokens.append({
+                                    "id": str(idx + 1),
+                                    "name": f"Conta {idx + 1}",
+                                    "key": item.strip()
+                                })
+                except Exception:
+                    pass
+            if not tokens:
+                parts = [p.strip() for p in raw_str.replace("\n", ",").split(",") if p.strip()]
+                for idx, p in enumerate(parts):
+                    tokens.append({
+                        "id": str(idx + 1),
+                        "name": f"Conta {idx + 1}",
+                        "key": p
+                    })
+
+    if not tokens and raw_single and isinstance(raw_single, str) and raw_single.strip():
+        raw_str = raw_single.strip()
+        if raw_str.startswith("[") and raw_str.endswith("]"):
+            try:
+                parsed = json.loads(raw_str)
+                if isinstance(parsed, list):
+                    for idx, item in enumerate(parsed):
+                        if isinstance(item, dict) and item.get("key"):
+                            tokens.append({
+                                "id": str(item.get("id") or idx + 1),
+                                "name": item.get("name") or f"Conta {idx + 1}",
+                                "key": str(item.get("key")).strip()
+                            })
+                        elif isinstance(item, str) and item.strip():
+                            tokens.append({
+                                "id": str(idx + 1),
+                                "name": f"Conta {idx + 1}",
+                                "key": item.strip()
+                            })
+            except Exception:
+                pass
+        if not tokens:
+            parts = [p.strip() for p in raw_str.replace("\n", ",").split(",") if p.strip()]
+            for idx, p in enumerate(parts):
+                tokens.append({
+                    "id": str(idx + 1),
+                    "name": f"Conta {idx + 1}" if len(parts) > 1 else "Conta Principal",
+                    "key": p
+                })
+
+    return tokens
+
+_MANYCHAT_ROTATION_POINTERS = {}
+
+def get_next_rotated_manychat_token(client_id: int) -> tuple:
+    """
+    Retorna (token_info, position, total) selecionando a próxima conta via rotação sequencial (Round-Robin).
+    Se houver 1 conta, retorna (token, 1, 1).
+    Se houver N contas, alterna (1 -> 2 -> ... -> N -> 1).
+    """
+    tokens = get_manychat_tokens(client_id)
+    if not tokens:
+        return (None, 0, 0)
+    
+    if len(tokens) == 1:
+        return (tokens[0], 1, 1)
+
+    current_idx = _MANYCHAT_ROTATION_POINTERS.get(client_id, 0)
+    selected_idx = current_idx % len(tokens)
+    
+    _MANYCHAT_ROTATION_POINTERS[client_id] = (selected_idx + 1) % len(tokens)
+    
+    return (tokens[selected_idx], selected_idx + 1, len(tokens))
+
+async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, email: str = None) -> dict:
+    """
+    Sincroniza contato com ManyChat utilizando rotação sequencial (Round-Robin) entre as contas cadastradas.
+    Retorna dicionário com o resultado da operação.
+    """
+    token_info, pos, total = get_next_rotated_manychat_token(client_id)
+    if not token_info:
+        return {
+            "status": "skipped",
+            "contact": {"status": "unknown", "id": None},
+            "tag": {"status": "pending", "name": tag},
+            "error": "API Key not configured"
+        }
+
+    res = await _sync_to_manychat_with_key(token_info["key"], name, phone, tag, email)
+    res["account_name"] = token_info["name"]
+    res["rotation_info"] = f"Rotação {pos} de {total}" if total > 1 else "Conta Única"
+
+    logger.info(f"🔄 [MANYCHAT-ROTATION] Sincronizado contato {phone} na conta '{token_info['name']}' ({pos}/{total}).")
+
+    return res
+
+
+async def _sync_to_manychat_with_key(api_key: str, name: str, phone: str, tag: str, email: str = None) -> dict:
+    """
+    Executa a sincronização para uma API Key específica do ManyChat.
+    """
     result_status = {
         "status": "pending",
         "contact": {"status": "unknown", "id": None},
@@ -99,7 +231,7 @@ async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, emai
 
     clean_phone_digits = "".join(filter(str.isdigit, str(phone or "")))
     if not clean_phone_digits:
-        logger.warning(f"Sincronização do ManyChat abortada para o cliente {client_id}: Telefone ausente ou inválido.")
+        logger.warning("Sincronização do ManyChat abortada: Telefone ausente ou inválido.")
         result_status["status"] = "failed"
         result_status["contact"]["status"] = "failed"
         result_status["tag"]["status"] = "failed"
@@ -107,7 +239,6 @@ async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, emai
         return result_status
 
     if not api_key or api_key == "seu_token_aqui":
-        logger.warning(f"ManyChat API Key não configurada para o cliente {client_id}")
         result_status["status"] = "skipped"
         result_status["error"] = "API Key not configured"
         return result_status
@@ -117,6 +248,7 @@ async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, emai
         "Content-Type": "application/json",
         "accept": "application/json"
     }
+
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:

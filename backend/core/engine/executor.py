@@ -178,52 +178,21 @@ async def execute_funnel(
     # 1. Aplicar Etiquetas na conversa local (Chat Local)
     if trigger.chatwoot_label:
         try:
-            from phone_normalizer import normalize_phone
-            from core.utils import robust_extract_labels
-            clean_phone = normalize_phone(contact_phone)
-            clean_labels = robust_extract_labels(trigger.chatwoot_label)
-            if clean_labels:
-                chat_convo = db.query(models.ChatConversation).filter(
-                    models.ChatConversation.client_id == trigger.client_id,
-                    models.ChatConversation.phone == clean_phone
-                ).first()
-                
-                if not chat_convo:
-                    chat_convo = models.ChatConversation(
-                        client_id=trigger.client_id,
-                        phone=clean_phone,
-                        contact_name=trigger.contact_name or clean_phone,
-                        status="open",
-                        unread_count=0
-                    )
-                    db.add(chat_convo)
-                    db.flush()
-                
-                current_labels = list(chat_convo.labels) if chat_convo.labels else []
-                for label in clean_labels:
-                    if label not in current_labels:
-                        current_labels.append(label)
-                
-                from sqlalchemy.orm.attributes import flag_modified
-                chat_convo.labels = current_labels
-                flag_modified(chat_convo, "labels")
-                db.commit()
-                
-                try:
-                    from rabbitmq_client import rabbitmq
-                    payload_ws = {
-                        "conversation_id": chat_convo.id,
-                        "client_id": trigger.client_id,
-                        "labels": current_labels
-                    }
-                    asyncio.create_task(rabbitmq.publish_event("conversation_updated", payload_ws))
-                except Exception as e_ws:
-                    logger.error(f"Erro no WebSocket ao atualizar labels: {e_ws}")
-                
-                trigger.conversation_id = chat_convo.id
-                conversation_id = chat_convo.id
+            from services.chat_label_service import apply_webhook_labels
+            convo = apply_webhook_labels(
+                db=db,
+                client_id=trigger.client_id,
+                phone=contact_phone,
+                raw_labels=trigger.chatwoot_label,
+                source="Webhook / Gatilho",
+                contact_name=trigger.contact_name
+            )
+            if convo:
+                trigger.conversation_id = convo.id
+                conversation_id = convo.id
         except Exception as e_lbl:
             logger.error(f"❌ [ENGINE] Erro ao aplicar etiquetas localmente: {e_lbl}")
+
 
     # 2. Enviar Nota Privada na conversa local (Chat Local)
     if trigger.private_message:

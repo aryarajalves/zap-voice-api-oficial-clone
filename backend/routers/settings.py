@@ -177,6 +177,8 @@ async def update_settings(
         "AI_MEMORY_ENABLED",
         "AGENT_MEMORY_WEBHOOK_URL",
         "MANYCHAT_API_KEY",
+        "MANYCHAT_API_KEYS",
+
         "WA_USE_UNIQUE_WEBHOOK",
         "WA_WEBHOOK_SLUG",
         "INSTAGRAM_ACCESS_TOKEN",

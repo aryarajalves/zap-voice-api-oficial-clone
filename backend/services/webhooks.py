@@ -199,35 +199,18 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             # 4. Aplica etiquetas locais de conversação (Chat Local)
             if phone and getattr(mapping, "chatwoot_label", None):
                 try:
-                    clean_labels = robust_extract_labels(mapping.chatwoot_label)
-                    if clean_labels:
-                        suffix = phone[-8:] if len(phone) >= 8 else phone
-                        convo = db.query(models.ChatConversation).filter(
-                            models.ChatConversation.client_id == client_id,
-                            models.ChatConversation.phone.like(f"%{suffix}")
-                        ).first()
-                        if not convo:
-                            convo = models.ChatConversation(
-                                client_id=client_id,
-                                phone=phone,
-                                contact_name=variables.get("name") or phone,
-                                status="open",
-                                unread_count=0,
-                                labels=[]
-                            )
-                            db.add(convo)
-                            db.flush()
-                        
-                        current_labels = list(convo.labels) if isinstance(convo.labels, list) else []
-                        changed = False
-                        for lbl in clean_labels:
-                            if lbl not in current_labels:
-                                current_labels.append(lbl)
-                                changed = True
-                        if changed:
-                            convo.labels = current_labels
+                    from services.chat_label_service import apply_webhook_labels
+                    apply_webhook_labels(
+                        db=db,
+                        client_id=client_id,
+                        phone=phone,
+                        raw_labels=mapping.chatwoot_label,
+                        source=f"Webhook ({integration.name if integration else 'Integrador'})",
+                        contact_name=variables.get("name")
+                    )
                 except Exception as label_err:
                     logger.error(f"Erro ao aplicar etiquetas de chat no AUTO_SKIP: {label_err}")
+
 
             history.status = "skipped"
             history.error_message = f"AUTO_SKIP: Mapeamento #{mapping.id} sem template nem funil definido — disparo não criado."

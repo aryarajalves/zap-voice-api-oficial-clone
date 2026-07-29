@@ -217,20 +217,17 @@ async def handle_funnel_execution(data: dict):
                                     logger.info(f"🏷️ [DIRECT] Aplicando etiquetas {clean_labels} na conversa {trigger.conversation_id}")
                                     await chatwoot_cl.add_label_to_conversation(trigger.conversation_id, clean_labels)
                                 
-                                # Sincronizar etiquetas localmente no banco do ZapVoice para exibição no Chat local
-                                suffix_fun = contact_phone[-8:] if len(contact_phone) >= 8 else contact_phone
-                                local_convo = db.query(models.ChatConversation).filter(
-                                    models.ChatConversation.client_id == client_id,
-                                    models.ChatConversation.phone.like(f"%{suffix_fun}")
-                                ).first()
-                                if local_convo:
-                                    current_labels = list(local_convo.labels or [])
-                                    updated_labels = list(set(current_labels + clean_labels))
-                                    local_convo.labels = updated_labels
-                                    db.commit()
-                                    logger.info(f"🏷️ [LOCAL-CRM] Etiquetas {updated_labels} atualizadas na conversa local de {contact_phone}")
-                                else:
-                                    logger.warning(f"⚠️ [LOCAL-CRM] Conversa local não encontrada para {contact_phone}. Não foi possível salvar etiquetas locais.")
+                                # Sincronizar etiquetas localmente no banco do ZapVoice com notificação de sistema no Chat local
+                                from services.chat_label_service import apply_webhook_labels
+                                apply_webhook_labels(
+                                    db=db,
+                                    client_id=client_id,
+                                    phone=contact_phone,
+                                    raw_labels=clean_labels,
+                                    source="Webhook / Disparo",
+                                    contact_name=trigger.contact_name
+                                )
+
                         except Exception as e_lbl:
                             logger.error(f"❌ [DIRECT] Erro ao aplicar etiquetas: {e_lbl}")
 

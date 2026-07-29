@@ -1,6 +1,7 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.6.4 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.6.5 — Versão Estável)
 
-Versão estável com suporte ao **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Página de Captura Personalizada com URLs Limpas**, **Upload Local de Imagem de Fundo de Tela Inteira**, **Fila de Retentativa de Webhook (Retry Queue)**, **Rate Limiting por Sessão JWT**, **Visualização em Tempo Real de Lembretes**, **Rastreabilidade de Status de Disparo** e **Sincronização com Worker em Container Separado**.
+Versão estável com suporte ao **Múltiplos Tokens do ManyChat com Rotação Sequencial (Round-Robin)**, **Notificação Visual de Etiqueta Adicionada via Webhook no Chat (fuso de Brasília)**, **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Página de Captura Personalizada com URLs Limpas**, **Upload Local de Imagem de Fundo de Tela Inteira**, **Fila de Retentativa de Webhook (Retry Queue)**, **Rate Limiting por Sessão JWT**, **Visualização em Tempo Real de Lembretes**, **Rastreabilidade de Status de Disparo** e **Sincronização com Worker em Container Separado**.
+
 
 
 

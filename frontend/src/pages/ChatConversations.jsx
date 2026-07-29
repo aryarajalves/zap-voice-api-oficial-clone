@@ -1356,17 +1356,26 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                 );
                                             } else {
                                                 // Mensagem normal do sistema (ex: etiqueta adicionada, conversa atribuída)
+                                                const isLabelNotice = msg.content && (msg.content.includes("Etiqueta") || msg.content.includes("etiqueta"));
                                                 return (
                                                     <div key={msg.id} className="flex justify-center my-2 animate-in fade-in duration-300">
-                                                        <div className="bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 rounded-lg px-3 py-1.5 shadow-sm text-[11px] max-w-md text-center">
-                                                            <p className="font-medium font-sans leading-relaxed">{msg.content}</p>
-                                                            <div className="text-[9px] opacity-60 mt-0.5">
-                                                                {formatMessageTimestamp(msg.timestamp)}
+                                                        <div className={`border rounded-lg px-3.5 py-1.5 shadow-sm text-[11px] max-w-md text-center flex items-center justify-center gap-2 ${
+                                                            isLabelNotice 
+                                                            ? 'bg-blue-500/10 border-blue-500/25 text-blue-800 dark:text-blue-300' 
+                                                            : 'bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400'
+                                                        }`}>
+                                                            {isLabelNotice && <FiTag size={13} className="text-blue-500 shrink-0" />}
+                                                            <div>
+                                                                <p className="font-medium font-sans leading-relaxed">{msg.content}</p>
+                                                                <div className="text-[9px] opacity-60 mt-0.5">
+                                                                    {formatMessageTimestamp(msg.timestamp)}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 );
                                             }
+
                                         }
 
                                         const isTemplate = msg.meta_data && msg.meta_data.is_template;
