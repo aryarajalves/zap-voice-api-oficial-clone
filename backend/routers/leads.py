@@ -1001,8 +1001,13 @@ def export_leads_csv(
 def _delete_lead_and_relations(db: Session, lead: models.WebhookLead, client_id: int):
     """
     Deleta o lead e todo o seu histórico/agendamentos atrelados.
+    Também remove restrições de 24h de template para que o número possa
+    receber o mesmo template novamente caso seja re-adicionado.
     """
     if lead.phone:
+        clean_phone = re.sub(r"\D", "", lead.phone)
+        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+
         # 1. Deletar Scheduled Triggers com esse telefone (e seus registros dependentes de message_status)
         trigger_ids = [t[0] for t in db.query(models.ScheduledTrigger.id).filter(
             models.ScheduledTrigger.client_id == client_id,
@@ -1030,8 +1035,31 @@ def _delete_lead_and_relations(db: Session, lead: models.WebhookLead, client_id:
         for h in histories:
             db.delete(h)
 
-    # 3. Deletar Lead
+        # 3. Limpar restrição de 24h: ContactTemplateHistory e MessageStatus de template
+        # Isso garante que se o contato for re-adicionado, ele não fique bloqueado
+        # pelo histórico de disparos do contato deletado.
+        db.query(models.ContactTemplateHistory).filter(
+            models.ContactTemplateHistory.client_id == client_id,
+            or_(
+                models.ContactTemplateHistory.phone == clean_phone,
+                models.ContactTemplateHistory.phone.like(f"%{suffix}")
+            )
+        ).delete(synchronize_session=False)
+
+        db.query(models.MessageStatus).filter(
+            models.MessageStatus.template_name.isnot(None),
+            or_(
+                models.MessageStatus.phone_number == clean_phone,
+                models.MessageStatus.phone_number.like(f"%{suffix}")
+            ),
+            models.MessageStatus.trigger_id.is_(None)  # apenas os sem trigger (já limpos acima)
+        ).delete(synchronize_session=False)
+
+        logger.info(f"🗑️ [Delete Lead] Restrições de 24h de template removidas para {clean_phone} junto com o lead.")
+
+    # 4. Deletar Lead
     db.delete(lead)
+
 
 @router.delete("/leads/{lead_id}", summary="Deletar um lead específico")
 def delete_lead(
