@@ -247,348 +247,379 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         db_check_init.close()
 
     all_sim_tasks = []
-    i = 0
-    while i < len(contacts):
-        db_check = SessionLocal()
-        try:
-            current_trig = db_check.query(models.ScheduledTrigger).get(trigger_id)
-            if not current_trig or current_trig.status in ['cancelled', 'deleted_pending', 'aborted', 'failed']:
-                if current_trig and current_trig.status == 'deleted_pending':
-                    db_check.delete(current_trig)
-                    db_check.commit()
-                return
+    try:
+        i = 0
+        while i < len(contacts):
+            db_check = SessionLocal()
+            try:
+                current_trig = db_check.query(models.ScheduledTrigger).get(trigger_id)
+                if not current_trig or current_trig.status in ['cancelled', 'deleted_pending', 'aborted', 'failed']:
+                    if current_trig and current_trig.status == 'deleted_pending':
+                        db_check.delete(current_trig)
+                        db_check.commit()
+                    return
 
-            # Atualizar heartbeat a cada iteração
-            pdata = dict(current_trig.processed_data or {})
-            pdata["last_heartbeat"] = datetime.utcnow().isoformat()
-            current_trig.processed_data = pdata
-            db_check.commit()
-
-            while current_trig and current_trig.status == 'paused':
-                # Atualizar heartbeat enquanto pausado
+                # Atualizar heartbeat a cada iteração
                 pdata = dict(current_trig.processed_data or {})
                 pdata["last_heartbeat"] = datetime.utcnow().isoformat()
                 current_trig.processed_data = pdata
                 db_check.commit()
+
+                while current_trig and current_trig.status == 'paused':
+                    # Atualizar heartbeat enquanto pausado
+                    pdata = dict(current_trig.processed_data or {})
+                    pdata["last_heartbeat"] = datetime.utcnow().isoformat()
+                    current_trig.processed_data = pdata
+                    db_check.commit()
+                    db_check.close()
+                    await asyncio.sleep(5)
+                    db_check = SessionLocal()
+                    current_trig = db_check.query(models.ScheduledTrigger).get(trigger_id)
+                    if not current_trig or current_trig.status == 'cancelled': return
+
+                batch = contacts[i:i + concurrency]
+                batch_phones_norm = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or '')) for c in batch]
+                
+                # Update tracking
+                current_trig.processed_contacts = list(set((current_trig.processed_contacts or []) + batch_phones_norm))
+                current_trig.pending_contacts = [p for p in all_phones if p not in current_trig.processed_contacts]
+                
+                sent_phones_set = await get_sent_phones_set(db_check, trigger_id)
+                db_check.commit()
+            except Exception as e_check:
+                logger.error(f"❌ [BULK] Erro ao atualizar heartbeat/tracking: {e_check}")
+            finally:
                 db_check.close()
-                await asyncio.sleep(5)
-                db_check = SessionLocal()
-                current_trig = db_check.query(models.ScheduledTrigger).get(trigger_id)
-                if not current_trig or current_trig.status == 'cancelled': return
 
-            batch = contacts[i:i + concurrency]
-            batch_phones_norm = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or '')) for c in batch]
-            
-            # Update tracking
-            current_trig.processed_contacts = list(set((current_trig.processed_contacts or []) + batch_phones_norm))
-            current_trig.pending_contacts = [p for p in all_phones if p not in current_trig.processed_contacts]
-            
-            sent_phones_set = await get_sent_phones_set(db_check, trigger_id)
-            db_check.commit()
-        finally:
-            db_check.close()
+            # Interaction data pre-fetch
+            db_fetch = SessionLocal()
+            try:
+                windows = db_fetch.query(models.ContactWindow).filter(models.ContactWindow.client_id == c_id, models.ContactWindow.phone.in_(batch_phones_norm)).all()
+                batch_interaction_map = {w.phone: w.last_interaction_at for w in windows}
+            finally:
+                db_fetch.close()
 
-        # Interaction data pre-fetch
-        db_fetch = SessionLocal()
-        try:
-            windows = db_fetch.query(models.ContactWindow).filter(models.ContactWindow.client_id == c_id, models.ContactWindow.phone.in_(batch_phones_norm)).all()
-            batch_interaction_map = {w.phone: w.last_interaction_at for w in windows}
-        finally:
-            db_fetch.close()
+            tasks = []
+            batch_meta = []
+            seen_in_batch = set()
 
-        tasks = []
-        batch_meta = []
-        seen_in_batch = set()
+            for c in batch:
+                phone_raw = c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or c.get('whatsapp') or '')
+                phone = normalize_phone(phone_raw)
+                if not phone or phone in seen_in_batch or phone in sent_phones_set: continue
+                seen_in_batch.add(phone)
 
-        for c in batch:
-            phone_raw = c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or c.get('whatsapp') or '')
-            phone = normalize_phone(phone_raw)
-            if not phone or phone in seen_in_batch or phone in sent_phones_set: continue
-            seen_in_batch.add(phone)
+                # Name extraction
+                name = ""
+                if isinstance(c, dict):
+                    name = c.get('{{1}}') or c.get('1') or c.get('name') or c.get('nome') or c.get('cliente') or ""
+                    if not name and 'components' in c:
+                        for comp in c['components']:
+                            if str(comp.get("type", "")).lower() == "body":
+                                p0 = comp.get("parameters", [])[0] if comp.get("parameters") else None
+                                name = (p0.get("text") if isinstance(p0, dict) else p0) or ""
+                                break
 
-            # Name extraction
-            name = ""
-            if isinstance(c, dict):
-                name = c.get('{{1}}') or c.get('1') or c.get('name') or c.get('nome') or c.get('cliente') or ""
-                if not name and 'components' in c:
-                    for comp in c['components']:
-                        if str(comp.get("type", "")).lower() == "body":
-                            p0 = comp.get("parameters", [])[0] if comp.get("parameters") else None
-                            name = (p0.get("text") if isinstance(p0, dict) else p0) or ""
-                            break
+                phone_suffix = phone[-8:] if len(phone) >= 8 else phone
+                if phone in blocked_set or phone_suffix in blocked_set:
+                    tasks.append(asyncio.create_task(asyncio.to_thread(record_blocked_status, trigger_id, phone)))
+                    batch_meta.append({"phone": phone, "name": name, "blocked": True, "vars": {}, "contact_obj": c})
+                    continue
 
-            phone_suffix = phone[-8:] if len(phone) >= 8 else phone
-            if phone in blocked_set or phone_suffix in blocked_set:
-                tasks.append(asyncio.create_task(asyncio.to_thread(record_blocked_status, trigger_id, phone)))
-                batch_meta.append({"phone": phone, "name": name, "blocked": True, "vars": {}, "contact_obj": c})
+                # Vars extraction (1-5)
+                cvars = {}
+                per_contact_components = c.get('components') if isinstance(c, dict) else None
+                for v_idx in range(1, 6):
+                    val = c.get(str(v_idx)) or c.get(f"{{{{{v_idx}}}}}") or c.get(v_idx) if isinstance(c, dict) else None
+                    if not val and per_contact_components:
+                        for comp in per_contact_components:
+                            if str(comp.get("type", "")).lower() == "body":
+                                params = comp.get("parameters", [])
+                                if len(params) >= v_idx:
+                                    p = params[v_idx-1]
+                                    val = p.get("text") if isinstance(p, dict) else p
+                                break
+                    if v_idx == 1 and not val: val = name
+                    cvars[f"var{v_idx}"] = str(val) if val is not None else ""
+
+                batch_meta.append({"phone": phone, "name": name, "blocked": False, "vars": cvars, "components": per_contact_components, "contact_obj": c})
+                tasks.append(send_smart_message(
+                    chatwoot, phone, trigger_id, template_name.split('|')[0], language,
+                    components=per_contact_components, direct_message=direct_message, direct_message_params=direct_message_params,
+                    last_interaction=batch_interaction_map.get(phone), template_body_cache=template_body_cache,
+                    template_btn_info=template_btn_info, contact_name=name,
+                    chatwoot_label=c_label,
+                    conversation_id=c.get('conversation_id') or c.get('id') if isinstance(c, dict) else None
+                ))
+
+            if not tasks:
+                i += concurrency
                 continue
 
-            # Vars extraction (1-5)
-            cvars = {}
-            per_contact_components = c.get('components') if isinstance(c, dict) else None
-            for v_idx in range(1, 6):
-                val = c.get(str(v_idx)) or c.get(f"{{{{{v_idx}}}}}") or c.get(v_idx) if isinstance(c, dict) else None
-                if not val and per_contact_components:
-                    for comp in per_contact_components:
-                        if str(comp.get("type", "")).lower() == "body":
-                            params = comp.get("parameters", [])
-                            if len(params) >= v_idx:
-                                p = params[v_idx-1]
-                                val = p.get("text") if isinstance(p, dict) else p
-                            break
-                if v_idx == 1 and not val: val = name
-                cvars[f"var{v_idx}"] = str(val) if val is not None else ""
-
-            batch_meta.append({"phone": phone, "name": name, "blocked": False, "vars": cvars, "components": per_contact_components, "contact_obj": c})
-            tasks.append(send_smart_message(
-                chatwoot, phone, trigger_id, template_name.split('|')[0], language,
-                components=per_contact_components, direct_message=direct_message, direct_message_params=direct_message_params,
-                last_interaction=batch_interaction_map.get(phone), template_body_cache=template_body_cache,
-                template_btn_info=template_btn_info, contact_name=name,
-                chatwoot_label=c_label,
-                conversation_id=c.get('conversation_id') or c.get('id') if isinstance(c, dict) else None
-            ))
-
-        results = await asyncio.gather(*tasks)
-        
-        # Persist results
-        db_msg = SessionLocal()
-        sent_message_ids = []
-        sent_count = 0
-        failed_count = 0
-        
-        try:
-            for idx, res in enumerate(results):
-                meta = batch_meta[idx]
-                if meta["blocked"]:
-                    try:
-                        update_trigger_stats(db_msg, trigger_id, failed=1)
-                    except Exception as e_block_stat:
-                        db_msg.rollback()
-                        logger.error(f"❌ Erro ao atualizar estatísticas de bloqueio para {meta['phone']}: {e_block_stat}")
-                    continue
-                
-                is_success = False
-                message_id = None
-                msg_type = res.get("type", "UNKNOWN") if isinstance(res, dict) else "UNKNOWN"
-                
-                if isinstance(res, dict) and not res.get("error"):
-                    raw_res = res.get("result") or res
-                    message_id = (raw_res.get("messages", [{}])[0].get("id") or raw_res.get("id", "")).replace("wamid.", "")
-                    if message_id: is_success = True
-
-                try:
-                    existing_status = db_msg.query(models.MessageStatus).filter_by(trigger_id=trigger_id, phone_number=meta["phone"]).first()
-                    if existing_status:
-                        if existing_status.status == 'sent':
-                            update_trigger_stats(db_msg, trigger_id, sent=-1)
-                        elif existing_status.status == 'failed':
-                            if existing_status.failure_reason == 'BLOCKED_VIA_BUTTON':
-                                update_trigger_stats(db_msg, trigger_id, blocked=-1)
-                            else:
-                                update_trigger_stats(db_msg, trigger_id, failed=-1)
-                        db_msg.delete(existing_status)
-                        db_msg.commit()
-
-                    if is_success:
-                        if direct_message:
-                            content = direct_message
-                        elif template_body_cache:
-                            content = render_template_body(template_body_cache, meta["components"] or [], contact_name=meta["name"])
-                        else:
-                            content = extract_body_from_components(meta["components"] or [])
-                            if not content:
-                                content = f"[Template: {template_name}]"
-                        
-                        tpl_media_url = None
-                        if meta.get("components"):
-                            for comp in meta["components"]:
-                                if str(comp.get("type", "")).lower() == "header":
-                                    params = comp.get("parameters", [])
-                                    for param in params:
-                                        param_type = str(param.get("type", "")).lower()
-                                        if param_type in ["image", "video", "document"]:
-                                            media_data = param.get(param_type, {})
-                                            if isinstance(media_data, dict):
-                                                tpl_media_url = media_data.get("link") or media_data.get("url")
-
-                        vars_dict = dict(meta.get("vars", {}))
-                        if tpl_media_url:
-                            vars_dict["var5"] = tpl_media_url
-
-                        msg_status = models.MessageStatus(
-                            trigger_id=trigger_id, message_id=message_id, phone_number=meta["phone"],
-                            contact_name=meta.get("name") or "",
-                            status='sent', message_type=msg_type, content=content, template_name=template_name,
-                            **vars_dict
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Persist results
+            db_msg = SessionLocal()
+            sent_message_ids = []
+            
+            try:
+                for idx, res in enumerate(results):
+                    meta = batch_meta[idx]
+                    if meta["blocked"]:
+                        try:
+                            update_trigger_stats(db_msg, trigger_id, failed=1)
+                        except Exception as e_block_stat:
+                            db_msg.rollback()
+                            logger.error(f"❌ Erro ao atualizar estatísticas de bloqueio para {meta['phone']}: {e_block_stat}")
+                        continue
+                    
+                    if isinstance(res, Exception):
+                        fail_msg = models.MessageStatus(
+                            trigger_id=trigger_id,
+                            phone_number=meta["phone"],
+                            status='failed',
+                            failure_reason=str(res),
+                            content=f"[Falha no Envio] {template_name or 'Mensagem Direta'}"
                         )
-                        db_msg.add(msg_status)
+                        db_msg.add(fail_msg)
                         db_msg.commit()
-                        
-                        update_trigger_stats(db_msg, trigger_id, sent=1)
-                        sent_count += 1
-                        sent_message_ids.append(message_id)
-                    else:
-                        # Verificar se é um skip de 24h (não é falha real)
-                        is_skipped_24h = isinstance(res, dict) and res.get("skipped_24h") is True
-                        if is_skipped_24h:
-                            record_skipped_status(trigger_id, meta["phone"])
-                            update_trigger_stats(db_msg, trigger_id, skipped=1)
-                        else:
-                            reason = "Erro na API da Meta ou dados inválidos"
-                            if isinstance(res, dict):
-                                if res.get("detail"):
-                                    reason = res.get("detail")
-                                elif res.get("error"):
-                                    err_val = res.get("error")
-                                    if isinstance(err_val, bool):
-                                        reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
-                                    else:
-                                        reason = str(err_val)
-                            reason = translate_meta_error(reason)
+                        update_trigger_stats(db_msg, trigger_id, failed=1)
+                        continue
+
+                    is_success = False
+                    message_id = None
+                    msg_type = res.get("type", "UNKNOWN") if isinstance(res, dict) else "UNKNOWN"
+                    
+                    if isinstance(res, dict) and not res.get("error"):
+                        raw_res = res.get("result") or res
+                        message_id = (raw_res.get("messages", [{}])[0].get("id") or raw_res.get("id", "")).replace("wamid.", "")
+                        if message_id: is_success = True
+
+                    try:
+                        existing_status = db_msg.query(models.MessageStatus).filter_by(trigger_id=trigger_id, phone_number=meta["phone"]).first()
+                        if existing_status:
+                            if existing_status.status == 'sent':
+                                update_trigger_stats(db_msg, trigger_id, sent=-1)
+                            elif existing_status.status == 'failed':
+                                if existing_status.failure_reason == 'BLOCKED_VIA_BUTTON':
+                                    update_trigger_stats(db_msg, trigger_id, blocked=-1)
+                                else:
+                                    update_trigger_stats(db_msg, trigger_id, failed=-1)
+                            db_msg.delete(existing_status)
+                            db_msg.commit()
+
+                        if is_success:
+                            if direct_message:
+                                content = direct_message
+                            elif template_body_cache:
+                                content = render_template_body(template_body_cache, meta["components"] or [], contact_name=meta["name"])
+                            else:
+                                content = extract_body_from_components(meta["components"] or [])
+                                if not content:
+                                    content = f"[Template: {template_name}]"
                             
-                            fail_msg = models.MessageStatus(
-                                trigger_id=trigger_id,
-                                phone_number=meta["phone"],
-                                status='failed',
-                                failure_reason=reason,
-                                content=f"[Falha no Envio] {template_name or 'Mensagem Direta'}"
+                            tpl_media_url = None
+                            if meta.get("components"):
+                                for comp in meta["components"]:
+                                    if str(comp.get("type", "")).lower() == "header":
+                                        params = comp.get("parameters", [])
+                                        for param in params:
+                                            param_type = str(param.get("type", "")).lower()
+                                            if param_type in ["image", "video", "document"]:
+                                                media_data = param.get(param_type, {})
+                                                if isinstance(media_data, dict):
+                                                    tpl_media_url = media_data.get("link") or media_data.get("url")
+
+                            vars_dict = dict(meta.get("vars", {}))
+                            if tpl_media_url:
+                                vars_dict["var5"] = tpl_media_url
+
+                            msg_status = models.MessageStatus(
+                                trigger_id=trigger_id, message_id=message_id, phone_number=meta["phone"],
+                                contact_name=meta.get("name") or "",
+                                status='sent', message_type=msg_type, content=content, template_name=template_name,
+                                **vars_dict
                             )
-                            db_msg.add(fail_msg)
+                            db_msg.add(msg_status)
                             db_msg.commit()
                             
-                            update_trigger_stats(db_msg, trigger_id, failed=1)
-                            failed_count += 1
-                            
-                            if "132015" in reason or "paused due to low quality" in reason:
-                                reason = "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade."
-                                fail_msg.failure_reason = reason
+                            update_trigger_stats(db_msg, trigger_id, sent=1)
+                            sent_message_ids.append(message_id)
+                        else:
+                            # Verificar se é um skip de 24h (não é falha real)
+                            is_skipped_24h = isinstance(res, dict) and res.get("skipped_24h") is True
+                            if is_skipped_24h:
+                                record_skipped_status(trigger_id, meta["phone"])
+                                update_trigger_stats(db_msg, trigger_id, skipped=1)
+                            else:
+                                reason = "Erro na API da Meta ou dados inválidos"
+                                if isinstance(res, dict):
+                                    if res.get("detail"):
+                                        reason = res.get("detail")
+                                    elif res.get("error"):
+                                        err_val = res.get("error")
+                                        if isinstance(err_val, bool):
+                                            reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
+                                        else:
+                                            reason = str(err_val)
+                                reason = translate_meta_error(reason)
                                 
-                                db_abort = SessionLocal()
-                                try:
-                                    t_abort = db_abort.query(models.ScheduledTrigger).get(trigger_id)
-                                    if t_abort:
-                                        t_abort.status = 'aborted'
-                                        t_abort.failure_reason = reason
-                                        db_abort.commit()
-                                        logger.error(f"🛑 [ABORT] Disparo {trigger_id} abortado. Template pausado por baixa qualidade.")
-                                finally:
-                                    db_abort.close()
-                except Exception as e_db_single:
-                    db_msg.rollback()
-                    logger.error(f"❌ Erro de banco de dados ao persistir status para o telefone {meta['phone']}: {e_db_single}")
-            
-            if is_simulate_messaging:
-                for mid in sent_message_ids:
-                    all_sim_tasks.append(asyncio.create_task(simulate_lifecycle(mid, trigger_id, c_id)))
-        finally:
-            db_msg.close()
+                                fail_msg = models.MessageStatus(
+                                    trigger_id=trigger_id,
+                                    phone_number=meta["phone"],
+                                    status='failed',
+                                    failure_reason=reason,
+                                    content=f"[Falha no Envio] {template_name or 'Mensagem Direta'}"
+                                )
+                                db_msg.add(fail_msg)
+                                db_msg.commit()
+                                
+                                update_trigger_stats(db_msg, trigger_id, failed=1)
+                                
+                                if "132015" in reason or "paused due to low quality" in reason:
+                                    reason = "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade."
+                                    fail_msg.failure_reason = reason
+                                    
+                                    db_abort = SessionLocal()
+                                    try:
+                                        t_abort = db_abort.query(models.ScheduledTrigger).get(trigger_id)
+                                        if t_abort:
+                                            t_abort.status = 'aborted'
+                                            t_abort.failure_reason = reason
+                                            db_abort.commit()
+                                            logger.error(f"🛑 [ABORT] Disparo {trigger_id} abortado. Template pausado por baixa qualidade.")
+                                    finally:
+                                        db_abort.close()
+                    except Exception as e_db_single:
+                        db_msg.rollback()
+                        logger.error(f"❌ Erro de banco de dados ao persistir status para o telefone {meta['phone']}: {e_db_single}")
+                
+                if is_simulate_messaging:
+                    for mid in sent_message_ids:
+                        all_sim_tasks.append(asyncio.create_task(simulate_lifecycle(mid, trigger_id, c_id)))
+            finally:
+                db_msg.close()
 
-        # Progress Event
-        db_progress = SessionLocal()
+            # Progress Event
+            db_progress = SessionLocal()
+            try:
+                t_prog = db_progress.query(models.ScheduledTrigger).get(trigger_id)
+                if t_prog:
+                    await rabbitmq.publish_event("bulk_progress", {
+                        "trigger_id": trigger_id,
+                        "status": "processing",
+                        "sent": t_prog.total_sent or 0,
+                        "total_sent": t_prog.total_sent or 0,
+                        "failed": t_prog.total_failed or 0,
+                        "total_failed": t_prog.total_failed or 0,
+                        "delivered": t_prog.total_delivered or 0,
+                        "total_delivered": t_prog.total_delivered or 0,
+                        "read": t_prog.total_read or 0,
+                        "total_read": t_prog.total_read or 0,
+                        "interactions": t_prog.total_interactions or 0,
+                        "total_interactions": t_prog.total_interactions or 0,
+                        "blocked": t_prog.total_blocked or 0,
+                        "total_blocked": t_prog.total_blocked or 0,
+                        "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                        "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
+                        "total_paid_templates": t_prog.total_paid_templates or 0,
+                        "total": len(contacts),
+                        "total_contacts": len(contacts)
+                    })
+            finally:
+                db_progress.close()
+
+            # Cancelamento gracioso: verificar APÓS o batch terminar, não antes
+            db_cancel_check = SessionLocal()
+            try:
+                trig_cancel = db_cancel_check.query(models.ScheduledTrigger).get(trigger_id)
+                if trig_cancel and trig_cancel.status == 'deleted_pending':
+                    db_cancel_check.delete(trig_cancel)
+                    db_cancel_check.commit()
+                    logger.info(f"🗑️ [BULK] Disparo #{trigger_id} deletado pelo usuário. Encerrando worker.")
+                    return
+                if trig_cancel and trig_cancel.status == 'cancelling':
+                    from services.engine import log_node_execution
+                    trig_cancel.status = 'cancelled'
+                    log_node_execution(db_cancel_check, trig_cancel, node_id=trig_cancel.current_node_id or 'DELIVERY',
+                                       status='cancelled', details='Disparo cancelado pelo usuário. Batch atual foi concluído antes de encerrar.')
+                    db_cancel_check.commit()
+                    logger.info(f"🛑 [BULK] Disparo #{trigger_id} cancelado graciosamente após batch.")
+                    await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": c_id})
+                    return
+            except Exception as e_cancel:
+                logger.error(f"❌ [BULK] Erro ao verificar cancelamento gracioso: {e_cancel}")
+            finally:
+                db_cancel_check.close()
+
+            i += concurrency
+            if i < len(contacts): await asyncio.sleep(delay)
+
+        # Aguardar tarefas de simulação de ciclo de vida (se houver) antes de marcar como completed
+        if all_sim_tasks:
+            logger.info(f"⏳ [SIMULATE] Aguardando conclusão da simulação de ciclo de vida ({len(all_sim_tasks)} tarefas) para o Trigger #{trigger_id}...")
+            await asyncio.gather(*all_sim_tasks, return_exceptions=True)
+
+        # Finalize
+        db_final = SessionLocal()
         try:
-            t_prog = db_progress.query(models.ScheduledTrigger).get(trigger_id)
-            if t_prog:
+            t = db_final.query(models.ScheduledTrigger).get(trigger_id)
+            if t and t.status == 'cancelling':
+                # Cancelamento solicitado mas todos os contatos já foram processados — finaliza como cancelado
+                from services.engine import log_node_execution
+                log_node_execution(db_final, t, node_id=t.current_node_id or 'DELIVERY',
+                                   status='cancelled', details='Disparo cancelado pelo usuário. Todos os contatos do último batch foram processados antes do encerramento.')
+                t.status = 'cancelled'
+                db_final.commit()
+                logger.info(f"🛑 [BULK] Disparo #{trigger_id} finalizado como cancelado (todos os batches já tinham sido processados).")
+                await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": c_id})
+            elif t and t.status not in ['cancelled']:
+                from services.engine import log_node_execution
+                client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=t.client_id)
+                log_node_execution(db_final, t, node_id='DELIVERY', status='completed', details=f'{client_name}: Envio finalizado para {t.total_sent} contatos.')
+
+                pdata = dict(t.processed_data or {})
+                pdata["finished_at"] = datetime.utcnow().isoformat()
+                t.processed_data = pdata
+                t.status = "completed"
+                db_final.commit()
+                
                 await rabbitmq.publish_event("bulk_progress", {
                     "trigger_id": trigger_id,
-                    "status": "processing",
-                    "sent": t_prog.total_sent or 0,
-                    "total_sent": t_prog.total_sent or 0,
-                    "failed": t_prog.total_failed or 0,
-                    "total_failed": t_prog.total_failed or 0,
-                    "delivered": t_prog.total_delivered or 0,
-                    "total_delivered": t_prog.total_delivered or 0,
-                    "read": t_prog.total_read or 0,
-                    "total_read": t_prog.total_read or 0,
-                    "interactions": t_prog.total_interactions or 0,
-                    "total_interactions": t_prog.total_interactions or 0,
-                    "blocked": t_prog.total_blocked or 0,
-                    "total_blocked": t_prog.total_blocked or 0,
-                    "cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
-                    "total_cost": float(t_prog.total_cost) if t_prog.total_cost else 0.0,
-                    "total_paid_templates": t_prog.total_paid_templates or 0,
-                    "total": len(contacts),
-                    "total_contacts": len(contacts)
+                    "status": "completed",
+                    "processed_data": pdata,
+                    "sent": t.total_sent or 0,
+                    "total_sent": t.total_sent or 0,
+                    "failed": t.total_failed or 0,
+                    "total_failed": t.total_failed or 0,
+                    "delivered": t.total_delivered or 0,
+                    "total_delivered": t.total_delivered or 0,
+                    "read": t.total_read or 0,
+                    "total_read": t.total_read or 0,
+                    "interactions": t.total_interactions or 0,
+                    "total_interactions": t.total_interactions or 0,
+                    "blocked": t.total_blocked or 0,
+                    "total_blocked": t.total_blocked or 0,
+                    "cost": float(t.total_cost) if t.total_cost else 0.0,
+                    "total_cost": float(t.total_cost) if t.total_cost else 0.0,
+                    "total_paid_templates": t.total_paid_templates or 0,
+                    "total": total,
+                    "total_contacts": total
                 })
         finally:
-            db_progress.close()
+             db_final.close()
 
-        # Cancelamento gracioso: verificar APÓS o batch terminar, não antes
-        db_cancel_check = SessionLocal()
+    except Exception as e_fatal_bulk:
+        logger.error(f"❌ [BULK_FATAL_ERROR] Exceção não tratada no disparo #{trigger_id}: {e_fatal_bulk}")
+        db_recovery = SessionLocal()
         try:
-            trig_cancel = db_cancel_check.query(models.ScheduledTrigger).get(trigger_id)
-            if trig_cancel and trig_cancel.status == 'deleted_pending':
-                db_cancel_check.delete(trig_cancel)
-                db_cancel_check.commit()
-                logger.info(f"🗑️ [BULK] Disparo #{trigger_id} deletado pelo usuário. Encerrando worker.")
-                return
-            if trig_cancel and trig_cancel.status == 'cancelling':
-                from services.engine import log_node_execution
-                trig_cancel.status = 'cancelled'
-                log_node_execution(db_cancel_check, trig_cancel, node_id=trig_cancel.current_node_id or 'DELIVERY',
-                                   status='cancelled', details='Disparo cancelado pelo usuário. Batch atual foi concluído antes de encerrar.')
-                db_cancel_check.commit()
-                logger.info(f"🛑 [BULK] Disparo #{trigger_id} cancelado graciosamente após batch.")
-                await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": c_id})
-                return
-        except Exception as e_cancel:
-            logger.error(f"❌ [BULK] Erro ao verificar cancelamento gracioso: {e_cancel}")
+            t_rec = db_recovery.query(models.ScheduledTrigger).get(trigger_id)
+            if t_rec and t_rec.status == 'processing':
+                t_rec.status = 'completed' if (t_rec.total_sent or 0) > 0 else 'failed'
+                t_rec.failure_reason = f"Erro de processamento: {str(e_fatal_bulk)}"
+                db_recovery.commit()
+                logger.info(f"🛡️ [RECOVERY] Status do Trigger #{trigger_id} atualizado para '{t_rec.status}' após erro fatal.")
+        except Exception as e_rec:
+            logger.error(f"❌ [RECOVERY_FAILED] Erro ao recuperar trigger em exceção fatal: {e_rec}")
         finally:
-            db_cancel_check.close()
-
-        i += concurrency
-        if i < len(contacts): await asyncio.sleep(delay)
-
-    # Aguardar tarefas de simulação de ciclo de vida (se houver) antes de marcar como completed
-    if all_sim_tasks:
-        logger.info(f"⏳ [SIMULATE] Aguardando conclusão da simulação de ciclo de vida ({len(all_sim_tasks)} tarefas) para o Trigger #{trigger_id}...")
-        await asyncio.gather(*all_sim_tasks, return_exceptions=True)
-
-    # Finalize
-    db_final = SessionLocal()
-    try:
-        t = db_final.query(models.ScheduledTrigger).get(trigger_id)
-        if t and t.status == 'cancelling':
-            # Cancelamento solicitado mas todos os contatos já foram processados — finaliza como cancelado
-            from services.engine import log_node_execution
-            log_node_execution(db_final, t, node_id=t.current_node_id or 'DELIVERY',
-                               status='cancelled', details='Disparo cancelado pelo usuário. Todos os contatos do último batch foram processados antes do encerramento.')
-            t.status = 'cancelled'
-            db_final.commit()
-            logger.info(f"🛑 [BULK] Disparo #{trigger_id} finalizado como cancelado (todos os batches já tinham sido processados).")
-            await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "cancelled", "client_id": c_id})
-        elif t and t.status not in ['cancelled']:
-            from services.engine import log_node_execution
-            client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=t.client_id)
-            log_node_execution(db_final, t, node_id='DELIVERY', status='completed', details=f'{client_name}: Envio finalizado para {t.total_sent} contatos.')
-
-            pdata = dict(t.processed_data or {})
-            pdata["finished_at"] = datetime.utcnow().isoformat()
-            t.processed_data = pdata
-            t.status = "completed"
-            db_final.commit()
-            
-            await rabbitmq.publish_event("bulk_progress", {
-                "trigger_id": trigger_id,
-                "status": "completed",
-                "processed_data": pdata,
-                "sent": t.total_sent or 0,
-                "total_sent": t.total_sent or 0,
-                "failed": t.total_failed or 0,
-                "total_failed": t.total_failed or 0,
-                "delivered": t.total_delivered or 0,
-                "total_delivered": t.total_delivered or 0,
-                "read": t.total_read or 0,
-                "total_read": t.total_read or 0,
-                "interactions": t.total_interactions or 0,
-                "total_interactions": t.total_interactions or 0,
-                "blocked": t.total_blocked or 0,
-                "total_blocked": t.total_blocked or 0,
-                "cost": float(t.total_cost) if t.total_cost else 0.0,
-                "total_cost": float(t.total_cost) if t.total_cost else 0.0,
-                "total_paid_templates": t.total_paid_templates or 0,
-                "total": total,
-                "total_contacts": total
-            })
-    finally:
-         db_final.close()
+            db_recovery.close()

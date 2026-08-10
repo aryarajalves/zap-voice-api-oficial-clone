@@ -134,6 +134,17 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     except Exception:
         trigger.queue_count = max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0))
     
+    # Se o disparo estiver em 'processing' mas todos os contatos já foram processados, marcar como 'completed'
+    if trigger.status == 'processing' and trigger.total_contacts and trigger.total_contacts > 0:
+        total_processed = sent + (trigger.total_failed or 0) + skipped + blocked
+        if total_processed >= trigger.total_contacts:
+            trigger.status = 'completed'
+            pdata = dict(trigger.processed_data or {})
+            if "finished_at" not in pdata:
+                pdata["finished_at"] = datetime.utcnow().isoformat()
+                trigger.processed_data = pdata
+            logger.info(f"✅ [RECONCILE] Disparo #{trigger_id} concluído com sucesso ({total_processed}/{trigger.total_contacts} processados).")
+
     # Não alterar os registros no banco durante o cálculo para evitar efeitos colaterais
     db.commit()
     db.refresh(trigger)
