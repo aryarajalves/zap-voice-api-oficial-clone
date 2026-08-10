@@ -1008,7 +1008,11 @@ export default function ChatConversations({ onClose, onNavigate }) {
             const lastMsg = new Date(selectedConvo.last_contact_message_at);
             const expiry = new Date(lastMsg.getTime() + 24 * 60 * 60 * 1000);
             const now = new Date();
-            const diff = expiry - now;
+            let diff = expiry - now;
+
+            // Garantir que não exiba 24:00:01 devido a pequenas variações de relógio entre cliente e servidor
+            const maxDiff = (24 * 60 * 60 * 1000) - 1000;
+            if (diff > maxDiff) diff = maxDiff;
 
             if (diff <= 0) {
                 engine.setTimeLeft24h('Janela Fechada');
