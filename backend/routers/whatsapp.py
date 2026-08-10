@@ -512,17 +512,88 @@ async def upload_template_media(
     """
     Faz upload de imagem/vídeo/documento para a Meta Resumable Upload API
     e retorna o header_handle a ser usado na criação de templates.
+    
+    Para vídeos, realiza transcodificação automática para H.264 + AAC + FastStart
+    antes do upload, garantindo compatibilidade no WhatsApp mobile (Android/iPhone).
     """
+    import os
+    import tempfile
+    import subprocess
+
     client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     if not wa_token:
         raise HTTPException(status_code=400, detail="WA_ACCESS_TOKEN não configurado.")
 
     file_bytes = await file.read()
-    file_length = len(file_bytes)
     mime_type = file.content_type or "application/octet-stream"
+    is_video = mime_type.startswith("video/") or (file.filename or "").lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm"))
 
-    async with httpx.AsyncClient(timeout=60.0) as http:
+    # Transcodificação automática para vídeos: H.264 + AAC + FastStart
+    # Isso garante que o vídeo abra corretamente no WhatsApp mobile (Android/iPhone).
+    # Sem isso, vídeos com codec H.265/HEVC, AV1 ou sem faststart causam erro no celular.
+    if is_video:
+        input_tmp = None
+        output_tmp = None
+        try:
+            # Salvar arquivo original em temp
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as f_in:
+                f_in.write(file_bytes)
+                input_tmp = f_in.name
+
+            output_tmp = input_tmp.replace(".mp4", "_wpp.mp4")
+
+            logger.info(f"🎬 [Template Upload] Transcodificando vídeo para H.264+AAC+FastStart: {file.filename}")
+
+            ffmpeg_result = subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-i", input_tmp,
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-c:a", "aac",
+                    "-b:a", "128k",
+                    "-movflags", "+faststart",
+                    output_tmp
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+
+            if ffmpeg_result.returncode != 0:
+                logger.error(f"❌ [Template Upload] FFmpeg falhou: {ffmpeg_result.stderr}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Erro ao processar o vídeo para compatibilidade com WhatsApp: {ffmpeg_result.stderr[-300:]}"
+                )
+
+            with open(output_tmp, "rb") as f_out:
+                file_bytes = f_out.read()
+
+            mime_type = "video/mp4"
+            logger.info(f"✅ [Template Upload] Vídeo transcodificado com sucesso. Tamanho final: {len(file_bytes) / (1024*1024):.1f} MB")
+
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=400, detail="Timeout ao processar o vídeo. Tente um arquivo menor.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"❌ [Template Upload] Erro inesperado na transcodificação: {e}")
+            raise HTTPException(status_code=500, detail=f"Erro ao processar vídeo: {str(e)}")
+        finally:
+            if input_tmp and os.path.exists(input_tmp):
+                try: os.remove(input_tmp)
+                except: pass
+            if output_tmp and os.path.exists(output_tmp):
+                try: os.remove(output_tmp)
+                except: pass
+
+    file_length = len(file_bytes)
+
+    async with httpx.AsyncClient(timeout=120.0) as http:
         # Step 1: create upload session
         session_res = await http.post(
             "https://graph.facebook.com/v25.0/app/uploads",
