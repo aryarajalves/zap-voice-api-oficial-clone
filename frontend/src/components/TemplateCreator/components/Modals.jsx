@@ -9,6 +9,8 @@ const Modals = ({ logic }) => {
         isBodyExpanded, setIsBodyExpanded, setFormData
     } = logic;
 
+    const bodyCharCount = (formData.body_text || '').length;
+
     return (
         <>
             <ConfirmModal
@@ -41,7 +43,12 @@ const Modals = ({ logic }) => {
                                     <FiFileText size={20} />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-xl text-gray-800 dark:text-white">Corpo da Mensagem</h3>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-bold text-xl text-gray-800 dark:text-white">Corpo da Mensagem</h3>
+                                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${bodyCharCount > 1024 ? 'bg-red-500/10 text-red-500 border border-red-500/30 animate-pulse' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                                            {bodyCharCount.toLocaleString('pt-BR')} / 1.024 caracteres
+                                        </span>
+                                    </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">Edição em tela cheia para melhor visualização</p>
                                 </div>
                             </div>

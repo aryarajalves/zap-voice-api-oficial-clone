@@ -2,10 +2,16 @@ import React from 'react';
 
 const FooterSection = ({ logic }) => {
     const { formData, setFormData } = logic;
+    const footerCharCount = (formData.footer_text || '').length;
 
     return (
         <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rodapé (Opcional)</label>
+            <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">Rodapé (Opcional)</label>
+                <span className={`text-[10px] font-bold ${footerCharCount > 60 ? 'text-red-500 font-bold animate-pulse' : 'text-gray-400'}`}>
+                    {footerCharCount} / 60
+                </span>
+            </div>
             <input
                 type="text"
                 value={formData.footer_text}

@@ -17,10 +17,17 @@ const BodySection = ({ logic }) => {
         setFormData({ ...formData, body_text: newText });
     };
 
+    const bodyCharCount = (formData.body_text || '').length;
+
     return (
         <div>
             <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-bold text-gray-700 dark:text-white">Corpo da Mensagem</label>
+                <div className="flex items-center gap-2">
+                    <label className="block text-sm font-bold text-gray-700 dark:text-white">Corpo da Mensagem</label>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${bodyCharCount > 1024 ? 'bg-red-500/10 text-red-500 border border-red-500/30 font-bold animate-pulse' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
+                        {bodyCharCount.toLocaleString('pt-BR')} / 1.024
+                    </span>
+                </div>
                 <button
                     type="button"
                     onClick={addVariable}

@@ -32,14 +32,22 @@ const HeaderSection = ({ logic }) => {
             </div>
 
             {formData.header_type === 'TEXT' && (
-                <input
-                    type="text"
-                    value={formData.header_text}
-                    onChange={(e) => setFormData({ ...formData, header_text: e.target.value })}
-                    className="w-full p-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white mt-4"
-                    placeholder="Texto do cabeçalho..."
-                    maxLength={60}
-                />
+                <div className="mt-4">
+                    <div className="flex justify-between items-center mb-1.5">
+                        <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Texto do Cabeçalho</label>
+                        <span className={`text-[10px] font-bold ${(formData.header_text?.length || 0) > 60 ? 'text-red-500 font-bold animate-pulse' : 'text-gray-400'}`}>
+                            {(formData.header_text?.length || 0)} / 60
+                        </span>
+                    </div>
+                    <input
+                        type="text"
+                        value={formData.header_text}
+                        onChange={(e) => setFormData({ ...formData, header_text: e.target.value })}
+                        className="w-full p-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                        placeholder="Texto do cabeçalho..."
+                        maxLength={60}
+                    />
+                </div>
             )}
 
             {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(formData.header_type) && (
