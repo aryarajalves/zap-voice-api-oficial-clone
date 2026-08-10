@@ -7,6 +7,9 @@ from datetime import datetime
 from database import SessionLocal
 import models
 from core.deps import get_db, get_current_user
+import tempfile
+import subprocess
+import io
 from core.logger import logger
 from sqlalchemy.orm import Session
 
@@ -109,6 +112,60 @@ async def upload_file(
     try:
         from storage import storage
         
+        # Se for vídeo, transcodificar com FFmpeg para garantir compatibilidade com WhatsApp (H.264 + AAC + faststart)
+        if detected_type == "video":
+            logger.info(f"🎬 [UPLOAD_TRANSCODE] Transcodificando vídeo para H.264+AAC+FastStart: {file.filename}")
+            input_tmp = None
+            output_tmp = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as f_in:
+                    file.file.seek(0)
+                    f_in.write(file.file.read())
+                    input_tmp = f_in.name
+
+                output_tmp = input_tmp.replace(ext, "_wpp.mp4")
+
+                ffmpeg_result = subprocess.run(
+                    [
+                        "ffmpeg", "-y",
+                        "-i", input_tmp,
+                        "-c:v", "libx264",
+                        "-pix_fmt", "yuv420p",
+                        "-preset", "fast",
+                        "-crf", "23",
+                        "-c:a", "aac",
+                        "-b:a", "128k",
+                        "-movflags", "+faststart",
+                        output_tmp
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+
+                if ffmpeg_result.returncode == 0 and os.path.exists(output_tmp):
+                    with open(output_tmp, "rb") as f_out:
+                        transcoded_bytes = f_out.read()
+                    
+                    file.file = io.BytesIO(transcoded_bytes)
+                    file_size = len(transcoded_bytes)
+                    file.content_type = "video/mp4"
+                    unique_name = f"{uuid.uuid4()}.mp4"
+                    logger.info(f"✅ [UPLOAD_TRANSCODE] Vídeo transcodificado com sucesso. Novo tamanho: {file_size / 1024 / 1024:.2f} MB")
+                else:
+                    logger.warning(f"⚠️ [UPLOAD_TRANSCODE] FFmpeg retornou erro ({ffmpeg_result.returncode}), utilizando vídeo original: {ffmpeg_result.stderr[-200:]}")
+                    file.file.seek(0)
+            except Exception as e_ffmpeg:
+                logger.warning(f"⚠️ [UPLOAD_TRANSCODE] Falha na transcodificação via FFmpeg ({e_ffmpeg}), utilizando arquivo original.")
+                file.file.seek(0)
+            finally:
+                if input_tmp and os.path.exists(input_tmp):
+                    try: os.remove(input_tmp)
+                    except: pass
+                if output_tmp and os.path.exists(output_tmp):
+                    try: os.remove(output_tmp)
+                    except: pass
+
         # Realizar Upload (Local ou MinIO conforme ENV)
         logger.info(f"📤 [STORAGE_UPLOADING] Enviando para storage: {unique_name}")
         file_url = storage.upload_file(file.file, unique_name, file.content_type)
