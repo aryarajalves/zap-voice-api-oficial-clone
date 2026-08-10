@@ -214,6 +214,40 @@ const TemplateSelectionSection = ({
 
             {selectedTemplateObj && (
                 <div className="space-y-8 animate-in zoom-in-95 duration-300">
+                    {/* Ações rápidas do Template Selecionado (Ex: Limpar 24h) */}
+                    <div className="flex justify-between items-center bg-slate-900/60 border border-white/5 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <span className="font-bold text-white">{selectedTemplateObj.name}</span>
+                            <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono uppercase">{selectedTemplateObj.category || 'MARKETING'}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (window.confirm(`Deseja zerar a restrição de 24h para o template "${selectedTemplateObj.name}"? Isso permitirá re-disparar este template imediatamente para contatos que já receberam nas últimas 24h.`)) {
+                                    try {
+                                        const { fetchWithAuth, API_URL } = await import('../../../config');
+                                        const activeClient = JSON.parse(localStorage.getItem('activeClient') || '{}');
+                                        const res = await fetchWithAuth(`${API_URL}/whatsapp/templates/${encodeURIComponent(selectedTemplateObj.name)}/24h-history`, {
+                                            method: 'DELETE'
+                                        }, activeClient.id);
+                                        const data = await res.json();
+                                        if (res.ok) {
+                                            alert(`✅ Restrição de 24h limpa com sucesso para "${selectedTemplateObj.name}"!`);
+                                        } else {
+                                            alert(`❌ Erro: ${data.detail || 'Falha ao limpar histórico'}`);
+                                        }
+                                    } catch (err) {
+                                        alert(`❌ Erro de conexão: ${err.message}`);
+                                    }
+                                }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+                            title="Zerar restrição de 24h para este template (permite re-envio imediato para todos os contatos)"
+                        >
+                            <span>🔄</span>
+                            <span>Resetar Janela de 24h</span>
+                        </button>
+                    </div>
 
                     {/* Upload de mídia para cabeçalhos IMAGE/VIDEO/DOCUMENT */}
                     {(() => {

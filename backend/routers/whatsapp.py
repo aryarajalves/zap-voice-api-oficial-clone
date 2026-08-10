@@ -689,6 +689,45 @@ async def delete_template(
         
     return result
 
+@router.delete("/templates/{template_name}/24h-history")
+async def reset_template_24h_history(
+    template_name: str,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    current_user: models.User = Depends(require_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Limpa todo o histórico de disparo de 24h para um template específico (ContactTemplateHistory e MessageStatus sem trigger_id).
+    Útil para liberar o re-disparo do template sem precisar aguardar 24h.
+    """
+    target_client_id = x_client_id if x_client_id else current_user.client_id
+    
+    # 1. Deletar registros de ContactTemplateHistory para esse template e cliente
+    deleted_history = db.query(models.ContactTemplateHistory).filter(
+        models.ContactTemplateHistory.client_id == target_client_id,
+        models.ContactTemplateHistory.template_name == template_name
+    ).delete(synchronize_session=False)
+
+    # 2. Deletar registros de MessageStatus de template avulso (sem trigger_id) para esse template
+    deleted_ms = db.query(models.MessageStatus).filter(
+        models.MessageStatus.template_name == template_name,
+        models.MessageStatus.trigger_id.is_(None)
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
+    logger.info(f"🧹 [RESET_24H_TEMPLATE] Template '{template_name}' limpo por Client {target_client_id}. Removeu {deleted_history} históricos e {deleted_ms} status.")
+
+    return {
+        "status": "success",
+        "message": f"Histórico de 24h do template '{template_name}' zerado com sucesso.",
+        "details": {
+            "deleted_history": deleted_history,
+            "deleted_message_status": deleted_ms
+        }
+    }
+
+
 @router.post("/templates/{template_id}/status")
 async def update_template_status(
     template_id: str,
