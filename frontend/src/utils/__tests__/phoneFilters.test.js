@@ -52,5 +52,12 @@ describe('Phone Filters Logic', () => {
             const dispatch = getDispatchList(filtered);
             expect(dispatch).toHaveLength(0);
         });
+
+        it('should slice dispatch list to N first contacts when limitMode is limit', () => {
+            const dispatch = getDispatchList(mockContacts, 'limit', 2);
+            expect(dispatch).toHaveLength(2);
+            expect(dispatch[0].phone).toBe('5585991112222');
+            expect(dispatch[1].phone).toBe('5511988887777');
+        });
     });
 });

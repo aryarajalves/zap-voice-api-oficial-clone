@@ -3,7 +3,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useBulkSender } from './useBulkSender';
 
 // Mock dependencies
-const mockClient = { id: 1, name: 'Client Test' };
+let mockClient = { id: 1, name: 'Client Test' };
 vi.mock('../../../contexts/ClientContext', () => ({
     useClient: () => ({
         activeClient: mockClient
@@ -249,6 +249,36 @@ describe('useBulkSender Hook - loadExclusionContactsByTag', () => {
         expect(result.current.exclusionList).toContain('5511999999992');
         expect(result.current.exclusionList.length).toBe(2);
         expect(result.current.selectedExclusionTag).toEqual([]);
+    });
+});
+
+describe('useBulkSender Hook - reset ao trocar de cliente ativo', () => {
+    it('deve voltar para o passo 1 e desmarcar o template ao alterar o cliente ativo', async () => {
+        const { act } = await import('@testing-library/react');
+        
+        mockClient = { id: 1, name: 'Cliente A' };
+        const { result, rerender } = renderHook(() => useBulkSender(vi.fn(), vi.fn()));
+
+        // Configurar estado no passo 2 com template selecionado
+        await act(async () => {
+            result.current.setStep(2);
+            result.current.setSelectedTemplate('template_cliente_a');
+            result.current.handleRecipientSelect([{ phone: '5511999999999' }]);
+        });
+
+        expect(result.current.step).toBe(2);
+        expect(result.current.selectedTemplate).toBe('template_cliente_a');
+        expect(result.current.finalContacts.length).toBe(1);
+
+        // Simular troca de cliente ativo
+        mockClient = { id: 2, name: 'Cliente B' };
+        await act(async () => {
+            rerender();
+        });
+
+        expect(result.current.step).toBe(1);
+        expect(result.current.selectedTemplate).toBe('');
+        expect(result.current.finalContacts.length).toBe(0);
     });
 });
 

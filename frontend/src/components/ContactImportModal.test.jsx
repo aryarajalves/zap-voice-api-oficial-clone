@@ -6,6 +6,7 @@ import { useContactImport } from './ContactImportModal/hooks/useContactImport';
 
 vi.mock('./ContactImportModal/hooks/useContactImport', () => ({
   useContactImport: vi.fn(),
+  getPhoneMappingError: vi.fn(() => null),
 }));
 
 vi.mock('react-icons/fi', () => ({
@@ -17,6 +18,9 @@ vi.mock('react-icons/fi', () => ({
   FiArrowRight: () => <span data-testid="icon-arrow-right" />,
   FiArrowLeft: () => <span data-testid="icon-arrow-left" />,
   FiLoader: () => <span data-testid="icon-loader" />,
+  FiMaximize2: () => <span data-testid="icon-maximize" />,
+  FiChevronDown: () => <span data-testid="icon-chevron-down" />,
+  FiCheck: () => <span data-testid="icon-check" />,
 }));
 
 const mockReset = vi.fn();
@@ -60,6 +64,10 @@ const defaultHookReturn = {
   handleFileChange: vi.fn(),
   handleExecuteImport: vi.fn(),
   reset: mockReset,
+  fixedTags: [],
+  setFixedTags: vi.fn(),
+  fixedRemoveTags: [],
+  setFixedRemoveTags: vi.fn(),
 };
 
 describe('ContactImportModal - Etiquetas render e modal', () => {

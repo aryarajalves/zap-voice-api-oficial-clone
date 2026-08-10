@@ -30,6 +30,13 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
         # --- CRIAR CONVERSA E SALVAR TEMPLATE NO CHAT LOCAL APÓS ENTREGA ---
         if message_record.message_type == 'TEMPLATE' or (message_record.template_name and str(message_record.template_name).strip()):
             try:
+                # Tentar extrair o client_id
+                client_id = trigger.client_id if trigger else (int(message_record.var1) if message_record.var1 else None)
+                if not client_id:
+                    logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] client_id não encontrado para salvar chat local ({phone}).")
+                    db.close()
+                    return
+
                 # 1. Verificar se a mensagem de chat local já existe por wa_message_id
                 existing_chat_msg = db.query(models.ChatMessage).filter(
                     models.ChatMessage.wa_message_id == msg_id
@@ -38,13 +45,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                 if not existing_chat_msg:
                     clean_phone = "".join(filter(str.isdigit, str(phone)))
                     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-                    
-                    # Tentar extrair o client_id
-                    client_id = trigger.client_id if trigger else (int(message_record.var1) if message_record.var1 else None)
-                    if not client_id:
-                        logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] client_id não encontrado para salvar chat local ({phone}).")
-                        db.close()
-                        return
                         
                     # Buscar conversa local
                     chat_convo = db.query(models.ChatConversation).filter(
@@ -79,8 +79,12 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                             new_labels = robust_extract_labels(trigger.chatwoot_label)
                             if new_labels:
                                 current_labels = list(chat_convo.labels or [])
-                                updated_labels = list(set(current_labels + new_labels))
-                                chat_convo.labels = updated_labels
+                                current_lower = [l.lower() for l in current_labels]
+                                for nl in new_labels:
+                                    if nl.lower() not in current_lower:
+                                        current_labels.append(nl)
+                                        current_lower.append(nl.lower())
+                                chat_convo.labels = current_labels
                                 logger.info(f"🏷️ [CHAT-LOCAL-POST-DELIVERY] Mescladas etiquetas {new_labels} na conversa local existente {chat_convo.id}")
 
                     # Reconstruir metadados do template
@@ -444,17 +448,23 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                                 else:
                                     # Calcular queue_count via SQL real (consistente com o modal de fila)
                                     try:
-                                        from sqlalchemy import func as sqlfunc
+                                        from sqlalchemy import func as sqlfunc, select
                                         ttn_id = trigger_to_notify.id
-                                        subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(
-                                            models.MessageStatus.trigger_id == ttn_id
-                                        ).group_by(models.MessageStatus.phone_number).subquery()
-                                        ws_queue_count = db.query(models.MessageStatus).filter(
-                                            models.MessageStatus.id.in_(subq),
+                                        base_queue_q = db.query(models.MessageStatus).filter(
+                                            models.MessageStatus.trigger_id == ttn_id,
                                             models.MessageStatus.status == 'sent',
                                             models.MessageStatus.delivered_counted == False,
                                             models.MessageStatus.read_counted == False
-                                        ).count()
+                                        )
+                                        if trigger_to_notify.is_bulk:
+                                            subq = base_queue_q.with_entities(
+                                                sqlfunc.max(models.MessageStatus.id).label("max_id")
+                                            ).group_by(models.MessageStatus.phone_number).subquery()
+                                            ws_queue_count = db.query(models.MessageStatus).filter(
+                                                models.MessageStatus.id.in_(select(subq.c.max_id))
+                                            ).count()
+                                        else:
+                                            ws_queue_count = base_queue_q.count()
                                     except Exception:
                                         ws_queue_count = max(0, (trigger_to_notify.total_sent or 0) - (trigger_to_notify.total_delivered or 0) - (trigger_to_notify.total_failed or 0))
                                 await wah.rabbitmq.publish_event("bulk_progress", {

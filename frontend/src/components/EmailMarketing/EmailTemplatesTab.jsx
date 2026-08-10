@@ -37,6 +37,11 @@ function cleanHtmlForEditing(html) {
 function formatTextToHtml(text) {
   if (!text) return '';
 
+  // Se já for um documento HTML ou estrutura gerada pelo editor visual
+  if (text.includes('<!DOCTYPE html>') || text.includes('<table role="presentation"') || text.includes('<table') || text.includes('<body')) {
+    return text;
+  }
+
   let html = text;
 
   // Processa listas com asterisco/bolinha (* item ou - item) se não estiverem envoltas em <ul>
@@ -140,14 +145,14 @@ export default function EmailTemplatesTab() {
       setFormData({
         name: tmpl.name,
         subject: tmpl.subject,
-        body_html: cleanHtmlForEditing(tmpl.body_html)
+        body_html: tmpl.body_html || ''
       });
     } else {
       setEditingTemplate(null);
       setFormData({
         name: '',
         subject: '',
-        body_html: 'Olá {{nome}},\n\nSeja muito bem-vindo! Estamos felizes em ter você aqui.\n\nQualquer dúvida estamos à disposição.'
+        body_html: ''
       });
     }
     setIsModalOpen(true);
@@ -330,7 +335,7 @@ export default function EmailTemplatesTab() {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'X-Client-ID': activeClient?.id ? String(activeClient.id) : ''
+          'X-Client-ID': String(activeClient?.id || localStorage.getItem('activeClientId') || localStorage.getItem('client_id') || '1')
         },
         body: uploadFormData
       });

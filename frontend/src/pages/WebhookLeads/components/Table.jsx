@@ -237,6 +237,7 @@ export default function Table({
                   onOpenVariables={(l) => { setLeadForVariables(l); setIsVariablesModalOpen(true); }}
                   onOpenTagsModal={handleOpenTagsModal}
                   onOpenBlockModal={onOpenBlockModal}
+                  updateLeadInPlace={updateLeadInPlace}
                 />
               ))
             )}
@@ -253,7 +254,7 @@ export default function Table({
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400">Exibir</span>
             <select value={limit} onChange={(e) => { setLimit(Number(e.target.value)); setPage(0); }} className="text-xs font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-              {[20, 50, 100, 500, 1000].map(n => <option key={n} value={n}>{n}</option>)}
+              {[50, 100, 200, 500].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
             <span className="text-xs text-gray-400">por página</span>
           </div>

@@ -99,7 +99,7 @@ def read_settings(
                 masked_settings[key] = ""
                 continue
                 
-            if ("TOKEN" in key or "KEY" in key or "SECRET" in key) and key != "AUTO_BLOCK_KEYWORDS":
+            if ("TOKEN" in key or "KEY" in key or "SECRET" in key) and key not in ("AUTO_BLOCK_KEYWORDS", "MANYCHAT_API_KEYS"):
                 if len(value) > 8:
                     # Preserva o tamanho original usando asteriscos
                     mask_len = len(value) - 8
@@ -196,7 +196,8 @@ async def update_settings(
         "APPOINTMENTS_REMINDER_MINUTES",
         "APPOINTMENTS_REMINDER_TEMPLATE",
         "APPOINTMENTS_REMINDER_PARAMS",
-        "APPOINTMENTS_REMINDER_BUTTONS"
+        "APPOINTMENTS_REMINDER_BUTTONS",
+        "WA_WABA_CARD_LAST4"
     }
     
     saved_count = 0

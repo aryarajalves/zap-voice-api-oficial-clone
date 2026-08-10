@@ -97,6 +97,8 @@ def sanitize_template_components(components: list, contact_name: str = None, con
     Remove ou substitui valores inválidos (como '1') nos componentes do template
     antes de enviar para a Meta API. Também realiza a substituição dinâmica
     de variáveis como {{nome}} e {{telefone}} pelos dados reais do contato.
+    Se um parâmetro de texto ficar vazio (""), aplica um fallback seguro (" ")
+    para evitar que a Meta rejeite a mensagem com o erro #131009 (Parameter value is not valid).
     """
     if not components:
         return []
@@ -111,7 +113,7 @@ def sanitize_template_components(components: list, contact_name: str = None, con
                         val = str(param.get("text", "")).strip()
                         if val == "1":
                             # Substitui pelo nome do contato se disponível, senão vazio
-                            param["text"] = contact_name if contact_name else ""
+                            val = contact_name.strip() if contact_name and contact_name.strip() else ""
                         else:
                             # Substituição dinâmica de variáveis escolhidas
                             if "{{nome}}" in val:
@@ -128,7 +130,14 @@ def sanitize_template_components(components: list, contact_name: str = None, con
                                 val = val.replace("{{telefone}}", contact_phone or "")
                             if "{{phone}}" in val:
                                 val = val.replace("{{phone}}", contact_phone or "")
-                            param["text"] = val
+
+                        # Proteção contra erro Meta 131009:
+                        # A Meta proíbe parâmetros de texto vazios (""). Se o resultado for vazio,
+                        # aplicamos um espaço neutro (" ") para que o disparo seja aceito na API com sucesso.
+                        if not val or not str(val).strip():
+                            val = " "
+
+                        param["text"] = val
         return new_components
     except Exception as e:
         print(f"Erro ao sanitizar componentes: {e}")

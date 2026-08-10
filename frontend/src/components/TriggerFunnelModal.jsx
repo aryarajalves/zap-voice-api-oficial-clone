@@ -16,7 +16,7 @@ const TriggerFunnelModal = ({ isOpen, onClose, funnel, onTriggerSuccess }) => {
     const [scheduleMode, setScheduleMode] = useState(false);
     const [scheduledTime, setScheduledTime] = useState('');
     const [delay, setDelay] = useState(1);
-    const [concurrency, setConcurrency] = useState(5);
+    const [concurrency, setConcurrency] = useState(10);
     const [isSending, setIsSending] = useState(false);
 
     // Reset states when funnel changes or modal opens

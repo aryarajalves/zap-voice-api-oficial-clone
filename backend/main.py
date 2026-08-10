@@ -127,7 +127,7 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 app = FastAPI(
     title="ZapVoice API Oficial",
-    version="4.0.5",
+    version="1.4.8",
     docs_url=None,
     redoc_url="/redoc" if DEBUG else None,
     openapi_url="/openapi.json" if DEBUG else None,
@@ -856,7 +856,7 @@ async def root():
         "message": "ZapVoice API",
         "docs": "/docs",
         "status": "online",
-        "version": "4.0.5",
+        "version": "1.4.8",
         "mode": "production"
     }
 

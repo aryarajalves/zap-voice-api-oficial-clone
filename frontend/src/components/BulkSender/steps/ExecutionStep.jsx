@@ -17,7 +17,7 @@ const ExecutionStep = ({
     setDelaySeconds,
     delayUnit = 'seconds',
     setDelayUnit,
-    concurrency = 4,
+    concurrency = 10,
     setConcurrency,
     handleSend,
     handleCopyFinalList,

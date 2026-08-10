@@ -29,31 +29,47 @@ export const DDI_LABELS = {
     '55': 'Brasil',
     '1': 'EUA/Canadá',
     '351': 'Portugal',
+    '34': 'Espanha',
     '54': 'Argentina',
+    '52': 'México',
+    '44': 'Reino Unido',
+    '39': 'Itália',
+    '33': 'França',
+    '49': 'Alemanha',
+    '56': 'Chile',
+    '57': 'Colômbia',
     '598': 'Uruguai',
     '595': 'Paraguai',
 };
 
 /**
- * Extrai DDI e DDD de uma string de telefone (com ou sem formatação),
- * seguindo a mesma heurística usada no backend (routers/triggers/details.py):
- *  - Começa com "55" e tem 12-13 dígitos => DDI "55", DDD = próximos 2 dígitos
- *  - 10 a 11 dígitos (sem DDI)            => DDD = primeiros 2 dígitos
- *  - Qualquer outro formato               => não reconhecido (retorna null)
- *
- * IMPORTANTE: só reconhece "tem DDI" quando o número realmente começa com
- * "55" — não basta ter 12-13 dígitos. Um telefone malformado tipo
- * "17988887777" com 1 dígito a mais (11+1=12) NÃO deve virar um DDI
- * fantasma "+17" (esse "17" é, na verdade, o DDD de SP).
+ * Extrai DDI e DDD de uma string de telefone (com ou sem formatação).
  */
 export function extractDdiDdd(rawPhone) {
     const digits = String(rawPhone || '').replace(/\D/g, '');
     const len = digits.length;
-    if (digits.startsWith('55') && (len === 12 || len === 13)) {
-        return { ddi: digits.slice(0, 2), ddd: digits.slice(2, 4) };
+    if (digits.startsWith('351') && len >= 11 && len <= 13) {
+        return { ddi: '351', ddd: digits.slice(3, 5) };
     }
+    if (digits.startsWith('595') && len >= 11 && len <= 13) {
+        return { ddi: '595', ddd: digits.slice(3, 6) };
+    }
+    if (digits.startsWith('598') && len >= 11 && len <= 13) {
+        return { ddi: '598', ddd: digits.slice(3, 5) };
+    }
+    if (digits.startsWith('55') && len >= 11 && len <= 13) {
+        return { ddi: '55', ddd: digits.slice(2, 4) };
+    }
+    if (digits.startsWith('1') && len === 11) {
+        return { ddi: '1', ddd: digits.slice(1, 4) };
+    }
+    if ((digits.startsWith('34') || digits.startsWith('54') || digits.startsWith('52') || digits.startsWith('44') || digits.startsWith('39') || digits.startsWith('33') || digits.startsWith('49') || digits.startsWith('56') || digits.startsWith('57')) && len >= 11 && len <= 13) {
+        const ddi = digits.slice(0, 2);
+        return { ddi, ddd: digits.slice(2, 4) };
+    }
+    // Números de 10 ou 11 dígitos sem DDI explícito no banco (padrão brasileiro: DDD + Número)
     if (len === 10 || len === 11) {
-        return { ddi: '', ddd: digits.slice(0, 2) };
+        return { ddi: '55', ddd: digits.slice(0, 2) };
     }
     return null;
 }
@@ -75,16 +91,21 @@ export function formatDdiOption(ddi) {
  * A partir de uma lista de telefones (strings), calcula os conjuntos de
  * DDIs e DDDs realmente presentes — para popular dropdowns dinâmicos.
  * @param {Array<string>} phones
+ * @param {string} activeDdi - DDI ativo (se houver) para filtrar os DDDs retornados
  * @returns {{ ddis: string[], ddds: string[] }}
  */
-export function getAvailableDdiDdd(phones) {
+export function getAvailableDdiDdd(phones, activeDdi = '') {
     const ddiSet = new Set();
     const dddSet = new Set();
     for (const phone of (phones || [])) {
         const parsed = extractDdiDdd(phone);
         if (!parsed) continue;
         if (parsed.ddi) ddiSet.add(parsed.ddi);
-        if (parsed.ddd) dddSet.add(parsed.ddd);
+
+        // Se um DDI específico está selecionado, só inclui DDDs pertencentes a esse DDI
+        if (!activeDdi || parsed.ddi === activeDdi || (!parsed.ddi && activeDdi === '55')) {
+            if (parsed.ddd) dddSet.add(parsed.ddd);
+        }
     }
     const ddis = Array.from(ddiSet).sort((a, b) => {
         if (a === '55') return -1;

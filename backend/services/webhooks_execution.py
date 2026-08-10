@@ -179,9 +179,9 @@ async def execute_webhook_resend_logic(
             
             logger.info(f"RESEND_MANYCHAT | Agendando sincronização para {mc_phone} ({mc_name}) com tag '{mc_tag}'")
             if background_tasks:
-                background_tasks.add_task(sync_to_manychat_and_update_history, integration.client_id, mc_name, mc_phone, mc_tag, parsed_data.get("email"), history.id)
+                background_tasks.add_task(sync_to_manychat_and_update_history, integration.client_id, mc_name, mc_phone, mc_tag, parsed_data.get("email"), history.id, custom_field_name=getattr(mapping, "manychat_custom_field", None) or "telefone_whatsapp")
             else:
-                asyncio.create_task(sync_to_manychat_and_update_history(integration.client_id, mc_name, mc_phone, mc_tag, parsed_data.get("email"), history.id))
+                asyncio.create_task(sync_to_manychat_and_update_history(integration.client_id, mc_name, mc_phone, mc_tag, parsed_data.get("email"), history.id, custom_field_name=getattr(mapping, "manychat_custom_field", None) or "telefone_whatsapp"))
 
         # 2. Ignorar se não houver template nem funil definido
         if not template_name and not funnel_id:

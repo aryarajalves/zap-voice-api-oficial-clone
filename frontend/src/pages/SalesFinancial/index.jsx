@@ -33,6 +33,7 @@ const PLATFORM_FILTER_OPTIONS = [
   { value: 'pagtrust',  label: 'PagTrust' },
   { value: 'pepper',    label: 'Pepper' },
   { value: 'ticto',     label: 'Ticto' },
+  { value: 'zapgroup',  label: 'ZapGroup' },
 ];
 
 const PAYMENT_METHOD_OPTIONS = [
@@ -100,6 +101,16 @@ export default function SalesFinancial({ activeClient }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [platformDropdownOpen]);
+
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+  const productDropdownRef = useRef(null);
+  useEffect(() => {
+    if (!productDropdownOpen) return;
+    const handler = (e) => { if (productDropdownRef.current && !productDropdownRef.current.contains(e.target)) setProductDropdownOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [productDropdownOpen]);
   const [paymentMethod, setPaymentMethod] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -120,7 +131,8 @@ export default function SalesFinancial({ activeClient }) {
     try {
       const platformParam = platforms.length > 0 ? platforms.join(',') : 'all';
       const statusParam = statuses.length > 0 ? statuses.join(',') : 'all';
-      const url = `${API_URL}/financial/sales?period=${period}&status=${statusParam}&platform=${platformParam}&start_date=${startDate}&end_date=${endDate}`;
+      const productParam = selectedProducts.length > 0 ? selectedProducts.join(',') : 'all';
+      const url = `${API_URL}/financial/sales?period=${period}&status=${statusParam}&platform=${platformParam}&product=${encodeURIComponent(productParam)}&start_date=${startDate}&end_date=${endDate}`;
       const res = await fetchWithAuth(url, {}, activeClient.id);
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const json = await res.json();
@@ -130,7 +142,7 @@ export default function SalesFinancial({ activeClient }) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient, period, statuses, platforms, startDate, endDate]);
+  }, [activeClient, period, statuses, platforms, selectedProducts, startDate, endDate]);
 
   useEffect(() => {
     fetchData();
@@ -338,6 +350,79 @@ export default function SalesFinancial({ activeClient }) {
                 <span key={s} className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/10 text-indigo-400 rounded-md text-[10px] font-semibold">
                   {STATUS_FILTER_OPTIONS.find(o => o.value === s)?.label}
                   <button onClick={() => setStatuses(prev => prev.filter(x => x !== s))} className="hover:text-indigo-200">×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Product filter - multi-select dropdown dinâmico */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium shrink-0">Produto:</span>
+          <div className="relative" ref={productDropdownRef}>
+            <button
+              onClick={() => setProductDropdownOpen(o => !o)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all min-w-[200px] justify-between"
+            >
+              <span>
+                {selectedProducts.length === 0
+                  ? 'Todos os Produtos'
+                  : selectedProducts.length === 1
+                    ? selectedProducts[0]
+                    : `${selectedProducts.length} produtos`}
+              </span>
+              <svg className={`w-3 h-3 transition-transform ${productDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            {productDropdownOpen && (
+              <div className="absolute z-50 top-full mt-1 left-0 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden">
+                <div className="p-1 max-h-64 overflow-y-auto overflow-x-hidden">
+                  {(data?.all_products || []).length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-gray-400 dark:text-gray-500 text-center">
+                      Nenhum produto encontrado
+                    </div>
+                  ) : (
+                    (data?.all_products || []).map(productName => {
+                      const checked = selectedProducts.includes(productName);
+                      return (
+                        <button
+                          key={productName}
+                          onClick={() => {
+                            setSelectedProducts(prev =>
+                              prev.includes(productName)
+                                ? prev.filter(p => p !== productName)
+                                : [...prev, productName]
+                            );
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all text-left"
+                        >
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-violet-500 border-violet-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                            {checked && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                          </span>
+                          <span className="truncate" title={productName}>{productName}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                {selectedProducts.length > 0 && (
+                  <div className="border-t border-gray-100 dark:border-gray-700 p-1">
+                    <button
+                      onClick={() => { setSelectedProducts([]); setProductDropdownOpen(false); }}
+                      className="w-full px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all text-left"
+                    >
+                      Limpar seleção
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {selectedProducts.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {selectedProducts.map(p => (
+                <span key={p} className="flex items-center gap-1 px-2 py-0.5 bg-violet-500/10 text-violet-400 rounded-md text-[10px] font-semibold max-w-[150px]">
+                  <span className="truncate" title={p}>{p}</span>
+                  <button onClick={() => setSelectedProducts(prev => prev.filter(x => x !== p))} className="hover:text-violet-200 shrink-0">×</button>
                 </span>
               ))}
             </div>

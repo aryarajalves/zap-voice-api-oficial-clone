@@ -9,19 +9,45 @@ const ConfirmationDialog = ({
     confirmText,
     confirmColorClass = 'bg-rose-600 hover:bg-rose-500',
     icon = '⚠️',
-    loading = false
+    loading = false,
+    showSelect = false,
+    selectLabel = 'Tempo de Repouso:',
+    selectValue = 24,
+    onSelectChange,
+    selectOptions = []
 }) => {
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden p-6 border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden p-6 border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
                 <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                     <span className="shrink-0">{icon}</span> {title}
                 </h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">
                     {message}
                 </p>
+
+                {showSelect && selectOptions.length > 0 && (
+                    <div className="mb-6 bg-gray-50 dark:bg-gray-900/60 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <label htmlFor="confirmation-dialog-select" className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">
+                            {selectLabel}
+                        </label>
+                        <select
+                            id="confirmation-dialog-select"
+                            value={selectValue}
+                            onChange={(e) => onSelectChange && onSelectChange(Number(e.target.value))}
+                            className="w-full text-sm p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 font-bold text-gray-800 dark:text-white cursor-pointer"
+                        >
+                            {selectOptions.map(opt => (
+                                <option key={opt.value} value={opt.value} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium">
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
                 <div className="flex justify-end gap-3">
                     <button
                         onClick={onClose}

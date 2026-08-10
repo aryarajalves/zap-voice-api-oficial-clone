@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FiExternalLink, FiMessageSquare, FiEdit2, FiTrash2, FiCalendar, FiLock, FiUnlock, FiDatabase, FiSlash } from 'react-icons/fi';
 import { SiChatwoot } from 'react-icons/si';
 import { toast } from 'react-hot-toast';
+import { API_URL } from '../../../config';
+import { fetchWithAuth } from '../../../AuthContext';
+import { useClient } from '../../../contexts/ClientContext';
 
 /**
  * O backend guarda/retorna datas em UTC "ingênuo" (sem 'Z' no fim, ex:
@@ -114,7 +118,40 @@ export default function LeadTableRow({
   onOpenVariables,
   onOpenTagsModal,
   onOpenBlockModal,
+  updateLeadInPlace,
 }) {
+  const { activeClient } = useClient();
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleConfirmResetTemplateHistory = async () => {
+    setIsResetting(true);
+    try {
+      const res = await fetchWithAuth(
+        `${API_URL}/leads/${lead.id}/template-history`,
+        { method: 'DELETE' },
+        activeClient?.id
+      );
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success("Histórico do template removido! Contato liberado para novo disparo.");
+        setShowResetModal(false);
+        if (updateLeadInPlace) {
+          updateLeadInPlace(lead.id, {
+            last_template_name: null,
+            last_template_dispatched_at: null
+          });
+        }
+      } else {
+        toast.error(data.detail || "Erro ao remover histórico do template.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro de conexão ao remover histórico do template.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
       <td className="px-3 py-2.5">
@@ -188,6 +225,21 @@ export default function LeadTableRow({
                   🚫 Bloqueado
                 </span>
               )}
+              {lead.last_template_name && (
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50 w-fit max-w-[200px] truncate" title={`Último Template: ${lead.last_template_name} enviado em ${formatDateBrasilia(lead.last_template_dispatched_at)}`}>
+                    📄 {lead.last_template_name} {lead.last_template_dispatched_at && <span className="text-[8.5px] font-normal opacity-80">({formatDateBrasilia(lead.last_template_dispatched_at)})</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(true)}
+                    className="p-1 hover:bg-rose-50 text-rose-500 hover:text-rose-600 dark:hover:bg-rose-950/40 rounded transition-colors"
+                    title="Remover trava de 24h para permitir novo disparo deste template"
+                  >
+                    <FiTrash2 size={11} />
+                  </button>
+                </div>
+              )}
               <RestingCountdown expiresAt={lead.resting_expires_at} />
             </div>
           </div>
@@ -218,23 +270,38 @@ export default function LeadTableRow({
           <span className="text-xs font-mono">{formatDateBrasilia(lead.created_at)}</span>
         </div>
       </td>
-      <td className="px-3 py-2.5 whitespace-nowrap text-right text-sm font-medium">
+      <td className="px-3 py-2.5 text-right whitespace-nowrap">
         <div className="flex items-center justify-end gap-1">
-          {lead.chatwoot_url && (
-            <a href={lead.chatwoot_url} target="_blank" rel="noreferrer" className="p-1.5 text-purple-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors" title="Ver Conversa no Chatwoot">
-              <FiMessageSquare size={15} />
-            </a>
+          {lead.variables && Object.keys(lead.variables).length > 0 && (
+            <button
+              onClick={() => onOpenVariables(lead)}
+              className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              title="Ver Variáveis Customizadas / IA"
+            >
+              <FiDatabase size={15} />
+            </button>
           )}
-          <button onClick={() => onOpenVariables(lead)} className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" title="Ver Variáveis Extraídas">
-            <FiDatabase size={15} />
-          </button>
-          <button onClick={() => onEdit(lead)} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" title="Editar Informações">
+          <button
+            onClick={() => onEdit(lead)}
+            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+            title="Editar Lead"
+          >
             <FiEdit2 size={15} />
           </button>
           <button
-            onClick={() => onOpenBlockModal({ id: lead.id, name: lead.name || 'Sem Nome', phone: lead.phone })}
-            className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-            title="Bloquear ou colocar em repouso"
+            onClick={() => onOpenBlockModal(lead)}
+            className={`p-1.5 rounded-lg transition-colors ${
+              lead.is_really_blocked || lead.resting_expires_at
+                ? 'text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20'
+                : 'text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20'
+            }`}
+            title={
+              lead.is_really_blocked
+                ? 'Contato Bloqueado — clique para gerenciar'
+                : lead.resting_expires_at
+                ? 'Contato em Repouso — clique para gerenciar'
+                : 'Gerenciar Bloqueio / Repouso'
+            }
           >
             <FiSlash size={15} />
           </button>
@@ -258,6 +325,40 @@ export default function LeadTableRow({
           </button>
         </div>
       </td>
+
+      {/* Modal de Confirmação de Remoção do Histórico do Template */}
+      {showResetModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 w-screen h-screen">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200" style={{ userSelect: 'none', cursor: 'default' }}>
+            <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2 mb-3">
+              <FiTrash2 className="text-rose-500 w-5 h-5" /> 
+              Remover Trava de 24h de Template?
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-6 bg-gray-50 dark:bg-gray-900/50 p-3.5 rounded-2xl border border-gray-150 dark:border-gray-700">
+              Isso irá remover o registro do último template (<strong>{lead.last_template_name}</strong>) para o contato <strong>{lead.name || lead.phone}</strong>. O contato ficará liberado para receber este mesmo template novamente de imediato.
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={() => setShowResetModal(false)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-bold transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={handleConfirmResetTemplateHistory}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isResetting ? "Removendo..." : "Confirmar Remoção"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </tr>
   );
 }

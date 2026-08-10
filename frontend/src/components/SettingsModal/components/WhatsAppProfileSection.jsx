@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiImage, FiShield, FiAlertCircle, FiCopy, FiUpload } from 'react-icons/fi';
+import { FiImage, FiShield, FiAlertCircle, FiCopy, FiUpload, FiCreditCard } from 'react-icons/fi';
 
 const tierMapping = {
     'TIER_250': '250',
@@ -40,6 +40,8 @@ const getQualityRatingBadge = (rating) => {
 };
 
 const WhatsAppProfileSection = ({
+    formData,
+    handleChange,
     whatsappProfile,
     whatsappName,
     setWhatsappName,
@@ -161,6 +163,30 @@ const WhatsAppProfileSection = ({
                             </button>
                         </div>
                     </div>
+
+                    {/* Campo de Cartão de Crédito WABA (Últimos 4 Dígitos) */}
+                    {formData && handleChange && (
+                        <div className="pt-2 border-t border-gray-200/60 dark:border-white/5 space-y-1">
+                            <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500 mb-1 flex items-center gap-1.5">
+                                <FiCreditCard className="text-blue-500" size={13} />
+                                Últimos 4 Dígitos do Cartão de Crédito (WABA)
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <input 
+                                    type="text" 
+                                    name="WA_WABA_CARD_LAST4"
+                                    value={formData.WA_WABA_CARD_LAST4 || ''}
+                                    onChange={handleChange}
+                                    maxLength={4}
+                                    className="w-full sm:w-48 bg-white dark:bg-[#1f2937]/80 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-mono tracking-widest focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                                    placeholder="Digite ex: 4821"
+                                />
+                            </div>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                                💡 Digite os 4 dígitos do seu cartão acima e clique em <b>"Salvar Configurações"</b> no canto inferior da modal. Se em branco, a informação será ignorada.
+                            </p>
+                        </div>
+                    )}
 
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                         Esta imagem e frase são exibidas para seus clientes no WhatsApp.

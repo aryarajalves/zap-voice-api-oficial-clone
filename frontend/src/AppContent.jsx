@@ -154,10 +154,10 @@ export default function AppContent() {
                 )}
               </div>
               <div className="flex items-center gap-3">
-                {SIMULATE_MESSAGING && (
+                {(SIMULATE_MESSAGING || logic.currentView === 'stress_test') && (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 dark:bg-yellow-500/20 border border-yellow-500/30 dark:border-yellow-500/40 text-yellow-700 dark:text-yellow-400 text-xs font-bold rounded-xl animate-pulse" title="Modo Simulação / Teste de Estresse Ativo">
                     <FiZap size={14} className="animate-bounce" />
-                    <span>Modo Simulação Ativo</span>
+                    <span>Modo Teste de Escala</span>
                   </div>
                 )}
                 <ConnectionStatus refreshKey={logic.settingsRefreshKey} />

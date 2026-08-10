@@ -42,7 +42,7 @@ const ManyChatSection = ({ mapping, mIndex, updateMapping }) => {
 
         {mapping.manychat_active && (
           <div className="space-y-4 pt-2 animate-in slide-in-from-top-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Nome no ManyChat</label>
                 <SearchableSelect
@@ -59,6 +59,16 @@ const ManyChatSection = ({ mapping, mIndex, updateMapping }) => {
                   value={mapping.manychat_phone}
                   onChange={(val) => updateMapping(mIndex, 'manychat_phone', val)}
                   placeholder="Mapear Telefone..."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Campo Customizado (ManyChat)</label>
+                <input
+                  type="text"
+                  value={mapping.manychat_custom_field !== undefined && mapping.manychat_custom_field !== null ? mapping.manychat_custom_field : 'telefone_whatsapp'}
+                  onChange={(e) => updateMapping(mIndex, 'manychat_custom_field', e.target.value)}
+                  className="w-full bg-white dark:bg-[#0b1120] border border-gray-100 dark:border-white/5 rounded-lg px-3 py-2 text-[11px] font-bold text-gray-700 dark:text-gray-200 outline-none focus:ring-1 focus:ring-indigo-500/30 shadow-inner"
+                  placeholder="telefone_whatsapp"
                 />
               </div>
               <div className="space-y-1.5">

@@ -151,6 +151,11 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
              return logger.error(f"ScheduledTrigger {trigger_id} not found")
              
         chatwoot = ChatwootClient(client_id=init_trig.client_id)
+        is_stress_test_flag = getattr(init_trig, 'is_stress_test', False) or (init_trig.product_name == 'SCALE_TEST')
+        if is_stress_test_flag:
+            chatwoot.simulate = True
+        import os
+        is_simulate_messaging = is_stress_test_flag or getattr(chatwoot, 'simulate', False) or os.getenv("SIMULATE_MESSAGING", "false").lower() in ("true", "1", "yes")
 
         # Se for um agendamento dinâmico por etiqueta, recarrega os contatos atualizados da Aba de Contatos (WebhookLead)
         updated_dynamic_contacts = await refresh_dynamic_label_contacts(init_trig, db=db_init, chatwoot=chatwoot)
@@ -174,9 +179,10 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         init_trig.total_sent = init_trig.total_failed = init_trig.total_blocked = 0
         init_trig.total_contacts = total
         
-        # Guardar o timestamp de início
+        # Guardar o timestamp de início (preserva se já existir para não zerar o cronômetro no resume)
         pdata = dict(init_trig.processed_data or {})
-        pdata["started_at"] = datetime.utcnow().isoformat()
+        if "started_at" not in pdata:
+            pdata["started_at"] = datetime.utcnow().isoformat()
         pdata.pop("finished_at", None)
         init_trig.processed_data = pdata
         
@@ -203,6 +209,44 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             db_tmpl.close()
 
     retries_map = {}
+    
+    # Pre-fetch de contatos bloqueados e em descanso (uma única vez no início do disparo)
+    db_check_init = SessionLocal()
+    blocked_set = set()
+    try:
+        client_ids = [c_id]
+        client = db_check_init.query(models.Client).filter(models.Client.id == c_id).first()
+        if client and client.project_id:
+            sibling_clients = db_check_init.query(models.Client.id).filter(models.Client.project_id == client.project_id).all()
+            client_ids = [c.id for c in sibling_clients]
+
+        blocked_raw = db_check_init.query(models.BlockedContact.phone).filter(
+            models.BlockedContact.client_id.in_(client_ids)
+        ).all()
+        for b in blocked_raw:
+            p_norm = normalize_phone(b[0])
+            if p_norm:
+                blocked_set.add(p_norm)
+                if len(p_norm) >= 8:
+                    blocked_set.add(p_norm[-8:])
+        
+        now = datetime.utcnow()
+        resting_raw = db_check_init.query(models.RestingContact.phone).filter(
+            models.RestingContact.client_id.in_(client_ids),
+            models.RestingContact.expires_at > now
+        ).all()
+        for r in resting_raw:
+            p_norm = normalize_phone(r[0])
+            if p_norm:
+                blocked_set.add(p_norm)
+                if len(p_norm) >= 8:
+                    blocked_set.add(p_norm[-8:])
+    except Exception as e_prefetch_block:
+        logger.error(f"⚠️ [BULK] Erro ao carregar contatos bloqueados/descanso: {e_prefetch_block}")
+    finally:
+        db_check_init.close()
+
+    all_sim_tasks = []
     i = 0
     while i < len(contacts):
         db_check = SessionLocal()
@@ -238,37 +282,6 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             # Update tracking
             current_trig.processed_contacts = list(set((current_trig.processed_contacts or []) + batch_phones_norm))
             current_trig.pending_contacts = [p for p in all_phones if p not in current_trig.processed_contacts]
-            
-            # Blocked list (with project sharing inheritance)
-            client_ids = [c_id]
-            client = db_check.query(models.Client).filter(models.Client.id == c_id).first()
-            if client and client.project_id:
-                sibling_clients = db_check.query(models.Client.id).filter(models.Client.project_id == client.project_id).all()
-                client_ids = [c.id for c in sibling_clients]
-
-            blocked_raw = db_check.query(models.BlockedContact.phone).filter(
-                models.BlockedContact.client_id.in_(client_ids)
-            ).all()
-            blocked_set = set()
-            for b in blocked_raw:
-                p_norm = normalize_phone(b[0])
-                if p_norm:
-                    blocked_set.add(p_norm)
-                    if len(p_norm) >= 8:
-                        blocked_set.add(p_norm[-8:])
-            
-            # Add resting contacts
-            now = datetime.utcnow()
-            resting_raw = db_check.query(models.RestingContact.phone).filter(
-                models.RestingContact.client_id.in_(client_ids),
-                models.RestingContact.expires_at > now
-            ).all()
-            for r in resting_raw:
-                p_norm = normalize_phone(r[0])
-                if p_norm:
-                    blocked_set.add(p_norm)
-                    if len(p_norm) >= 8:
-                        blocked_set.add(p_norm[-8:])
             
             sent_phones_set = await get_sent_phones_set(db_check, trigger_id)
             db_check.commit()
@@ -341,6 +354,8 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         # Persist results
         db_msg = SessionLocal()
         sent_message_ids = []
+        sent_count = 0
+        failed_count = 0
         
         try:
             for idx, res in enumerate(results):
@@ -457,10 +472,9 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     db_msg.rollback()
                     logger.error(f"❌ Erro de banco de dados ao persistir status para o telefone {meta['phone']}: {e_db_single}")
             
-            import os
-            if os.getenv("SIMULATE_MESSAGING", "false").lower() in ("true", "1", "yes"):
+            if is_simulate_messaging:
                 for mid in sent_message_ids:
-                    asyncio.create_task(simulate_lifecycle(mid, trigger_id, c_id))
+                    all_sim_tasks.append(asyncio.create_task(simulate_lifecycle(mid, trigger_id, c_id)))
         finally:
             db_msg.close()
 
@@ -518,6 +532,11 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
 
         i += concurrency
         if i < len(contacts): await asyncio.sleep(delay)
+
+    # Aguardar tarefas de simulação de ciclo de vida (se houver) antes de marcar como completed
+    if all_sim_tasks:
+        logger.info(f"⏳ [SIMULATE] Aguardando conclusão da simulação de ciclo de vida ({len(all_sim_tasks)} tarefas) para o Trigger #{trigger_id}...")
+        await asyncio.gather(*all_sim_tasks, return_exceptions=True)
 
     # Finalize
     db_final = SessionLocal()

@@ -67,6 +67,7 @@ class ScheduledTrigger(Base):
     is_interaction = Column(Boolean, default=False)
     skip_block_check = Column(Boolean, default=False)
     sent_as = Column(String, nullable=True)
+    waba_card_last4 = Column(String, nullable=True)
     
     interaction_funnel_id = Column(Integer, ForeignKey("funnels.id"), nullable=True)
     block_funnel_id = Column(Integer, ForeignKey("funnels.id"), nullable=True)
@@ -113,13 +114,17 @@ class TriggerFolder(Base):
 
 class MessageStatus(Base):
     __tablename__ = "message_status"
+    __table_args__ = (
+        Index("ix_message_status_trigger_status", "trigger_id", "status"),
+        Index("ix_message_status_trigger_phone", "trigger_id", "phone_number"),
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     trigger_id = Column(Integer, ForeignKey("scheduled_triggers.id", ondelete="CASCADE"), index=True)
     message_id = Column(String, unique=True, index=True)
-    phone_number = Column(String)
+    phone_number = Column(String, index=True)
     contact_name = Column(String, nullable=True)
-    status = Column(String, default="sent")
+    status = Column(String, default="sent", index=True)
     failure_reason = Column(String, nullable=True)
 
     # Quando uma falha é "resolvida" a partir do relatório de falhas (bloquear, colocar
@@ -319,6 +324,9 @@ class WebhookLead(Base):
     chatwoot_account_id = Column(Integer, nullable=True)
     chatwoot_inbox_id = Column(Integer, nullable=True)
     
+    last_template_name = Column(String, nullable=True)
+    last_template_dispatched_at = Column(DateTime(timezone=True), nullable=True)
+
     is_locked = Column(Boolean, default=False, nullable=False, server_default="false")
     variables = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=dict)
 
@@ -335,6 +343,19 @@ class WebhookLead(Base):
     client = relationship("Client", foreign_keys=[client_id])
     imported_by_client = relationship("Client", foreign_keys=[imported_by_client_id])
     project = relationship("Project")
+
+class ContactTemplateHistory(Base):
+    __tablename__ = "contact_template_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
+    phone = Column(String, nullable=False, index=True)
+    template_name = Column(String, nullable=False, index=True)
+    trigger_id = Column(Integer, ForeignKey("scheduled_triggers.id", ondelete="SET NULL"), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    client = relationship("Client")
+    trigger = relationship("ScheduledTrigger")
 
 class RecurringTrigger(Base):
     __tablename__ = "recurring_triggers"
@@ -472,6 +493,25 @@ def before_insert_trigger(mapper, connection, target):
                         target.funnel_snapshot = result[0]
         except Exception:
             pass
+
+
+@event.listens_for(ScheduledTrigger, 'before_insert')
+def set_waba_card_last4_snapshot(mapper, connection, target):
+    """
+    Automaticamente congela os últimos 4 dígitos do cartão WABA atual do cliente no momento da criação do disparo.
+    """
+    if not target.waba_card_last4 and target.client_id:
+        try:
+            from sqlalchemy import text
+            result = connection.execute(
+                text("SELECT value FROM app_config WHERE client_id = :cid AND key = 'WA_WABA_CARD_LAST4' LIMIT 1"),
+                {"cid": target.client_id}
+            ).fetchone()
+            if result and result[0]:
+                target.waba_card_last4 = str(result[0]).strip()
+        except Exception:
+            pass
+
 
 
 

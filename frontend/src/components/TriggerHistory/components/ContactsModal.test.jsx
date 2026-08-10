@@ -430,4 +430,21 @@ describe('ContactsModal', () => {
     fireEvent.click(closeExplanationButton);
     expect(screen.queryByText('Bloqueou o Bot (Ação do Contato)')).not.toBeInTheDocument();
   });
+
+  it('exibe mensagem explicativa de disparo em andamento quando a lista estiver vazia e o disparo estiver em processamento', () => {
+    const propsDisparoEmAndamento = {
+      ...defaultProps,
+      contactsModal: {
+        ...defaultProps.contactsModal,
+        triggerStatus: 'processing',
+        contacts: [],
+        counts: { total: 0 },
+      },
+      contactsTotal: 0,
+    };
+    render(<ContactsModal {...propsDisparoEmAndamento} />);
+    expect(screen.getByText('Disparo em Andamento')).toBeInTheDocument();
+    expect(screen.getByText(/a listagem individual dos contatos deste filtro será liberada/i)).toBeInTheDocument();
+    expect(screen.getByText('Mensagens sendo processadas na fila...')).toBeInTheDocument();
+  });
 });

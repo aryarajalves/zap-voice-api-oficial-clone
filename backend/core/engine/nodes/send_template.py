@@ -48,6 +48,14 @@ async def handle_send_template_node(db, trigger, node, chatwoot, contact_phone, 
             })
 
     try:
+        from services.template_history_service import is_template_sent_in_last_24h, record_template_dispatch
+        if is_template_sent_in_last_24h(db, trigger.client_id, contact_phone, template_name):
+            log_node_execution(
+                db, trigger, current_node_id, "completed",
+                f"Pulado: Template '{template_name}' já enviado nas últimas 24h para {contact_phone}."
+            )
+            return "success"
+
         # Dispara o template utilizando o cliente integrado do Chatwoot/WhatsApp
         result = await chatwoot.send_template(contact_phone, template_name, language, components)
         
@@ -61,6 +69,7 @@ async def handle_send_template_node(db, trigger, node, chatwoot, contact_phone, 
         
         # 2. Se o envio foi aceito, registra a mensagem e aguarda a confirmação de entrega
         if isinstance(result, dict) and result.get("messages"):
+            record_template_dispatch(db, trigger.client_id, contact_phone, template_name, trigger.id)
             raw_id = result["messages"][0].get("id")
             wamid = raw_id.replace("wamid.", "") if raw_id else raw_id
             

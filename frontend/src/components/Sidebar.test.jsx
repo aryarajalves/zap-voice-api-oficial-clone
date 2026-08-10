@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 
 vi.mock('react-icons/fi', () => ({
   FiHome: () => <span />,
+  FiMail: () => <span />,
   FiLayers: () => <span />,
   FiClock: () => <span />,
   FiSettings: () => <span />,

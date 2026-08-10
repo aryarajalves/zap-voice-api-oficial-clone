@@ -34,6 +34,8 @@ export const useRecipientSelector = ({
     const [activeDropdown, setActiveDropdown] = useState(null);
 
     const [variableFilters, setVariableFilters] = useState({});
+    const [limitMode, setLimitMode] = useState('all'); // 'all' | 'limit'
+    const [dispatchLimit, setDispatchLimit] = useState(500);
 
     useEffect(() => {
         if (requireOpenWindow) {
@@ -97,8 +99,8 @@ export const useRecipientSelector = ({
     }, [contacts, searchTerm, filterOpenOnly, filterBlockedOnly, dddSearch, exclusionList]);
 
     const selectedList = useMemo(() => {
-        return getDispatchList(filteredContacts);
-    }, [filteredContacts]);
+        return getDispatchList(filteredContacts, limitMode, dispatchLimit);
+    }, [filteredContacts, limitMode, dispatchLimit]);
 
     const displayedContacts = useMemo(() => {
         return filteredContacts.slice(0, displayLimit);
@@ -151,7 +153,9 @@ export const useRecipientSelector = ({
         const payload = { list: selectedList, mode, tag: currentTag, tagExclusions, isValidated, variableFilters };
         const payloadStr = JSON.stringify(payload);
         if (lastOnSelectRef.current !== payloadStr) {
-            onSelect(selectedList, { mode, tag: currentTag, tagExclusions, isValidated, variableFilters });
+            if (typeof onSelect === 'function') {
+                onSelect(selectedList, { mode, tag: currentTag, tagExclusions, isValidated, variableFilters });
+            }
             lastOnSelectRef.current = payloadStr;
         }
     }, [selectedList, mode, isValidated, onSelect, variableFilters, tags.selectedTags, originalTagPhones]);
@@ -313,6 +317,8 @@ export const useRecipientSelector = ({
         activeClient,
         isValidated,
         variableFilters, setVariableFilters,
+        limitMode, setLimitMode,
+        dispatchLimit, setDispatchLimit,
         // From Sub-hooks
         ...fileImport,
         ...validation,

@@ -77,6 +77,7 @@ const mockData = {
   top_products: [
     { product_name: 'Produto C', sales_count: 1, total_revenue: 200.0 }
   ],
+  all_products: ['Produto A', 'Produto B', 'Produto C', 'Produto D'],
   transactions: mockTransactions
 };
 
@@ -146,5 +147,117 @@ describe('SalesFinancial Page', () => {
     expect(screen.queryByText('Comprador Boleto')).not.toBeInTheDocument();
     expect(screen.queryByText('Comprador Cartao')).not.toBeInTheDocument();
     expect(screen.queryByText('Comprador Outro')).not.toBeInTheDocument();
+  });
+
+  // --- Testes do novo filtro por Produto ---
+
+  it('renders the product filter dropdown button', async () => {
+    await act(async () => {
+      render(<SalesFinancial activeClient={mockActiveClient} />);
+    });
+
+    await waitFor(() => {
+      // O botão do dropdown de produto deve existir com o texto padrão
+      expect(screen.getByRole('button', { name: /Todos os Produtos/i })).toBeInTheDocument();
+    });
+  });
+
+  it('opens the product dropdown and lists all_products from API', async () => {
+    await act(async () => {
+      render(<SalesFinancial activeClient={mockActiveClient} />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Todos os Produtos/i })).toBeInTheDocument();
+    });
+
+    // Abre o dropdown
+    const dropdownBtn = screen.getByRole('button', { name: /Todos os Produtos/i });
+    await act(async () => {
+      fireEvent.click(dropdownBtn);
+    });
+
+    // Todos os produtos do mock devem aparecer no dropdown
+    await waitFor(() => {
+      expect(screen.getAllByText('Produto A').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Produto B').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Produto C').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Produto D').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('selecting a product triggers API call with product parameter', async () => {
+    await act(async () => {
+      render(<SalesFinancial activeClient={mockActiveClient} />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Todos os Produtos/i })).toBeInTheDocument();
+    });
+
+    vi.clearAllMocks();
+    vi.mocked(fetchWithAuth).mockResolvedValue({
+      ok: true,
+      json: async () => mockData
+    });
+
+    // Abre o dropdown
+    const dropdownBtn = screen.getByRole('button', { name: /Todos os Produtos/i });
+    await act(async () => {
+      fireEvent.click(dropdownBtn);
+    });
+
+    // Seleciona "Produto A" no dropdown
+    await waitFor(() => {
+      expect(screen.getAllByText('Produto A').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Busca o botão que contém apenas "Produto A" (no dropdown, não no ranking)
+    const allProdABtns = screen.getAllByRole('button').filter(b => b.textContent?.trim() === 'Produto A');
+    expect(allProdABtns.length).toBeGreaterThanOrEqual(1);
+    await act(async () => {
+      fireEvent.click(allProdABtns[0]);
+    });
+
+    // Aguarda nova chamada à API com o parâmetro product=Produto+A
+    await waitFor(() => {
+      expect(fetchWithAuth).toHaveBeenCalled();
+      const calledUrl = vi.mocked(fetchWithAuth).mock.calls[0][0];
+      expect(calledUrl).toMatch(/product=Produto/);
+    });
+  });
+
+  it('clearing product selection resets filter to all products', async () => {
+    await act(async () => {
+      render(<SalesFinancial activeClient={mockActiveClient} />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Todos os Produtos/i })).toBeInTheDocument();
+    });
+
+    // Abre o dropdown e seleciona Produto B
+    const dropdownBtn = screen.getByRole('button', { name: /Todos os Produtos/i });
+    await act(async () => { fireEvent.click(dropdownBtn); });
+
+    await waitFor(() => { expect(screen.getAllByText('Produto B').length).toBeGreaterThanOrEqual(1); });
+
+    // Busca o botão exato "Produto B" no dropdown
+    const allProdBBtns = screen.getAllByRole('button').filter(b => b.textContent?.trim() === 'Produto B');
+    expect(allProdBBtns.length).toBeGreaterThanOrEqual(1);
+    await act(async () => { fireEvent.click(allProdBBtns[0]); });
+
+    // Clica em "Limpar seleção"
+    await waitFor(() => {
+      expect(screen.getByText('Limpar seleção')).toBeInTheDocument();
+    });
+
+    const clearBtn = screen.getByText('Limpar seleção');
+    await act(async () => { fireEvent.click(clearBtn); });
+
+    // O botão principal do dropdown deve voltar ao estado padrão
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Todos os Produtos/i })).toBeInTheDocument();
+    });
   });
 });

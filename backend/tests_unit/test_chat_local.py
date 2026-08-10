@@ -47,6 +47,26 @@ def test_send_media_requires_auth():
     response = client.post("/api/chat/conversations/1/media")
     assert response.status_code in [401, 403]
 
+def test_send_media_document_caption_requires_auth():
+    response = client.post(
+        "/api/chat/conversations/1/media",
+        json={
+            "media_url": "http://localhost:8000/api/media/proxy/test.pdf",
+            "message_type": "document",
+            "caption": "Documento em anexo"
+        }
+    )
+    assert response.status_code in [401, 403]
+
+
+def test_update_private_note_message_requires_auth():
+    response = client.put(
+        "/api/chat/conversations/1/notes/1",
+        json={"private_note": "Anotação atualizada"}
+    )
+    assert response.status_code in [401, 403]
+
+
 def test_pin_conversation_requires_auth():
     response = client.post("/api/chat/conversations/1/pin", json={"pinned": True})
     assert response.status_code in [401, 403]
@@ -57,4 +77,19 @@ def test_note_conversation_requires_auth():
 
 def test_urgent_conversation_requires_auth():
     response = client.post("/api/chat/conversations/1/urgent", json={"urgent": True})
+    assert response.status_code in [401, 403]
+
+
+def test_get_ai_config_requires_auth():
+    response = client.get("/api/chat/ai-config")
+    assert response.status_code in [401, 403]
+
+
+def test_analyze_doubts_requires_auth():
+    response = client.post("/api/chat/conversations/1/analyze-doubts")
+    assert response.status_code in [401, 403]
+
+
+def test_analyze_doubts_bulk_requires_auth():
+    response = client.post("/api/chat/conversations/analyze-doubts-bulk", json={"conversation_ids": [1, 2]})
     assert response.status_code in [401, 403]

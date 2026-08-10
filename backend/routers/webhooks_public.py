@@ -281,6 +281,19 @@ async def handle_external_webhook(
             history.mapping_id = mapping.id
         history.event_type = event_type
         db.commit()
+
+        # Emitir evento em tempo real para atualizar o frontend sem necessidade de F5
+        try:
+            asyncio.create_task(rabbitmq.publish_event("webhook_history_update", {
+                "history_id": int(history.id) if history.id else None,
+                "integration_id": str(integration.id) if integration.id else None,
+                "client_id": int(integration.client_id) if integration.client_id else None,
+                "event_type": event_type,
+                "status": history.status,
+                "processed_data": processed_dict
+            }))
+        except Exception as ws_err:
+            logger.warning(f" Erro ao emitir evento WS de webhook: {ws_err}")
         
         if not mapping:
             logger.info(f"⏭️ [SKIP] Nenhum mapeamento configurado para {event_type} na integração {integration.name}")
@@ -355,7 +368,8 @@ async def handle_external_webhook(
                     phone=mc_phone,
                     tag=mc_tag,
                     email=final_vars.get("email"),
-                    history_id=history.id
+                    history_id=history.id,
+                    custom_field_name=getattr(mapping, "manychat_custom_field", None) or "telefone_whatsapp"
                 )
 
         # Main Automation Process

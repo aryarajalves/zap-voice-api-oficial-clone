@@ -4,7 +4,7 @@ import { useContactImport, getPhoneMappingError } from './ContactImportModal/hoo
 import { API_URL } from '../config';
 import { fetchWithAuth } from '../AuthContext';
 
-function TagChipInput({ tags, setTags, placeholder }) {
+function TagChipInput({ tags = [], setTags, placeholder }) {
   const [input, setInput] = React.useState('');
 
   const addTag = (val) => {
@@ -717,6 +717,8 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
                     </div>
 
                     {renderSimpleField({ key: 'email', label: 'Email', required: false })}
+
+                    {renderSimpleField({ key: 'created_at', label: 'Data e Horário de Chegada', required: false })}
 
                     {/* Etiquetas a Adicionar */}
                     <div className="flex flex-col gap-1.5 pt-1 border-t border-gray-100 dark:border-gray-700">

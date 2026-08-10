@@ -62,9 +62,9 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         has_read = any(ms.status in ['read', 'interaction'] or ms.read_counted or (ms.is_interaction and not ms.status == 'sent') for ms in group)
         has_blocked = any(ms.failure_reason == 'BLOCKED_VIA_BUTTON' for ms in group)
         
-        # Para falha, consideramos se o status final (mais recente) do contato é falha
+        # Para falha do disparo principal: apenas contatos que NÃO foram enviados com sucesso e falharam
         latest_ms = max(group, key=lambda x: x.id)
-        has_failed = latest_ms.status == 'failed' and latest_ms.failure_reason != 'BLOCKED_VIA_BUTTON'
+        has_failed = (latest_ms.status == 'failed' or any(ms.status == 'failed' for ms in group)) and not has_sent and latest_ms.failure_reason != 'BLOCKED_VIA_BUTTON'
 
         if has_sent: sent += 1
         if has_delivered: delivered += 1
@@ -85,15 +85,19 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
                     total_cost += float(trigger.cost_per_unit)
                     paid_templates += 1
 
-    # 4. Atualizar o Trigger
-    trigger.total_sent = sent
-    trigger.total_delivered = delivered
-    trigger.total_read = read
-    trigger.total_failed = failed
+    # 4. Atualizar o Trigger (Garantindo que contadores cumulativos nunca regridam)
+    trigger.total_sent = max(trigger.total_sent or 0, sent)
+    trigger.total_delivered = max(trigger.total_delivered or 0, delivered)
+    trigger.total_read = max(trigger.total_read or 0, read)
+
+    # Calcular total_failed estritamente para o disparo principal
+    failed_msgs = [ms for ms in all_statuses if ms.trigger_id == trigger_id and ms.status == 'failed' and ms.failure_reason != 'BLOCKED_VIA_BUTTON']
+    failed_phones = set(ms.phone_number for ms in failed_msgs if ms.phone_number)
+    trigger.total_failed = len(failed_phones)
     trigger.total_blocked = blocked
-    trigger.total_interactions = interactions
-    trigger.total_cost = total_cost
-    trigger.total_paid_templates = paid_templates
+    trigger.total_interactions = max(trigger.total_interactions or 0, interactions)
+    trigger.total_cost = max(float(trigger.total_cost or 0.0), total_cost)
+    trigger.total_paid_templates = max(trigger.total_paid_templates or 0, paid_templates)
 
     # Se houver mensagens falhas, sincronizar a razão do erro
     failed_msgs = [ms for ms in all_statuses if ms.status == 'failed' and ms.failure_reason]
@@ -108,17 +112,21 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     # porque as categorias se sobrepõem e podem gerar valor negativo.
     try:
         from sqlalchemy import func as sqlfunc, select
-        subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(
-            models.MessageStatus.trigger_id.in_(all_trigger_ids)
-        ).group_by(models.MessageStatus.phone_number).subquery()
-        trigger.queue_count = db.query(models.MessageStatus).filter(
-            models.MessageStatus.id.in_(select(subq)),
+        base_queue_q = db.query(models.MessageStatus).filter(
+            models.MessageStatus.trigger_id == trigger_id,
             models.MessageStatus.status == 'sent',
             models.MessageStatus.delivered_counted == False,
             models.MessageStatus.read_counted == False
+        )
+        subq = base_queue_q.with_entities(
+            sqlfunc.max(models.MessageStatus.id).label("max_id")
+        ).group_by(models.MessageStatus.phone_number).subquery()
+
+        trigger.queue_count = db.query(models.MessageStatus).filter(
+            models.MessageStatus.id.in_(select(subq.c.max_id))
         ).count()
     except Exception:
-        trigger.queue_count = 0
+        trigger.queue_count = max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0))
     
     # Não alterar os registros no banco durante o cálculo para evitar efeitos colaterais
     db.commit()
@@ -301,7 +309,8 @@ async def start_now_trigger_logic(trigger_id: int, db: Session):
     
     # Resetar para estado inicial de execução
     trigger.status = "queued"
-    trigger.scheduled_time = datetime.now(timezone.utc)
+    if not trigger.scheduled_time:
+        trigger.scheduled_time = datetime.now(timezone.utc)
     trigger.failure_reason = None
     
     # Se for bulk, garante que temos contatos pendentes

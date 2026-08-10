@@ -87,6 +87,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
     const [totalItems, setTotalItems] = useState(0);
     const [showOnlyPinned, setShowOnlyPinned] = useState(false);
     const [selectedFolderId, setSelectedFolderId] = useState(null);
+    const [sortBy, setSortBy] = useState('recent'); // 'recent' ou 'largest'
 
     const fetchHistory = useCallback(async () => {
         if (!activeClient) return;
@@ -101,6 +102,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
             if (showTechnical) url += `&show_technical=true`;
             if (showOnlyPinned) url += `&pinned_only=true`;
             if (selectedFolderId) url += `&folder_id=${selectedFolderId}`;
+            if (sortBy && sortBy !== 'recent') url += `&sort_by=${sortBy}`;
 
             const now = new Date();
             let start = null;
@@ -151,7 +153,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
         } finally {
             setLoading(false);
         }
-    }, [filterName, dateRange, customStart, customEnd, filterStatus, itemsPerPage, page, triggerType, showTechnical, showOnlyPinned, selectedFolderId, activeClient]);
+    }, [activeClient, page, itemsPerPage, filterName, filterStatus, dateRange, triggerType, customStart, customEnd, showTechnical, showOnlyPinned, selectedFolderId, sortBy, refreshKey]);
 
     const {
         handleDelete,
@@ -291,8 +293,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
                         ? allFormatted.filter(c => (c.phone_number || '').replace(/\D/g, '').includes(cleanSearch))
                         : allFormatted;
                     const { ddis, ddds } = getAvailableDdiDdd(optionsSource.map(c => c.phone_number));
-                    setContactsDdiOptions(ddis);
-                    setContactsDddOptions(ddds);
+                    if (!contactsFilterDdi) setContactsDdiOptions(ddis);
+                    if (!contactsFilterDdd) setContactsDddOptions(ddds);
 
                     setContactsTotal(filtered.length);
                     setContactsModal(prev => ({
@@ -330,30 +332,25 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
                     failureReasons: data.failure_reasons || []
                 }));
 
-                // O backend faz reconcile ao buscar contatos de triggers finalizados.
-                // Atualiza a linha na lista para refletir os contadores corrigidos.
-                const FINISHED_STATUSES = ['completed', 'failed', 'cancelled', 'aborted'];
-                const currentTrigger = triggers.find(t => t.id === contactsModal.triggerId);
-                if (currentTrigger && FINISHED_STATUSES.includes(currentTrigger.status)) {
-                    try {
-                        const resT = await fetchWithAuth(`${API_URL}/triggers/${contactsModal.triggerId}`, {}, activeClient?.id);
-                        if (resT.ok) {
-                            const updated = await resT.json();
-                            const STAT_FIELDS = [
-                                'total_sent', 'total_delivered', 'total_read', 'total_interactions',
-                                'total_failed', 'total_blocked', 'queue_count', 'total_contacts',
-                                'total_paid_templates', 'total_cost', 'cost_per_unit',
-                                'status', 'updated_at'
-                            ];
-                            const patch = {};
-                            for (const f of STAT_FIELDS) {
-                                if (updated[f] !== undefined) patch[f] = updated[f];
-                            }
-                            setTriggers(prev => prev.map(t => t.id === contactsModal.triggerId ? { ...t, ...patch } : t));
-                        }
-                    } catch (_) {
-                        // silencioso — não interrompe a UI
-                    }
+                // Popula DDI e DDD a partir dos contatos recebidos (sem encolher opções se um filtro estiver ativo)
+                const phones = (data.items || []).map(i => i.phone_number || i.phone).filter(Boolean);
+                const { ddis, ddds } = getAvailableDdiDdd(phones);
+                if (!contactsFilterDdi) setContactsDdiOptions(ddis);
+                if (!contactsFilterDdd) setContactsDddOptions(ddds);
+
+                // Atualiza a linha na lista usando os contadores já calculados e retornados pelo backend
+                if (data.counts) {
+                    const countsPatch = {
+                        total_sent: data.counts.sent,
+                        total_delivered: data.counts.delivered,
+                        total_read: data.counts.read,
+                        total_interactions: data.counts.interaction,
+                        total_failed: data.counts.failed,
+                        total_blocked: data.counts.blocked,
+                        queue_count: data.counts.queue,
+                        total_contacts: data.counts.all
+                    };
+                    setTriggers(prev => prev.map(t => t.id === contactsModal.triggerId ? { ...t, ...countsPatch } : t));
                 }
             }
         } catch (e) {
@@ -369,42 +366,6 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
             fetchTriggerContacts();
         }
     }, [contactsFilter, contactsTypeFilter, contactsErrorFilter, contactsSearchPhone, contactsFilterDdi, contactsFilterDdd, contactsModal.isOpen, contactsModal.triggerId, contactsPage, contactsPerPage]);
-
-    // Calcula as opções de DDI/DDD disponíveis nas abas paginadas (tudo exceto
-    // "total", que já calcula isso sozinha em fetchTriggerContacts acima).
-    // Busca a lista completa (sem o filtro de DDI/DDD) para saber quais códigos
-    // realmente existem entre os contatos deste filtro, e só então popula o dropdown.
-    const fetchAvailableDdiDddOptions = async () => {
-        if (!contactsModal.triggerId) return;
-        try {
-            let url = `${API_URL}/triggers/${contactsModal.triggerId}/messages`;
-            const params = new URLSearchParams();
-            if (contactsFilter !== 'all') params.append('status_filter', contactsFilter);
-            if (contactsTypeFilter !== 'all') params.append('message_type', contactsTypeFilter);
-            if ((contactsFilter === 'failed' || contactsFilter === 'blocked') && contactsErrorFilter !== 'all') {
-                params.append('failure_reason', contactsErrorFilter);
-            }
-            if (contactsSearchPhone) params.append('search_phone', contactsSearchPhone);
-            params.append('limit', 999999);
-            params.append('skip', 0);
-            const res = await fetchWithAuth(`${url}?${params.toString()}`, {}, activeClient?.id);
-            if (res.ok) {
-                const data = await res.json();
-                const phones = (data.items || []).map(i => i.phone_number || i.phone).filter(Boolean);
-                const { ddis, ddds } = getAvailableDdiDdd(phones);
-                setContactsDdiOptions(ddis);
-                setContactsDddOptions(ddds);
-            }
-        } catch (_) {
-            // silencioso — dropdown apenas fica sem opções extras nesse caso
-        }
-    };
-
-    useEffect(() => {
-        if (contactsModal.isOpen && contactsModal.triggerId && contactsFilter !== 'total') {
-            fetchAvailableDdiDddOptions();
-        }
-    }, [contactsFilter, contactsTypeFilter, contactsErrorFilter, contactsSearchPhone, contactsModal.isOpen, contactsModal.triggerId]);
 
     const handleSelectAll = (e) => {
         if (e.target.checked) {
@@ -426,12 +387,14 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
         const filterLabels = { total: 'Total na Lista', sent: 'Enviados', queue: 'Fila (Meta)', delivered: 'Recebidas', read: 'Lidos', failed: 'Falhas', interaction: 'Interações', blocked: 'Bloqueados', free: 'Gratuitas', template: 'Templates', private_note: 'Notas Privadas' };
         setContactsFilter(initialFilter);
         setContactsPage(1); // Resetar para página 1 ao abrir
+        setContactsPerPage(20); // Resetar para 20 itens por página (menor valor) ao abrir popup
         setContactsErrorFilter('all');
         const label = filterLabels[initialFilter];
         setContactsModal({
             isOpen: true,
             title: label ? `${label} — ${trigger.funnel?.name || trigger.template_name || 'Envio em Massa'}` : `Contatos — ${trigger.funnel?.name || 'Envio em Massa'}`,
             triggerId: trigger.id,
+            triggerStatus: trigger.status,
             isTemplate: !!trigger.template_name,
             showTabs: initialFilter === 'all',
             contacts: [],
@@ -481,6 +444,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
         contactsSearchPhone, setContactsSearchPhone,
         contactsFilterDdi, setContactsFilterDdi,
         contactsFilterDdd, setContactsFilterDdd,
-        contactsDdiOptions, contactsDddOptions
+        contactsDdiOptions, contactsDddOptions,
+        sortBy, setSortBy
     };
 };

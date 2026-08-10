@@ -210,6 +210,8 @@ const ContactsModal = ({
         displayContacts,
         isConfirmRestOpen,
         setIsConfirmRestOpen,
+        restingHours,
+        setRestingHours,
         loadingRest,
         handleOpenTagModal,
         handleOpenBulkSendModal,
@@ -218,6 +220,8 @@ const ContactsModal = ({
         isSelected,
         toggleSelectOne,
         toggleSelectAll,
+        handleSelectAllTarget,
+        getAllTargetContacts,
         getContactPhone
     } = useContactsModalLogic({
         contactsModal, setContactsModal, contactsFilter, setContactsFilter,
@@ -261,7 +265,7 @@ const ContactsModal = ({
                                 <option value="free">🆓 Gratuitos (Livre)</option>
                             </select>
                         )}
-                        {((contactsFilter === 'failed' || contactsFilter === 'blocked') && contactsModal.failureReasons && contactsModal.failureReasons.length > 0) && (
+                        {((contactsFilter === 'failed' || contactsFilter === 'blocked') && (contactsModal.failureReasons || []).length > 0) && (
                             <select
                                 id="contacts-error-filter"
                                 value={contactsErrorFilter}
@@ -271,7 +275,7 @@ const ContactsModal = ({
                                 <option value="all">
                                     {contactsFilter === 'blocked' ? '🚫 Todos os Bloqueios' : '⚠️ Todos os Erros'}
                                 </option>
-                                {contactsModal.failureReasons.map((reason, idx) => (
+                                {(contactsModal.failureReasons || []).map((reason, idx) => (
                                     <option key={idx} value={reason}>
                                         {reason === 'BLOCKED_VIA_BUTTON' ? 'BLOQUEOU O BOT' : reason}
                                     </option>
@@ -294,7 +298,7 @@ const ContactsModal = ({
                     <div className="flex-1 min-w-[200px] relative">
                         <input 
                             type="text" 
-                            value={contactsSearchPhone} 
+                            value={contactsSearchPhone || ''} 
                             onChange={e => { setContactsSearchPhone(e.target.value); setPage(1); }} 
                             placeholder="Buscar por número..."
                             className="w-full pl-3 pr-8 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-gray-400"
@@ -311,13 +315,13 @@ const ContactsModal = ({
                     
                     <div className="w-[140px] relative">
                         <select
-                            value={contactsFilterDdi}
+                            value={contactsFilterDdi || ''}
                             onChange={e => { setContactsFilterDdi(e.target.value); setPage(1); }}
                             className="w-full px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
-                            disabled={contactsDdiOptions.length === 0}
+                            disabled={(contactsDdiOptions || []).length === 0}
                         >
                             <option value="">Todos DDIs</option>
-                            {contactsDdiOptions.map(ddi => (
+                            {(contactsDdiOptions || []).map(ddi => (
                                 <option key={ddi} value={ddi}>{formatDdiOption(ddi)}</option>
                             ))}
                         </select>
@@ -328,13 +332,13 @@ const ContactsModal = ({
                             realmente existem entre os contatos deste filtro — nunca a lista
                             fixa de todos os DDDs do Brasil. */}
                         <select
-                            value={contactsFilterDdd}
+                            value={contactsFilterDdd || ''}
                             onChange={e => { setContactsFilterDdd(e.target.value); setPage(1); }}
                             className="w-full px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-xs text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
-                            disabled={contactsDddOptions.length === 0}
+                            disabled={(contactsDddOptions || []).length === 0}
                         >
                             <option value="">Todos DDDs</option>
-                            {contactsDddOptions.map(ddd => (
+                            {(contactsDddOptions || []).map(ddd => (
                                 <option key={ddd} value={ddd}>{formatDddOption(ddd)}</option>
                             ))}
                         </select>
@@ -389,99 +393,112 @@ const ContactsModal = ({
 
                         {/* Lista */}
                         <div className="p-0 overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-900/30 min-h-[300px]">
-                            {contactsModal.contacts.length > 0 && (
-                                <div className="p-3 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center sticky top-0 z-20 shadow-sm">
-                                    <label className="flex items-center gap-3 cursor-pointer select-none">
-                                        <input
-                                            type="checkbox"
-                                            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500/20 w-4 h-4 bg-transparent transition-all"
-                                            checked={(() => {
-                                                // Contatos já resolvidos (travados) não entram na conta do "selecionar todos".
-                                                const selectable = displayContacts.filter(c => !c.failure_resolution);
-                                                return selectable.length > 0 && selectable.every(c => selectedPhones.includes(getContactPhone(c)));
-                                            })()}
-                                            onChange={toggleSelectAll}
-                                        />
-                                        <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Selecionar Todos ({displayContacts.length})
-                                        </span>
-                                    </label>
-                                    {contactsModal.contacts.length > 0 && (
-                                        <div className="flex flex-col gap-1.5">
-                                            {/* Linha 1: Etiqueta Chat + Etiquetar + Disparar */}
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => setIsChatwootLabelModalOpen(true)}
-                                                    disabled={chatwootLabeling || loadingAllTarget}
-                                                    className="flex-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-indigo-950/20 disabled:opacity-50"
-                                                >
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                                                        <line x1="7" y1="7" x2="7.01" y2="7"/>
-                                                    </svg>
-                                                    {selectedPhones.length > 0 ? `Etiqueta Chat (${selectedPhones.length})` : `Etiqueta Chat (${totalCount})`}
-                                                </button>
-                                                <button
-                                                    onClick={handleOpenTagModal}
-                                                    disabled={taggingAll || loadingAllTarget}
-                                                    className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
-                                                >
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                                                        <line x1="7" y1="7" x2="7.01" y2="7"/>
-                                                    </svg>
-                                                    {selectedPhones.length > 0 ? `Etiquetar (${selectedPhones.length})` : `Etiquetar Todos (${totalCount})`}
-                                                </button>
-                                                {contactsFilter === 'failed' && (
-                                                    <button
-                                                        onClick={handleOpenBulkSendModal}
-                                                        disabled={sendingAll || loadingAllTarget}
-                                                        className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/20 disabled:opacity-50"
-                                                        id="contacts-bulk-send-button"
-                                                    >
-                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                            <polyline points="22 2 15 22 11 13 2 9 22 2" />
-                                                            <line x1="22" y1="2" x2="11" y2="13" />
-                                                        </svg>
-                                                        {selectedPhones.length > 0 ? `Disparar (${selectedPhones.length})` : `Disparar Todos (${totalCount})`}
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {/* Linha 2: Repousar + Bloquear (só em falhas) */}
+                            {(contactsModal.contacts || []).length > 0 && (
+                                <div className="p-3 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex flex-col gap-2 sticky top-0 z-20 shadow-sm">
+                                    <div className="flex justify-between items-center">
+                                        <label className="flex items-center gap-3 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500/20 w-4 h-4 bg-transparent transition-all"
+                                                checked={(() => {
+                                                    const selectable = (displayContacts || []).filter(c => !c?.failure_resolution);
+                                                    return selectable.length > 0 && (selectedPhones.length >= totalCount || selectable.every(c => selectedPhones.includes(getContactPhone(c))));
+                                                })()}
+                                                onChange={toggleSelectAll}
+                                            />
+                                            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                {selectedPhones.length >= totalCount && totalCount > 0
+                                                    ? `Todos os ${totalCount} Selecionados`
+                                                    : `Selecionar Página (${(displayContacts || []).length})`}
+                                            </span>
+                                        </label>
+                                        
+                                        {totalCount > (displayContacts || []).length && (
+                                            <button
+                                                type="button"
+                                                onClick={handleSelectAllTarget}
+                                                disabled={loadingAllTarget}
+                                                className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800/40 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 border border-blue-200/50 dark:border-blue-700/50 flex items-center gap-1"
+                                            >
+                                                {loadingAllTarget ? 'Carregando...' : selectedPhones.length >= totalCount ? `Desmarcar ${totalCount}` : `✨ Selecionar todos ${totalCount}`}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        {/* Linha 1: Etiqueta Chat + Etiquetar + Disparar */}
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setIsChatwootLabelModalOpen(true)}
+                                                disabled={chatwootLabeling || loadingAllTarget}
+                                                className="flex-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-indigo-950/20 disabled:opacity-50"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                                                    <line x1="7" y1="7" x2="7.01" y2="7"/>
+                                                </svg>
+                                                {selectedPhones.length > 0 ? `Etiqueta Chat (${selectedPhones.length})` : `Etiqueta Chat (${totalCount})`}
+                                            </button>
+                                            <button
+                                                onClick={handleOpenTagModal}
+                                                disabled={taggingAll || loadingAllTarget}
+                                                className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                                                    <line x1="7" y1="7" x2="7.01" y2="7"/>
+                                                </svg>
+                                                {selectedPhones.length > 0 ? `Etiquetar (${selectedPhones.length})` : `Etiquetar Todos (${totalCount})`}
+                                            </button>
                                             {contactsFilter === 'failed' && (
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => setIsConfirmRestOpen(true)}
-                                                        disabled={loadingRest || loadingAllTarget}
-                                                        className="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/20 disabled:opacity-50"
-                                                        id="contacts-bulk-rest-button"
-                                                    >
-                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                            <circle cx="12" cy="12" r="10" />
-                                                            <polyline points="12 6 12 12 16 14" />
-                                                        </svg>
-                                                        {selectedPhones.length > 0 ? `Repousar (${selectedPhones.length})` : `Repousar Todos (${totalCount})`}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setIsConfirmBlockOpen(true)}
-                                                        disabled={loadingBlock || loadingAllTarget}
-                                                        className="flex-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-rose-950/20 disabled:opacity-50"
-                                                    >
-                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                            <circle cx="12" cy="12" r="10" />
-                                                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                                                        </svg>
-                                                        {selectedPhones.length > 0 ? `Bloquear (${selectedPhones.length})` : `Bloquear Todos (${totalCount})`}
-                                                    </button>
-                                                </div>
+                                                <button
+                                                    onClick={handleOpenBulkSendModal}
+                                                    disabled={sendingAll || loadingAllTarget}
+                                                    className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/20 disabled:opacity-50"
+                                                    id="contacts-bulk-send-button"
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                        <polyline points="22 2 15 22 11 13 2 9 22 2" />
+                                                        <line x1="22" y1="2" x2="11" y2="13" />
+                                                    </svg>
+                                                    {selectedPhones.length > 0 ? `Disparar (${selectedPhones.length})` : `Disparar Todos (${totalCount})`}
+                                                </button>
                                             )}
                                         </div>
-                                    )}
+                                        {/* Linha 2: Repousar + Bloquear (só em falhas) */}
+                                        {contactsFilter === 'failed' && (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setIsConfirmRestOpen(true)}
+                                                    disabled={loadingRest || loadingAllTarget}
+                                                    className="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/20 disabled:opacity-50"
+                                                    id="contacts-bulk-rest-button"
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                        <circle cx="12" cy="12" r="10" />
+                                                        <polyline points="12 6 12 12 16 14" />
+                                                    </svg>
+                                                    {selectedPhones.length > 0 ? `Repousar (${selectedPhones.length})` : `Repousar Todos (${totalCount})`}
+                                                </button>
+                                                <button
+                                                    onClick={() => setIsConfirmBlockOpen(true)}
+                                                    disabled={loadingBlock || loadingAllTarget}
+                                                    className="flex-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-rose-950/20 disabled:opacity-50"
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                        <circle cx="12" cy="12" r="10" />
+                                                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                                                    </svg>
+                                                    {selectedPhones.length > 0 ? `Bloquear (${selectedPhones.length})` : `Bloquear Todos (${totalCount})`}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
                             <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                                {displayContacts.map((contact, i) => (
+                                {(displayContacts || []).map((contact, i) => (
                                     <ContactRow
                                         key={i}
                                         contact={contact}
@@ -492,9 +509,11 @@ const ContactsModal = ({
                                     />
                                 ))}
 
-                                {contactsModal.contacts.length === 0 && (
-                                    <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                                        <p className="text-sm">Nenhum contato encontrado neste filtro.</p>
+                                {(contactsModal.contacts || []).length === 0 && (
+                                    <div className="flex flex-col items-center justify-center p-8 my-6 text-center max-w-lg mx-auto rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 shadow-lg shadow-amber-500/5 animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="py-6 text-center text-gray-400 dark:text-gray-500">
+                                            <p className="text-sm font-medium">Nenhum contato encontrado neste filtro.</p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -551,18 +570,54 @@ const ContactsModal = ({
                 {/* Footer */}
                 <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-end gap-3 z-10">
                     <button
-                        onClick={() => {
-                            if (!contactsModal.contacts || contactsModal.contacts.length === 0) {
-                                toast.error('A lista está vazia. Nenhum contato para copiar.');
-                                return;
+                        onClick={async () => {
+                            let phonesToCopy = [];
+                            let copyToast = null;
+                            try {
+                                if (selectedPhones.length > 0) {
+                                    phonesToCopy = selectedPhones;
+                                } else {
+                                    copyToast = toast.loading(`Buscando todos os ${totalCount} contatos de todas as páginas...`);
+                                    const allContacts = await getAllTargetContacts();
+                                    phonesToCopy = (allContacts || []).map(getContactPhone).filter(Boolean);
+                                }
+
+                                if (phonesToCopy.length === 0) {
+                                    if (copyToast) toast.dismiss(copyToast);
+                                    toast.error('Nenhum contato disponível para copiar.');
+                                    return;
+                                }
+
+                                const text = phonesToCopy.join('\n');
+                                try {
+                                    await navigator.clipboard.writeText(text);
+                                } catch (e) {
+                                    const textarea = document.createElement('textarea');
+                                    textarea.value = text;
+                                    document.body.appendChild(textarea);
+                                    textarea.select();
+                                    document.execCommand('copy');
+                                    document.body.removeChild(textarea);
+                                }
+
+                                const count = phonesToCopy.length;
+                                const msg = count === 1 ? '1 contato copiado!' : `${count} contatos copiados!`;
+                                if (copyToast) {
+                                    toast.success(msg, { id: copyToast });
+                                } else {
+                                    toast.success(msg);
+                                }
+                            } catch (err) {
+                                if (copyToast) {
+                                    toast.error('Erro ao copiar contatos.', { id: copyToast });
+                                } else {
+                                    toast.error('Erro ao copiar contatos.');
+                                }
                             }
-                            const text = contactsModal.contacts.map(c => c.phone_number || c.phone).join('\n');
-                            navigator.clipboard.writeText(text);
-                            toast.success('Lista copiada!');
                         }}
                         className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition font-medium flex items-center gap-2"
                     >
-                        Copiar Lista
+                        {selectedPhones.length > 0 ? `Copiar Selecionados (${selectedPhones.length})` : totalCount > 0 ? `Copiar Lista (${totalCount})` : 'Copiar Lista'}
                     </button>
                     <button
                         onClick={() => setContactsModal({ ...contactsModal, isOpen: false })}
@@ -577,13 +632,23 @@ const ContactsModal = ({
             <ConfirmationDialog
                 isOpen={isConfirmRestOpen}
                 onClose={() => setIsConfirmRestOpen(false)}
-                onConfirm={handleRestSelectedContacts}
+                onConfirm={() => handleRestSelectedContacts(restingHours)}
                 title="Colocar em Repouso?"
-                message={`Você tem certeza que deseja colocar os ${selectedPhones.length} contatos selecionados em repouso por 24 horas? Eles não receberão disparos de templates até o fim do período ou remoção manual.`}
+                message={`Você tem certeza que deseja colocar os ${selectedPhones.length > 0 ? selectedPhones.length : totalCount} contatos selecionados em repouso por ${restingHours} horas? Eles não receberão disparos de templates até o fim do período ou remoção manual.`}
                 confirmText="Sim, Repousar"
                 confirmColorClass="bg-amber-600 hover:bg-amber-500 focus:ring-amber-500/20"
                 icon="⏰"
                 loading={loadingRest}
+                showSelect={true}
+                selectLabel="Tempo de Repouso:"
+                selectValue={restingHours}
+                onSelectChange={setRestingHours}
+                selectOptions={[
+                    { value: 24, label: '24 horas (1 dia) — Padrão' },
+                    { value: 48, label: '48 horas (2 dias)' },
+                    { value: 72, label: '72 horas (3 dias)' },
+                    { value: 96, label: '96 horas (4 dias)' }
+                ]}
             />
 
             {/* Modal de Confirmação de Bloqueio */}

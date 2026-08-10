@@ -95,8 +95,20 @@ const ContactsViewerModal = ({ isOpen, onClose, triggerId, contacts, counts, fil
               <p className="text-xs font-bold text-gray-500 tracking-widest uppercase">Buscando contatos...</p>
             </div>
           ) : safeContacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 italic text-sm">
-              Nenhum registro encontrado para este filtro.
+            <div className="flex flex-col items-center justify-center p-8 my-6 text-center max-w-lg mx-auto rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 shadow-lg shadow-amber-500/5 animate-in fade-in zoom-in-95 duration-200">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-500 flex items-center justify-center text-3xl mb-3 shadow-inner">
+                ⏳
+              </div>
+              <h4 className="font-extrabold text-white text-base">
+                Disparo em Andamento ou Sem Registros
+              </h4>
+              <p className="text-xs text-gray-300 mt-2 leading-relaxed font-medium">
+                Se o disparo estiver em andamento, os contatos individuais deste filtro serão liberados <strong className="text-amber-400">assim que a execução for concluída</strong> para garantir a velocidade dos envios.
+              </p>
+              <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-950/40 text-amber-300 text-xs font-bold border border-amber-500/30">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                Aguardando finalização do processo...
+              </div>
             </div>
           ) : (
             <>

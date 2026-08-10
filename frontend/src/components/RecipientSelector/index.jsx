@@ -153,6 +153,10 @@ const RecipientSelector = ({
                     variableFilters={hook.variableFilters}
                     setVariableFilters={hook.setVariableFilters}
                     exclusionList={exclusionList}
+                    limitMode={hook.limitMode}
+                    setLimitMode={hook.setLimitMode}
+                    dispatchLimit={hook.dispatchLimit}
+                    setDispatchLimit={hook.setDispatchLimit}
                 />
             )}
 

@@ -44,7 +44,11 @@ const ContactList = ({
     progress,
     variableFilters,
     setVariableFilters,
-    exclusionList = []
+    exclusionList = [],
+    limitMode = 'all',
+    setLimitMode,
+    dispatchLimit = 500,
+    setDispatchLimit
 }) => {
     const activeVarColumns = useMemo(() => {
         return templateVariables || [];
@@ -130,6 +134,7 @@ const ContactList = ({
 
             <ContactTable 
                 displayedContacts={displayedContacts}
+                filteredContacts={filteredContacts}
                 activeVarColumns={templateVariables || []}
                 setContacts={setContacts}
                 showValidation={showValidation}
@@ -142,6 +147,85 @@ const ContactList = ({
                 setVariableFilters={setVariableFilters}
                 exclusionList={exclusionList}
             />
+
+            {/* Seletor de Modo de Limite de Disparo (Todos os Aptos vs N Primeiros) */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                        <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                            Alcance do Disparo aos Contatos Aptos
+                        </span>
+                    </div>
+                    <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                        {selectedList.length} contato(s) apto(s)
+                    </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <button
+                        type="button"
+                        onClick={() => setLimitMode && setLimitMode('all')}
+                        className={`p-3.5 rounded-xl border text-left font-semibold flex items-center gap-3 transition ${
+                            limitMode === 'all'
+                            ? 'bg-blue-600/15 border-blue-500 text-white ring-1 ring-blue-500/30'
+                            : 'bg-slate-800/40 border-slate-700/60 text-slate-400 hover:text-white'
+                        }`}
+                    >
+                        <input
+                            type="radio"
+                            name="limitMode"
+                            checked={limitMode === 'all'}
+                            onChange={() => setLimitMode && setLimitMode('all')}
+                            className="text-blue-600 focus:ring-0 cursor-pointer"
+                        />
+                        <div>
+                            <div className="font-bold text-white text-xs">Disparar para TODOS os Aptos</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">Envia para todos os contatos válidos e não bloqueados</div>
+                        </div>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setLimitMode && setLimitMode('limit')}
+                        className={`p-3.5 rounded-xl border text-left font-semibold flex items-center gap-3 transition ${
+                            limitMode === 'limit'
+                            ? 'bg-blue-600/15 border-blue-500 text-white ring-1 ring-blue-500/30'
+                            : 'bg-slate-800/40 border-slate-700/60 text-slate-400 hover:text-white'
+                        }`}
+                    >
+                        <input
+                            type="radio"
+                            name="limitMode"
+                            checked={limitMode === 'limit'}
+                            onChange={() => setLimitMode && setLimitMode('limit')}
+                            className="text-blue-600 focus:ring-0 cursor-pointer"
+                        />
+                        <div className="flex-1 flex items-center justify-between gap-2">
+                            <div>
+                                <div className="font-bold text-white text-xs">Disparar para os N Primeiros</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">Limitar disparo aos primeiros aptos da lista</div>
+                            </div>
+                            {limitMode === 'limit' && (
+                                <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                                    <span className="text-[10px] text-slate-400 font-bold">Máx:</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="100000"
+                                        value={dispatchLimit || 500}
+                                        onChange={e => setDispatchLimit && setDispatchLimit(Math.max(1, parseInt(e.target.value) || 0))}
+                                        className="w-20 bg-slate-900 border border-blue-500/50 text-white font-bold text-xs px-2 py-1 rounded-lg text-center focus:outline-none focus:border-blue-400"
+                                        placeholder="500"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </button>
+                </div>
+            </div>
 
             <button
                 onClick={startValidation}

@@ -5,6 +5,7 @@ import ConfirmModal from '../../../components/ConfirmModal';
 import ContactImportModal from '../../../components/ContactImportModal';
 import EditLeadModal from '../../../components/EditLeadModal';
 import CreateLeadModal from '../../../components/CreateLeadModal';
+import ExportModal from './ExportModal';
 
 function DeletingOverlay({ isDeleting, selectAllPages, count }) {
   if (!isDeleting) return null;
@@ -40,7 +41,8 @@ export default function Modals({
   selectAllPages, total,
   isImportModalOpen, setIsImportModalOpen, fetchLeads, fetchFilters,
   isEditModalOpen, setIsEditModalOpen, setLeadToEdit, leadToEdit,
-  isCreateModalOpen, setIsCreateModalOpen, onNavigateToImportHistory
+  isCreateModalOpen, setIsCreateModalOpen, onNavigateToImportHistory,
+  isExportModalOpen, isExporting, exportStatus, exportError, handleCloseExportModal
 }) {
   return (
     <>
@@ -108,6 +110,15 @@ export default function Modals({
           fetchLeads();
           fetchFilters();
         }}
+      />
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={handleCloseExportModal}
+        isExporting={isExporting}
+        exportStatus={exportStatus}
+        exportError={exportError}
+        count={selectedLeads?.length > 0 ? selectedLeads.length : total}
       />
     </>
   );

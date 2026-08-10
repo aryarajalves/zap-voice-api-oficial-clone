@@ -4,6 +4,7 @@ from sqlalchemy import or_, func
 from typing import List, Optional
 import models, schemas
 from core.deps import get_current_user, get_db
+from core.logger import logger
 from rabbitmq_client import rabbitmq
 
 router = APIRouter()
@@ -163,6 +164,23 @@ async def get_trigger(
                 resolved_actions[btn_text] = action
         trigger.button_actions = resolved_actions
         
+    if not trigger.waba_card_last4:
+        card_setting = db.query(models.AppConfig).filter(
+            models.AppConfig.client_id == trigger.client_id,
+            models.AppConfig.key == "WA_WABA_CARD_LAST4"
+        ).first()
+        if card_setting and card_setting.value:
+            trigger.waba_card_last4 = card_setting.value.strip()
+
+    if trigger.template_name:
+        clean_tmpl = trigger.template_name.split('|')[0].strip()
+        tmpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+            models.WhatsAppTemplateCache.client_id == trigger.client_id,
+            models.WhatsAppTemplateCache.name == clean_tmpl
+        ).first()
+        if tmpl_cache and tmpl_cache.category:
+            trigger.template_category = tmpl_cache.category
+
     return trigger
 
 @router.get("", response_model=schemas.TriggerListResponse, summary="Listar Disparos e Agendamentos")
@@ -178,6 +196,7 @@ async def list_triggers(
     show_technical: bool = False,
     pinned_only: bool = False,
     folder_id: Optional[int] = None,
+    sort_by: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -247,8 +266,7 @@ async def list_triggers(
             query = query.filter(
                 models.ScheduledTrigger.is_bulk == True,
                 models.ScheduledTrigger.funnel_id == None,
-                models.ScheduledTrigger.is_recurring == False,
-                or_(models.ScheduledTrigger.product_name != 'SCALE_TEST', models.ScheduledTrigger.product_name == None)
+                models.ScheduledTrigger.is_recurring == False
             )
         elif trigger_type == 'single':
             query = query.filter(
@@ -261,16 +279,29 @@ async def list_triggers(
         elif trigger_type == 'recurring':
             query = query.filter(models.ScheduledTrigger.is_recurring == True)
         elif trigger_type == 'scale_test':
-            query = query.filter(models.ScheduledTrigger.product_name == 'SCALE_TEST')
+            query = query.filter(
+                or_(
+                    models.ScheduledTrigger.product_name == 'SCALE_TEST',
+                    models.ScheduledTrigger.is_stress_test == True
+                )
+            )
 
     total = query.count()
     # Alguns registros antigos/em massa têm is_pinned NULL em vez de FALSE (não passaram
     # pelo default do ORM). No Postgres, NULL vem ANTES de TRUE em ORDER BY ... DESC,
     # então sem o coalesce os não-fixados (NULL) furariam a frente dos fixados.
-    triggers = query.order_by(
-        func.coalesce(models.ScheduledTrigger.is_pinned, False).desc(),
-        models.ScheduledTrigger.created_at.desc()
-    ).offset(skip).limit(limit).all()
+    # Ordenação flexível (maiores disparos x mais recentes)
+    if sort_by == 'largest':
+        triggers = query.order_by(
+            func.coalesce(models.ScheduledTrigger.is_pinned, False).desc(),
+            models.ScheduledTrigger.total_contacts.desc(),
+            models.ScheduledTrigger.created_at.desc()
+        ).offset(skip).limit(limit).all()
+    else:
+        triggers = query.order_by(
+            func.coalesce(models.ScheduledTrigger.is_pinned, False).desc(),
+            models.ScheduledTrigger.created_at.desc()
+        ).offset(skip).limit(limit).all()
 
     # Coletar todos os funnel_ids únicos nas button_actions dos triggers retornados
     funnel_ids = set()
@@ -280,56 +311,159 @@ async def list_triggers(
                 if isinstance(action, dict) and action.get("funnel_id"):
                     funnel_ids.add(action.get("funnel_id"))
                     
-    # Buscar os funis correspondentes de uma vez
+    # Buscar mapa de funis para button_actions
     funnel_names = {}
     if funnel_ids:
-        funnels = db.query(models.Funnel).filter(models.Funnel.id.in_(list(funnel_ids))).all()
-        funnel_names = {f.id: f.name for f in funnels}
+        fn_rows = db.query(models.Funnel.id, models.Funnel.name).filter(models.Funnel.id.in_(list(funnel_ids))).all()
+        funnel_names = {f[0]: f[1] for f in fn_rows}
 
-    for trigger in triggers:
-        # NOTA: reconcile NÃO é chamado aqui para não tornar a listagem lenta
-        # (chamada N vezes = N queries pesadas por page load).
-        # Os valores em DB são atualizados pelo botão Sync, pela abertura do modal de contatos
-        # (details.py) e pelos handlers de status do WhatsApp em tempo real.
+    # Buscar configuração dos últimos 4 dígitos do cartão WABA do cliente
+    card_setting = db.query(models.AppConfig).filter(
+        models.AppConfig.client_id == client_id,
+        models.AppConfig.key == "WA_WABA_CARD_LAST4"
+    ).first()
+    card_last4_val = card_setting.value.strip() if (card_setting and card_setting.value) else None
 
-        if trigger.sent_as is None and trigger.messages:
-            first_msg = min(trigger.messages, key=lambda m: m.id)
-            if first_msg.message_type:
-                trigger.sent_as = first_msg.message_type
-        
-        trigger.child_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == trigger.id).count()
-        trigger.interaction_child_count = db.query(models.ScheduledTrigger).filter(
-            models.ScheduledTrigger.parent_id == trigger.id,
-            models.ScheduledTrigger.is_interaction == True
-        ).count()
-        trigger.block_child_count = db.query(models.ScheduledTrigger).filter(
-            models.ScheduledTrigger.parent_id == trigger.id,
-            models.ScheduledTrigger.skip_block_check == True
-        ).count()
-        
-        # queue_count: sempre calculado via SQL real (max id por telefone) para todos os bulk.
-        # Garante valor correto tanto em disparos ativos quanto finalizados, sem depender do
-        # valor salvo no DB (que pode estar desatualizado).
-        if trigger.is_bulk:
-            try:
-                child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger.id).all()]
-                all_ids = [trigger.id] + child_ids
-                from sqlalchemy import func as sqlfunc
-                subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(models.MessageStatus.trigger_id.in_(all_ids)).group_by(models.MessageStatus.phone_number).subquery()
-                trigger.queue_count = db.query(models.MessageStatus).filter(
-                    models.MessageStatus.id.in_(subq),
+    # Buscar mapa de categorias de templates do cliente para resolver de uma vez
+    tmpl_caches = db.query(models.WhatsAppTemplateCache.name, models.WhatsAppTemplateCache.category).filter(
+        models.WhatsAppTemplateCache.client_id == client_id
+    ).all()
+    tmpl_cat_map = {tc[0]: tc[1] for tc in tmpl_caches if tc[0]}
+
+    # Otimização N+1: Pré-buscar dados em lote para todos os disparos da página
+    trigger_ids = [t.id for t in triggers]
+    child_counts_map = {}
+    interaction_child_counts_map = {}
+    block_child_counts_map = {}
+    followups_map = {}
+    queue_counts_map = {}
+    failed_counts_map = {}
+
+    if trigger_ids:
+        try:
+            # 1. Busca agrupada de contagem de filhos
+            c_rows = db.query(
+                models.ScheduledTrigger.parent_id,
+                func.count(models.ScheduledTrigger.id)
+            ).filter(
+                models.ScheduledTrigger.parent_id.in_(trigger_ids)
+            ).group_by(models.ScheduledTrigger.parent_id).all()
+            child_counts_map = {r[0]: r[1] for r in c_rows}
+
+            # 2. Busca agrupada de contagem de interações filhas
+            ic_rows = db.query(
+                models.ScheduledTrigger.parent_id,
+                func.count(models.ScheduledTrigger.id)
+            ).filter(
+                models.ScheduledTrigger.parent_id.in_(trigger_ids),
+                models.ScheduledTrigger.is_interaction == True
+            ).group_by(models.ScheduledTrigger.parent_id).all()
+            interaction_child_counts_map = {r[0]: r[1] for r in ic_rows}
+
+            # 3. Busca agrupada de contagem de bloqueios filhos
+            bc_rows = db.query(
+                models.ScheduledTrigger.parent_id,
+                func.count(models.ScheduledTrigger.id)
+            ).filter(
+                models.ScheduledTrigger.parent_id.in_(trigger_ids),
+                models.ScheduledTrigger.skip_block_check == True
+            ).group_by(models.ScheduledTrigger.parent_id).all()
+            block_child_counts_map = {r[0]: r[1] for r in bc_rows}
+
+            # 4. Busca em lote de follow-ups filhos
+            fu_rows = db.query(models.ScheduledTrigger).filter(
+                models.ScheduledTrigger.parent_id.in_(trigger_ids),
+                models.ScheduledTrigger.is_followup == True
+            ).all()
+            followups_map = {f.parent_id: f for f in fu_rows}
+
+            bulk_triggers = [t for t in triggers if t.is_bulk]
+            if bulk_triggers:
+                bulk_ids = [t.id for t in bulk_triggers]
+                # Buscar IDs de disparos filhos para incluir no cálculo das estatísticas do lote
+                child_records = db.query(models.ScheduledTrigger.id, models.ScheduledTrigger.parent_id).filter(
+                    models.ScheduledTrigger.parent_id.in_(bulk_ids)
+                ).all()
+
+                parent_map = {t_id: t_id for t_id in bulk_ids}
+                for c_id, p_id in child_records:
+                    parent_map[c_id] = p_id
+
+                all_bulk_target_ids = list(parent_map.keys())
+
+                from sqlalchemy import func as sqlfunc, select
+                # 1. Fila de envio (queue)
+                base_queue_q = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.trigger_id.in_(all_bulk_target_ids),
                     models.MessageStatus.status == 'sent',
                     models.MessageStatus.delivered_counted == False,
                     models.MessageStatus.read_counted == False
-                ).count()
-            except Exception:
-                pass  # mantém o valor do DB
+                )
 
-        # Buscar follow-up filho associado
-        followup = db.query(models.ScheduledTrigger).filter(
-            models.ScheduledTrigger.parent_id == trigger.id,
-            models.ScheduledTrigger.is_followup == True
-        ).first()
+                subq = base_queue_q.with_entities(
+                    models.MessageStatus.trigger_id.label("trig_id"),
+                    models.MessageStatus.phone_number.label("phone"),
+                    sqlfunc.max(models.MessageStatus.id).label("max_id")
+                ).group_by(models.MessageStatus.trigger_id, models.MessageStatus.phone_number).subquery()
+
+                queue_items = db.query(subq.c.trig_id, subq.c.phone).all()
+                queue_phones_by_parent = {}
+                for t_id, phone in queue_items:
+                    p_id = parent_map.get(t_id)
+                    if p_id:
+                        if p_id not in queue_phones_by_parent:
+                            queue_phones_by_parent[p_id] = set()
+                        queue_phones_by_parent[p_id].add(phone)
+
+                for p_id, phone_set in queue_phones_by_parent.items():
+                    queue_counts_map[p_id] = len(phone_set)
+
+                # 2. Cálculo de falhas (total_failed) agregando pai + filhos
+                base_failed_q = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.trigger_id.in_(all_bulk_target_ids),
+                    models.MessageStatus.status == 'failed',
+                    or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON')
+                )
+                subq_failed = base_failed_q.with_entities(
+                    models.MessageStatus.trigger_id.label("trig_id"),
+                    models.MessageStatus.phone_number.label("phone"),
+                    sqlfunc.max(models.MessageStatus.id).label("max_id")
+                ).group_by(models.MessageStatus.trigger_id, models.MessageStatus.phone_number).subquery()
+
+                failed_items = db.query(subq_failed.c.trig_id, subq_failed.c.phone).all()
+                failed_phones_by_parent = {}
+                for t_id, phone in failed_items:
+                    p_id = parent_map.get(t_id)
+                    if p_id:
+                        if p_id not in failed_phones_by_parent:
+                            failed_phones_by_parent[p_id] = set()
+                        failed_phones_by_parent[p_id].add(phone)
+
+                for p_id, phone_set in failed_phones_by_parent.items():
+                    failed_counts_map[p_id] = len(phone_set)
+
+        except Exception as e_batch:
+            logger.error(f"⚠️ Erro ao pré-buscar estatísticas em lote: {e_batch}")
+
+    for trigger in triggers:
+        if not trigger.waba_card_last4 and card_last4_val:
+            trigger.waba_card_last4 = card_last4_val
+
+        if trigger.template_name:
+            clean_tmpl = trigger.template_name.split('|')[0].strip()
+            trigger.template_category = tmpl_cat_map.get(clean_tmpl)
+
+        trigger.child_count = child_counts_map.get(trigger.id, 0)
+        trigger.interaction_child_count = interaction_child_counts_map.get(trigger.id, 0)
+        trigger.block_child_count = block_child_counts_map.get(trigger.id, 0)
+        
+        if trigger.is_bulk:
+            trigger.queue_count = queue_counts_map.get(trigger.id, 0)
+            if trigger.id in failed_counts_map:
+                trigger.total_failed = failed_counts_map[trigger.id]
+
+        # Preencher follow-up filho a partir do mapa pré-buscado
+        followup = followups_map.get(trigger.id)
         if followup:
             trigger.followup_status = followup.status
             trigger.followup_scheduled_time = followup.scheduled_time
@@ -447,3 +581,44 @@ async def bulk_delete_triggers(
 
     db.commit()
     return {"message": f"{deleted_count} registros excluídos com sucesso", "deleted_count": deleted_count}
+
+
+@router.patch("/{trigger_id}/update-params", summary="Atualizar parâmetros do disparo (delay, concorrência, horário e contatos)")
+async def update_trigger_params(
+    trigger_id: int,
+    payload: schemas.UpdateTriggerParamsRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id).first()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Disparo não encontrado")
+
+    if current_user.role == 'admin' and trigger.client_id != current_user.client_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    if payload.delay_seconds is not None:
+        trigger.delay_seconds = payload.delay_seconds
+    if payload.concurrency_limit is not None:
+        trigger.concurrency_limit = payload.concurrency_limit
+    if payload.scheduled_time is not None:
+        trigger.scheduled_time = payload.scheduled_time
+    if payload.contacts_list is not None:
+        trigger.contacts_list = payload.contacts_list
+        from services.bulk import normalize_phone
+        trigger.pending_contacts = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or '')) for c in payload.contacts_list]
+        trigger.total_contacts = len(payload.contacts_list)
+
+    db.commit()
+    db.refresh(trigger)
+
+    # Notifica via WebSocket para sincronia imediata na UI
+    await rabbitmq.publish_event("trigger_updated", {
+        "trigger_id": trigger_id,
+        "client_id": trigger.client_id,
+        "delay_seconds": trigger.delay_seconds,
+        "concurrency_limit": trigger.concurrency_limit
+    })
+
+    return {"message": "Parâmetros atualizados com sucesso", "id": trigger_id, "delay_seconds": trigger.delay_seconds, "concurrency_limit": trigger.concurrency_limit}
+

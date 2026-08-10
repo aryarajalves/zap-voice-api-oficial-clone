@@ -15,21 +15,30 @@ export const applyFilters = (contacts, { searchTerm, dddSearch, filterOpenOnly, 
     if (!contacts || !Array.isArray(contacts)) return [];
 
     return contacts.filter(c => {
+        if (!c) return false;
+        const phoneStr = String(c.phone || '');
+        if (!phoneStr) return false;
+
         // Primary filter: Exclusion list
-        if (exclusionList.includes(c.phone)) return false;
+        if (exclusionList.includes(phoneStr) || exclusionList.includes(c.phone)) return false;
 
         // Search filter (name/phone partial match)
-        if (searchTerm && !c.phone.includes(searchTerm)) return false;
+        if (searchTerm) {
+            const term = String(searchTerm).toLowerCase();
+            const matchesPhone = phoneStr.includes(term);
+            const matchesName = String(c.name || '').toLowerCase().includes(term);
+            if (!matchesPhone && !matchesName) return false;
+        }
 
         // DDD filter (starts with 55 + DDD)
         if (dddSearch) {
-            const cleanDDD = dddSearch.replace(/\D/g, '');
-            if (cleanDDD && !c.phone.startsWith('55' + cleanDDD)) return false;
+            const cleanDDD = String(dddSearch).replace(/\D/g, '');
+            if (cleanDDD && !phoneStr.startsWith('55' + cleanDDD)) return false;
         }
 
         // Status filters
-        if (filterBlockedOnly) return c.is_blocked;
-        if (filterOpenOnly) return c.window_open && c.status === 'verified';
+        if (filterBlockedOnly) return Boolean(c.is_blocked);
+        if (filterOpenOnly) return Boolean(c.window_open) && c.status === 'verified';
 
         return true;
     });
@@ -41,9 +50,13 @@ export const applyFilters = (contacts, { searchTerm, dddSearch, filterOpenOnly, 
  * @param {Array} filteredContacts - The list currently visible in the UI.
  * @returns {Array} The final "selectedList" for the bulk sender.
  */
-export const getDispatchList = (filteredContacts) => {
+export const getDispatchList = (filteredContacts, limitMode = 'all', dispatchLimit = 500) => {
     if (!filteredContacts || !Array.isArray(filteredContacts)) return [];
     
     // Safety check: dispatch MUST only target non-blocked contacts
-    return filteredContacts.filter(c => !c.is_blocked);
+    const apt = filteredContacts.filter(c => !c.is_blocked);
+    if (limitMode === 'limit' && Number(dispatchLimit) > 0) {
+        return apt.slice(0, Number(dispatchLimit));
+    }
+    return apt;
 };

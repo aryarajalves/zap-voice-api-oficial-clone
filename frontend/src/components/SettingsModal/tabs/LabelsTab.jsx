@@ -154,14 +154,20 @@ const LabelsTab = ({ user, activeClient }) => {
             <div className="bg-gray-50/50 dark:bg-white/5 border border-gray-100 dark:border-white/5 p-5 rounded-2xl space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-                            {editingLabel ? 'Editar Nome da Etiqueta' : 'Nome da Etiqueta'}
-                        </label>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                                {editingLabel ? 'Editar Nome da Etiqueta' : 'Nome da Etiqueta'}
+                            </label>
+                            <span className="text-[10px] text-gray-400 font-semibold">
+                                {name ? name.length : 0}/20 caracteres
+                            </span>
+                        </div>
                         <input
                             type="text"
-                            placeholder="Ex: Suporte, Financeiro, Lead Quente..."
+                            placeholder="Ex: Suporte, Lead Quente..."
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            maxLength={20}
+                            onChange={(e) => setName(e.target.value.slice(0, 20))}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                     e.preventDefault();
@@ -268,8 +274,8 @@ const LabelsTab = ({ user, activeClient }) => {
                                         style={{ backgroundColor: label.color }}
                                     />
                                     <div className="flex flex-col min-w-0">
-                                        <span className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate pr-2">
-                                            {label.name}
+                                        <span className="text-sm font-bold text-gray-800 dark:text-gray-200 break-words pr-2 leading-tight">
+                                            {label.name} <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">({label.name ? label.name.length : 0})</span>
                                         </span>
                                         {label.is_legacy && (
                                             <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-md mt-0.5 w-max">

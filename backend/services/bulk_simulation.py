@@ -16,7 +16,7 @@ async def simulate_lifecycle(message_id: str, trigger_id: int, client_id: int):
     logger.info(f"🔄 [SIMULATE] Iniciando simulação para message_id={message_id}, trigger_id={trigger_id}")
 
     # 1. Simular entrega (delivered) - ~90% de sucesso
-    await asyncio.sleep(random.uniform(1.0, 3.0))
+    await asyncio.sleep(random.uniform(0.1, 0.3))
     
     db = SessionLocal()
     try:
@@ -25,7 +25,7 @@ async def simulate_lifecycle(message_id: str, trigger_id: int, client_id: int):
             logger.warning(f"⚠️ [SIMULATE] Mensagem {message_id} não encontrada no banco para o Trigger {trigger_id}.")
             return
         
-        trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id).first()
+        trigger = db.query(models.ScheduledTrigger).get(trigger_id)
         
         # 90% chance to deliver
         if random.random() < 0.90:
@@ -36,7 +36,7 @@ async def simulate_lifecycle(message_id: str, trigger_id: int, client_id: int):
             price_brl = 0.0
             category = "service"
             
-            if trigger and not trigger.is_free_message and (trigger.template_name or trigger.product_name == "SCALE_TEST"):
+            if trigger and not trigger.is_free_message and (trigger.template_name or trigger.product_name == "SCALE_TEST" or trigger.is_stress_test):
                 if random.random() < 0.70:
                     is_paid = True
                     price_brl = trigger.cost_per_unit or 0.35
@@ -62,7 +62,7 @@ async def simulate_lifecycle(message_id: str, trigger_id: int, client_id: int):
             await notify_progress(db, trigger_id)
             
             # 2. Simular visualização (read) - ~75% de chance se entregue
-            await asyncio.sleep(random.uniform(2.0, 5.0))
+            await asyncio.sleep(random.uniform(0.15, 0.4))
             db.refresh(msg)
             if random.random() < 0.75:
                 msg.status = 'read'
@@ -76,7 +76,7 @@ async def simulate_lifecycle(message_id: str, trigger_id: int, client_id: int):
                 await notify_progress(db, trigger_id)
                 
                 # 3. Simular interação ou bloqueio
-                await asyncio.sleep(random.uniform(2.0, 5.0))
+                await asyncio.sleep(random.uniform(0.15, 0.4))
                 db.refresh(msg)
                 rand_val = random.random()
                 if rand_val < 0.35: # ~35% de chance de interação
@@ -195,28 +195,26 @@ async def notify_progress(db, trigger_id):
     db.commit()
     t_prog = db.query(models.ScheduledTrigger).get(trigger_id)
     if t_prog:
-        if t_prog.status in ['completed', 'failed', 'cancelled', 'aborted', 'processed']:
+        if t_prog.status in ['failed', 'cancelled', 'aborted']:
             queue_count = 0
         else:
             try:
-                from sqlalchemy import func
+                from sqlalchemy import func, select
+                base_queue_q = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.trigger_id == trigger_id,
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                )
                 if t_prog.is_bulk:
-                    subquery = db.query(func.max(models.MessageStatus.id)).filter(
-                        models.MessageStatus.trigger_id == trigger_id
+                    subquery = base_queue_q.with_entities(
+                        func.max(models.MessageStatus.id).label("max_id")
                     ).group_by(models.MessageStatus.phone_number).subquery()
                     queue_count = db.query(models.MessageStatus).filter(
-                        models.MessageStatus.id.in_(subquery),
-                        models.MessageStatus.status == 'sent',
-                        models.MessageStatus.delivered_counted == False,
-                        models.MessageStatus.read_counted == False
+                        models.MessageStatus.id.in_(select(subquery.c.max_id))
                     ).count()
                 else:
-                    queue_count = db.query(models.MessageStatus).filter(
-                        models.MessageStatus.trigger_id == trigger_id,
-                        models.MessageStatus.status == 'sent',
-                        models.MessageStatus.delivered_counted == False,
-                        models.MessageStatus.read_counted == False
-                    ).count()
+                    queue_count = base_queue_q.count()
             except Exception:
                 queue_count = max(0, (t_prog.total_sent or 0) - (t_prog.total_delivered or 0) - (t_prog.total_failed or 0))
 

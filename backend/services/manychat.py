@@ -8,7 +8,7 @@ import httpx
 from config_loader import get_settings
 from core.logger import logger
 
-async def sync_to_manychat_and_update_history(client_id: int, name: str, phone: str, tag: str, email: str, history_id: int):
+async def sync_to_manychat_and_update_history(client_id: int, name: str, phone: str, tag: str, email: str, history_id: int, custom_field_name: str = None):
     """
     Wrapper para o background task que sincroniza com ManyChat e atualiza o histórico.
     """
@@ -21,10 +21,27 @@ async def sync_to_manychat_and_update_history(client_id: int, name: str, phone: 
         history = db.query(models.WebhookHistory).filter(models.WebhookHistory.id == history_id).first()
         if history:
             updated_data = dict(history.processed_data or {})
+            
+            pending_acc_name = None
+            pending_key_preview = None
+            try:
+                tokens = get_manychat_tokens(client_id)
+                if tokens:
+                    curr_ptr = _MANYCHAT_ROTATION_POINTERS.get(client_id, 0)
+                    sel_token = tokens[curr_ptr % len(tokens)]
+                    pending_acc_name = sel_token.get("name")
+                    sel_key = str(sel_token.get("key", "")).strip()
+                    if sel_key:
+                        pending_key_preview = f"...{sel_key[-4:]}" if len(sel_key) >= 4 else sel_key
+            except Exception:
+                pass
+
             updated_data["manychat_sync"] = {
                 "status": "pending",
                 "contact": {"status": "processing"},
-                "tag": {"status": "pending", "name": tag}
+                "tag": {"status": "pending", "name": tag},
+                "account_name": pending_acc_name,
+                "key_preview": pending_key_preview
             }
             history.processed_data = updated_data
             db.commit()
@@ -49,7 +66,7 @@ async def sync_to_manychat_and_update_history(client_id: int, name: str, phone: 
 
     # 2. Executar Sincronização Real
     try:
-        result = await sync_to_manychat(client_id, name, phone, tag, email)
+        result = await sync_to_manychat(client_id, name, phone, tag, email, custom_field_name=custom_field_name)
         
         # 3. Atualizar com o resultado final
         db = SessionLocal()
@@ -195,7 +212,7 @@ def get_next_rotated_manychat_token(client_id: int) -> tuple:
     
     return (tokens[selected_idx], selected_idx + 1, len(tokens))
 
-async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, email: str = None) -> dict:
+async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, email: str = None, custom_field_name: str = None) -> dict:
     """
     Sincroniza contato com ManyChat utilizando rotação sequencial (Round-Robin) entre as contas cadastradas.
     Retorna dicionário com o resultado da operação.
@@ -209,16 +226,19 @@ async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, emai
             "error": "API Key not configured"
         }
 
-    res = await _sync_to_manychat_with_key(token_info["key"], name, phone, tag, email)
+    res = await _sync_to_manychat_with_key(token_info["key"], name, phone, tag, email, custom_field_name=custom_field_name)
     res["account_name"] = token_info["name"]
     res["rotation_info"] = f"Rotação {pos} de {total}" if total > 1 else "Conta Única"
+    key_str = str(token_info.get("key", "")).strip()
+    if key_str:
+        res["key_preview"] = f"...{key_str[-4:]}" if len(key_str) >= 4 else key_str
 
     logger.info(f"🔄 [MANYCHAT-ROTATION] Sincronizado contato {phone} na conta '{token_info['name']}' ({pos}/{total}).")
 
     return res
 
 
-async def _sync_to_manychat_with_key(api_key: str, name: str, phone: str, tag: str, email: str = None) -> dict:
+async def _sync_to_manychat_with_key(api_key: str, name: str, phone: str, tag: str, email: str = None, custom_field_name: str = None) -> dict:
     """
     Executa a sincronização para uma API Key específica do ManyChat.
     """
@@ -337,24 +357,28 @@ async def _sync_to_manychat_with_key(api_key: str, name: str, phone: str, tag: s
                     
                     extended_variants = [p for p in phone_variants] + [f"+{p}" for p in phone_variants]
 
-                    # Buscar ID do campo customizado 'telefone_whatsapp'
+                    # Buscar ID do campo customizado (usando custom_field_name da mapeação ou 'telefone_whatsapp' como padrão)
+                    target_cf_name = (custom_field_name or "telefone_whatsapp").strip()
+                    if target_cf_name.startswith("{") or target_cf_name.startswith("phone"):
+                        target_cf_name = "telefone_whatsapp"
+
                     cf_id = None
                     try:
                         cf_resp = await client.get("https://api.manychat.com/fb/page/getCustomFields", headers=headers)
                         if cf_resp.status_code == 200:
                             custom_fields = cf_resp.json().get("data", [])
                             for cf in custom_fields:
-                                if cf.get("name", "").lower() == "telefone_whatsapp":
+                                if cf.get("name", "").lower() == target_cf_name.lower():
                                     cf_id = cf.get("id")
-                                    logger.info(f"MANYCHAT | Campo customizado 'telefone_whatsapp' encontrado com ID: {cf_id}")
+                                    logger.info(f"MANYCHAT | Campo customizado '{target_cf_name}' encontrado com ID: {cf_id}")
                                     break
                     except Exception as cf_err:
-                        logger.error(f"Erro ao buscar campos customizados no ManyChat: {cf_err}")
+                        logger.error(f"Erro ao buscar campo customizado '{target_cf_name}' no ManyChat: {cf_err}")
 
                     # A. Tentar busca direta por múltiplos campos (Fallback rápido)
                     search_targets = extended_variants + [clean_phone_digits[2:]]
                     for p_var in search_targets:
-                        # 0. Tenta pelo campo customizado 'telefone_whatsapp' se localizado
+                        # 0. Tenta pelo campo customizado se localizado
                         if cf_id:
                             clean_p_var = p_var.replace("+", "")
                             find_url_cf = f"https://api.manychat.com/fb/subscriber/findByCustomField?field_id={cf_id}&field_value={clean_p_var}"
@@ -365,7 +389,7 @@ async def _sync_to_manychat_with_key(api_key: str, name: str, phone: str, tag: s
                                     if subs_cf:
                                         subscriber_id = subs_cf[0].get("id")
                                         located_via_phone = True
-                                        logger.info(f"ID {subscriber_id} localizado via custom field 'telefone_whatsapp' ({clean_p_var})")
+                                        logger.info(f"ID {subscriber_id} localizado via custom field '{target_cf_name}' ({clean_p_var})")
                                         break
                             except Exception as cf_search_err:
                                 logger.error(f"Erro ao buscar por custom field no ManyChat: {cf_search_err}")

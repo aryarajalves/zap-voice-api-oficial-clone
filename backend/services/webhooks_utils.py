@@ -146,6 +146,9 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
     elif platform_lower == 'appmax':
         from services.utils.webhook_platform_parsers import parse_appmax
         parse_appmax(payload, result)
+    elif platform_lower == 'zapgroup':
+        from services.utils.webhook_platform_parsers import parse_zapgroup
+        parse_zapgroup(payload, result)
     elif platform_lower in ['elementor', 'generic', 'outra', 'outros']:
         # Tenta capturar campos comuns em payloads desconhecidos
         result['name'] = (
@@ -406,7 +409,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
                         break
 
     # Name Validation
-    if result.get("name"):
+    if result.get("name") and platform_lower != "zapgroup":
         name_val = str(result["name"]).strip()
         if name_val.isdigit() or len(name_val) <= 1:
              result["name"] = None

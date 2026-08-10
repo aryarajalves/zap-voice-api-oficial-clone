@@ -215,6 +215,31 @@ const TriggerTableRow = ({
                                 {triggerWithActions.product_name === 'SCALE_TEST' ? '⚡ Teste de Escala: ' : '📤 '}
                                 {triggerWithActions.template_name?.split('|').pop() || triggerWithActions.funnel?.name || 'Disparo em Massa'}
                             </span>
+                            {(() => {
+                                const cat = String(triggerWithActions.template_category || '').toUpperCase();
+                                if (cat === 'UTILITY' || cat === 'UTILIDADE') {
+                                    return (
+                                        <span className="text-[10px] bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300/40 dark:border-amber-800/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1" title="Categoria Meta: Utilidade">
+                                            🛠️ Utilidade
+                                        </span>
+                                    );
+                                }
+                                if (cat === 'AUTHENTICATION' || cat === 'AUTENTICACAO' || cat === 'AUTENTICAÇÃO') {
+                                    return (
+                                        <span className="text-[10px] bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-300/40 dark:border-purple-800/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1" title="Categoria Meta: Autenticação">
+                                            🔐 Autenticação
+                                        </span>
+                                    );
+                                }
+                                if (cat === 'MARKETING' || triggerWithActions.template_name) {
+                                    return (
+                                        <span className="text-[10px] bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-300/40 dark:border-sky-800/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1" title="Categoria Meta: Marketing">
+                                            📢 Marketing
+                                        </span>
+                                    );
+                                }
+                                return null;
+                            })()}
                             {triggerWithActions.product_name === 'SCALE_TEST' ? (
                                 <span className="text-xs bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded-full font-bold">⚡ Simulação</span>
                             ) : triggerWithActions.is_recurring ? (
@@ -228,6 +253,11 @@ const TriggerTableRow = ({
                             <span className="text-[10px] bg-slate-105/10 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1" title="Limite de concorrência">
                                 👥 {triggerWithActions.concurrency_limit ?? 1}
                             </span>
+                            {triggerWithActions.waba_card_last4 && String(triggerWithActions.waba_card_last4).trim() !== "" && (
+                                <span className="text-[10px] bg-blue-500/10 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1" title="Últimos 4 dígitos do Cartão WABA vinculado">
+                                    💳 Final {String(triggerWithActions.waba_card_last4).trim()}
+                                </span>
+                            )}
                         </div>
                         {triggerWithActions.is_bulk && (triggerWithActions.interaction_funnel || triggerWithActions.block_funnel) && (
                             <div className="flex flex-col gap-0.5 mt-1 text-[11px] text-gray-500 dark:text-gray-400">
@@ -607,15 +637,33 @@ const TriggerTableRow = ({
                     </>
                 )}
 
-                {/* 3. DISPAROS FINALIZADOS OU COM ERRO */}
-                {(triggerWithActions.status === 'failed' || triggerWithActions.status === 'cancelled' || triggerWithActions.status === 'paused') && (
+                {/* 3. DISPAROS FINALIZADOS, PAUSADOS, CANCELADOS OU EM ENCERRAMENTO */}
+                {(triggerWithActions.status === 'failed' || triggerWithActions.status === 'cancelled' || triggerWithActions.status === 'paused' || triggerWithActions.status === 'cancelling') && (
                     <div className="flex items-center gap-2">
-                        <Tip text="Retomar o disparo a partir dos contatos que ainda não foram enviados.">
-                            <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-green-600 hover:bg-green-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+                        {triggerWithActions.is_bulk && (
+                            <Tip text="Ajustar o delay entre disparos e o limite de concorrência antes de retomar.">
+                                <button onClick={() => handleEditParams(triggerWithActions)} className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                            </Tip>
+                        )}
+                        <Tip text="Retomar o disparo a partir do último contato enviado.">
+                            <button onClick={() => handleStartNow(triggerWithActions.id)} className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
                         </Tip>
                         {triggerWithActions.status === 'failed' && (
                             <Tip text="Repetir o disparo apenas para os contatos que falharam, sem reenviar para quem já recebeu.">
-                                <button onClick={() => handleRetry(triggerWithActions.id)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                                <button onClick={() => handleRetry(triggerWithActions.id)} className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
                             </Tip>
                         )}
                     </div>

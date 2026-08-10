@@ -41,7 +41,8 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
             t.processed_contacts = []
             
             pdata = dict(t.processed_data or {})
-            pdata["started_at"] = datetime.utcnow().isoformat()
+            if "started_at" not in pdata:
+                pdata["started_at"] = datetime.utcnow().isoformat()
             pdata.pop("finished_at", None)
             t.processed_data = pdata
             
@@ -87,6 +88,7 @@ async def process_bulk_funnel(trigger_id: int, funnel_id: int, contacts: list, d
                 scheduled_time=datetime.now(timezone.utc),
                 is_bulk=False,
                 parent_id=trigger_id,
+                is_stress_test=getattr(t_parent, 'is_stress_test', False),
                 product_name="HIDDEN_CHILD",
                 chatwoot_label=t_parent.chatwoot_label if t_parent else None,
                 private_message=t_parent.private_message if t_parent else None,

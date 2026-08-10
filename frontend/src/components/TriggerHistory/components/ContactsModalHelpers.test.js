@@ -20,12 +20,23 @@ describe('ContactsModalHelpers - Error Explanations', () => {
         
         const explanation = ERROR_EXPLANATIONS[key];
         expect(explanation).toBeDefined();
-        expect(explanation.titulo).toBe('Número em Experimento da Meta');
-        expect(explanation.descricao).toContain('faz parte de um grupo de testes');
+        expect(explanation.titulo).toBe('Número em Experimento da Meta (Temporário)');
+        expect(explanation.descricao).toContain('teste/experimento interno temporário');
     });
 
-    it('should return null for unmapped errors', () => {
+    it('should map the Meta 131009 error correctly to INVALID_PARAMETER', () => {
+        const reason = '(#131009) Parameter value is not valid';
+        const key = getExplanationKey(reason);
+        expect(key).toBe('INVALID_PARAMETER');
+        
+        const explanation = ERROR_EXPLANATIONS[key];
+        expect(explanation).toBeDefined();
+        expect(explanation.titulo).toContain('Parâmetro ou Número Inválido');
+        expect(explanation.descricao).toContain('número de telefone possui formato incorreto');
+    });
+
+    it('should return SOMETHING_WENT_WRONG fallback for unmapped errors', () => {
         const key = getExplanationKey('Unknown Error 999999');
-        expect(key).toBeNull();
+        expect(key).toBe('SOMETHING_WENT_WRONG');
     });
 });

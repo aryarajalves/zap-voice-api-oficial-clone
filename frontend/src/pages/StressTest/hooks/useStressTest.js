@@ -226,6 +226,9 @@ export const PLATFORM_EVENT_OPTIONS = {
         { value: 'pending_pix', label: 'PIX Gerado' },
         { value: 'abandoned_cart', label: 'Carrinho Abandonado' },
     ],
+    zapgroup: [
+        { value: 'lead_extraido', label: 'Lead Extraído de Grupo' },
+    ],
 };
 
 export function generateWebhookPayload(platform, eventType, index) {
@@ -1213,6 +1216,14 @@ export function generateWebhookPayload(platform, eventType, index) {
                 contact: { name, email, phone },
                 product: { name: 'Produto Scale Test' },
                 timestamp: new Date().toISOString()
+            };
+        case 'zapgroup':
+            return {
+                nome: phone,
+                grupo: 'Grupo Lancamento Teste',
+                numero: phone,
+                grupo_jid: '120363405673797894@g.us',
+                extraido_em: new Date().toISOString()
             };
     }
 }

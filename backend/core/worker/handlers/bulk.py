@@ -89,6 +89,21 @@ async def handle_bulk_send(data: dict):
             
         logger.info(f"✅ Job de Bulk Send {trigger_id} concluído com sucesso!")
         
+    except asyncio.TimeoutError:
+        logger.error(f"⏰ [TIMEOUT] Processamento do Bulk Send {trigger_id} excedeu o tempo limite máximo (7200s).")
+        db = SessionLocal()
+        try:
+            from models import ScheduledTrigger
+            t = db.query(ScheduledTrigger).get(trigger_id)
+            if t and t.status not in ['completed', 'processed', 'cancelled']:
+                t.status = "failed"
+                t.failure_reason = "Tempo limite maximo de processamento excedido (7200s)."
+                db.commit()
+        except Exception as db_err:
+            logger.error(f"⚠️ Erro ao atualizar status de timeout no DB: {db_err}")
+            db.rollback()
+        finally:
+            db.close()
     except Exception as e:
         logger.error(f"❌ Erro ao processar Bulk Send {trigger_id}: {e}")
         # Garantir que o status no banco reflita a falha

@@ -26,20 +26,26 @@ def apply_webhook_labels(
     db: Session,
     client_id: int,
     phone: str,
-    raw_labels: Union[str, List[str]],
+    raw_labels: Optional[Union[str, List[str]]] = None,
     source: str = "Webhook",
-    contact_name: Optional[str] = None
+    contact_name: Optional[str] = None,
+    remove_raw_labels: Optional[Union[str, List[str]]] = None
 ) -> Optional[models.ChatConversation]:
     """
-    Aplica etiquetas em uma conversa do Chat Local quando disparadas por um Webhook ou automação.
+    Aplica e/ou remove etiquetas em uma conversa do Chat Local quando disparadas por um Webhook, API ou automação.
     Gera uma mensagem de sistema no histórico do chat com data e hora de Brasília.
     Dispara eventos WebSocket em tempo real.
     """
-    if not phone or not raw_labels or not client_id:
+    if not phone or not client_id:
         return None
 
-    clean_labels = robust_extract_labels(raw_labels)
-    if not clean_labels:
+    if not raw_labels and not remove_raw_labels:
+        return None
+
+    clean_labels = robust_extract_labels(raw_labels) if raw_labels else []
+    clean_remove_labels = robust_extract_labels(remove_raw_labels) if remove_raw_labels else []
+
+    if not clean_labels and not clean_remove_labels:
         return None
 
     clean_phone = normalize_phone(phone)
@@ -57,7 +63,6 @@ def apply_webhook_labels(
         models.ChatConversation.phone.like(f"%{suffix}")
     ).first()
 
-    is_new_convo = False
     if not convo:
         convo = models.ChatConversation(
             client_id=client_id,
@@ -69,53 +74,82 @@ def apply_webhook_labels(
         )
         db.add(convo)
         db.flush()
-        is_new_convo = True
         logger.info(f"🆕 [CHAT-LABEL-SERVICE] Conversa local criada para {clean_phone} (Client: {client_id})")
 
     current_labels = list(convo.labels) if isinstance(convo.labels, list) else []
     added_labels = []
+    removed_labels = []
 
-    for lbl in clean_labels:
-        if lbl not in current_labels:
-            current_labels.append(lbl)
-            added_labels.append(lbl)
+    # Processar remoção de etiquetas
+    if clean_remove_labels:
+        clean_remove_lower = [l.lower() for l in clean_remove_labels]
+        new_labels = []
+        for lbl in current_labels:
+            if lbl.lower() in clean_remove_lower:
+                removed_labels.append(lbl)
+            else:
+                new_labels.append(lbl)
+        current_labels = new_labels
 
-    if not added_labels:
-        logger.info(f"ℹ️ [CHAT-LABEL-SERVICE] Nenhuma etiqueta nova para adicionar na conversa #{convo.id}. Existentes: {current_labels}")
+    # Processar adição de etiquetas
+    if clean_labels:
+        for lbl in clean_labels:
+            if not any(l.lower() == lbl.lower() for l in current_labels):
+                current_labels.append(lbl)
+                added_labels.append(lbl)
+
+    if not added_labels and not removed_labels:
+        logger.info(f"ℹ️ [CHAT-LABEL-SERVICE] Nenhuma alteração de etiqueta para a conversa #{convo.id}. Existentes: {current_labels}")
         return convo
 
     # Atualizar lista de etiquetas na conversa
     convo.labels = current_labels
     flag_modified(convo, "labels")
 
+    # Atualizar human_handover_at se a etiqueta de humano for alterada
+    try:
+        from config_loader import get_setting
+        human_label = get_setting("WA_HUMAN_LABEL", "", client_id=client_id).strip()
+        if human_label:
+            if any(l.lower() == human_label.lower() for l in added_labels) and not convo.human_handover_at:
+                convo.human_handover_at = datetime.now(timezone.utc)
+            elif any(l.lower() == human_label.lower() for l in removed_labels):
+                convo.human_handover_at = None
+    except Exception as e_human:
+        logger.warning(f"⚠️ [CHAT-LABEL-SERVICE] Erro ao atualizar human_handover_at: {e_human}")
+
     # Formatar data e hora em Brasília
     now_br = get_brasilia_now()
     date_str = now_br.strftime("%d/%m/%Y")
     time_str = now_br.strftime("%H:%M")
 
-    # Criar mensagem(ns) de sistema no chat
-    system_messages = []
-    for lbl in added_labels:
-        content = f"Etiqueta '{lbl}' adicionada via {source} em {date_str} às {time_str}"
-        msg = models.ChatMessage(
-            conversation_id=convo.id,
-            sender_type="system",
-            message_type="text",
-            content=content,
-            timestamp=datetime.now(timezone.utc)
-        )
-        db.add(msg)
-        system_messages.append(msg)
+    # Criar mensagem de sistema no chat
+    parts = []
+    if removed_labels:
+        parts.append(f"Marcador(es) '{', '.join(removed_labels)}' removido(s)")
+    if added_labels:
+        parts.append(f"Marcador(es) '{', '.join(added_labels)}' adicionado(s)")
+
+    content = f"{' e '.join(parts)} via {source} em {date_str} às {time_str}"
+
+    msg = models.ChatMessage(
+        conversation_id=convo.id,
+        sender_type="system",
+        message_type="text",
+        content=content,
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(msg)
+    system_messages = [msg]
 
     # Atualizar metadados da conversa
-    last_msg_text = f"Etiqueta(s) '{', '.join(added_labels)}' adicionada(s) via {source}"
-    convo.last_message_content = last_msg_text
+    convo.last_message_content = content
     convo.last_message_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(convo)
 
-    logger.info(f"✅ [CHAT-LABEL-SERVICE] Etiquetas {added_labels} adicionadas à conversa #{convo.id} via {source}. Mensagem de sistema criada ({date_str} às {time_str}).")
+    logger.info(f"✅ [CHAT-LABEL-SERVICE] Conversa #{convo.id} atualizada via {source}. {content}")
 
     # Publicar eventos em tempo real via RabbitMQ/WebSocket
     try:

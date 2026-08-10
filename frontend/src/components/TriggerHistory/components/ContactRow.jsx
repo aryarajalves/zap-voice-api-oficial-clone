@@ -143,16 +143,14 @@ const ContactRow = ({
                             <div className="text-xs text-red-500 font-bold max-w-[150px] truncate" title={contact.failure_reason}>
                                 {contact.failure_reason === 'BLOCKED_VIA_BUTTON' ? 'BLOQUEOU O BOT' : contact.failure_reason}
                             </div>
-                            {expKey && (
-                                <button
-                                    type="button"
-                                    onClick={() => onExplainError(contact.failure_reason)}
-                                    className="p-0.5 text-blue-500 hover:text-blue-650 hover:bg-blue-500/10 dark:hover:bg-blue-500/5 rounded transition-all shrink-0"
-                                    title="Explicar erro"
-                                >
-                                    <FiAlertCircle className="w-3.5 h-3.5" />
-                                </button>
-                            )}
+                            <button
+                                type="button"
+                                onClick={() => onExplainError(contact.failure_reason)}
+                                className="p-0.5 text-blue-500 hover:text-blue-650 hover:bg-blue-500/10 dark:hover:bg-blue-500/5 rounded transition-all shrink-0"
+                                title="Explicar erro"
+                            >
+                                <FiAlertCircle className="w-3.5 h-3.5" />
+                            </button>
                         </div>
                     )}
                     {contact.memory_webhook_status && (

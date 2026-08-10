@@ -181,7 +181,7 @@ const BulkSendContactsModal = ({ isOpen, onClose, selectedPhones, clientId, trig
                 })),
                 exclusion_list: [],
                 delay_seconds: 1,
-                concurrency_limit: 4,
+                concurrency_limit: 10,
                 schedule_at: (isScheduleEnabled && scheduledTime) ? new Date(scheduledTime).toISOString() : new Date().toISOString(),
                 chatwoot_label: [],
                 template_name: selectedTemplateName,

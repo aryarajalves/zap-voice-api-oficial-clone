@@ -11,6 +11,8 @@ import ChildrenFunnelsModal from './components/ChildrenFunnelsModal';
 import BulkSummaryBar from './components/BulkSummaryBar';
 import ManualInteractionModal from './components/ManualInteractionModal';
 
+import ErrorBoundary from '../ErrorBoundary';
+
 const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateToFunnels, onNavigateToChat, triggerType: initialTriggerTypeProp = 'bulk' }) => {
     const {
         user, activeClient, triggers, loading, monitoringTrigger, setMonitoringTrigger,
@@ -31,7 +33,8 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
         contactsSearchPhone, setContactsSearchPhone,
         contactsFilterDdi, setContactsFilterDdi,
         contactsFilterDdd, setContactsFilterDdd,
-        contactsDdiOptions, contactsDddOptions
+        contactsDdiOptions, contactsDddOptions,
+        sortBy, setSortBy
     } = useTriggerHistory(refreshKey, initialTriggerTypeProp);
 
     const [manualInteractionTriggerId, setManualInteractionTriggerId] = useState(null);
@@ -81,12 +84,14 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                             <option value="single">🚀 Disparo de Funil</option>
                             <option value="bulk">📤 Disparos em Massa</option>
                             <option value="recurring">🔄 Disparos Recorrentes</option>
+                            <option value="scale_test">⚡ Testes de Escala</option>
                         </select>
                         <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none">
                             {currentTriggerType === 'all' && <svg size={16} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>}
                             {currentTriggerType === 'single' && <svg size={16} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>}
                             {currentTriggerType === 'bulk' && <svg size={16} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>}
                             {currentTriggerType === 'recurring' && <svg size={16} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>}
+                            {currentTriggerType === 'scale_test' && <svg size={16} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>}
                         </div>
                         <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-blue-500 transition-colors">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
@@ -112,44 +117,48 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 fetchHistory={fetchHistory} 
             />
 
-            <ContactsModal 
-                contactsModal={contactsModal} 
-                setContactsModal={setContactsModal} 
-                contactsFilter={contactsFilter} 
-                setContactsFilter={setContactsFilter}
-                contactsTypeFilter={contactsTypeFilter}
-                setContactsTypeFilter={setContactsTypeFilter}
-                contactsErrorFilter={contactsErrorFilter}
-                setContactsErrorFilter={setContactsErrorFilter}
-                loadingContacts={loadingContacts}
-                contactsPage={contactsPage}
-                setContactsPage={setContactsPage}
-                contactsPerPage={contactsPerPage}
-                setContactsPerPage={setContactsPerPage}
-                contactsTotal={contactsTotal}
-                activeClient={activeClient}
-                onRefresh={fetchHistory}
-                contactsSearchPhone={contactsSearchPhone}
-                setContactsSearchPhone={setContactsSearchPhone}
-                contactsFilterDdi={contactsFilterDdi}
-                setContactsFilterDdi={setContactsFilterDdi}
-                contactsFilterDdd={contactsFilterDdd}
-                setContactsFilterDdd={setContactsFilterDdd}
-                contactsDdiOptions={contactsDdiOptions}
-                contactsDddOptions={contactsDddOptions}
-            />
+            <ErrorBoundary onReset={() => setContactsModal(prev => ({ ...prev, isOpen: false }))}>
+                <ContactsModal 
+                    contactsModal={contactsModal} 
+                    setContactsModal={setContactsModal} 
+                    contactsFilter={contactsFilter} 
+                    setContactsFilter={setContactsFilter}
+                    contactsTypeFilter={contactsTypeFilter}
+                    setContactsTypeFilter={setContactsTypeFilter}
+                    contactsErrorFilter={contactsErrorFilter}
+                    setContactsErrorFilter={setContactsErrorFilter}
+                    loadingContacts={loadingContacts}
+                    contactsPage={contactsPage}
+                    setContactsPage={setContactsPage}
+                    contactsPerPage={contactsPerPage}
+                    setContactsPerPage={setContactsPerPage}
+                    contactsTotal={contactsTotal}
+                    activeClient={activeClient}
+                    onRefresh={fetchHistory}
+                    contactsSearchPhone={contactsSearchPhone}
+                    setContactsSearchPhone={setContactsSearchPhone}
+                    contactsFilterDdi={contactsFilterDdi}
+                    setContactsFilterDdi={setContactsFilterDdi}
+                    contactsFilterDdd={contactsFilterDdd}
+                    setContactsFilterDdd={setContactsFilterDdd}
+                    contactsDdiOptions={contactsDdiOptions}
+                    contactsDddOptions={contactsDddOptions}
+                />
+            </ErrorBoundary>
 
             <ErrorReportModal 
                 errorModal={errorModal} 
                 setErrorModal={setErrorModal} 
             />
 
-            <ChildrenFunnelsModal 
-                childrenModal={childrenModal} 
-                setChildrenModal={setChildrenModal} 
-                setMonitoringTrigger={setMonitoringTrigger} 
-                fetchChildren={fetchChildren}
-            />
+            <ErrorBoundary onReset={() => setChildrenModal(prev => ({ ...prev, isOpen: false }))}>
+                <ChildrenFunnelsModal 
+                    childrenModal={childrenModal} 
+                    setChildrenModal={setChildrenModal} 
+                    setMonitoringTrigger={setMonitoringTrigger} 
+                    fetchChildren={fetchChildren}
+                />
+            </ErrorBoundary>
 
             <TriggerFilters
                 filterName={filterName} setFilterName={setFilterName}
@@ -167,6 +176,7 @@ const TriggerHistoryOrchestrator = ({ refreshKey, onNavigateToBulk, onNavigateTo
                 folders={folders} loadingFolders={loadingFolders}
                 selectedFolderId={selectedFolderId} onSelectFolder={handleSelectFolder}
                 createFolder={createFolder} updateFolder={updateFolder} deleteFolder={deleteFolder}
+                sortBy={sortBy} setSortBy={setSortBy}
             />
 
             <TriggerTable

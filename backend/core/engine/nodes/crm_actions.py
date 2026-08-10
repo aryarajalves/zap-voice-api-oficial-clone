@@ -55,36 +55,16 @@ async def handle_crm_actions_node(db, trigger, node, chatwoot, contact_phone, co
                     log_node_execution(db, trigger, current_node_id, "completed", "Etiquetagem local ignorada: nenhuma etiqueta de adicionar ou remover fornecida.")
                     return "default"
 
-                if chat_convo:
-                    current_labels = list(chat_convo.labels) if chat_convo.labels else []
-                    
-                    if add_str:
-                        labels_to_add = [l.strip() for l in add_str.split(",") if l.strip()]
-                        for label in labels_to_add:
-                            if label not in current_labels:
-                                current_labels.append(label)
-                                
-                    if remove_str:
-                        labels_to_remove = [l.strip() for l in remove_str.split(",") if l.strip()]
-                        current_labels = [l for l in current_labels if l not in labels_to_remove]
-                    
-                    from sqlalchemy.orm.attributes import flag_modified
-                    chat_convo.labels = current_labels
-                    flag_modified(chat_convo, "labels")
-                    db.commit()
-
-                    # Notificar via WebSocket
-                    try:
-                        from rabbitmq_client import rabbitmq
-                        payload_ws = {
-                            "conversation_id": chat_convo.id,
-                            "client_id": trigger.client_id,
-                            "labels": current_labels
-                        }
-                        import asyncio
-                        asyncio.create_task(rabbitmq.publish_event("conversation_updated", payload_ws))
-                    except Exception as e_ws:
-                        logger.error(f"Erro no WebSocket ao atualizar labels: {e_ws}")
+                from services.chat_label_service import apply_webhook_labels
+                apply_webhook_labels(
+                    db=db,
+                    client_id=trigger.client_id,
+                    phone=trigger.contact_phone,
+                    raw_labels=add_str if add_str else None,
+                    remove_raw_labels=remove_str if remove_str else None,
+                    source="Funil",
+                    contact_name=trigger.contact_name
+                )
 
                 log_node_execution(db, trigger, current_node_id, "completed", f"Etiquetas locais processadas. Adicionadas: '{add_str or 'Nenhuma'}'. Removidas: '{remove_str or 'Nenhuma'}'.")
 

@@ -20,6 +20,7 @@ export const EVENT_TYPES = [
   { value: 'assinatura_renovada', label: 'Assinatura Renovada' },
   { value: 'assinatura_vencida', label: 'Assinatura Vencida' },
   { value: 'form_submission', label: 'Formulário / Elementor' },
+  { value: 'lead_extraido', label: 'Lead Extraído (ZapGroup)' },
   { value: 'evento_aluno', label: 'Evento de Aluno' },
   { value: 'alteracao_vencimento', label: 'Alteração de Vencimento' },
   { value: 'troca_de_plano', label: 'Troca de Plano' },
@@ -44,6 +45,7 @@ export const PLATFORM_EVENT_TYPES = {
   herospark: ['compra_aprovada','compra_aprovada_com_ob','compra_aprovada_upsell','cartao_recusado','reembolso','chargeback','carrinho_abandonado','pix_gerado','pix_expirado','boleto_expirado','assinatura_cancelada','assinatura_atrasada','assinatura_renovada','outros'],
   pagtrust:  ['compra_aprovada','compra_aprovada_ob','compra_cancelada','cartao_recusado','reembolso','chargeback','carrinho_abandonado','pix_gerado','pix_expirado','boleto_impresso','outros'],
   elementor: ['form_submission','outros'],
+  zapgroup:  ['lead_extraido','compra_aprovada','carrinho_abandonado','outros'],
   outra:     ['compra_aprovada','cartao_recusado','reembolso','carrinho_abandonado','pix_gerado','boleto_impresso','outros'],
 };
 

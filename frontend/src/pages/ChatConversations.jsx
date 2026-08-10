@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe, FiMaximize2 } from 'react-icons/fi';
-import { BsPinAngle, BsPinAngleFill, BsJournalText, BsExclamationCircle, BsExclamationCircleFill } from 'react-icons/bs';
+import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe, FiMaximize2, FiUploadCloud, FiFileText, FiEdit2, FiCheck, FiTrash2, FiCpu } from 'react-icons/fi';
+import { BsPinAngle, BsPinAngleFill, BsJournalText, BsExclamationCircle, BsExclamationCircleFill, BsStars } from 'react-icons/bs';
 import { fetchWithAuth } from '../AuthContext';
 import { API_URL } from '../config';
 import { useClient } from '../contexts/ClientContext';
@@ -17,6 +17,7 @@ import ResendAgentflowModal from './ChatConversations/ResendAgentflowModal';
 import SendTemplateModal from './ChatConversations/SendTemplateModal';
 import ChatContactSidebar from './ChatConversations/ChatContactSidebar';
 import { useChatEngine } from './ChatConversations/useChatEngine';
+import { exportConversationToDoc } from './ChatConversations/exportConversationToDoc';
 
 const NAV_SHORTCUTS = [
     { view: 'webhook_integrations', label: 'Integração Webhook', icon: FiGlobe },
@@ -34,6 +35,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [searchQuery, setSearchQuery] = React.useState('');
     const [selectedLabelFilter, setSelectedLabelFilter] = React.useState(null); // filtro por etiqueta
     const [filterWindowOpen, setFilterWindowOpen] = React.useState(false); // só conversas com janela 24h aberta
+    const [filterTemplate24h, setFilterTemplate24h] = React.useState(false); // só conversas que receberam template nas últimas 24h
     const [filterUnread, setFilterUnread] = React.useState(false); // só conversas com mensagem não lida
     const [filterHasNote, setFilterHasNote] = React.useState(false); // só conversas com anotação privada preenchida
     const [filterUrgent, setFilterUrgent] = React.useState(false); // só conversas com marcação de urgência
@@ -47,6 +49,10 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [isMaximizedInputOpen, setIsMaximizedInputOpen] = React.useState(false);
     const [showFunnelModal, setShowFunnelModal] = React.useState(false);
     const [selectAllPages, setSelectAllPages] = React.useState(false);
+    const [isBulkTagModalOpen, setIsBulkTagModalOpen] = React.useState(false);
+    const [selectedBulkTag, setSelectedBulkTag] = React.useState('');
+    const [customBulkTag, setCustomBulkTag] = React.useState('');
+    const [isApplyingBulkTag, setIsApplyingBulkTag] = React.useState(false);
 
     const engine = useChatEngine({
         activeClient,
@@ -60,6 +66,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
         filterEndDate,
         filterUnread,
         filterWindowOpen,
+        filterTemplate24h,
         filterUrgent,
         filterHasReplied,
         selectedConvo,
@@ -74,7 +81,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
 
     React.useEffect(() => {
         setSelectAllPages(false);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h]);
 
     const formatTime = (isoString) => {
         if (!isoString) return '';
@@ -174,10 +181,221 @@ export default function ChatConversations({ onClose, onNavigate }) {
         image: '5 MB', video: '16 MB', audio: '16 MB', document: '100 MB',
     };
 
-    const handleMediaUpload = async (e) => {
-        const file = e.target.files[0];
+    const [isDraggingFile, setIsDraggingFile] = React.useState(false);
+    const dragCounter = React.useRef(0);
+
+    const [editingNoteId, setEditingNoteId] = React.useState(null);
+    const [editingNoteText, setEditingNoteText] = React.useState('');
+    const [isSavingNoteMsg, setIsSavingNoteMsg] = React.useState(false);
+    const [isNoteModalMaximized, setIsNoteModalMaximized] = React.useState(false);
+
+    const handleSaveEditedNote = async (msgId) => {
+        if (!editingNoteText.trim() || !selectedConvo) return;
+        setIsSavingNoteMsg(true);
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/chat/conversations/${selectedConvo.id}/notes/${msgId}`,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ private_note: editingNoteText.trim() })
+                },
+                activeClient?.id
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                const updatedContent = data.message?.content || `🔒 Anotação Privada: ${editingNoteText.trim()}`;
+
+                engine.setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: updatedContent } : m));
+                setSelectedConvo(prev => ({ ...prev, private_note: editingNoteText.trim() }));
+                engine.setConversations(prev => prev.map(c => c.id === selectedConvo.id ? { ...c, private_note: editingNoteText.trim() } : c));
+                engine.setPrivateNote(editingNoteText.trim());
+
+                toast.success('Anotação privada atualizada!');
+                setEditingNoteId(null);
+                setEditingNoteText('');
+            } else {
+                const err = await res.json();
+                throw new Error(err.detail || 'Erro ao atualizar anotação.');
+            }
+        } catch (err) {
+            toast.error(err.message || 'Erro ao salvar anotação.');
+        } finally {
+            setIsSavingNoteMsg(false);
+        }
+    };
+
+    const [deleteNoteConfirmMsgId, setDeleteNoteConfirmMsgId] = React.useState(null);
+    const [isDeletingNoteMsg, setIsDeletingNoteMsg] = React.useState(false);
+
+    const handleDeleteNoteMsg = async (msgId) => {
+        if (!msgId || !selectedConvo) return;
+        setIsDeletingNoteMsg(true);
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/chat/conversations/${selectedConvo.id}/messages/${msgId}`,
+                { method: 'DELETE' },
+                activeClient?.id
+            );
+
+            if (res.ok) {
+                engine.setMessages(prev => prev.filter(m => m.id !== msgId));
+
+                const remainingNotes = engine.messages.filter(m => m.id !== msgId && m.sender_type === 'system' && m.content?.startsWith('🔒 Anotação Privada:'));
+                const newestNote = remainingNotes.length > 0 ? remainingNotes[remainingNotes.length - 1].content.replace('🔒 Anotação Privada: ', '') : '';
+
+                setSelectedConvo(prev => ({ ...prev, private_note: newestNote }));
+                engine.setConversations(prev => prev.map(c => c.id === selectedConvo.id ? { ...c, private_note: newestNote } : c));
+                engine.setPrivateNote(newestNote);
+
+                toast.success('Anotação privada excluída!');
+                setDeleteNoteConfirmMsgId(null);
+            } else {
+                const err = await res.json();
+                throw new Error(err.detail || 'Erro ao excluir anotação.');
+            }
+        } catch (err) {
+            toast.error(err.message || 'Erro ao excluir anotação.');
+        } finally {
+            setIsDeletingNoteMsg(false);
+        }
+    };
+
+    const [isOpenAiConfigured, setIsOpenAiConfigured] = React.useState(false);
+    const [isAnalyzingAi, setIsAnalyzingAi] = React.useState(false);
+    const [aiReportData, setAiReportData] = React.useState(null);
+    const [isAiReportModalOpen, setIsAiReportModalOpen] = React.useState(false);
+
+    useEffect(() => {
+        const checkAiConfig = async () => {
+            try {
+                const res = await fetchWithAuth(`${API_URL}/chat/ai-config`, {}, activeClient?.id);
+                if (res.ok) {
+                    const data = await res.json();
+                    setIsOpenAiConfigured(!!data.openai_configured);
+                }
+            } catch (err) {
+                console.error('Erro ao verificar AI config:', err);
+            }
+        };
+        checkAiConfig();
+    }, [activeClient?.id]);
+
+    const handleAnalyzeSingleChatDoubts = async () => {
+        if (!selectedConvo || isAnalyzingAi) return;
+        setIsAnalyzingAi(true);
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/chat/conversations/${selectedConvo.id}/analyze-doubts`,
+                { method: 'POST' },
+                activeClient?.id
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                setAiReportData({
+                    title: `Análise de Dúvidas (IA) — ${data.contact_name}`,
+                    raw_report: data.raw_report,
+                    has_unanswered_doubts: data.has_unanswered_doubts,
+                    isBulk: false
+                });
+                setIsAiReportModalOpen(true);
+                toast.success('Análise de dúvidas por IA concluída!');
+            } else {
+                const err = await res.json();
+                throw new Error(err.detail || 'Erro ao analisar dúvidas com IA.');
+            }
+        } catch (err) {
+            toast.error(err.message || 'Erro ao analisar dúvidas.');
+        } finally {
+            setIsAnalyzingAi(false);
+        }
+    };
+
+    const handleAnalyzeBulkChatsDoubts = async () => {
+        if (!engine.selectedConversationIds || engine.selectedConversationIds.length === 0 || isAnalyzingAi) return;
+        setIsAnalyzingAi(true);
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/chat/conversations/analyze-doubts-bulk`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conversation_ids: engine.selectedConversationIds })
+                },
+                activeClient?.id
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                setAiReportData({
+                    title: `Relatório Consolidado de Dúvidas (IA) — ${data.total_analyzed} Conversas`,
+                    raw_report: data.raw_report,
+                    has_unanswered_doubts: data.has_unanswered_doubts,
+                    total_analyzed: data.total_analyzed,
+                    isBulk: true
+                });
+                setIsAiReportModalOpen(true);
+                toast.success(`Análise de ${data.total_analyzed} conversas concluída!`);
+            } else {
+                const err = await res.json();
+                throw new Error(err.detail || 'Erro ao analisar conversas em massa.');
+            }
+        } catch (err) {
+            toast.error(err.message || 'Erro ao analisar conversas.');
+        } finally {
+            setIsAnalyzingAi(false);
+        }
+    };
+
+    const exportAiReportHtml = () => {
+        if (!aiReportData) return;
+        const reportTitle = aiReportData.title || 'Relatório de Dúvidas IA';
+        const dateStr = new Date().toLocaleString('pt-BR');
+
+        const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>${reportTitle}</title>
+<style>
+    body { font-family: 'Calibri', 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; padding: 30px; color: #0f172a; background-color: #f8fafc; }
+    .container { max-width: 860px; margin: 0 auto; background: #ffffff; padding: 35px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .header { border-bottom: 2px solid #8b5cf6; padding-bottom: 15px; margin-bottom: 25px; }
+    .header h1 { color: #5b21b6; font-size: 22px; margin: 0 0 8px 0; }
+    .meta { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+    .content { font-size: 14px; line-height: 1.6; white-space: pre-wrap; color: #1e293b; background: #faf5ff; border-left: 4px solid #8b5cf6; padding: 20px; border-radius: 8px; }
+    .btn-print { background: #7c3aed; color: #ffffff; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; float: right; }
+    @media print { .btn-print { display: none; } }
+</style>
+</head>
+<body>
+    <div class="container">
+        <button onclick="window.print()" class="btn-print">🖨️ Imprimir / Salvar PDF</button>
+        <div class="header">
+            <h1>🤖 ${reportTitle}</h1>
+            <div class="meta">Data da Análise: ${dateStr} | Gerado via ZapVoice IA</div>
+        </div>
+        <div class="content">${aiReportData.raw_report}</div>
+    </div>
+</body>
+</html>
+        `.trim();
+
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `relatorio_duvidas_ia_${new Date().getTime()}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    };
+
+    const processFileAttachment = (file) => {
         if (!file || !selectedConvo) return;
-        e.target.value = null;
 
         let messageType = 'document';
         if (file.type.startsWith('image/')) messageType = 'image';
@@ -196,14 +414,76 @@ export default function ChatConversations({ onClose, onNavigate }) {
             return;
         }
 
-        if (messageType === 'image' || messageType === 'video') {
-            const localUrl = URL.createObjectURL(file);
-            engine.setMediaPreview({ file, localUrl, messageType, fileUrl: null });
-            engine.setPreviewCaption('');
-            return;
-        }
+        const localUrl = URL.createObjectURL(file);
+        engine.setMediaPreview({ file, localUrl, messageType, fileUrl: null });
+        engine.setPreviewCaption(engine.newMessage || '');
+    };
 
-        await sendMedia(file, messageType, '');
+    const handleMediaUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !selectedConvo) return;
+        e.target.value = null;
+        processFileAttachment(file);
+    };
+
+    const handlePaste = (e) => {
+        if (!selectedConvo) return;
+        const clipboardItems = e.clipboardData?.items;
+        if (!clipboardItems) return;
+
+        for (let i = 0; i < clipboardItems.length; i++) {
+            const item = clipboardItems[i];
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) {
+                    e.preventDefault();
+                    processFileAttachment(file);
+                    break;
+                }
+            }
+        }
+    };
+
+    const handleDragEnter = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!selectedConvo) return;
+        if (e.dataTransfer?.types?.includes('Files')) {
+            dragCounter.current += 1;
+            setIsDraggingFile(true);
+        }
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!selectedConvo) return;
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current -= 1;
+        if (dragCounter.current <= 0) {
+            dragCounter.current = 0;
+            setIsDraggingFile(false);
+        }
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter.current = 0;
+        setIsDraggingFile(false);
+        if (!selectedConvo) return;
+
+        const droppedFiles = e.dataTransfer?.files;
+        if (droppedFiles && droppedFiles.length > 0) {
+            processFileAttachment(droppedFiles[0]);
+        }
     };
 
     const sendMedia = async (file, messageType, caption) => {
@@ -248,6 +528,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                 engine.loadConversations(false);
                 engine.setMediaPreview(null);
                 engine.setPreviewCaption('');
+                engine.setNewMessage('');
             } else {
                 const errData = await sendRes.json();
                 throw new Error(errData.detail || 'Erro ao enviar mídia.');
@@ -337,14 +618,26 @@ export default function ChatConversations({ onClose, onNavigate }) {
         toast('Gravação cancelada.');
     };
 
-    const handleAddTagWithName = async (tagName) => {
-        if (!tagName.trim() || !selectedConvo) return;
+    const handleAddTagWithName = async (tagName, customColor = null) => {
+        if (!tagName || !tagName.trim() || !selectedConvo) return;
+        const cleanTag = tagName.trim().slice(0, 20);
         const currentTags = selectedConvo.labels || [];
-        const cleanTag = tagName.trim();
-        
+
         if (currentTags.map(t => t.toLowerCase()).includes(cleanTag.toLowerCase())) {
             toast.error('Esta etiqueta já foi adicionada.');
             return;
+        }
+
+        if (customColor) {
+            try {
+                await fetchWithAuth(`${API_URL}/chat/labels`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: cleanTag, color: customColor })
+                }, activeClient.id);
+            } catch (err) {
+                console.error('Erro ao registrar nova etiqueta:', err);
+            }
         }
 
         const updatedTags = [...currentTags, cleanTag];
@@ -608,6 +901,64 @@ export default function ChatConversations({ onClose, onNavigate }) {
         }
     };
 
+    const handleBulkTagConversations = async (tagToApply) => {
+        const label = (tagToApply || customBulkTag || selectedBulkTag || '').trim();
+        if (!label) {
+            toast.error('Informe ou selecione uma etiqueta.');
+            return;
+        }
+        if (!engine.selectedConvoIds.length && !selectAllPages) return;
+
+        setIsApplyingBulkTag(true);
+        const payload = selectAllPages ? {
+            select_all_pages: true,
+            labels: [label],
+            tab: activeTab,
+            status: statusFilter,
+            search: searchQuery || undefined,
+            label: selectedLabelFilter || undefined,
+            block_status: filterBlockStatus || undefined,
+            has_note: filterHasNote || undefined,
+            start_date: filterStartDate || undefined,
+            end_date: filterEndDate || undefined,
+            unread_only: filterUnread || undefined,
+            window_open_only: filterWindowOpen || undefined,
+            template_sent_24h_only: filterTemplate24h || undefined,
+            has_replied: filterHasReplied || undefined
+        } : {
+            labels: [label],
+            ids: engine.selectedConvoIds
+        };
+
+        const toastId = toast.loading(`Aplicando etiqueta "${label}"...`);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/conversations/bulk-tag`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }, activeClient?.id);
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(`Etiqueta "${label}" aplicada em ${data.updated_count || 0} conversa(s)!`, { id: toastId });
+                setIsBulkTagModalOpen(false);
+                setSelectedBulkTag('');
+                setCustomBulkTag('');
+                engine.setSelectedConvoIds([]);
+                setSelectAllPages(false);
+                engine.loadConversations(true);
+                engine.loadAvailableLabels();
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                toast.error(errData.detail || 'Erro ao aplicar etiqueta.', { id: toastId });
+            }
+        } catch {
+            toast.error('Erro de conexão ao aplicar etiqueta.', { id: toastId });
+        } finally {
+            setIsApplyingBulkTag(false);
+        }
+    };
+
     // Polling and timers
     useEffect(() => {
         engine.loadConversations(true);
@@ -617,7 +968,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
             engine.loadAvailableLabels();
         }, 5000);
         return () => clearInterval(convoInterval);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterUrgent, filterHasReplied]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied]);
 
     useEffect(() => {
         if (!selectedConvo) return;
@@ -807,7 +1158,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         <div className="flex items-center px-4 py-2 gap-1.5">
                             {[
                                 { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!selectedLabelFilter },
-                                { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterUnread || filterHasNote || filterUrgent || filterHasReplied },
+                                { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterTemplate24h || filterUnread || filterHasNote || filterUrgent || filterHasReplied },
                                 { key: 'bloqueio', label: 'Bloqueio', icon: FiSlash, active: !!filterBlockStatus },
                                 { key: 'data', label: 'Data', icon: FiCalendar, active: !!filterStartDate || !!filterEndDate }
                             ].map(f => (
@@ -841,34 +1192,41 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         )}
 
                         {activeFilterTab === 'status' && (
-                             <div className="px-4 pb-3 flex gap-1 flex-wrap">
+                             <div className="px-4 pb-3 grid grid-cols-3 gap-1.5">
                                  <button
                                      onClick={() => setFilterWindowOpen(!filterWindowOpen)}
-                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterWindowOpen ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterWindowOpen ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Janela 24h
                                  </button>
                                  <button
+                                     onClick={() => setFilterTemplate24h(!filterTemplate24h)}
+                                     className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterTemplate24h ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     title="Filtrar conversas que receberam mensagem de modelo (template) nas últimas 24h"
+                                 >
+                                     Template 24h
+                                 </button>
+                                 <button
                                      onClick={() => setFilterUnread(!filterUnread)}
-                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterUnread ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterUnread ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Não lidas
                                  </button>
                                  <button
                                      onClick={() => setFilterHasNote(!filterHasNote)}
-                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterHasNote ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterHasNote ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Anotações
                                  </button>
                                  <button
                                      onClick={() => setFilterUrgent(!filterUrgent)}
-                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterUrgent ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterUrgent ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                  >
                                      Urgentes
                                  </button>
                                  <button
                                      onClick={() => setFilterHasReplied(!filterHasReplied)}
-                                     className={`flex-1 py-1.5 px-1 rounded-lg border text-[10px] font-semibold truncate ${filterHasReplied ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterHasReplied ? 'bg-purple-500/10 text-purple-400 border-purple-500/30' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
                                      title="Filtrar contatos que enviaram pelo menos 1 mensagem"
                                  >
                                      Respondeu
@@ -965,13 +1323,33 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                  Selecionar todas
                              </button>
                              {(selectAllPages || engine.selectedConvoIds.length > 0) && (
-                                 <button
-                                     onClick={() => engine.setConfirmDeleteConvos('bulk')}
-                                     className="ml-auto flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold transition border border-red-500/20"
-                                 >
-                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                     Deletar ({selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length})
-                                 </button>
+                                  <div className="ml-auto flex items-center gap-2">
+                                      <button
+                                          onClick={() => setIsBulkTagModalOpen(true)}
+                                          className="flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 dark:text-blue-400 px-2.5 py-1 rounded-lg text-xs font-semibold transition border border-blue-500/20"
+                                      >
+                                          <FiTag size={13} />
+                                          Etiquetar ({selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length})
+                                      </button>
+                                      <button
+                                          onClick={() => engine.setConfirmDeleteConvos('bulk')}
+                                          className="flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 px-2.5 py-1 rounded-lg text-xs font-semibold transition border border-red-500/20"
+                                      >
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          Deletar ({selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length})
+                                      </button>
+                                      {isOpenAiConfigured && (
+                                          <button
+                                              onClick={handleAnalyzeBulkChatsDoubts}
+                                              disabled={isAnalyzingAi}
+                                              className="flex items-center gap-1 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 px-2.5 py-1 rounded-lg text-xs font-semibold transition border border-purple-500/20 disabled:opacity-50"
+                                              title="Analisar dúvidas não respondidas das conversas selecionadas com IA"
+                                          >
+                                              {isAnalyzingAi ? <FiRefreshCw className="animate-spin" size={13} /> : <BsStars size={13} />}
+                                              <span>Analisar Dúvidas (IA)</span>
+                                          </button>
+                                      )}
+                                  </div>
                              )}
                          </div>
                      )}
@@ -999,7 +1377,16 @@ export default function ChatConversations({ onClose, onNavigate }) {
                      )}
 
                      {/* Lista */}
-                     <div className="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-white/5">
+                    <div className="relative flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-white/5">
+                        {/* Overlay de Carregamento / Filtragem */}
+                        {engine.isLoadingConvos && (
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center gap-3 transition-opacity">
+                                <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                <span className="text-xs font-semibold text-white bg-slate-800/90 px-3.5 py-1.5 rounded-xl border border-slate-700/60 shadow-xl">
+                                    Filtrando conversas...
+                                </span>
+                            </div>
+                        )}
                          {visibleConversations.map(convo => {
                              const isSelected = selectedConvo?.id === convo.id;
                              const isChecked = selectAllPages || engine.selectedConvoIds.includes(convo.id);
@@ -1038,68 +1425,68 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                          className="rounded border-gray-300 text-blue-600 shrink-0 cursor-pointer"
                                      />
                                      <div
-                                         className="flex flex-1 gap-3 items-center min-w-0"
-                                         onClick={() => setSelectedConvo(convo)}
-                                     >
-                                         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm tracking-wide shrink-0">
-                                             {initials}
-                                         </div>
-                                         <div className="flex-1 min-w-0">
-                                             <div className="flex justify-between items-baseline mb-1 pr-8">
-                                                 <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate pr-2 flex items-center gap-1.5">
-                                                     {convo.pinned && <BsPinAngleFill className="text-blue-500 rotate-45 shrink-0" size={12} title="Fixada" />}
-                                                     {convo.urgent && <BsExclamationCircleFill className="text-red-500 shrink-0 animate-pulse" size={12} title="Urgente" />}
-                                                     {convo.contact_name ? getFirstName(convo.contact_name) : convo.phone}
-                                                 </h4>
-                                                 <span className="text-[10px] text-gray-400 shrink-0">{formatTime(convo.last_message_at)}</span>
-                                             </div>
-                                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">{convo.last_message_content || 'Nenhuma mensagem'}</p>
-                                             
-                                             {/* Badges de bloqueio/repouso e atendente atribuído */}
-                                             {(convo.block_status || convo.assigned_user_name) && (
-                                                 <div className="mb-1 flex flex-wrap gap-1">
-                                                     {convo.block_status === 'blocked' && (
-                                                         <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 border-red-500/30 bg-red-500/10">
-                                                             <FiSlash size={9} /> Bloqueado
-                                                         </span>
-                                                     )}
-                                                     {convo.block_status === 'resting' && (
-                                                         <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-orange-400 border-orange-500/30 bg-orange-500/10">
-                                                             <FiClock size={9} /> Repouso
-                                                         </span>
-                                                     )}
-                                                     {convo.assigned_user_name && (
-                                                         <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-blue-400 border-blue-500/30 bg-blue-500/10">
-                                                             <FiUser size={9} /> {convo.assigned_user_name}
-                                                         </span>
-                                                     )}
-                                                 </div>
-                                             )}
+                                          className="flex flex-1 gap-3 items-center min-w-0"
+                                          onClick={() => setSelectedConvo(convo)}
+                                      >
+                                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm tracking-wide shrink-0">
+                                              {initials}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                              <div className="flex justify-between items-baseline mb-1 pr-8">
+                                                  <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate pr-2 flex items-center gap-1.5">
+                                                      {convo.pinned && <BsPinAngleFill className="text-blue-500 rotate-45 shrink-0" size={12} title="Fixada" />}
+                                                      {convo.urgent && <BsExclamationCircleFill className="text-red-500 shrink-0 animate-pulse" size={12} title="Urgente" />}
+                                                      {convo.contact_name ? getFirstName(convo.contact_name) : convo.phone}
+                                                  </h4>
+                                                  <span className="text-[10px] text-gray-400 shrink-0">{formatTime(convo.last_message_at)}</span>
+                                              </div>
+                                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">{convo.last_message_content || 'Nenhuma mensagem'}</p>
+                                              
+                                              {/* Badges de bloqueio/repouso e atendente atribuído */}
+                                              {(convo.block_status || convo.assigned_user_name) && (
+                                                  <div className="mb-1 flex flex-wrap gap-1">
+                                                      {convo.block_status === 'blocked' && (
+                                                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 border-red-500/30 bg-red-500/10">
+                                                              <FiSlash size={9} /> Bloqueado
+                                                          </span>
+                                                      )}
+                                                      {convo.block_status === 'resting' && (
+                                                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-orange-400 border-orange-500/30 bg-orange-500/10">
+                                                              <FiClock size={9} /> Repouso
+                                                          </span>
+                                                      )}
+                                                      {convo.assigned_user_name && (
+                                                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-blue-400 border-blue-500/30 bg-blue-500/10">
+                                                              <FiUser size={9} /> {convo.assigned_user_name}
+                                                          </span>
+                                                      )}
+                                                  </div>
+                                              )}
 
-                                             {/* Marcadores/Etiquetas coloridas do card */}
-                                             {convo.labels && convo.labels.length > 0 && (
-                                                 <div className="flex flex-wrap gap-1">
-                                                     {convo.labels.map(label => {
-                                                         const labelColor = engine.getLabelColor(label);
-                                                         return (
-                                                             <span
-                                                                 key={label}
-                                                                 style={{
-                                                                     color: labelColor,
-                                                                     borderColor: labelColor + '33',
-                                                                     backgroundColor: labelColor + '15'
-                                                                 }}
-                                                                 className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
-                                                             >
-                                                                 {label}
-                                                             </span>
-                                                         );
-                                                     })}
-                                                 </div>
-                                             )}
-                                         </div>
-                                         {convo.unread_count > 0 && <span className="bg-emerald-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">{convo.unread_count}</span>}
-                                     </div>
+                                              {/* Marcadores/Etiquetas coloridas do card */}
+                                              {convo.labels && convo.labels.length > 0 && (
+                                                  <div className="flex flex-wrap gap-1">
+                                                      {convo.labels.map(label => {
+                                                          const labelColor = engine.getLabelColor(label);
+                                                          return (
+                                                              <span
+                                                                  key={label}
+                                                                  style={{
+                                                                      color: labelColor,
+                                                                      borderColor: labelColor + '33',
+                                                                      backgroundColor: labelColor + '15'
+                                                                  }}
+                                                                  className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                                                              >
+                                                                  {label} <span className="opacity-70 font-normal">({label ? label.length : 0})</span>
+                                                              </span>
+                                                          );
+                                                      })}
+                                                  </div>
+                                              )}
+                                          </div>
+                                          {convo.unread_count > 0 && <span className="bg-emerald-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">{convo.unread_count}</span>}
+                                      </div>
 
                                      {/* Botão delete individual (aparece no hover, cinza, centralizado verticalmente) */}
                                      <button
@@ -1162,7 +1549,25 @@ export default function ChatConversations({ onClose, onNavigate }) {
                 </div>
 
                 {/* Chat Ativo */}
-                <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#0f172a]">
+                <div 
+                    className="flex-1 flex flex-col h-full bg-white dark:bg-[#0f172a] relative"
+                    onDragEnter={handleDragEnter}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onPaste={handlePaste}
+                >
+                    {isDraggingFile && (
+                        <div
+                            className="absolute inset-0 z-40 bg-blue-900/80 backdrop-blur-md border-2 border-dashed border-blue-400 rounded-2xl flex flex-col items-center justify-center text-white p-6 shadow-2xl transition-all pointer-events-none"
+                        >
+                            <div className="w-16 h-16 rounded-full bg-blue-500/30 flex items-center justify-center mb-3 animate-bounce">
+                                <FiUploadCloud size={36} className="text-blue-300" />
+                            </div>
+                            <p className="text-lg font-bold text-white">Solte seu arquivo aqui para enviar</p>
+                            <p className="text-xs text-blue-200 mt-1">Imagens, Vídeos, Áudios ou PDFs (Documentos)</p>
+                        </div>
+                    )}
                     {selectedConvo ? (
                         <>
                             {/* Header do Chat */}
@@ -1201,6 +1606,29 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     >
                                         {selectedConvo.pinned ? <BsPinAngleFill size={16} /> : <BsPinAngle size={16} />}
                                     </button>
+
+                                    <button
+                                        onClick={() => {
+                                            exportConversationToDoc(selectedConvo, engine.messages, activeClient?.id);
+                                            toast.success('Histórico exportado! Arquivo HTML pronto para abrir ou salvar como PDF.');
+                                        }}
+                                        title="Exportar Conversa (HTML / PDF)"
+                                        className="p-2 rounded-xl border bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-200 dark:hover:border-blue-800/30 transition-all flex items-center justify-center"
+                                    >
+                                        <FiFileText size={16} />
+                                    </button>
+
+                                    {isOpenAiConfigured && (
+                                        <button
+                                            onClick={handleAnalyzeSingleChatDoubts}
+                                            disabled={isAnalyzingAi}
+                                            title="Analisar dúvidas não respondidas pelo agente nesta conversa (IA)"
+                                            className="px-3 py-1.5 rounded-xl border bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 hover:border-purple-300 transition-all flex items-center gap-1.5 text-xs font-semibold shadow-sm cursor-pointer disabled:opacity-50"
+                                        >
+                                            {isAnalyzingAi ? <FiRefreshCw className="animate-spin" size={14} /> : <BsStars size={14} />}
+                                            <span>Dúvidas (IA)</span>
+                                        </button>
+                                    )}
 
                                     <button
                                         onClick={handleToggleUrgent}
@@ -1340,23 +1768,95 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                         if (isSystem) {
                                             const isPrivateNote = msg.content && msg.content.startsWith("🔒 Anotação Privada:");
                                             if (isPrivateNote) {
+                                                const isEditingThisNote = editingNoteId === msg.id;
+                                                const noteText = msg.content.replace("🔒 Anotação Privada: ", "");
+
                                                 return (
                                                     <div key={msg.id} className="flex justify-center my-2">
                                                         <div className="bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-xl px-4 py-2.5 shadow-sm text-xs max-w-lg w-full">
-                                                            <div className="flex items-center gap-1.5 font-bold mb-1 uppercase tracking-wider text-[10px] text-amber-600 dark:text-amber-400">
-                                                                <BsJournalText size={12} />
-                                                                <span>Anotação Interna / Nota Privada</span>
+                                                            <div className="flex items-center justify-between font-bold mb-1.5 uppercase tracking-wider text-[10px] text-amber-600 dark:text-amber-400">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <BsJournalText size={12} />
+                                                                    <span>Anotação Interna / Nota Privada</span>
+                                                                </div>
+                                                                {!isEditingThisNote && (
+                                                                     <div className="flex items-center gap-2">
+                                                                         <button
+                                                                             type="button"
+                                                                             onClick={() => {
+                                                                                 setEditingNoteId(msg.id);
+                                                                                 setEditingNoteText(noteText);
+                                                                             }}
+                                                                             className="p-1 rounded hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition-all flex items-center gap-1 text-[10px] font-semibold"
+                                                                             title="Editar esta anotação privada"
+                                                                         >
+                                                                             <FiEdit2 size={11} />
+                                                                             <span>Editar</span>
+                                                                         </button>
+                                                                         <button
+                                                                             type="button"
+                                                                             onClick={() => setDeleteNoteConfirmMsgId(msg.id)}
+                                                                             className="p-1 rounded hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all flex items-center gap-1 text-[10px] font-semibold"
+                                                                             title="Excluir esta anotação privada"
+                                                                         >
+                                                                             <FiTrash2 size={11} />
+                                                                             <span>Deletar</span>
+                                                                         </button>
+                                                                     </div>
+                                                                 )}
                                                             </div>
-                                                            <p className="whitespace-pre-wrap leading-relaxed font-sans">{msg.content.replace("🔒 Anotação Privada: ", "")}</p>
-                                                            <div className="flex justify-end mt-1 text-[9px] opacity-75 font-medium tracking-wide">
-                                                                {formatMessageTimestamp(msg.timestamp)}
-                                                            </div>
+
+                                                            {isEditingThisNote ? (
+                                                                <div className="space-y-2 mt-1">
+                                                                    <textarea
+                                                                        value={editingNoteText}
+                                                                        onChange={(e) => setEditingNoteText(e.target.value)}
+                                                                        className="w-full px-3 py-2 bg-white/10 dark:bg-black/30 border border-amber-500/30 rounded-lg text-amber-900 dark:text-amber-100 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans"
+                                                                        rows={3}
+                                                                        autoFocus
+                                                                    />
+                                                                    <div className="flex justify-end gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setIsNoteModalMaximized(true)}
+                                                                            className="px-2.5 py-1 rounded-lg border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-semibold hover:bg-amber-500/20 transition flex items-center gap-1"
+                                                                            title="Maximizar em um popup para digitar com mais espaço"
+                                                                        >
+                                                                            <FiMaximize2 size={10} />
+                                                                            <span>Maximizar</span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setEditingNoteId(null)}
+                                                                            className="px-2.5 py-1 rounded-lg border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[10px] font-semibold hover:bg-amber-500/10 transition"
+                                                                        >
+                                                                            Cancelar
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isSavingNoteMsg || !editingNoteText || !editingNoteText.trim()}
+                                                                            onClick={() => handleSaveEditedNote(msg.id)}
+                                                                            className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-semibold transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                        >
+                                                                            {isSavingNoteMsg ? <FiRefreshCw className="animate-spin" size={10} /> : <FiCheck size={11} />}
+                                                                            <span>Salvar</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <p className="whitespace-pre-wrap leading-relaxed font-sans">{noteText}</p>
+                                                                    <div className="flex justify-end mt-1 text-[9px] opacity-75 font-medium tracking-wide">
+                                                                        {formatMessageTimestamp(msg.timestamp)}
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
                                             } else {
-                                                // Mensagem normal do sistema (ex: etiqueta adicionada, conversa atribuída)
-                                                const isLabelNotice = msg.content && (msg.content.includes("Etiqueta") || msg.content.includes("etiqueta"));
+                                                // Mensagem normal do sistema (ex: etiqueta adicionada, conversa atribuída, marcador removido)
+                                                const isLabelNotice = msg.content && (msg.content.includes("Etiqueta") || msg.content.includes("etiqueta") || msg.content.includes("Marcador") || msg.content.includes("marcador"));
                                                 return (
                                                     <div key={msg.id} className="flex justify-center my-2 animate-in fade-in duration-300">
                                                         <div className={`border rounded-lg px-3.5 py-1.5 shadow-sm text-[11px] max-w-md text-center flex items-center justify-center gap-2 ${
@@ -1725,6 +2225,128 @@ export default function ChatConversations({ onClose, onNavigate }) {
                     contactName={selectedConvo.contact_name || selectedConvo.phone}
                 />
             )}
+            {/* Modal Maximizado de Edição de Anotação Privada */}
+            {isNoteModalMaximized && (
+                <div
+                    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div
+                        className="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#0f172a]/60">
+                            <div className="flex items-center gap-2 font-bold text-gray-800 dark:text-white text-sm">
+                                <BsJournalText className="text-amber-500" size={18} />
+                                <span>Anotação Privada — {selectedConvo?.contact_name || selectedConvo?.phone}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsNoteModalMaximized(false)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition"
+                                title="Fechar modal"
+                            >
+                                <FiX size={18} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-3">
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                Digite o conteúdo da anotação privada abaixo:
+                            </label>
+                            <textarea
+                                value={editingNoteText}
+                                onChange={(e) => setEditingNoteText(e.target.value)}
+                                placeholder="Escreva os detalhes da anotação privada..."
+                                className="w-full h-72 px-4 py-3 bg-gray-50 dark:bg-black/30 text-gray-800 dark:text-gray-100 text-xs rounded-xl border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans resize-y leading-relaxed"
+                                autoFocus
+                            />
+                            <div className="flex justify-between items-center text-[11px] text-gray-400 font-medium">
+                                <span>{editingNoteText ? editingNoteText.length : 0} caracteres digitados</span>
+                                <span>🔒 Anotação visível apenas para sua equipe</span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#0f172a]/60">
+                            <button
+                                type="button"
+                                onClick={() => setIsNoteModalMaximized(false)}
+                                className="px-4 py-2 rounded-xl border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isSavingNoteMsg}
+                                onClick={async () => {
+                                    if (editingNoteId) {
+                                        await handleSaveEditedNote(editingNoteId);
+                                    }
+                                    setIsNoteModalMaximized(false);
+                                }}
+                                className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center gap-2 shadow-md"
+                            >
+                                {isSavingNoteMsg ? <FiRefreshCw className="animate-spin" size={14} /> : <FiCheck size={14} />}
+                                <span>Salvar Anotação</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Confirmação de Exclusão de Anotação Privada */}
+            {deleteNoteConfirmMsgId && (
+                <div
+                    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div
+                        className="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#0f172a]/60">
+                            <div className="flex items-center gap-2 font-bold text-red-600 dark:text-red-400 text-sm">
+                                <BsExclamationCircleFill size={18} />
+                                <span>Excluir Anotação Privada</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setDeleteNoteConfirmMsgId(null)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition"
+                            >
+                                <FiX size={18} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-2">
+                            <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans">
+                                Tem certeza de que deseja excluir permanentemente esta anotação privada?
+                            </p>
+                            <p className="text-[11px] text-gray-400 font-medium">
+                                Esta ação não poderá ser desfeita e a anotação será removida do histórico da conversa.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#0f172a]/60">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteNoteConfirmMsgId(null)}
+                                className="px-4 py-2 rounded-xl border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isDeletingNoteMsg}
+                                onClick={() => handleDeleteNoteMsg(deleteNoteConfirmMsgId)}
+                                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center gap-2 shadow-md hover:shadow-red-500/20"
+                            >
+                                {isDeletingNoteMsg ? <FiRefreshCw className="animate-spin" size={14} /> : <FiTrash2 size={14} />}
+                                <span>Sim, Excluir</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Modal de Disparo de Funil */}
             {selectedConvo && (
                 <TriggerFunnelModal
@@ -1736,6 +2358,157 @@ export default function ChatConversations({ onClose, onNavigate }) {
                     }}
                     isTriggering={engine.isSending}
                 />
+            )}
+            {/* Modal de Etiquetagem em Massa */}
+            {isBulkTagModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-blue-500/10 text-blue-400 rounded-lg">
+                                    <FiTag size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-white text-base">Etiquetar Contatos</h3>
+                                    <p className="text-xs text-slate-400">
+                                        Aplicando em <strong>{selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}</strong> contato(s) selecionado(s)
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { setIsBulkTagModalOpen(false); setSelectedBulkTag(''); setCustomBulkTag(''); }}
+                                className="text-slate-400 hover:text-white p-1"
+                            >
+                                <FiX size={18} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {engine.availableLabels.length > 0 && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                                        Escolher etiqueta existente:
+                                    </label>
+                                    <select
+                                        value={selectedBulkTag}
+                                        onChange={e => { setSelectedBulkTag(e.target.value); if (e.target.value) setCustomBulkTag(''); }}
+                                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                                    >
+                                        <option value="">-- Selecione uma etiqueta --</option>
+                                        {engine.availableLabels.map(l => (
+                                            <option key={l} value={l}>{l}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                                    {engine.availableLabels.length > 0 ? 'Ou criar/digitar nova etiqueta:' : 'Digite o nome da etiqueta:'}
+                                </label>
+                                <input
+                                    type="text"
+                                    value={customBulkTag}
+                                    onChange={e => { setCustomBulkTag(e.target.value); if (e.target.value) setSelectedBulkTag(''); }}
+                                    placeholder="Ex: VIP, Interessado, Lead 2026"
+                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-blue-500 placeholder-slate-500"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
+                            <button
+                                onClick={() => { setIsBulkTagModalOpen(false); setSelectedBulkTag(''); setCustomBulkTag(''); }}
+                                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700 transition"
+                                disabled={isApplyingBulkTag}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => handleBulkTagConversations()}
+                                disabled={isApplyingBulkTag || (!selectedBulkTag && !customBulkTag.trim())}
+                                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition flex items-center gap-2"
+                            >
+                                {isApplyingBulkTag ? 'Aplicando...' : 'Aplicar Etiqueta'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Relatório de Dúvidas (IA) */}
+            {isAiReportModalOpen && aiReportData && (
+                <div
+                    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div
+                        className="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header do Modal */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-purple-500/10 dark:bg-purple-900/20">
+                            <div className="flex items-center gap-2 font-bold text-purple-900 dark:text-purple-200 text-sm">
+                                <BsStars className="text-purple-500" size={18} />
+                                <span>{aiReportData.title}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsAiReportModalOpen(false)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition"
+                                title="Fechar modal"
+                            >
+                                <FiX size={18} />
+                            </button>
+                        </div>
+
+                        {/* Corpo do Relatório com Scroll */}
+                        <div className="p-6 space-y-4 overflow-y-auto flex-1 font-sans">
+                            {!aiReportData.has_unanswered_doubts && (
+                                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                                    <span>✅ Nenhuma dúvida não respondida encontrada! Todas as perguntas foram devidamente atendidas.</span>
+                                </div>
+                            )}
+
+                            <div className="bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-xl p-5 text-xs leading-relaxed text-gray-800 dark:text-gray-100 whitespace-pre-wrap">
+                                {aiReportData.raw_report}
+                            </div>
+                        </div>
+
+                        {/* Rodapé com Ações */}
+                        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#0f172a]/60">
+                            <span className="text-[11px] text-gray-400">
+                                Relatório gerado via OpenAI GPT
+                            </span>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(aiReportData.raw_report);
+                                        toast.success('Relatório copiado para a área de transferência!');
+                                    }}
+                                    className="px-4 py-2 rounded-xl border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition flex items-center gap-1.5"
+                                >
+                                    <span>📋 Copiar Texto</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={exportAiReportHtml}
+                                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-md hover:shadow-purple-500/20"
+                                >
+                                    <FiFileText size={14} />
+                                    <span>Exportar Relatório (HTML / PDF)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAiReportModalOpen(false)}
+                                    className="px-4 py-2 rounded-xl border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     </>

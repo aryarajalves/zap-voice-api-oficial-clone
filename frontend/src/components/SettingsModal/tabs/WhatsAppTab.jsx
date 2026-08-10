@@ -479,6 +479,8 @@ const WhatsAppTab = ({
                         <div className="space-y-4 animate-in fade-in duration-200">
                             {/* WhatsApp Profile Section (Componente Extraído) */}
                             <WhatsAppProfileSection
+                                formData={formData}
+                                handleChange={handleChange}
                                 whatsappProfile={whatsappProfile}
                                 whatsappName={whatsappName}
                                 setWhatsappName={setWhatsappName}

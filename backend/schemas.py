@@ -112,10 +112,12 @@ class ScheduledTrigger(ScheduledTriggerBase):
     block_funnel_id: Optional[int] = None
     interaction_funnel: Optional[Funnel] = None
     block_funnel: Optional[Funnel] = None
+    waba_card_last4: Optional[str] = Field(None, description="Últimos 4 dígitos do cartão de crédito WABA vinculado")
     
     # Bulk send fields
     is_bulk: bool = Field(False, description="Indica se faz parte de um envio em massa")
     template_name: Optional[str] = Field(None, description="Nome do template WhatsApp (se aplicável)")
+    template_category: Optional[str] = Field(None, description="Categoria do template: MARKETING, UTILITY ou AUTHENTICATION")
     private_message: Optional[str] = Field(None, description="Mensagem privada para o Chatwoot")
     private_message_delay: int = 5
     private_message_concurrency: int = 1
@@ -254,6 +256,12 @@ class ScheduledTrigger(ScheduledTriggerBase):
 
 class BulkDeleteRequest(BaseModel):
     ids: List[int] = Field(..., description="Lista de IDs para exclusão em massa")
+
+class UpdateTriggerParamsRequest(BaseModel):
+    delay_seconds: Optional[int] = None
+    concurrency_limit: Optional[int] = None
+    contacts_list: Optional[List[Any]] = None
+    scheduled_time: Optional[datetime] = None
 
 class MessageStatus(BaseModel):
     id: int
@@ -624,6 +632,8 @@ class WebhookLeadBase(BaseModel):
     price: Optional[str] = None
     tags: Optional[str] = None
     total_events: int = 1
+    last_template_name: Optional[str] = None
+    last_template_dispatched_at: Optional[datetime] = None
     is_locked: bool = False
     variables: Optional[Dict[str, Any]] = None
     google_calendar_link: Optional[str] = None

@@ -534,3 +534,49 @@ def test_get_recurring_contacts_fallback_banco_local_quando_chatwoot_falha(app_c
     assert data.get("source") == "local_db"
     assert data["count"] == 1
     assert data["contacts"][0]["phone"] == "5511888880001"
+
+
+def test_get_schedules_hides_funnel_delay_steps(app_client, auth_headers, db, client_obj, funnel):
+    """
+    Testa que o endpoint GET /api/schedules retorna apenas disparos em massa principais
+    e oculta passos/nós de delay de contatos individuais navegando em funis.
+    """
+    from models import ScheduledTrigger
+    now = datetime.now(timezone.utc)
+    start_str = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_str = (now + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # 1. Disparo em massa agendado (Deve aparecer)
+    bulk_trig = ScheduledTrigger(
+        client_id=client_obj.id,
+        status="queued",
+        is_bulk=True,
+        template_name="TemplateMassa",
+        scheduled_time=now + timedelta(hours=1),
+        contacts_list=[{"phone": "5511999999999"}]
+    )
+
+    # 2. Passo/Nó de delay de contato navegando em funil (Deve ser ocultado)
+    delay_step_trig = ScheduledTrigger(
+        client_id=client_obj.id,
+        funnel_id=funnel.id,
+        status="queued",
+        is_bulk=False,
+        contact_phone="5511988888888",
+        current_node_id="node_delay_123",
+        scheduled_time=now + timedelta(hours=2)
+    )
+
+    db.add(bulk_trig)
+    db.add(delay_step_trig)
+    db.commit()
+
+    resp = app_client.get(f"/api/schedules/?start={start_str}&end={end_str}", headers=auth_headers)
+    assert resp.status_code == 200
+    events = resp.json()
+
+    # Deve conter apenas o disparo em massa e NENHUM passo interno de nó delay
+    ids = [e["id"] for e in events]
+    assert bulk_trig.id in ids
+    assert delay_step_trig.id not in ids
+

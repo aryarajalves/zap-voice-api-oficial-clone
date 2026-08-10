@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Body
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from core.deps import get_db, get_current_user
@@ -119,6 +119,7 @@ async def list_conversations(
     end_date: Optional[str] = None,    # formato YYYY-MM-DD
     unread_only: Optional[bool] = None,
     window_open_only: Optional[bool] = None,
+    template_sent_24h_only: Optional[bool] = None,
     urgent_only: Optional[bool] = None,
     has_replied: Optional[bool] = None,
     page: int = Query(1, ge=1),
@@ -151,6 +152,58 @@ async def list_conversations(
         from datetime import timedelta
         limit_time = datetime.utcnow() - timedelta(hours=24)
         query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
+
+    # Filtro: template enviado nas últimas 24h apenas
+    if template_sent_24h_only:
+        from datetime import timedelta
+        since_24h = datetime.utcnow() - timedelta(hours=24)
+        
+        # 1. IDs de conversas com ChatMessage do tipo template nas últimas 24h
+        chat_convo_ids = [
+            r[0] for r in db.query(models.ChatMessage.conversation_id)
+            .filter(
+                models.ChatMessage.timestamp >= since_24h,
+                or_(
+                    models.ChatMessage.message_type.in_(['template', 'TEMPLATE']),
+                    models.ChatMessage.content.like('%[Template:%'),
+                    models.ChatMessage.content.like('%template%')
+                )
+            ).distinct().all() if r[0]
+        ]
+        
+        # 2. Telefones com disparos de template ENVIADOS/ENTREGUES/LIDOS nas últimas 24h em MessageStatus
+        raw_phones = [
+            r[0] for r in db.query(models.MessageStatus.phone_number)
+            .filter(
+                models.MessageStatus.timestamp >= since_24h,
+                models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'SENT', 'DELIVERED', 'READ']),
+                or_(
+                    models.MessageStatus.message_type.in_(['TEMPLATE', 'template']),
+                    models.MessageStatus.template_name.isnot(None)
+                )
+            ).distinct().all() if r[0]
+        ]
+        
+        clean_phones = set()
+        clean_phones_no_plus = set()
+        for p in raw_phones:
+            p_clean = str(p).replace('+', '').strip()
+            if p_clean:
+                clean_phones.add(p_clean)
+                clean_phones.add(f"+{p_clean}")
+                clean_phones_no_plus.add(p_clean)
+        
+        conditions = []
+        if chat_convo_ids:
+            conditions.append(models.ChatConversation.id.in_(chat_convo_ids))
+        if clean_phones:
+            conditions.append(models.ChatConversation.phone.in_(list(clean_phones)))
+            conditions.append(func.replace(models.ChatConversation.phone, '+', '').in_(list(clean_phones_no_plus)))
+            
+        if conditions:
+            query = query.filter(or_(*conditions))
+        else:
+            query = query.filter(models.ChatConversation.id == -1)
 
     # Filtro: urgentes apenas
     if urgent_only:
@@ -683,9 +736,12 @@ async def update_conversation_labels(
         elif not has_human_label and convo.human_handover_at:
             convo.human_handover_at = None
 
-    # Detectar adição e remoção de etiquetas para registrar no histórico
-    added = [l for l in labels if l not in old_labels]
-    removed = [l for l in old_labels if l not in labels]
+    # Detectar adição e remoção de etiquetas para registrar no histórico (case-insensitive)
+    old_labels_lower = [l.lower() for l in old_labels]
+    new_labels_lower = [l.lower() for l in labels]
+
+    added = [l for l in labels if l.lower() not in old_labels_lower]
+    removed = [l for l in old_labels if l.lower() not in new_labels_lower]
     
     events = []
     if added:
@@ -704,7 +760,15 @@ async def update_conversation_labels(
         )
         db.add(system_msg)
 
-    convo.labels = labels
+    # Garantir lista sem duplicatas preservando maiúsculas/minúsculas
+    unique_labels = []
+    seen_lower = set()
+    for l in labels:
+        if l.lower() not in seen_lower:
+            seen_lower.add(l.lower())
+            unique_labels.append(l)
+
+    convo.labels = unique_labels
     db.commit()
     return {"status": "ok", "labels": convo.labels, "human_handover_at": convo.human_handover_at.isoformat() if convo.human_handover_at else None}
 
@@ -1049,18 +1113,23 @@ async def delete_chat_message(
     if not msg:
         raise HTTPException(status_code=404, detail="Mensagem não encontrada.")
 
-    if msg.sender_type != "user":
-        raise HTTPException(status_code=403, detail="Só é possível deletar mensagens enviadas pelo agente.")
+    if msg.sender_type not in ["user", "system"]:
+        raise HTTPException(status_code=403, detail="Não é possível deletar esta mensagem.")
+
+    if msg.content and msg.content.startswith("🔒 Anotação Privada:"):
+        note_text = msg.content.replace("🔒 Anotação Privada: ", "")
+        if convo.private_note == note_text or note_text in convo.private_note:
+            convo.private_note = ""
 
     wa_result = {"skipped": True}
-    if msg.wa_message_id:
+    if msg.wa_message_id and msg.sender_type == "user":
         wa_client = WhatsAppClient(client_id=client_id)
         wa_result = await wa_client.delete_message(msg.wa_message_id)
 
     db.delete(msg)
     db.commit()
 
-    return {"success": True, "wa_result": wa_result}
+    return {"success": True, "wa_result": wa_result, "deleted_id": message_id}
 
 
 @router.post("/chat/conversations/{conversation_id}/pin")
@@ -1200,7 +1269,9 @@ async def update_conversation_note(
     if not convo:
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")
 
-    private_note = payload.get("private_note", "")
+    private_note = payload.get("private_note", "").strip()
+    if not private_note:
+        raise HTTPException(status_code=400, detail="A anotação privada não pode estar vazia.")
     convo.private_note = private_note
     
     # Salvar nota como uma mensagem interna visível no chat
@@ -1228,6 +1299,53 @@ async def update_conversation_note(
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
         "wa_message_id": None
     }}
+
+
+@router.put("/chat/conversations/{conversation_id}/notes/{message_id}")
+async def update_private_note_message(
+    conversation_id: int,
+    message_id: int,
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    msg = db.query(models.ChatMessage).filter(
+        models.ChatMessage.id == message_id,
+        models.ChatMessage.conversation_id == conversation_id
+    ).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Anotação não encontrada.")
+
+    private_note = payload.get("private_note", "").strip()
+    if not private_note:
+        raise HTTPException(status_code=400, detail="O conteúdo da anotação não pode ser vazio.")
+
+    msg.content = f"🔒 Anotação Privada: {private_note}"
+    convo.private_note = private_note
+    db.commit()
+
+    return {
+        "status": "ok",
+        "private_note": convo.private_note,
+        "message": {
+            "id": msg.id,
+            "conversation_id": msg.conversation_id,
+            "sender_type": msg.sender_type,
+            "user_id": msg.user_id,
+            "message_type": msg.message_type,
+            "content": msg.content,
+            "timestamp": msg.timestamp.isoformat() if msg.timestamp else datetime.now().isoformat(),
+            "wa_message_id": msg.wa_message_id
+        }
+    }
 
 
 @router.delete("/chat/conversations/{conversation_id}", summary="Deletar conversa")
@@ -1392,6 +1510,238 @@ async def delete_conversations_bulk(
         db.delete(convo)
     db.commit()
     return {"status": "ok", "deleted_count": count}
+
+
+@router.post("/chat/conversations/bulk-tag", summary="Etiquetar conversas em massa")
+async def bulk_tag_conversations(
+    payload: dict = Body(...),
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
+
+    labels_to_add = payload.get("labels", [])
+    if isinstance(labels_to_add, str):
+        labels_to_add = [labels_to_add]
+    labels_to_add = [l.strip() for l in labels_to_add if isinstance(l, str) and l.strip()]
+
+    if not labels_to_add:
+        raise HTTPException(status_code=400, detail="Forneça ao menos uma etiqueta para aplicar.")
+
+    select_all_pages = payload.get("select_all_pages", False)
+    ids = payload.get("ids", [])
+
+    if not select_all_pages and not ids:
+        raise HTTPException(status_code=400, detail="Nenhuma conversa selecionada para etiquetar.")
+
+    if select_all_pages:
+        query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
+        
+        tab = payload.get("tab", "todos")
+        status = payload.get("status", "open")
+        search = payload.get("search")
+        label = payload.get("label")
+        block_status = payload.get("block_status")
+        has_note = payload.get("has_note")
+        start_date = payload.get("start_date")
+        end_date = payload.get("end_date")
+        unread_only = payload.get("unread_only")
+        window_open_only = payload.get("window_open_only")
+        template_sent_24h_only = payload.get("template_sent_24h_only")
+        has_replied = payload.get("has_replied")
+
+        if status != "all":
+            query = query.filter(models.ChatConversation.status == status)
+
+        if unread_only:
+            query = query.filter(models.ChatConversation.unread_count > 0)
+
+        if window_open_only:
+            from datetime import timedelta
+            limit_time = datetime.utcnow() - timedelta(hours=24)
+            query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
+
+        if template_sent_24h_only:
+            from datetime import timedelta
+            since_24h = datetime.utcnow() - timedelta(hours=24)
+            
+            chat_convo_ids = [
+                r[0] for r in db.query(models.ChatMessage.conversation_id)
+                .filter(
+                    models.ChatMessage.timestamp >= since_24h,
+                    or_(
+                        models.ChatMessage.message_type.in_(['template', 'TEMPLATE']),
+                        models.ChatMessage.content.like('%[Template:%'),
+                        models.ChatMessage.content.like('%template%')
+                    )
+                ).distinct().all() if r[0]
+            ]
+            
+            raw_phones = [
+                r[0] for r in db.query(models.MessageStatus.phone_number)
+                .filter(
+                    models.MessageStatus.timestamp >= since_24h,
+                    models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'SENT', 'DELIVERED', 'READ']),
+                    or_(
+                        models.MessageStatus.message_type.in_(['TEMPLATE', 'template']),
+                        models.MessageStatus.template_name.isnot(None)
+                    )
+                ).distinct().all() if r[0]
+            ]
+            
+            clean_phones = set()
+            clean_phones_no_plus = set()
+            for p in raw_phones:
+                p_clean = str(p).replace('+', '').strip()
+                if p_clean:
+                    clean_phones.add(p_clean)
+                    clean_phones.add(f"+{p_clean}")
+                    clean_phones_no_plus.add(p_clean)
+            
+            conditions = []
+            if chat_convo_ids:
+                conditions.append(models.ChatConversation.id.in_(chat_convo_ids))
+            if clean_phones:
+                conditions.append(models.ChatConversation.phone.in_(list(clean_phones)))
+                conditions.append(func.replace(models.ChatConversation.phone, '+', '').in_(list(clean_phones_no_plus)))
+                
+            if conditions:
+                query = query.filter(or_(*conditions))
+            else:
+                query = query.filter(models.ChatConversation.id == -1)
+
+        if has_replied:
+            query = query.filter(models.ChatConversation.last_contact_message_at.isnot(None))
+
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                query = query.filter(models.ChatConversation.last_message_at >= start_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear start_date na etiquetagem bulk: {e_dt}")
+
+        if end_date:
+            try:
+                from datetime import time
+                end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time(23, 59, 59, 999999))
+                query = query.filter(models.ChatConversation.last_message_at <= end_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear end_date na etiquetagem bulk: {e_dt}")
+
+        if tab == "minha":
+            query = query.filter(models.ChatConversation.assigned_user_id == current_user.id)
+        elif tab == "nao_atribuida":
+            query = query.filter(models.ChatConversation.assigned_user_id == None)
+
+        if search:
+            search_term = f"%{search}%"
+            message_match = (
+                db.query(models.ChatMessage.id)
+                .filter(
+                    models.ChatMessage.conversation_id == models.ChatConversation.id,
+                    models.ChatMessage.content.ilike(search_term)
+                )
+                .exists()
+            )
+            query = query.filter(
+                models.ChatConversation.contact_name.ilike(search_term) |
+                models.ChatConversation.phone.ilike(search_term) |
+                message_match
+            )
+
+        if has_note:
+            query = query.filter(
+                models.ChatConversation.private_note.isnot(None),
+                models.ChatConversation.private_note != ''
+            )
+
+        conversations = query.all()
+
+        if label:
+            clean_label = label.strip().lower()
+            conversations = [
+                c for c in conversations
+                if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
+            ]
+    else:
+        conversations = db.query(models.ChatConversation).filter(
+            models.ChatConversation.client_id == client_id,
+            models.ChatConversation.id.in_(ids)
+        ).all()
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    count_updated = 0
+    convo_phone_set = set()
+
+    for convo in conversations:
+        current_labels = convo.labels if isinstance(convo.labels, list) else []
+        new_labels = list(current_labels)
+        updated_this = False
+        for lbl in labels_to_add:
+            if lbl.lower() not in [x.lower() for x in new_labels]:
+                new_labels.append(lbl)
+                updated_this = True
+        if updated_this:
+            convo.labels = new_labels
+            flag_modified(convo, "labels")
+            count_updated += 1
+        if convo.phone:
+            cp = str(convo.phone).replace('+', '').strip()
+            if cp:
+                convo_phone_set.add(cp)
+                convo_phone_set.add(f"+{cp}")
+
+    # Sincronização em lote com a Base de Leads (1 única query SQL em vez de 2000 queries N+1)
+    if convo_phone_set:
+        all_leads = db.query(models.WebhookLead).filter(
+            models.WebhookLead.client_id == client_id,
+            models.WebhookLead.phone.in_(list(convo_phone_set))
+        ).all()
+
+        leads_by_phone = {}
+        for lead in all_leads:
+            cp = str(lead.phone).replace('+', '').strip()
+            if cp not in leads_by_phone:
+                leads_by_phone[cp] = []
+            leads_by_phone[cp].append(lead)
+
+        existing_lead_phones = set(leads_by_phone.keys())
+
+        # Atualizar etiquetas dos leads existentes
+        for lead in all_leads:
+            existing_tags = [t.strip() for t in (lead.tags or "").split(",") if t.strip()]
+            lead_updated = False
+            for lbl in labels_to_add:
+                if lbl.lower() not in [t.lower() for t in existing_tags]:
+                    existing_tags.append(lbl)
+                    lead_updated = True
+            if lead_updated:
+                lead.tags = ", ".join(existing_tags)
+                flag_modified(lead, "tags")
+
+        # Criar registros para contatos que ainda não existiam na Base de Leads
+        new_leads = []
+        for convo in conversations:
+            if convo.phone:
+                cp = str(convo.phone).replace('+', '').strip()
+                if cp and cp not in existing_lead_phones:
+                    existing_lead_phones.add(cp)
+                    new_leads.append(models.WebhookLead(
+                        client_id=client_id,
+                        phone=cp,
+                        name=convo.contact_name or cp,
+                        tags=", ".join(labels_to_add),
+                        platform="Chatwoot",
+                        created_at=datetime.utcnow()
+                    ))
+        if new_leads:
+            db.add_all(new_leads)
+
+    db.commit()
+    return {"status": "ok", "updated_count": count_updated}
 
 
 class ResendAgentFlowPayload(BaseModel):
@@ -1566,20 +1916,230 @@ async def finish_human_handover(
     human_label = get_setting("WA_HUMAN_LABEL", "", client_id=client_id).strip()
     robo_label = get_setting("WA_ROBO_LABEL", "", client_id=client_id).strip()
 
-    current_labels = list(convo.labels or [])
-    
-    # Remover etiqueta humano
-    if human_label and human_label in current_labels:
-        current_labels.remove(human_label)
-    
-    # Adicionar etiqueta robo
-    if robo_label and robo_label not in current_labels:
-        current_labels.append(robo_label)
-        
-    convo.labels = current_labels
-    convo.human_handover_at = None
-    db.commit()
+    from services.chat_label_service import apply_webhook_labels
+    user_name = current_user.full_name or current_user.email
+    updated_convo = apply_webhook_labels(
+        db=db,
+        client_id=client_id,
+        phone=convo.phone,
+        raw_labels=robo_label if robo_label else None,
+        remove_raw_labels=human_label if human_label else None,
+        source=f"Atendente ({user_name})",
+        contact_name=convo.contact_name
+    )
+    if updated_convo:
+        updated_convo.human_handover_at = None
+        db.commit()
+        return {"status": "success", "labels": updated_convo.labels}
 
-    return {"status": "success", "labels": convo.labels}
+
+@router.get("/chat/ai-config")
+async def get_ai_config(
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+):
+    from config_loader import get_setting
+    openai_key = get_setting("OPENAI_API_KEY", "", client_id=client_id)
+    return {
+        "openai_configured": bool(openai_key and openai_key.strip())
+    }
+
+
+@router.post("/chat/conversations/{conversation_id}/analyze-doubts")
+async def analyze_conversation_doubts(
+    conversation_id: int,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from config_loader import get_setting
+    openai_key = get_setting("OPENAI_API_KEY", "", client_id=client_id)
+    if not openai_key or not openai_key.strip():
+        raise HTTPException(status_code=400, detail="Chave OPENAI_API_KEY não configurada no projeto.")
+
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    messages = db.query(models.ChatMessage).filter(
+        models.ChatMessage.conversation_id == conversation_id
+    ).order_by(models.ChatMessage.timestamp.asc()).all()
+
+    if not messages:
+        return {
+            "status": "ok",
+            "conversation_id": conversation_id,
+            "contact_name": convo.contact_name or convo.phone,
+            "has_unanswered_doubts": False,
+            "summary": "Nenhuma mensagem encontrada nesta conversa.",
+            "unanswered_doubts": [],
+            "raw_report": "Nenhuma dúvida não respondida encontrada nesta conversa."
+        }
+
+    formatted_transcript = []
+    for m in messages:
+        sender = "👤 Cliente" if m.sender_type == "contact" else "🤖 Agente/Bot"
+        formatted_transcript.append(f"{sender}: {m.content or ''}")
+
+    transcript_text = "\n".join(formatted_transcript)
+
+    openai_model = get_setting("OPENAI_API_MODEL", "gpt-4o-mini", client_id=client_id)
+    system_prompt = (
+        "Você é um especialista em Análise de Qualidade de Atendimento ao Cliente e Inteligência Artificial. "
+        "Sua missão é ler o histórico de conversa entre o Cliente e o Agente/Robô e identificar as principais dúvidas, "
+        "perguntas, problemas ou objeções do cliente que o agente/robô NÃO SOUBE RESPONDER, deu respostas genéricas/evasivas "
+        "ou simplesmente ignorou.\n\n"
+        "Regras:\n"
+        "1. Se TODAS as dúvidas do cliente foram devidamente respondidas com clareza pelo agente, declare explicitamente: "
+        "'Nenhuma dúvida não respondida encontrada nesta conversa.'\n"
+        "2. Se houver dúvidas não respondidas ou mal respondidas, liste cada uma claramente explicando a dúvida do cliente, "
+        "o que o agente respondeu de errado ou se ficou sem resposta, e o que falta treinar no robô.\n"
+        "3. Responda em Português do Brasil com formatação limpa e objetiva em tópicos."
+    )
+
+    user_prompt = f"Contato: {convo.contact_name or convo.phone} (#{convo.id})\n\nHistórico de Mensagens:\n{transcript_text}"
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as http_client:
+            openai_res = await http_client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openai_key.strip()}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": openai_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.3
+                }
+            )
+
+        if openai_res.status_code != 200:
+            logger.error(f"Erro OpenAI ({openai_res.status_code}): {openai_res.text}")
+            raise HTTPException(status_code=500, detail=f"Erro ao chamar API da OpenAI ({openai_res.status_code}).")
+
+        res_data = openai_res.json()
+        ai_content = res_data["choices"][0]["message"]["content"].strip()
+        has_doubts = "Nenhuma dúvida não respondida" not in ai_content
+
+        return {
+            "status": "ok",
+            "conversation_id": conversation_id,
+            "contact_name": convo.contact_name or convo.phone,
+            "phone": convo.phone,
+            "has_unanswered_doubts": has_doubts,
+            "raw_report": ai_content
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Erro ao analisar dúvidas por IA na conversa {conversation_id}: {exc}")
+        raise HTTPException(status_code=500, detail=f"Falha no serviço de análise por IA: {exc}")
+
+
+@router.post("/chat/conversations/analyze-doubts-bulk")
+async def analyze_conversations_doubts_bulk(
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from config_loader import get_setting
+    openai_key = get_setting("OPENAI_API_KEY", "", client_id=client_id)
+    if not openai_key or not openai_key.strip():
+        raise HTTPException(status_code=400, detail="Chave OPENAI_API_KEY não configurada no projeto.")
+
+    conversation_ids = payload.get("conversation_ids", [])
+    if not conversation_ids or not isinstance(conversation_ids, list):
+        raise HTTPException(status_code=400, detail="Nenhuma conversa selecionada para análise.")
+
+    convos = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id.in_(conversation_ids),
+        models.ChatConversation.client_id == client_id
+    ).all()
+
+    if not convos:
+        raise HTTPException(status_code=404, detail="Nenhuma conversa válida encontrada.")
+
+    combined_transcripts = []
+    for c in convos:
+        msgs = db.query(models.ChatMessage).filter(
+            models.ChatMessage.conversation_id == c.id
+        ).order_by(models.ChatMessage.timestamp.asc()).all()
+
+        formatted_msgs = []
+        for m in msgs:
+            sender = "👤 Cliente" if m.sender_type == "contact" else "🤖 Agente/Bot"
+            formatted_msgs.append(f"{sender}: {m.content or ''}")
+
+        convo_text = f"--- Conversa #{c.id} ({c.contact_name or c.phone}) ---\n" + "\n".join(formatted_msgs)
+        combined_transcripts.append(convo_text)
+
+    all_transcripts_text = "\n\n".join(combined_transcripts)
+
+    openai_model = get_setting("OPENAI_API_MODEL", "gpt-4o-mini", client_id=client_id)
+    system_prompt = (
+        "Você é um Analista de Inteligência Artificial de Atendimento. "
+        "Sua tarefa é analisar o histórico de MÚLTIPLAS conversas entre clientes e o agente/robô de atendimento. "
+        "Identifique todas as DÚVIDAS, OBJEÇÕES e PERGUNTAS dos clientes que o agente/robô NÃO SOUBE RESPONDER "
+        "ou respondeu de forma incompleta/genérica.\n\n"
+        "Gere um relatório consolidado com a seguinte estrutura em Markdown:\n"
+        "1. **Resumo Geral de Treinamento**: Visão geral de quantas conversas tinham dúvidas pendentes.\n"
+        "2. **Tópicos e Perguntas Mais Frequentes Não Respondidas**: Agrupadas por tema com sugestões de treinamento para o prompt do robô.\n"
+        "3. **Detalhamento por Contato**: Lista dos contatos e as dúvidas específicas que ficaram sem resposta em cada conversa (se não houve nenhuma no contato, informe 'Nenhuma dúvida não respondida').\n\n"
+        "Se em NENHUMA conversa foram encontradas dúvidas não respondidas, afirme explicitamente: "
+        "'Nenhuma dúvida não respondida encontrada nas conversas analisadas.'"
+    )
+
+    user_prompt = f"Total de Conversas Analisadas: {len(convos)}\n\nHistóricos de Conversas:\n{all_transcripts_text}"
+
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as http_client:
+            openai_res = await http_client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openai_key.strip()}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": openai_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.3
+                }
+            )
+
+        if openai_res.status_code != 200:
+            logger.error(f"Erro OpenAI Bulk ({openai_res.status_code}): {openai_res.text}")
+            raise HTTPException(status_code=500, detail=f"Erro ao chamar API da OpenAI ({openai_res.status_code}).")
+
+        res_data = openai_res.json()
+        ai_content = res_data["choices"][0]["message"]["content"].strip()
+        has_doubts = "Nenhuma dúvida não respondida encontrada nas conversas analisadas" not in ai_content
+
+        return {
+            "status": "ok",
+            "total_analyzed": len(convos),
+            "conversation_ids": [c.id for c in convos],
+            "has_unanswered_doubts": has_doubts,
+            "raw_report": ai_content
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Erro ao analisar dúvidas por IA em massa: {exc}")
+        raise HTTPException(status_code=500, detail=f"Falha no serviço de análise por IA em massa: {exc}")
+    else:
+        convo.human_handover_at = None
+        db.commit()
+        return {"status": "success", "labels": convo.labels}
 
 

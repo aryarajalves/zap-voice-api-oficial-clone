@@ -199,6 +199,7 @@ def get_financial_sales(
     period: str = "monthly",  # daily, weekly, monthly, yearly
     status: str = "all",      # all, approved, pending, refunded, canceled
     platform: str = "all",    # all, hotmart, kiwify, eduzz, etc.
+    product: str = "all",     # all, ou nomes separados por vírgula
     start_date: Optional[str] = None, # YYYY-MM-DD
     end_date: Optional[str] = None,   # YYYY-MM-DD
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
@@ -286,6 +287,12 @@ def get_financial_sales(
         "total_revenue": 0.0
     })
 
+    # Todos os produtos distintos (para popular dropdown no frontend)
+    all_product_names: set = set()
+
+    # Filtro por produto (suporta múltiplos nomes separados por vírgula)
+    product_list = [p.strip() for p in product.split(',') if p.strip() and p.strip() != 'all']
+
     # Detailed transactions list
     transactions = []
 
@@ -319,9 +326,18 @@ def get_financial_sales(
         elif evt in ["cartao_recusado", "pix_expirado", "chargeback"]:
             tx_status_category = "canceled"
 
+        # Coleta todos os nomes de produto distintos (antes de qualquer filtro de produto)
+        # para retornar a lista completa ao frontend
+        if p_name and p_name != "Produto Desconhecido":
+            all_product_names.add(p_name)
+
         # Apply platform filter (suporta múltiplas plataformas separadas por vírgula)
         platform_list = [p.strip().lower() for p in platform.split(',') if p.strip() and p.strip() != 'all']
         if platform_list and tx_platform not in platform_list:
+            continue
+
+        # Apply product filter (filtra por nome exato do produto)
+        if product_list and p_name not in product_list:
             continue
 
         # Apply status filter
@@ -443,11 +459,15 @@ def get_financial_sales(
 
     totals["total_revenue"] = round(totals["total_revenue"], 2)
 
+    # Lista completa de produtos distintos (ordenada alfabeticamente)
+    all_products_list = sorted(list(all_product_names))
+
     return {
         "period_type": period,
         "totals": totals,
         "rows": sorted_rows,
         "top_products": sorted_products,
+        "all_products": all_products_list,
         "transactions": transactions
     }
 

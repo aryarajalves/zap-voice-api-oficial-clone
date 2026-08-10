@@ -89,37 +89,46 @@ export const useTagManagement = ({
             const res = await fetchWithAuth(`${API_URL}/leads?${tagParams}&tag_mode=${tagMode}${excludeParams}&limit=10000`, {}, activeClient.id);
             if (res && res.ok) {
                 const data = await res.json();
-                const incoming = (data.items || []).map(lead => {
-                    const vars = {};
-                    templateVariables.forEach(v => {
-                        let val = tagVariables[v.key] || '';
-                        if (val) {
-                            val = val.replace(/\{\{nome\}\}/gi, lead.name || '');
-                            val = val.replace(/\{\{primeiro_nome\}\}/gi, (lead.name || '').split(' ')[0]);
-                            val = val.replace(/\{\{email\}\}/gi, lead.email || '');
-                            val = val.replace(/\{\{telefone\}\}/gi, lead.phone || '');
-                            val = val.replace(/\{\{produto\}\}/gi, lead.product_name || '');
+                const rawItems = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+                
+                const incoming = rawItems
+                    .filter(lead => lead && lead.phone)
+                    .map(lead => {
+                        const vars = {};
+                        if (Array.isArray(templateVariables)) {
+                            templateVariables.forEach(v => {
+                                let val = tagVariables ? (tagVariables[v.key] || '') : '';
+                                if (val) {
+                                    const nameStr = String(lead.name || '');
+                                    val = val.replace(/\{\{nome\}\}/gi, nameStr);
+                                    val = val.replace(/\{\{primeiro_nome\}\}/gi, nameStr.split(' ')[0] || '');
+                                    val = val.replace(/\{\{email\}\}/gi, String(lead.email || ''));
+                                    val = val.replace(/\{\{telefone\}\}/gi, String(lead.phone || ''));
+                                    val = val.replace(/\{\{produto\}\}/gi, String(lead.product_name || ''));
+                                }
+                                vars[v.key] = val;
+                            });
                         }
-                        vars[v.key] = val;
-                    });
 
-                    return {
-                        phone: lead.phone.replace(/\D/g, ''),
-                        vars: vars,
-                        status: 'pending',
-                        window_open: false,
-                        name: lead.name,
-                        email: lead.email
-                    };
-                });
+                        const cleanPhone = String(lead.phone || '').replace(/\D/g, '');
+                        return {
+                            phone: cleanPhone,
+                            vars: vars,
+                            status: 'pending',
+                            window_open: false,
+                            name: lead.name || '',
+                            email: lead.email || ''
+                        };
+                    })
+                    .filter(item => item.phone.length > 0);
 
                 if (incoming.length === 0) {
-                    toast.error("Nenhum contato encontrado com esta(s) etiqueta(s)");
+                    toast.error("Nenhum contato com telefone válido foi encontrado com esta(s) etiqueta(s)");
                     setIsProcessing(false);
                     return;
                 }
 
-                const contactsWithoutName = data.items.filter(lead => !lead.name || lead.name.trim() === '');
+                const contactsWithoutName = rawItems.filter(lead => !lead.name || lead.name.trim() === '');
                 const hasContactsWithoutName = contactsWithoutName.length > 0;
 
                 setContacts(prev => {

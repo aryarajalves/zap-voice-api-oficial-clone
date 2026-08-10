@@ -64,7 +64,7 @@ export function useWebhookLeads(activeClient) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(50);
   
   // Filtros base
   const [search, setSearch] = useState('');
@@ -97,13 +97,17 @@ export function useWebhookLeads(activeClient) {
   const [selectedLeads, setSelectedLeads] = useState([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // Modais de ações
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
-  // Edit Lead
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [leadToEdit, setLeadToEdit] = useState(null);
+
+  // Modal de Exportação
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState('loading'); // 'loading' | 'success' | 'error'
+  const [exportError, setExportError] = useState(null);
 
   // Clean corrupted tags
   const [isCleaningTags, setIsCleaningTags] = useState(false);
@@ -314,6 +318,12 @@ export function useWebhookLeads(activeClient) {
       toast.error("Não há dados para exportar ainda.");
       return;
     }
+
+    setIsExportModalOpen(true);
+    setIsExporting(true);
+    setExportStatus('loading');
+    setExportError(null);
+
     try {
       const { from, to } = resolveDateRange(datePreset, customDateFrom, customDateTo);
       let url = `${API_URL}/leads/export?`;
@@ -345,14 +355,25 @@ export function useWebhookLeads(activeClient) {
         document.body.appendChild(link);
         link.click();
         link.remove();
-        toast.success("Exportação concluída!");
+        
+        setExportStatus('success');
       } else {
-        throw new Error("Erro na exportação");
+        throw new Error("Não foi possível gerar a exportação dos contatos.");
       }
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao exportar leads.");
+      setExportError(err.message || "Erro ao exportar leads.");
+      setExportStatus('error');
+    } finally {
+      setIsExporting(false);
     }
+  };
+
+  const handleCloseExportModal = () => {
+    if (isExporting) return; // Não permite fechar durante o carregamento
+    setIsExportModalOpen(false);
+    setExportStatus('loading');
+    setExportError(null);
   };
 
   const executeDelete = async () => {
@@ -627,6 +648,8 @@ export function useWebhookLeads(activeClient) {
     selectAllPages, handleSelectAllPages, handleClearSelectAllPages,
     fetchLeads, fetchFilters, handleCleanTags, handleExport, executeDelete, handleSelectAll, handleSelectLead,
     updateLeadInPlace,
+    // Exportação
+    isExportModalOpen, setIsExportModalOpen, isExporting, exportStatus, exportError, handleCloseExportModal,
     // Etiquetar em massa
     isBulkTagModalOpen, setIsBulkTagModalOpen, isBulkTagging, handleBulkTag,
     // Bloquear / repouso (individual ou em massa)

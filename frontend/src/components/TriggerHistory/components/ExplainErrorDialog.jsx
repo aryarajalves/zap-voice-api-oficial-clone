@@ -27,11 +27,20 @@ const ExplainErrorDialog = ({ errorReason, onClose }) => {
                     </div>
 
                     <div>
-                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block mb-1">O que fazer com os contatos:</span>
-                        <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed bg-amber-500/10 dark:bg-yellow-500/5 p-3 rounded-xl border border-amber-500/20">
+                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block mb-1">O que fazer para resolver:</span>
+                        <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed bg-amber-500/10 dark:bg-yellow-500/5 p-3 rounded-xl border border-amber-500/20 whitespace-pre-line">
                             {explanation.acao}
                         </p>
                     </div>
+
+                    {errorReason && (
+                        <div>
+                            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider block mb-1">Mensagem Técnica da Meta:</span>
+                            <div className="text-[11px] font-mono text-rose-500 dark:text-rose-400 bg-rose-500/5 p-2.5 rounded-xl border border-rose-500/10 break-all select-text">
+                                {errorReason}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-6 flex justify-end">

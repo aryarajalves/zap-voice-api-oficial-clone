@@ -30,22 +30,10 @@ async def get_trigger_messages(
     
     if not trigger: raise HTTPException(status_code=404, detail="Disparo não encontrado")
     
-    # Reconciliar estatísticas somente para disparos já finalizados (não recalcular a cada clique durante execução)
-    FINISHED_STATUSES = ('completed', 'failed', 'cancelled', 'aborted')
-    if trigger.status in FINISHED_STATUSES:
-        from services.triggers_service import reconcile_trigger_stats_logic
-        await reconcile_trigger_stats_logic(trigger_id, client_id, db)
-        db.refresh(trigger)
-        
     child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
     all_trigger_ids = [trigger_id] + child_ids
     
-    if trigger.is_bulk:
-        from sqlalchemy import func, select
-        subquery = db.query(func.max(models.MessageStatus.id)).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids)).group_by(models.MessageStatus.phone_number).subquery()
-        base_query = db.query(models.MessageStatus).filter(models.MessageStatus.id.in_(select(subquery)))
-    else:
-        base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids))
+    base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids))
     
     # Guardar cópia da query base antes de aplicar filtros específicos para calcular a contagem total correta de cada tab
     counts_query = base_query
@@ -74,7 +62,8 @@ async def get_trigger_messages(
         elif status_filter == 'read':
             base_query = base_query.filter(or_(models.MessageStatus.status.in_(['read', 'interaction']), models.MessageStatus.is_interaction == True, models.MessageStatus.read_counted == True))
         elif status_filter == 'failed':
-            base_query = base_query.filter(
+            base_query = db.query(models.MessageStatus).filter(
+                models.MessageStatus.trigger_id.in_(all_trigger_ids),
                 models.MessageStatus.status == 'failed',
                 or_(
                     models.MessageStatus.failure_reason == None,
@@ -84,7 +73,12 @@ async def get_trigger_messages(
         elif status_filter == 'sent':
             base_query = base_query.filter(or_(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.read_counted == True))
         elif status_filter == 'queue':
-            base_query = base_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False)
+            base_query = db.query(models.MessageStatus).filter(
+                models.MessageStatus.trigger_id.in_(all_trigger_ids),
+                models.MessageStatus.status == 'sent',
+                models.MessageStatus.delivered_counted == False,
+                models.MessageStatus.read_counted == False
+            )
         elif status_filter == 'blocked':
             base_query = base_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON')
         elif status_filter in ('interaction', 'interactions'):
@@ -106,13 +100,9 @@ async def get_trigger_messages(
 
     if message_type:
         if message_type == 'template': 
-            base_query = base_query.filter(models.MessageStatus.message_type == 'TEMPLATE', models.MessageStatus.meta_price_brl > 0)
+            base_query = base_query.filter(models.MessageStatus.message_type == 'TEMPLATE')
         elif message_type == 'free': 
-            base_query = base_query.filter(or_(
-                models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE']),
-                models.MessageStatus.meta_price_brl == 0,
-                models.MessageStatus.meta_price_brl == None
-            ))
+            base_query = base_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE']))
 
     # Filtros de Busca por Telefone, DDI e DDD
     if search_phone:
@@ -124,19 +114,45 @@ async def get_trigger_messages(
     if filter_ddi:
         clean_ddi = "".join(filter(str.isdigit, filter_ddi))
         if clean_ddi:
-            # DDI geralmente é o início do número (ex: 55...)
-            base_query = base_query.filter(models.MessageStatus.phone_number.like(f"{clean_ddi}%"))
+            if clean_ddi == '55':
+                from sqlalchemy import func
+                base_query = base_query.filter(or_(
+                    models.MessageStatus.phone_number.like("55%"),
+                    func.length(models.MessageStatus.phone_number) == 10,
+                    func.length(models.MessageStatus.phone_number) == 11
+                ))
+            else:
+                base_query = base_query.filter(models.MessageStatus.phone_number.like(f"{clean_ddi}%"))
             
     if filter_ddd:
         clean_ddd = "".join(filter(str.isdigit, filter_ddd))
         if clean_ddd:
-            # DDD em número brasileiro padrão "55DD..." ou sem DDI "DD..."
-            # Procuramos por 55 + DDD no começo, ou apenas o DDD depois do DDI
-            base_query = base_query.filter(or_(
-                models.MessageStatus.phone_number.like(f"55{clean_ddd}%"),
-                # Caso o número venha sem o DDI 55
-                models.MessageStatus.phone_number.like(f"{clean_ddd}%")
-            ))
+            if filter_ddi:
+                clean_ddi = "".join(filter(str.isdigit, filter_ddi))
+                base_query = base_query.filter(models.MessageStatus.phone_number.like(f"{clean_ddi}{clean_ddd}%"))
+            else:
+                base_query = base_query.filter(or_(
+                    models.MessageStatus.phone_number.like(f"55{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"1{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"351{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"34{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"54{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"52{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"44{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"39{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"33{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"49{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"56{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"57{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"598{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"595{clean_ddd}%"),
+                    models.MessageStatus.phone_number.like(f"{clean_ddd}%")
+                ))
+
+    if trigger.is_bulk:
+        from sqlalchemy import func, select
+        subquery = base_query.with_entities(func.max(models.MessageStatus.id)).group_by(models.MessageStatus.phone_number).subquery()
+        base_query = base_query.filter(models.MessageStatus.id.in_(select(subquery)))
 
     total = base_query.count()
     items = base_query.order_by(models.MessageStatus.updated_at.desc()).offset(skip).limit(limit).all()
@@ -192,8 +208,52 @@ async def get_trigger_messages(
                     "failure_resolution": None,
                     "failure_resolved_at": None
                 })
-            total = len(virtual_items)
-            virtual_items = virtual_items[skip:skip+limit]
+        elif trigger.contacts_list and status_filter in (None, 'all', 'total') and (trigger.total_sent or 0) == 0:
+            raw = trigger.contacts_list or []
+            for idx, c in enumerate(raw):
+                phone = c if isinstance(c, str) else (c.get('phone') or c.get('whatsapp') or c.get('telefone') or c.get('number') or '')
+                name = '' if isinstance(c, str) else (c.get('nome') or c.get('name') or c.get('full_name') or c.get('{{1}}') or c.get('1') or '')
+                if not phone: continue
+
+                clean_p = "".join(filter(str.isdigit, str(phone)))
+                if search_phone and clean_p and "".join(filter(str.isdigit, search_phone)) not in clean_p:
+                    continue
+                if filter_ddi and clean_p and not clean_p.startswith("".join(filter(str.isdigit, filter_ddi))):
+                    continue
+                if filter_ddd:
+                    c_ddd = "".join(filter(str.isdigit, filter_ddd))
+                    if clean_p and not (clean_p.startswith(f"55{c_ddd}") or clean_p.startswith(c_ddd)):
+                        continue
+
+                virtual_items.append({
+                    "id": idx + 1,
+                    "trigger_id": trigger_id,
+                    "message_id": f"virtual_raw_{idx+1}",
+                    "phone_number": str(phone),
+                    "status": "pending",
+                    "failure_reason": None,
+                    "is_interaction": False,
+                    "message_type": "TEMPLATE" if trigger.template_name else "FREE_MESSAGE",
+                    "meta_price_category": None,
+                    "meta_price_brl": 0.0,
+                    "content": trigger.template_name or "Disparo em Massa",
+                    "private_note_posted": False,
+                    "memory_webhook_status": None,
+                    "memory_webhook_error": None,
+                    "chatwoot_conversation_id": None,
+                    "chatwoot_account_id": trigger.chatwoot_account_id,
+                    "chatwoot_inbox_id": trigger.chatwoot_inbox_id,
+                    "timestamp": trigger.created_at.isoformat() if trigger.created_at else None,
+                    "updated_at": trigger.created_at.isoformat() if trigger.created_at else None,
+                    "contact_name": name or str(phone),
+                    "chatwoot_url": None,
+                    "lead_tags": None,
+                    "failure_resolution": None,
+                    "failure_resolved_at": None
+                })
+        
+        total = len(virtual_items)
+        virtual_items = virtual_items[skip:skip+limit]
 
     base_url = get_setting("CHATWOOT_URL", "https://app.chatwoot.com", client_id=trigger.client_id)
     if base_url.endswith("/"): base_url = base_url[:-1]
@@ -208,18 +268,29 @@ async def get_trigger_messages(
                     name = c.get('{{1}}') or c.get('1') or c.get('nome') or c.get('name') or c.get('full_name') or c.get('contact_name') or ""
                     if clean_p: contacts_map[clean_p] = name
 
-    # Buscar os leads do client_id para obter as tags
-    leads = db.query(models.WebhookLead).filter(
-        models.WebhookLead.client_id == client_id
-    ).all()
-    
+    # Extrair os sufixos de telefone dos itens da página atual para buscar tags apenas deles
+    target_items = virtual_items if len(virtual_items) > 0 else items
+    page_phone_suffixes = set()
+    for item in target_items:
+        p = item.get("phone_number") if isinstance(item, dict) else getattr(item, "phone_number", None)
+        if p:
+            clean_p = "".join(filter(str.isdigit, str(p)))
+            if clean_p:
+                page_phone_suffixes.add(clean_p[-8:] if len(clean_p) >= 8 else clean_p)
+
     lead_tags_map = {}
-    for lead in leads:
-        if lead.phone:
-            clean_p = "".join(filter(str.isdigit, str(lead.phone)))
-            last8 = clean_p[-8:] if len(clean_p) >= 8 else clean_p
-            if last8:
-                lead_tags_map[last8] = lead.tags
+    if page_phone_suffixes:
+        like_conds = [models.WebhookLead.phone.like(f"%{suf}") for suf in page_phone_suffixes]
+        leads = db.query(models.WebhookLead.phone, models.WebhookLead.tags).filter(
+            models.WebhookLead.client_id == client_id,
+            or_(*like_conds)
+        ).all()
+        for lead_phone, tags in leads:
+            if lead_phone:
+                clean_p = "".join(filter(str.isdigit, str(lead_phone)))
+                last8 = clean_p[-8:] if len(clean_p) >= 8 else clean_p
+                if last8:
+                    lead_tags_map[last8] = tags
 
     serialized_items = []
     if len(virtual_items) > 0:
@@ -300,7 +371,7 @@ async def get_trigger_messages(
                 "failed": trigger.total_failed or 0,
                 "blocked": trigger.total_blocked or 0,
                 "interaction": trigger.total_interactions or 0,
-                "queue": trigger.queue_count or 0,
+                "queue": getattr(trigger, "queue_count", None) if getattr(trigger, "queue_count", None) is not None else max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0)),
                 "free": counts_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
                 "template": counts_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
                 "private_note": trigger.total_private_notes or 0,

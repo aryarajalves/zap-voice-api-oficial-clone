@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.6.5 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v4.5.0 — Versão Estável)
 
-Versão estável com suporte ao **Múltiplos Tokens do ManyChat com Rotação Sequencial (Round-Robin)**, **Notificação Visual de Etiqueta Adicionada via Webhook no Chat (fuso de Brasília)**, **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Página de Captura Personalizada com URLs Limpas**, **Upload Local de Imagem de Fundo de Tela Inteira**, **Fila de Retentativa de Webhook (Retry Queue)**, **Rate Limiting por Sessão JWT**, **Visualização em Tempo Real de Lembretes**, **Rastreabilidade de Status de Disparo** e **Sincronização com Worker em Container Separado**.
+Versão estável com suporte à **Análise de Dúvidas de Atendimento com IA**, **Popup Modal de Escolha de Cor para Etiquetas**, **Exibição da Quantidade de Caracteres por Marcador**, **Limite de 20 Caracteres Sem Truncamento**, **Anotações Privadas com Edição e Exclusão Segura**, **Otimização do Histórico de Disparos**, **Resiliência e Tratamento de Timeout no Worker**, **Exibição da Conta Destino e Rotação do ManyChat no Histórico de Integrações**, **Múltiplos Tokens do ManyChat com Rotação Sequencial (Round-Robin)**, **Notificação Visual de Etiqueta Adicionada via Webhook no Chat (fuso de Brasília)**, **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Página de Captura Personalizada com URLs Limpas**, **Upload Local de Imagem de Fundo de Tela Inteira**, **Fila de Retentativa de Webhook (Retry Queue)**, **Rate Limiting por Sessão JWT**, **Visualização em Tempo Real de Lembretes**, **Rastreabilidade de Status de Disparo** e **Sincronização com Worker em Container Separado**.
 
 
 
@@ -69,7 +69,7 @@ Visualização e controle de conversas diretamente no painel do ZapVoice:
 *   Geração e revogação de tokens de autenticação (`API Keys`) para garantir que apenas sistemas autorizados possam acionar webhooks públicos e rotas sensíveis do backend.
 
 ### 6. Integrações de Webhooks & Mapeamento de Contatos
-Integração nativa com as principais plataformas de vendas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark e Elementor**.
+Integração nativa com as principais plataformas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark, Elementor e ZapGroup**.
 *   **Mapeamento Completo de Status**: Mapeamento inteligente de eventos como Compra Aprovada, Pix Gerado, Boleto Impresso, Cartão Recusado, Carrinho Abandonado, Reembolso, Chargeback, Assinatura Ativa/Cancelada e Troca de Plano.
 *   **Campos Customizados de Contato**: Permite configurar regras para extrair informações do payload do webhook (como e-mail, telefone, CPF, etc.) e salvá-los no contato local do lead.
 *   **Inteligência de Vendas Casadas**: Detecção automática de ofertas **Order Bump** e campanhas de **Upsell / Upgrade** baseadas no nome do produto ou tags do payload para evitar duplicação ou segmentar funis específicos.
@@ -168,6 +168,13 @@ Content-Type: application/json
 ---
 
 ## 🗒️ Changelog
+
+### v4.5.0 — Versão Estável (2026-08-10)
+- ✅ **Análise de Dúvidas de Atendimento com IA (OpenAI)**: Análise inteligente individual e em lote para conversas, gerando relatório de dúvidas não respondidas e opção de exportação em HTML e PDF.
+- ✅ **Popup Modal de Escolha de Cor para Novas Etiquetas**: Ao criar um novo marcador no chat, exibe modal centralizado com paleta de cores predefinidas + seletor customizado `<input type="color">` e pré-visualização ao vivo.
+- ✅ **Exibição da Quantidade de Caracteres por Etiqueta**: Exibição dinâmica da contagem de caracteres de cada marcador nos cards de atendimento, barra lateral e gerenciador de etiquetas.
+- ✅ **Trava Rígida de 20 Caracteres e Exibição Sem Truncar**: Limite de 20 caracteres nos inputs frontend e backend com suporte a quebra de linha (`break-words`) para mostrar o nome completo da etiqueta sem `...`.
+- ✅ **Anotações Privadas com Edição, Remoção com Confirm Popup e Modo Maximizado**: Popup com backdrop transparente para confirmação de exclusão e modal maximizado para digitação confortável.
 
 ### v4.4.0 — Versão Estável (2026-07-14)
 - ✅ **Endpoint público de atualização de contatos** (`POST /api/contacts/{phone}/update`) com autenticação por API Key e rate limit de 100 req/min

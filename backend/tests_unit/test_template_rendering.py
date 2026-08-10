@@ -52,8 +52,26 @@ def test_sanitize_template_components_dynamic_vars():
     body_params_en = sanitized_en[0]["parameters"]
     assert body_params_en[0]["text"] == "Hello John!", f"Falha var dinamica 3: {body_params_en[0]['text']}"
     assert body_params_en[1]["text"] == "Phone: 123456789", f"Falha var dinamica 4: {body_params_en[1]['text']}"
-    print("✅ Teste 2: Substituição de {{name}} e {{phone}} com sucesso.")
-    
+    # 3. Teste de fallback seguro contra Erro Meta 131009 quando o texto do parâmetro estiver em branco
+    components_empty = [
+        {
+            "type": "body",
+            "parameters": [
+                {"type": "text", "text": "1"}, # Sem nome de contato
+                {"type": "text", "text": ""}   # Parâmetro vazio
+            ]
+        }
+    ]
+    sanitized_empty = sanitize_template_components(
+        components_empty,
+        contact_name="", # Sem nome
+        contact_phone="5511988888888"
+    )
+    empty_params = sanitized_empty[0]["parameters"]
+    assert empty_params[0]["text"] == " ", f"Falha fallback 131009 (1): '{empty_params[0]['text']}'"
+    assert empty_params[1]["text"] == " ", f"Falha fallback 131009 (2): '{empty_params[1]['text']}'"
+    print("✅ Teste 3: Proteção Erro Meta 131009 - Parâmetro em branco convertido para ' ' (espaço neutro).")
+
     print("\n🎉 Todos os testes de sanitização dinâmica passaram!")
 
 def test_render_template_body_scenarios():

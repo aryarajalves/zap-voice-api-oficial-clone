@@ -29,6 +29,7 @@ export function useContactImport(onClose, onImportComplete) {
     name: '',
     phone: '',
     email: '',
+    created_at: '',
     tags: '',
     remove_tags: ''
   });
@@ -81,6 +82,9 @@ export function useContactImport(onClose, onImportComplete) {
         
         const emailIdx = lowerHeaders.findIndex(h => h.includes('email') || h.includes('mail'));
         if (emailIdx !== -1) newMapping.email = data.headers[emailIdx];
+
+        const dateIdx = lowerHeaders.findIndex(h => h.includes('data') || h.includes('date') || h.includes('chegada') || h.includes('criado') || h.includes('created') || h.includes('entrada') || h.includes('timestamp'));
+        if (dateIdx !== -1) newMapping.created_at = data.headers[dateIdx];
 
         const tagsIdx = lowerHeaders.findIndex(h => (h.includes('tag') || h.includes('etiqueta')) && !h.includes('remove') && !h.includes('limp'));
         if (tagsIdx !== -1) newMapping.tags = data.headers[tagsIdx];
@@ -153,7 +157,7 @@ export function useContactImport(onClose, onImportComplete) {
     setFile(null);
     setPreviewData(null);
     setImportResult(null);
-    setMapping({ name: '', phone: '', email: '', tags: '', remove_tags: '' });
+    setMapping({ name: '', phone: '', email: '', created_at: '', tags: '', remove_tags: '' });
     setFixedTags([]);
     setFixedRemoveTags([]);
   };

@@ -279,7 +279,7 @@ const TagSelector = ({
                                             <textarea
                                                 rows={6}
                                                 className="w-full p-4 pr-12 bg-black/40 border border-white/5 rounded-2xl focus:border-emerald-500/50 outline-none text-white text-xs transition-all shadow-inner placeholder:text-slate-700 font-bold resize-y"
-                                                placeholder={`Texto fixo ou {{nome}} dinâmico...`}
+                                                placeholder={`Valor para ${v.label}... (Texto fixo ou {{nome}} dinâmico)`}
                                                 value={tagVariables[v.key] || ''}
                                                 onChange={(e) => setTagVariables(prev => ({ ...prev, [v.key]: e.target.value }))}
                                             />
@@ -287,7 +287,7 @@ const TagSelector = ({
                                             <input
                                                 type="text"
                                                 className="w-full p-4 pr-20 bg-black/40 border border-white/5 rounded-2xl focus:border-emerald-500/50 outline-none text-white text-xs transition-all shadow-inner placeholder:text-slate-700 font-bold"
-                                                placeholder={`Texto fixo ou {{nome}} dinâmico...`}
+                                                placeholder={`Valor para ${v.label}... (Texto fixo ou {{nome}} dinâmico)`}
                                                 value={tagVariables[v.key] || ''}
                                                 onChange={(e) => setTagVariables(prev => ({ ...prev, [v.key]: e.target.value }))}
                                             />

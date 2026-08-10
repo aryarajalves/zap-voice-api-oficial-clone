@@ -8,7 +8,7 @@ const ClientContext = createContext();
 export const useClient = () => {
     const context = useContext(ClientContext);
     if (!context) {
-        throw new Error('useClient must be used within a ClientProvider');
+        return { activeClient: null, clients: [], loading: false };
     }
     return context;
 };

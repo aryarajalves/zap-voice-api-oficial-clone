@@ -2,6 +2,8 @@ import os
 import re
 import json
 import io
+from typing import Optional, List
+from datetime import datetime, timezone
 import pandas as pd
 
 IMPORT_FILES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "imports")
@@ -41,11 +43,55 @@ def read_csv_smart(content: bytes, sep: str = ";") -> pd.DataFrame:
             continue
     # fallback — latin-1 cobre todos os 256 bytes, nunca vai lançar erro de encoding
     return pd.read_csv(io.BytesIO(content), sep=sep, encoding="latin-1")
+
+
+def _parse_datetime_smart(val) -> Optional[datetime]:
+    """Converte valores de data/hora (string, Timestamp ou número) para datetime consciente de fuso horário.
+    Suporta formatos comuns em português e ISO:
+    - '06/08/2026 15:53:15', '06/08/2026 15:53', '06/08/2026'
+    - '2026-08-06 15:53:15', '2026-08-06T15:53:15', '2026-08-06'
+    """
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    
+    if isinstance(val, (datetime, pd.Timestamp)):
+        dt = val.to_pydatetime() if isinstance(val, pd.Timestamp) else val
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    
+    s = str(val).strip()
+    if not s or s.lower() in ('nan', 'none', 'null', '', '-'):
+        return None
+
+    # 1. Tenta formatos explícitos conhecidos primeiro para evitar ambiguidade (ex: YYYY-MM-DD vs DD/MM/YYYY)
+    formats = [
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    ]
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+
+    # 2. Fallback via pd.to_datetime
+    try:
+        ts = pd.to_datetime(s, dayfirst=True, errors='coerce')
+        if not pd.isna(ts):
+            dt = ts.to_pydatetime()
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+
+    return None
 from fastapi import APIRouter, Depends, HTTPException, Header, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_, func as sa_func
-from typing import Optional, List
-from datetime import datetime, timezone
 from pydantic import BaseModel
 
 import models
@@ -82,42 +128,118 @@ def bulk_create_leads(
     current_user: models.User = Depends(require_premium)
 ):
     """
-    Cria ou atualiza uma lista de leads.
+    Cria ou atualiza uma lista de leads em massa com alta performance.
     """
     client_id = x_client_id if x_client_id else current_user.client_id
+    if not request.leads:
+        return {"status": "success", "imported": 0}
+
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    # Pré-carregar TODOS os contatos existentes em memória (1 consulta SQL ao invés de N)
+    if proj_id:
+        existing_rows = db.query(
+            models.WebhookLead.id,
+            models.WebhookLead.phone,
+            models.WebhookLead.tags,
+            models.WebhookLead.name,
+            models.WebhookLead.email,
+            models.WebhookLead.total_events,
+        ).filter(models.WebhookLead.project_id == proj_id).all()
+    else:
+        existing_rows = db.query(
+            models.WebhookLead.id,
+            models.WebhookLead.phone,
+            models.WebhookLead.tags,
+            models.WebhookLead.name,
+            models.WebhookLead.email,
+            models.WebhookLead.total_events,
+        ).filter(models.WebhookLead.client_id == client_id).all()
+
+    existing_map = {}
+    for lead_id, phone, tags, ex_name, ex_email, total_events in existing_rows:
+        if phone:
+            last_8 = str(phone)[-8:]
+            existing_map[last_8] = {
+                'id': lead_id,
+                'tags': tags,
+                'name': ex_name,
+                'email': ex_email,
+                'total_events': total_events or 0,
+            }
+
+    now = datetime.now(timezone.utc)
+    global_tags = [t.strip() for t in request.tags.split(",") if t.strip()] if request.tags else []
+
+    to_insert = []
+    to_update = []
+    seen_in_request = set()
     success_count = 0
-    
+
+    def _split_tags_local(val):
+        if not val: return []
+        return [t.strip() for t in str(val).split(",") if t.strip()]
+
     for item in request.leads:
-        # Limpeza de telefone
         clean_phone = re.sub(r"\D", "", item.phone)
         if not clean_phone or len(clean_phone) < 8:
             continue
-            
-        lead_data = {
-            "phone": clean_phone,
-            "name": item.name,
-            "email": item.email,
-            "event_type": "bulk_manual_import"
-        }
-        
-        # Mesclar tags globais do request com as tags especificas do contato se existirem
-        merged_tags = []
-        if request.tags:
-            merged_tags.extend([t.strip() for t in request.tags.split(",") if t.strip()])
-        if item.tags:
-            merged_tags.extend([t.strip() for t in item.tags.split(",") if t.strip()])
-            
-        final_tags = ", ".join(list(set(merged_tags))) if merged_tags else None
-        
-        upsert_webhook_lead(
-            db=db,
-            client_id=client_id,
-            platform="manual_bulk",
-            parsed_data=lead_data,
-            tag=final_tags
-        )
-        success_count += 1
-        
+
+        last_8 = clean_phone[-8:]
+        if last_8 in seen_in_request:
+            continue
+        seen_in_request.add(last_8)
+
+        name = item.name.strip() if item.name and item.name.strip() else None
+        email = item.email.strip() if item.email and item.email.strip() else None
+        item_tags = _split_tags_local(item.tags)
+        all_item_tags = list(dict.fromkeys(global_tags + item_tags))
+
+        if last_8 in existing_map:
+            ex = existing_map[last_8]
+            curr_tags = _split_tags_local(ex['tags'])
+            for t in all_item_tags:
+                if t not in curr_tags:
+                    curr_tags.append(t)
+
+            update_dict = {
+                'id': ex['id'],
+                'tags': ", ".join(curr_tags) if curr_tags else None,
+                'platform': 'manual_bulk',
+                'total_events': (ex['total_events'] or 0) + 1,
+                'last_event_at': now,
+                'updated_at': now,
+            }
+            if name: update_dict['name'] = name
+            if email: update_dict['email'] = email
+
+            to_update.append(update_dict)
+            success_count += 1
+        else:
+            insert_dict = {
+                'client_id': client_id,
+                'project_id': proj_id,
+                'imported_by_client_id': client_id,
+                'name': name,
+                'phone': clean_phone,
+                'email': email,
+                'last_event_type': 'importado',
+                'last_event_at': now,
+                'platform': 'manual_bulk',
+                'tags': ", ".join(all_item_tags) if all_item_tags else None,
+                'total_events': 1,
+                'created_at': now,
+                'updated_at': now,
+            }
+            to_insert.append(insert_dict)
+            success_count += 1
+
+    if to_insert:
+        db.bulk_insert_mappings(models.WebhookLead, to_insert)
+    if to_update:
+        db.bulk_update_mappings(models.WebhookLead, to_update)
+
     db.commit()
     return {"status": "success", "imported": success_count}
 
@@ -569,6 +691,10 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
                 if email and str(email).strip().lower() == 'nan':
                     email = None
 
+                # Mapeamento opcional de Data/Horário de Chegada (created_at / last_event_at)
+                raw_created_at = row.get(mapping_dict.get('created_at')) if mapping_dict.get('created_at') else None
+                parsed_created_at = _parse_datetime_smart(raw_created_at)
+
                 _INVALID_TAG_VALUES = {'nan', 'none', '-', '--', '—', '.', 'n/a', 'na', ''}
 
                 csv_tag = str(row.get(mapping_dict.get('tags'))) if mapping_dict.get('tags') else None
@@ -597,13 +723,15 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
                         'tags': ", ".join(current_tags),
                         'platform': 'manual_bulk',
                         'total_events': (ex['total_events'] or 0) + 1,
-                        'last_event_at': now,
+                        'last_event_at': parsed_created_at or now,
                         'updated_at': now,
                     }
                     if name:
                         update_dict['name'] = name
                     if email:
                         update_dict['email'] = email
+                    if parsed_created_at:
+                        update_dict['created_at'] = parsed_created_at
 
                     to_update.append(update_dict)
                     existing_map[last_8] = {**ex, 'tags': ", ".join(current_tags), 'total_events': (ex['total_events'] or 0) + 1}
@@ -623,11 +751,11 @@ def process_import_in_bg(import_id: int, content: bytes, file_extension: str, ma
                         'phone': clean_phone,
                         'email': email,
                         'last_event_type': 'importado',
-                        'last_event_at': now,
+                        'last_event_at': parsed_created_at or now,
                         'platform': 'manual_bulk',
                         'tags': ", ".join(row_tags_add) if row_tags_add else None,
                         'total_events': 1,
-                        'created_at': now,
+                        'created_at': parsed_created_at or now,
                         'updated_at': now,
                     }
                     to_insert.append(insert_dict)

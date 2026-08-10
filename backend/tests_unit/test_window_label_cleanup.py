@@ -68,6 +68,7 @@ async def test_run_closed_window_label_cleanup_window_open(mock_rabbitmq):
 @patch("services.scheduler.rabbitmq")
 async def test_run_closed_window_label_cleanup_window_closed(mock_rabbitmq):
     """Garante que remove as etiquetas se a janela de 24h estiver fechada (mais de 24h)."""
+    mock_rabbitmq.publish_event = AsyncMock()
     mock_db = MagicMock()
     
     # Config
@@ -97,15 +98,23 @@ async def test_run_closed_window_label_cleanup_window_closed(mock_rabbitmq):
     # Executa
     await run_closed_window_label_cleanup(db_session=mock_db)
     
+    # Deve ter adicionado a mensagem de sistema no banco
+    mock_db.add.assert_called_once()
+    sys_msg = mock_db.add.call_args[0][0]
+    assert isinstance(sys_msg, models.ChatMessage)
+    assert sys_msg.conversation_id == 100
+    assert sys_msg.sender_type == "system"
+    assert "O sistema removeu marcador(es) por expiração da janela de 24h" in sys_msg.content
+    assert "24-horas, robo" in sys_msg.content
+    
     # Deve ter comitado
     mock_db.commit.assert_called_once()
     
-    # Deve ter publicado o evento via WebSocket informando a lista atualizada
-    mock_rabbitmq.publish_event.assert_called_once_with("conversation_updated", {
-        "conversation_id": 100,
-        "client_id": 1,
-        "labels": ["suporte"]
-    })
+    # Deve ter publicado os eventos new_message e conversation_updated via WebSocket
+    assert mock_rabbitmq.publish_event.call_count == 2
+    events_published = [call_args[0][0] for call_args in mock_rabbitmq.publish_event.call_args_list]
+    assert "new_message" in events_published
+    assert "conversation_updated" in events_published
     
     # As etiquetas 24-horas e robo foram removidas, sobrando apenas suporte
     assert mock_convo.labels == ["suporte"]

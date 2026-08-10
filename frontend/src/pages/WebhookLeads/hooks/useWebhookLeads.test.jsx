@@ -204,4 +204,57 @@ describe('useWebhookLeads Hook', () => {
     // O reset de outros filtros é imediato pelo useEffect
     expect(result.current.page).toBe(0);
   });
+
+  it('gerencia os estados do modal de exportação ao chamar handleExport com sucesso', async () => {
+    const mockLeads = { items: [{ id: 1, name: 'Lead Teste' }], total: 1 };
+    fetchWithAuth.mockImplementation(async (url) => {
+      if (url.includes('/leads/filters')) return { ok: true, json: async () => mockFiltersEmpty };
+      if (url.includes('/leads/export')) return { ok: true, blob: async () => new Blob(['id,name\n1,Lead Teste'], { type: 'text/csv' }) };
+      return { ok: true, json: async () => mockLeads };
+    });
+
+    const { result } = renderHook(() => useWebhookLeads(mockClient));
+    await vi.waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+
+    // Mock das funções de DOM para download de arquivo
+    const originalCreateObjectURL = window.URL.createObjectURL;
+    window.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/test-uuid');
+
+    await act(async () => {
+      await result.current.handleExport();
+    });
+
+    expect(result.current.isExportModalOpen).toBe(true);
+    expect(result.current.exportStatus).toBe('success');
+    expect(result.current.isExporting).toBe(false);
+
+    // Testar fechar modal
+    act(() => {
+      result.current.handleCloseExportModal();
+    });
+    expect(result.current.isExportModalOpen).toBe(false);
+
+    window.URL.createObjectURL = originalCreateObjectURL;
+  });
+
+  it('trata erro e atualiza estado para error quando a exportação falha', async () => {
+    const mockLeads = { items: [{ id: 1, name: 'Lead Teste' }], total: 1 };
+    fetchWithAuth.mockImplementation(async (url) => {
+      if (url.includes('/leads/filters')) return { ok: true, json: async () => mockFiltersEmpty };
+      if (url.includes('/leads/export')) return { ok: false, status: 500 };
+      return { ok: true, json: async () => mockLeads };
+    });
+
+    const { result } = renderHook(() => useWebhookLeads(mockClient));
+    await vi.waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+
+    await act(async () => {
+      await result.current.handleExport();
+    });
+
+    expect(result.current.isExportModalOpen).toBe(true);
+    expect(result.current.exportStatus).toBe('error');
+    expect(result.current.exportError).toBeTruthy();
+    expect(result.current.isExporting).toBe(false);
+  });
 });

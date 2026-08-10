@@ -52,6 +52,11 @@ vi.mock('./hooks/useWebhookLeads', () => ({
     setLimit: vi.fn(),
     executeDelete: vi.fn(),
     handleCleanTags: vi.fn(),
+    isExportModalOpen: false,
+    isExporting: false,
+    exportStatus: 'loading',
+    exportError: null,
+    handleCloseExportModal: vi.fn(),
   })
 }));
 

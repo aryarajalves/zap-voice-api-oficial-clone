@@ -28,6 +28,10 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 07/08/2026 | Índices de Performance em Status de Mensagem | `message_status` | Índices nas colunas `phone_number`, `status` e índices compostos `(trigger_id, status)` e `(trigger_id, phone_number)` | `backend/scripts/add_message_status_indexes.py` |
+| 06/08/2026 | Histórico de Templates e Validação 24h | `contact_template_history`, `webhook_leads` | Tabela `contact_template_history` inteira, colunas `last_template_name`, `last_template_dispatched_at` em `webhook_leads` | `backend/scripts/add_template_history_table.py` |
+| 06/08/2026 | Campo Customizado Dinâmico do ManyChat | `webhook_event_mappings` | `manychat_custom_field` | `backend/scripts/add_manychat_custom_field_column.py` |
+| 30/07/2026 | Congelamento Histórico do Cartão WABA | `scheduled_triggers` | `waba_card_last4` | `backend/scripts/add_waba_card_last4_column.py` |
 | 22/07/2026 | Imagem de Fundo para Página de Captura | `capture_page_configs` | `bg_image_url` | `backend/add_bg_image_url_column.py` |
 | 22/07/2026 | Página de Captura Personalizável & Página de Obrigado | `capture_page_configs`, `capture_page_leads` | Tabelas completas de configuração, textos, link do WhatsApp e leads capturados | `backend/add_capture_page_tables.py` |
 | 21/07/2026 | Marcação de Urgência no Contato | `chat_conversations` | `urgent` | `backend/scripts/database/add_chat_urgent_column.py` |

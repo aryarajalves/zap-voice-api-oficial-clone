@@ -114,9 +114,19 @@ async def get_schedules(
         
         log(f"QUERY: Found {len(triggers)} triggers")
 
-
         events = []
         for t in triggers:
+            # Regra UX: Ocultar execuções/nós de delay de contatos individuais dentro de funis
+            # A aba/calendário de Agendamentos deve exibir apenas os disparos e agendamentos principais.
+            is_individual_funnel_step = not t.is_bulk and (
+                t.contact_phone is not None or 
+                t.current_node_id is not None or 
+                t.parent_id is not None or 
+                t.product_name == 'HIDDEN_CHILD'
+            )
+            if is_individual_funnel_step:
+                continue
+
             # Define Título e Tipo
             if t.is_bulk:
                 title = f"📢 Massa: {t.contact_name or t.template_name or 'Sem nome'}"

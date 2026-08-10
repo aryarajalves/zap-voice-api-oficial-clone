@@ -33,8 +33,9 @@ else:
         SQLALCHEMY_DATABASE_URL,
         pool_pre_ping=True,      # Testa conexão antes de usar (detecta conexões mortas)
         pool_recycle=3600,       # Recicla conexões a cada 1 hora (evita timeout PostgreSQL)
-        pool_size=50,            # Pool maior para workers concorrentes
-        max_overflow=50          # Permite até 100 conexões no total (50 + 50)
+        pool_size=100,           # Pool expandido para suportar disparos e eventos em massa
+        max_overflow=100,        # Permite até 200 conexões no total (100 + 100)
+        pool_timeout=60          # Tempo limite de espera por conexão ajustado para 60s
     )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

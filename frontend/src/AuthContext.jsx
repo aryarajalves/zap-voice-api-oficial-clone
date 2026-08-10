@@ -198,9 +198,10 @@ export const fetchWithAuth = async (url, options = {}, clientId = null) => {
         'Authorization': token ? `Bearer ${token}` : '',
     };
 
-    // Add X-Client-ID header if clientId is provided
-    if (clientId) {
-        headers['X-Client-ID'] = clientId.toString();
+    // Add X-Client-ID header if clientId is provided or fallback to localStorage
+    const effectiveClientId = clientId || localStorage.getItem('activeClientId') || localStorage.getItem('client_id');
+    if (effectiveClientId && effectiveClientId !== "undefined" && effectiveClientId !== "null") {
+        headers['X-Client-ID'] = effectiveClientId.toString();
     }
 
     // Only set Content-Type to JSON if it's NOT FormData and not already set

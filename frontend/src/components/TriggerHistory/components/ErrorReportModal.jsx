@@ -5,10 +5,11 @@ const ErrorReportModal = ({ errorModal, setErrorModal }) => {
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
 
-    // Resetar para página 1 ao abrir o modal
+    // Resetar para página 1 e 20 itens por página ao abrir o modal
     useEffect(() => {
         if (errorModal.isOpen) {
             setPage(1);
+            setPerPage(20);
         }
     }, [errorModal.isOpen]);
 

@@ -208,6 +208,40 @@ def _phone_suffix(phone: Optional[str]):
     return digits[-8:] if len(digits) >= 8 else digits
 
 
+@router.delete("/leads/{lead_id}/template-history", summary="Remover histórico de 24h do último template do contato")
+def reset_lead_template_history(
+    lead_id: int,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    client_id = x_client_id if x_client_id else current_user.client_id
+    lead = db.query(models.WebhookLead).filter(
+        models.WebhookLead.id == lead_id,
+        models.WebhookLead.client_id == client_id
+    ).first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Contato não encontrado.")
+
+    clean_phone = re.sub(r"\D", "", lead.phone or "")
+    if clean_phone:
+        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+        db.query(models.ContactTemplateHistory).filter(
+            models.ContactTemplateHistory.client_id == client_id,
+            or_(
+                models.ContactTemplateHistory.phone == clean_phone,
+                models.ContactTemplateHistory.phone.like(f"%{suffix}")
+            )
+        ).delete(synchronize_session=False)
+
+    lead.last_template_name = None
+    lead.last_template_dispatched_at = None
+    db.commit()
+
+    return {"success": True, "message": "Histórico do último template removido com sucesso. O contato pode receber o mesmo template novamente."}
+
+
 @router.post("/leads", response_model=schemas.WebhookLead, summary="Criar ou atualizar lead manualmente")
 def create_manual_lead(
     lead_in: schemas.WebhookLeadCreate,
@@ -1207,7 +1241,7 @@ def bulk_delete_all_leads(
     return {"status": "success", "deleted_count": deleted_count, "skipped_locked": skipped_locked, "message": msg}
 
 
-def _add_tags_to_lead(lead, new_tags_str: str) -> bool:
+def _add_tags_to_lead(lead, new_tags_str: str, db: Optional[Session] = None) -> bool:
     """Adiciona etiqueta(s) ao campo 'tags' do lead sem apagar as existentes.
     Aceita múltiplas etiquetas separadas por vírgula. Retorna True se algo mudou."""
     existing = [t.strip() for t in (lead.tags or '').split(',') if t.strip()]
@@ -1218,8 +1252,29 @@ def _add_tags_to_lead(lead, new_tags_str: str) -> bool:
             existing.append(t)
             changed = True
     if changed:
+        from sqlalchemy.orm.attributes import flag_modified
         lead.tags = ', '.join(existing)
         lead.updated_at = datetime.now()
+        flag_modified(lead, "tags")
+
+        if db and lead.phone and lead.client_id:
+            clean_phone = str(lead.phone).replace('+', '').strip()
+            target_phones = [lead.phone, clean_phone, f"+{clean_phone}"]
+            convos = db.query(models.ChatConversation).filter(
+                models.ChatConversation.client_id == lead.client_id,
+                models.ChatConversation.phone.in_(target_phones)
+            ).all()
+            for convo in convos:
+                c_labels = convo.labels if isinstance(convo.labels, list) else []
+                c_new = list(c_labels)
+                c_changed = False
+                for t in new_tags:
+                    if t.lower() not in [x.lower() for x in c_new]:
+                        c_new.append(t)
+                        c_changed = True
+                if c_changed:
+                    convo.labels = c_new
+                    flag_modified(convo, "labels")
     return changed
 
 
@@ -1246,7 +1301,7 @@ def bulk_tag_leads(
         models.WebhookLead.client_id == client_id
     ).all()
 
-    tagged_count = sum(1 for lead in leads if _add_tags_to_lead(lead, request.tag))
+    tagged_count = sum(1 for lead in leads if _add_tags_to_lead(lead, request.tag, db=db))
     db.commit()
 
     return {

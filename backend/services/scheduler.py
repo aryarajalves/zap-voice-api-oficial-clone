@@ -128,14 +128,14 @@ async def run_bulk_crash_detection(db_session=None):
 
         # Busca todos os disparos bulk em 'processing' — filtramos heartbeat em Python
         # pois last_heartbeat fica dentro do JSON processed_data
-        cutoff_processing = now_utc - timedelta(minutes=1)  # TODO: voltar para 15min em produção
+        cutoff_processing = now_utc - timedelta(minutes=15)
         candidates = db.query(models.ScheduledTrigger).filter(
             models.ScheduledTrigger.is_bulk == True,
             models.ScheduledTrigger.status == 'processing',
             models.ScheduledTrigger.updated_at < cutoff_processing,
         ).all()
 
-        HEARTBEAT_TIMEOUT = 1 * 60  # TODO: voltar para 10 minutos em produção (10 * 60)
+        HEARTBEAT_TIMEOUT = 10 * 60
         FAILURE_REASON = (
             "Servidor reiniciado durante o disparo. "
             "Este contato nao foi processado pois o sistema caiu enquanto o disparo estava em andamento."
@@ -515,25 +515,61 @@ async def run_closed_window_label_cleanup(db_session=None):
                     has_label_to_remove = False
                     new_labels = []
                     
+                    removed_labels = []
                     for lbl in convo_labels:
                         if lbl.lower() in target_labels_lower:
                             has_label_to_remove = True
+                            removed_labels.append(lbl)
                         else:
                             new_labels.append(lbl)
                             
                     if has_label_to_remove:
                         convo.labels = new_labels
+                        
+                        from services.chat_label_service import get_brasilia_now
+                        now_br = get_brasilia_now()
+                        date_str = now_br.strftime("%d/%m/%Y")
+                        time_str = now_br.strftime("%H:%M")
+                        
+                        event_text = f"O sistema removeu marcador(es) por expiração da janela de 24h em {date_str} às {time_str}: {', '.join(removed_labels)}"
+                        sys_msg = models.ChatMessage(
+                            conversation_id=convo.id,
+                            sender_type="system",
+                            message_type="text",
+                            content=event_text,
+                            timestamp=datetime.now(timezone.utc)
+                        )
+                        db.add(sys_msg)
+                        
+                        convo.last_message_content = f"Marcador(es) '{', '.join(removed_labels)}' removido(s) (janela de 24h)"
+                        convo.last_message_at = datetime.now(timezone.utc)
                         db.commit()
+                        db.refresh(sys_msg)
                         
                         # Notifica o frontend via WebSocket usando RabbitMQ
+                        payload_msg = {
+                            "id": sys_msg.id,
+                            "conversation_id": sys_msg.conversation_id,
+                            "sender_type": sys_msg.sender_type,
+                            "message_type": sys_msg.message_type,
+                            "content": sys_msg.content,
+                            "media_url": sys_msg.media_url,
+                            "meta_data": sys_msg.meta_data,
+                            "timestamp": sys_msg.timestamp.isoformat() if sys_msg.timestamp else datetime.now(timezone.utc).isoformat(),
+                            "client_id": client_id
+                        }
                         payload_ws = {
                             "conversation_id": convo.id,
+                            "id": convo.id,
                             "client_id": client_id,
-                            "labels": new_labels
+                            "labels": new_labels,
+                            "last_message_content": convo.last_message_content,
+                            "last_message_at": convo.last_message_at.isoformat() if convo.last_message_at else None
                         }
+                        await rabbitmq.publish_event("new_message", payload_msg)
                         await rabbitmq.publish_event("conversation_updated", payload_ws)
                         logger.info(f"🧹 [LABEL-CLEANUP] Janela fechada para conversa {convo.id}. "
-                                    f"Etiquetas removidas do chat interno: {target_labels}")
+                                    f"Etiquetas removidas do chat interno: {removed_labels}. Mensagem de sistema criada ({date_str} às {time_str}).")
                                     
     except Exception as e:
         logger.error(f"❌ [LABEL-CLEANUP] Erro no ciclo de limpeza de etiquetas: {e}")

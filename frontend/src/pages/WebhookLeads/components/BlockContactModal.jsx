@@ -7,7 +7,7 @@ const HOUR_PRESETS = [
   { value: 24, label: '24h' },
   { value: 48, label: '48h' },
   { value: 72, label: '72h' },
-  { value: 168, label: '7 dias' },
+  { value: 96, label: '96h' },
 ];
 
 export default function BlockContactModal({

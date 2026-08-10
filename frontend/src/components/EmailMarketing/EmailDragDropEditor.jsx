@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   FiType, FiImage, FiExternalLink, FiVideo, FiColumns, FiMinus, 
   FiTrash2, FiArrowUp, FiArrowDown, FiZap, FiDroplet, FiLayout, FiSliders
 } from 'react-icons/fi';
 import { API_URL } from '../../config';
 import { toast } from 'react-hot-toast';
+import { useClient } from '../../contexts/ClientContext';
 
 // Variáveis disponíveis na aba de contatos
 const CONTACT_VARIABLES = [
@@ -72,10 +73,12 @@ export function exportBlocksToHtml(blocks, globalStyles) {
       case 'video':
         return `
           <div style="margin-bottom: 16px; text-align: center;">
-            <a href="${b.url || '#'}" target="_blank" style="text-decoration: none; display: block;">
-              <div style="background-color: #0f172a; padding: 32px 16px; border-radius: 8px; color: #ffffff; font-family: Arial, sans-serif; font-weight: bold;">
-                ▶️ Assistir ao Vídeo: ${b.title || 'Clique para Assistir'}
-              </div>
+            <video controls width="100%" style="max-width: 100%; border-radius: 8px; margin-bottom: 8px; display: block;">
+              <source src="${b.url || '#'}" type="video/mp4">
+              Seu navegador não suporta a exibição de vídeos.
+            </video>
+            <a href="${b.url || '#'}" target="_blank" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #0f172a; color: #ffffff; border-radius: 6px; font-family: Arial, sans-serif; font-size: 13px; font-weight: bold;">
+              ▶️ Assistir ao Vídeo: ${b.title || 'Clique para Assistir'}
             </a>
           </div>
         `;
@@ -112,58 +115,157 @@ export function exportBlocksToHtml(blocks, globalStyles) {
   `.trim();
 }
 
-// Parser simples para re-converter o HTML salvo de volta em blocos editáveis no Drag & Drop
-function parseHtmlToBlocks(html) {
-  if (!html) return null;
+// Parser para re-converter o HTML salvo de volta em blocos editáveis no Drag & Drop
+export function parseHtmlToBlocks(html) {
+  if (!html || typeof html !== 'string' || !html.trim()) return null;
 
-  let outerBg = '#b20505';
-  const outerBgMatch = html.match(/background-color:\s*([^;"]+)/i);
-  if (outerBgMatch && outerBgMatch[1]) {
-    outerBg = outerBgMatch[1].trim();
-  }
+  try {
+    let outerBg = '#b20505';
+    const bgMatch = html.match(/background-color:\s*([^;"]+)/i);
+    if (bgMatch && bgMatch[1]) {
+      const foundBg = bgMatch[1].trim();
+      if (foundBg && foundBg !== 'inherit' && foundBg !== 'transparent') {
+        outerBg = foundBg;
+      }
+    }
 
-  // Se for HTML completo gerado pelo editor
-  const parsedBlocks = [];
-  const textMatches = [...html.matchAll(/<div[^>]*font-size:\s*(\d+)px[^>]*color:\s*([^;"]+)[^>]*>(.*?)<\/div>/gis)];
+    if (typeof window !== 'undefined' && window.DOMParser) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
 
-  if (textMatches.length > 0) {
-    textMatches.forEach((m, idx) => {
-      const fontSize = Number(m[1]) || 15;
-      const color = m[2] || '#334155';
-      const rawContent = m[3].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>?/gm, '').trim();
+      const cardTd = doc.querySelector('td[style*="padding"]') || doc.querySelector('table td') || doc.body;
+      const children = Array.from(cardTd.children);
 
-      if (rawContent) {
-        parsedBlocks.push({
-          id: `b-parsed-${idx}`,
-          type: 'text',
-          content: rawContent,
-          fontSize,
-          color,
-          textAlign: 'left'
+      const blocks = [];
+
+      if (children.length > 0) {
+        children.forEach((el, idx) => {
+          const id = `b-restored-${idx}-${Date.now()}`;
+          const textContent = el.textContent || '';
+          const innerHtml = el.innerHTML || '';
+
+          // 1. Imagem
+          const img = el.querySelector('img') || (el.tagName === 'IMG' ? el : null);
+          if (img) {
+            blocks.push({
+              id,
+              type: 'image',
+              url: img.getAttribute('src') || '',
+              alt: img.getAttribute('alt') || 'Imagem',
+              align: el.style?.textAlign || img.parentElement?.style?.textAlign || 'center',
+              borderRadius: 8
+            });
+            return;
+          }
+
+          // 2. Vídeo
+          if (textContent.includes('Assistir ao Vídeo') || el.querySelector('video') || el.tagName === 'VIDEO') {
+            const aTag = el.querySelector('a');
+            const videoTag = el.querySelector('video');
+            const titleMatch = textContent.replace(/▶️\s*Assistir ao Vídeo:\s*/i, '').trim();
+            blocks.push({
+              id,
+              type: 'video',
+              title: titleMatch || 'Vídeo',
+              url: aTag?.getAttribute('href') || videoTag?.querySelector('source')?.getAttribute('src') || 'https://'
+            });
+            return;
+          }
+
+          // 3. Botão CTA
+          const btnAnchor = el.querySelector('a[style*="background-color"]') || (el.tagName === 'A' && el.style?.backgroundColor ? el : null);
+          if (btnAnchor) {
+            const bgColor = btnAnchor.style?.backgroundColor || '#2563eb';
+            const textColor = btnAnchor.style?.color || '#ffffff';
+            blocks.push({
+              id,
+              type: 'button',
+              text: btnAnchor.textContent?.trim() || 'Clique Aqui',
+              url: btnAnchor.getAttribute('href') || 'https://',
+              bgColor,
+              textColor,
+              align: el.style?.textAlign || 'center',
+              borderRadius: 8
+            });
+            return;
+          }
+
+          // 4. Divisor HR
+          if (el.querySelector('hr') || el.tagName === 'HR') {
+            const hr = el.querySelector('hr') || (el.tagName === 'HR' ? el : null);
+            const styleAttr = hr?.getAttribute('style') || '';
+            const borderTopMatch = styleAttr.match(/border-top:\s*(\d+)px\s+solid\s+([^;"]+)/i);
+            const marginMatch = styleAttr.match(/margin:\s*(\d+)px/i);
+
+            blocks.push({
+              id,
+              type: 'divider',
+              thickness: borderTopMatch ? Number(borderTopMatch[1]) : 1,
+              color: borderTopMatch ? borderTopMatch[2].trim() : '#e2e8f0',
+              margin: marginMatch ? Number(marginMatch[1]) : 20
+            });
+            return;
+          }
+
+          // 5. Duas colunas (tabela interna)
+          if (el.tagName === 'TABLE' && el.querySelectorAll('td').length >= 2) {
+            const tds = el.querySelectorAll('td');
+            blocks.push({
+              id,
+              type: 'columns_2',
+              col1Text: (tds[0]?.innerHTML || tds[0]?.textContent || '').replace(/<br\s*\/?>/gi, '\n').trim(),
+              col2Text: (tds[1]?.innerHTML || tds[1]?.textContent || '').replace(/<br\s*\/?>/gi, '\n').trim()
+            });
+            return;
+          }
+
+          // 6. Texto / HTML Geral
+          let cleanContent = innerHtml.replace(/<br\s*\/?>/gi, '\n').replace(/<p[^>]*>/gi, '').replace(/<\/p>/gi, '\n').trim();
+          if (!cleanContent) cleanContent = textContent.trim();
+
+          if (cleanContent) {
+            const fontSizeMatch = el.getAttribute('style')?.match(/font-size:\s*(\d+)px/i);
+            const colorMatch = el.getAttribute('style')?.match(/color:\s*([^;"]+)/i);
+            const alignMatch = el.getAttribute('style')?.match(/text-align:\s*([^;"]+)/i);
+
+            blocks.push({
+              id,
+              type: 'text',
+              content: cleanContent,
+              fontSize: fontSizeMatch ? Number(fontSizeMatch[1]) : 16,
+              color: colorMatch ? colorMatch[1].trim() : '#1e293b',
+              textAlign: alignMatch ? alignMatch[1].trim() : 'left'
+            });
+          }
         });
       }
-    });
+
+      if (blocks.length > 0) {
+        return {
+          globalStyles: { outerBgColor: outerBg, cardBgColor: '#ffffff', cardWidth: 600, padding: 24 },
+          blocks
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao restaurar blocos de HTML:', err);
   }
 
-  // Tenta extrair botões salvos
-  const buttonMatches = [...html.matchAll(/<a[^>]*href="([^"]*)"[^>]*background-color:\s*([^;"]+)[^>]*color:\s*([^;"]+)[^>]*>(.*?)<\/a>/gis)];
-  buttonMatches.forEach((bm, idx) => {
-    parsedBlocks.push({
-      id: `b-btn-${idx}`,
-      type: 'button',
-      text: bm[4].replace(/<[^>]*>?/gm, '').trim() || 'Botão CTA',
-      url: bm[1] || 'https://',
-      bgColor: bm[2] || '#2563eb',
-      textColor: bm[3] || '#ffffff',
-      align: 'center',
-      borderRadius: 8
-    });
-  });
-
-  if (parsedBlocks.length > 0) {
+  // Fallback se não for HTML estruturado: criar um bloco de texto com todo o conteúdo
+  const cleanRawText = html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>?/gm, '').trim();
+  if (cleanRawText) {
     return {
-      globalStyles: { outerBgColor: outerBg, cardBgColor: '#ffffff', cardWidth: 600, padding: 24 },
-      blocks: parsedBlocks
+      globalStyles: { outerBgColor: '#b20505', cardBgColor: '#ffffff', cardWidth: 600, padding: 24 },
+      blocks: [
+        {
+          id: `b-fallback-${Date.now()}`,
+          type: 'text',
+          content: cleanRawText,
+          fontSize: 16,
+          color: '#1e293b',
+          textAlign: 'left'
+        }
+      ]
     };
   }
 
@@ -171,6 +273,7 @@ function parseHtmlToBlocks(html) {
 }
 
 export default function EmailDragDropEditor({ initialHtml, onChangeHtml }) {
+  const { activeClient } = useClient();
   const [globalStyles, setGlobalStyles] = useState({
     outerBgColor: '#b20505', // Vermelho elegante por padrão
     cardBgColor: '#ffffff',
@@ -178,7 +281,7 @@ export default function EmailDragDropEditor({ initialHtml, onChangeHtml }) {
     padding: 24
   });
 
-  const [blocks, setBlocks] = useState([
+  const DEFAULT_BLOCKS = [
     {
       id: 'b-1',
       type: 'text',
@@ -197,22 +300,35 @@ export default function EmailDragDropEditor({ initialHtml, onChangeHtml }) {
       align: 'center',
       borderRadius: 8
     }
-  ]);
+  ];
 
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [blocks, setBlocks] = useState(DEFAULT_BLOCKS);
+  const lastInitialHtmlRef = useRef(null);
+  const lastExportedHtmlRef = useRef(null);
 
-  // Restaura os blocos e cor de fundo quando um template salvo é aberto (apenas na carga inicial)
+  // Restaura os blocos e cor de fundo quando um template salvo é aberto
   useEffect(() => {
-    if (initialHtml && !isInitialized) {
+    // Evita loop de re-renders (flicker): se o initialHtml for o mesmo que acabou de ser exportado por este componente, ignora
+    if (initialHtml && initialHtml === lastExportedHtmlRef.current) {
+      return;
+    }
+
+    if (initialHtml && initialHtml !== lastInitialHtmlRef.current) {
+      lastInitialHtmlRef.current = initialHtml;
+      lastExportedHtmlRef.current = initialHtml;
       const restored = parseHtmlToBlocks(initialHtml);
       if (restored && restored.blocks && restored.blocks.length > 0) {
         setGlobalStyles(restored.globalStyles);
         setBlocks(restored.blocks);
         setActiveBlockId(restored.blocks[0].id);
       }
-      setIsInitialized(true);
+    } else if (!initialHtml && lastInitialHtmlRef.current !== null) {
+      lastInitialHtmlRef.current = null;
+      lastExportedHtmlRef.current = null;
+      setBlocks(DEFAULT_BLOCKS);
+      setActiveBlockId(DEFAULT_BLOCKS[0].id);
     }
-  }, [initialHtml, isInitialized]);
+  }, [initialHtml]);
 
   const [activeBlockId, setActiveBlockId] = useState('b-1');
   const [activeTab, setActiveTab] = useState('blocks'); // 'blocks' | 'styles'
@@ -220,6 +336,7 @@ export default function EmailDragDropEditor({ initialHtml, onChangeHtml }) {
   // Sempre que os blocos ou estilos mudarem, notifica o componente pai com o HTML gerado
   useEffect(() => {
     const generatedHtml = exportBlocksToHtml(blocks, globalStyles);
+    lastExportedHtmlRef.current = generatedHtml;
     if (onChangeHtml) onChangeHtml(generatedHtml);
   }, [blocks, globalStyles]);
 
@@ -523,8 +640,29 @@ export default function EmailDragDropEditor({ initialHtml, onChangeHtml }) {
                   )}
 
                   {b.type === 'video' && (
-                    <div className="p-4 bg-slate-900 text-white rounded-xl text-center font-bold text-xs flex items-center justify-center gap-2">
-                      ▶️ {b.title}
+                    <div style={{ textAlign: 'center' }}>
+                      {b.url && b.url !== 'https://' && b.url !== '#' ? (
+                        <div className="space-y-2">
+                          <video 
+                            controls 
+                            className="w-full rounded-xl max-h-[360px] bg-black shadow-lg mx-auto"
+                            src={b.url}
+                          >
+                            Seu navegador não suporta a exibição de vídeos.
+                          </video>
+                          <div className="text-xs text-gray-400 font-semibold flex items-center justify-center gap-1">
+                            <span>▶️ {b.title || 'Vídeo sem título'}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-6 bg-slate-900 border-2 border-dashed border-red-500/30 text-white rounded-xl text-center font-bold text-xs flex flex-col items-center justify-center gap-2">
+                          <FiVideo size={32} className="text-red-500 animate-pulse" />
+                          <span className="text-sm font-bold text-white">{b.title || 'Nenhum vídeo selecionado'}</span>
+                          <span className="text-[11px] text-gray-400 font-normal max-w-sm">
+                            Faça o upload do vídeo (.mp4, .webm, .mov) no painel lateral à direita ou insira a URL pública.
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -614,13 +752,17 @@ export default function EmailDragDropEditor({ initialHtml, onChangeHtml }) {
                       if (!file) return;
                       try {
                         const token = localStorage.getItem('token');
+                        const clientId = activeClient?.id || localStorage.getItem('activeClientId') || localStorage.getItem('client_id') || '1';
                         const uploadFormData = new FormData();
                         uploadFormData.append('file', file);
 
                         toast.loading("Enviando imagem...", { id: 'img-upload' });
                         const res = await fetch(`${API_URL}/upload`, {
                           method: 'POST',
-                          headers: { Authorization: `Bearer ${token}` },
+                          headers: { 
+                            Authorization: `Bearer ${token}`,
+                            'X-Client-ID': String(clientId)
+                          },
                           body: uploadFormData
                         });
 
@@ -663,6 +805,125 @@ export default function EmailDragDropEditor({ initialHtml, onChangeHtml }) {
                   <textarea
                     rows={3} value={activeBlock.col2Text}
                     onChange={e => updateActiveBlock('col2Text', e.target.value)}
+                    className="w-full p-2 bg-slate-800 border border-white/10 rounded-lg text-xs text-white"
+                  />
+                </div>
+              </>
+            )}
+
+            {activeBlock.type === 'divider' && (
+              <>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Espessura da Linha (Tamanho): {activeBlock.thickness || 1}px
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={activeBlock.thickness || 1}
+                    onChange={e => updateActiveBlock('thickness', Number(e.target.value))}
+                    className="w-full accent-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Cor da Linha do Divisor:
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={activeBlock.color || '#e2e8f0'}
+                      onChange={e => updateActiveBlock('color', e.target.value)}
+                      className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
+                    />
+                    <input
+                      type="text"
+                      value={activeBlock.color || '#e2e8f0'}
+                      onChange={e => updateActiveBlock('color', e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-slate-800 border border-white/10 rounded-lg text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Espaçamento Vertical (Margem): {activeBlock.margin || 20}px
+                  </label>
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    step="5"
+                    value={activeBlock.margin || 20}
+                    onChange={e => updateActiveBlock('margin', Number(e.target.value))}
+                    className="w-full accent-blue-500"
+                  />
+                </div>
+              </>
+            )}
+
+            {activeBlock.type === 'video' && (
+              <>
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-gray-300">Upload de Vídeo (do computador):</label>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      try {
+                        const token = localStorage.getItem('token');
+                        const clientId = activeClient?.id || localStorage.getItem('activeClientId') || localStorage.getItem('client_id') || '1';
+                        const uploadFormData = new FormData();
+                        uploadFormData.append('file', file);
+
+                        toast.loading("Enviando vídeo para o servidor...", { id: 'video-upload' });
+                        const res = await fetch(`${API_URL}/upload`, {
+                          method: 'POST',
+                          headers: { 
+                            Authorization: `Bearer ${token}`,
+                            'X-Client-ID': String(clientId)
+                          },
+                          body: uploadFormData
+                        });
+
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || "Erro no upload do vídeo.");
+                        
+                        updateActiveBlock('url', data.url);
+                        if (!activeBlock.title || activeBlock.title === 'Assistir ao Vídeo Exclusivo') {
+                          updateActiveBlock('title', file.name);
+                        }
+                        toast.success("Vídeo enviado e player atualizado!", { id: 'video-upload' });
+                      } catch (err) {
+                        toast.error(err.message || "Erro ao enviar vídeo.", { id: 'video-upload' });
+                      }
+                    }}
+                    className="w-full text-xs text-gray-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-700 cursor-pointer"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-white/10">
+                  <label className="block text-xs text-gray-400 mb-1">OU URL Pública / Link do Vídeo:</label>
+                  <input
+                    type="text"
+                    value={activeBlock.url || ''}
+                    onChange={e => updateActiveBlock('url', e.target.value)}
+                    placeholder="https://exemplo.com/meu-video.mp4"
+                    className="w-full p-2 bg-slate-800 border border-white/10 rounded-lg text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Título / Legenda do Vídeo:</label>
+                  <input
+                    type="text"
+                    value={activeBlock.title || ''}
+                    onChange={e => updateActiveBlock('title', e.target.value)}
+                    placeholder="Ex: Assistir ao Vídeo Exclusivo"
                     className="w-full p-2 bg-slate-800 border border-white/10 rounded-lg text-xs text-white"
                   />
                 </div>

@@ -183,29 +183,24 @@ async def list_dispatches(
         # Calcular queue_count dinamicamente baseado nos contatos pendentes da fila do WhatsApp (em lote)
         # de forma deduplicada por telefone idêntica ao modal do frontend
         try:
-            if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted']:
-                trigger.queue_count = 0
+            from sqlalchemy import func as sqlfunc, select
+            base_queue_q = db.query(models.MessageStatus).filter(
+                models.MessageStatus.trigger_id == trigger.id,
+                models.MessageStatus.status == 'sent',
+                models.MessageStatus.delivered_counted == False,
+                models.MessageStatus.read_counted == False
+            )
+            if trigger.is_bulk:
+                subq = base_queue_q.with_entities(
+                    sqlfunc.max(models.MessageStatus.id).label("max_id")
+                ).group_by(models.MessageStatus.phone_number).subquery()
+                trigger.queue_count = db.query(models.MessageStatus).filter(
+                    models.MessageStatus.id.in_(select(subq.c.max_id))
+                ).count()
             else:
-                child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger.id).all()]
-                all_ids = [trigger.id] + child_ids
-                if trigger.is_bulk:
-                    from sqlalchemy import func as sqlfunc
-                    subq = db.query(sqlfunc.max(models.MessageStatus.id)).filter(models.MessageStatus.trigger_id.in_(all_ids)).group_by(models.MessageStatus.phone_number).subquery()
-                    trigger.queue_count = db.query(models.MessageStatus).filter(
-                        models.MessageStatus.id.in_(subq),
-                        models.MessageStatus.status == 'sent',
-                        models.MessageStatus.delivered_counted == False,
-                        models.MessageStatus.read_counted == False
-                    ).count()
-                else:
-                    trigger.queue_count = db.query(models.MessageStatus).filter(
-                        models.MessageStatus.trigger_id.in_(all_ids),
-                        models.MessageStatus.status == 'sent',
-                        models.MessageStatus.delivered_counted == False,
-                        models.MessageStatus.read_counted == False
-                    ).count()
+                trigger.queue_count = base_queue_q.count()
         except Exception as e:
-            trigger.queue_count = 0
+            trigger.queue_count = max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0))
 
         # Atribuir follow-up pré-calculado
         followup = followup_map.get(trigger.id)

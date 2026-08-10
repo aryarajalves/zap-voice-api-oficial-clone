@@ -28,6 +28,35 @@ _TAG_POOL = [
     "trial", "inativo", "promotor", "prospect", "recuperacao",
 ]
 
+_SCALE_TEST_DDIS = [
+    # 🇧🇷 BRASIL (+55) — Todos os 67 DDDs do Brasil
+    ("55", "11"), ("55", "12"), ("55", "13"), ("55", "14"), ("55", "15"), ("55", "16"), ("55", "17"), ("55", "18"), ("55", "19"), # SP
+    ("55", "21"), ("55", "22"), ("55", "24"), # RJ
+    ("55", "27"), ("55", "28"), # ES
+    ("55", "31"), ("55", "32"), ("55", "33"), ("55", "34"), ("55", "35"), ("55", "37"), ("55", "38"), # MG
+    ("55", "41"), ("55", "42"), ("55", "43"), ("55", "44"), ("55", "45"), ("55", "46"), # PR
+    ("55", "47"), ("55", "48"), ("55", "49"), # SC
+    ("55", "51"), ("55", "53"), ("55", "54"), ("55", "55"), # RS
+    ("55", "61"), ("55", "62"), ("55", "63"), ("55", "64"), ("55", "65"), ("55", "66"), ("55", "67"), ("55", "68"), ("55", "69"), # CO / Norte
+    ("55", "71"), ("55", "73"), ("55", "74"), ("55", "75"), ("55", "77"), ("55", "79"), # Nordeste (BA/SE)
+    ("55", "81"), ("55", "82"), ("55", "83"), ("55", "84"), ("55", "85"), ("55", "86"), ("55", "87"), ("55", "88"), ("55", "89"), # Nordeste (PE/AL/PB/RN/CE/PI)
+    ("55", "91"), ("55", "92"), ("55", "93"), ("55", "94"), ("55", "95"), ("55", "96"), ("55", "97"), ("55", "98"), ("55", "99"), # Norte (PA/AM/RR/AP/MA)
+    # 🌎 INTERNACIONAL (Diversos países e áreas)
+    ("1", "212"), ("1", "305"), ("1", "310"), ("1", "415"), ("1", "312"), # EUA (+1)
+    ("351", "91"), ("351", "92"), ("351", "96"), # Portugal (+351)
+    ("34", "61"), ("34", "91"), # Espanha (+34)
+    ("54", "11"), ("54", "351"), # Argentina (+54)
+    ("52", "55"), ("52", "33"), # México (+52)
+    ("44", "20"), ("44", "161"), # Reino Unido (+44)
+    ("39", "06"), ("39", "02"), # Itália (+39)
+    ("33", "01"), ("33", "04"), # França (+33)
+    ("49", "30"), ("49", "89"), # Alemanha (+49)
+    ("56", "02"), ("56", "32"), # Chile (+56)
+    ("57", "601"), ("57", "604"), # Colômbia (+57)
+    ("598", "99"), ("598", "98"), # Uruguai (+598)
+    ("595", "981"), ("595", "971"), # Paraguai (+595)
+]
+
 router = APIRouter()
 
 @router.post("/stress-test", summary="Iniciar um Teste de Estresse e Escala")
@@ -58,18 +87,28 @@ async def start_stress_test(
     if number_of_contacts <= 0 or number_of_contacts > 20000:
         raise HTTPException(status_code=400, detail="O número de contatos deve ser entre 1 e 20.000")
 
-    # Gerar contatos fictícios
+    # Gerar contatos fictícios com DDIs variados
     contacts_data = []
+    ddi_count = len(_SCALE_TEST_DDIS)
     for i in range(1, number_of_contacts + 1):
-        phone = f"+551199999{i:04d}"
+        ddi, ddd = _SCALE_TEST_DDIS[(i - 1) % ddi_count]
+        first_name = _FIRST_NAMES[(i - 1) % len(_FIRST_NAMES)]
+        last_name = _LAST_NAMES[(i - 1) % len(_LAST_NAMES)]
+        contact_name = f"{first_name} {last_name}"
+        if ddi == "55":
+            phone = f"55{ddd}9{10000000 + i}"
+        elif ddi == "1":
+            phone = f"1{ddd}{1000000 + i}"
+        else:
+            phone = f"{ddi}{ddd}9{100000 + i}"
         contacts_data.append({
             "id": 100000 + i,
             "phone": phone,
-            "name": f"Simulado Contato {i}",
+            "name": contact_name,
             "inbox_id": 1,
             "meta": {
                 "sender": {
-                    "name": f"Simulado Contato {i}",
+                    "name": contact_name,
                     "phone_number": phone
                 }
             }
@@ -88,6 +127,7 @@ async def start_stress_test(
         template_language="pt_BR",
         status='processing', # Começa imediatamente em processing
         is_bulk=True,
+        is_stress_test=True,
         contacts_list=contacts_data,
         total_contacts=number_of_contacts,
         scheduled_time=datetime.now(timezone.utc),
@@ -163,12 +203,13 @@ def stress_test_contacts(
     now = datetime.now(timezone.utc)
     to_insert = []
 
+    ddi_count = len(_SCALE_TEST_DDIS)
     for i in range(number):
         first = random.choice(_FIRST_NAMES)
         last = random.choice(_LAST_NAMES)
         name = f"{first} {last}"
-        # Telefone único: 55 + 11 + 9 + 8 dígitos baseados no índice
-        phone = f"5511{900000000 + i:09d}"
+        ddi, ddd = _SCALE_TEST_DDIS[i % ddi_count]
+        phone = f"{ddi}{ddd}9{1000000 + i:06d}"
         email = f"{first.lower()}.{last.lower()}{i}@teste-escala.com"
 
         # N etiquetas aleatórias do pool + etiqueta identificadora do teste

@@ -122,6 +122,7 @@ const PLATFORM_OPTIONS = [
   { value: 'pagtrust', label: 'PagTrust' },
   { value: 'pepper',   label: 'Pepper' },
   { value: 'ticto',    label: 'Ticto' },
+  { value: 'zapgroup', label: 'ZapGroup' },
 ];
 
 function PlatformSelect({ value, onChange }) {

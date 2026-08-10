@@ -19,12 +19,12 @@ logging.basicConfig(
 logger = setup_logger("Worker")
 
 # Worker Configuration
-PREFETCH_COUNT = int(os.getenv("RABBITMQ_PREFETCH_COUNT", 100))
+EVENTS_PREFETCH_COUNT = int(os.getenv("RABBITMQ_EVENTS_PREFETCH_COUNT", 30))
 MESSAGE_DELAY = float(os.getenv("RABBITMQ_MESSAGE_DELAY", 1.0))
 
 async def start_worker():
     """Inicia o worker e conecta às filas"""
-    logger.info(f"👷 Iniciando ZapVoice Worker Modular | Prefetch Funis: {PREFETCH_COUNT} | Delay: {MESSAGE_DELAY}s")
+    logger.info(f"👷 Iniciando ZapVoice Worker Modular | Prefetch Eventos: {EVENTS_PREFETCH_COUNT} | Delay: {MESSAGE_DELAY}s")
     
     # Conecta ao RabbitMQ
     await rabbitmq.connect()
@@ -37,7 +37,7 @@ async def start_worker():
     await rabbitmq.consume("agent_memory_webhook_queue", handle_agent_memory_webhook, prefetch_count=1)
     
     logger.info("📡 Configurando consumidor: whatsapp_events")
-    await rabbitmq.consume("whatsapp_events", handle_whatsapp_event, prefetch_count=10)
+    await rabbitmq.consume("whatsapp_events", handle_whatsapp_event, prefetch_count=EVENTS_PREFETCH_COUNT)
     
     logger.info("📡 Configurando consumidor: zapvoice_funnel_executions")
     await rabbitmq.consume("zapvoice_funnel_executions", handle_funnel_execution, prefetch_count=5)

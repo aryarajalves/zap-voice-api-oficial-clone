@@ -93,20 +93,21 @@ const ChildrenFunnelsModal = ({ childrenModal, setChildrenModal, setMonitoringTr
     if (!childrenModal.isOpen) return null;
 
     const filterType = childrenModal.filterType || 'all';
-    let displayChildren = childrenModal.children;
+    const rawChildren = Array.isArray(childrenModal.children) ? childrenModal.children : [];
+    let displayChildren = rawChildren;
     let modalTitle = 'Funis Iniciados';
     let modalIcon = '🚀';
 
     if (filterType === 'followup') {
-        displayChildren = childrenModal.children.filter(child => child.is_followup);
+        displayChildren = rawChildren.filter(child => child.is_followup);
         modalTitle = 'Follow-up Ativado';
         modalIcon = '⏳';
     } else if (filterType === 'interaction') {
-        displayChildren = childrenModal.children.filter(child => child.is_interaction && !child.skip_block_check);
+        displayChildren = rawChildren.filter(child => child.is_interaction && !child.skip_block_check);
         modalTitle = 'Funis de Interação Iniciados';
         modalIcon = '🔄';
     } else if (filterType === 'block') {
-        displayChildren = childrenModal.children.filter(child => child.skip_block_check);
+        displayChildren = rawChildren.filter(child => child.skip_block_check);
         modalTitle = 'Funis de Bloqueio Iniciados';
         modalIcon = '🚫';
     }

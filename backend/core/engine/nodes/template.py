@@ -76,6 +76,14 @@ async def handle_template_node(db, trigger, node, chatwoot, conversation_id, con
                 return "abort"
 
     if template_name:
+        from services.template_history_service import is_template_sent_in_last_24h, record_template_dispatch
+        if is_template_sent_in_last_24h(db, trigger.client_id, contact_phone, template_name):
+            log_node_execution(
+                db, trigger, current_node_id, "completed",
+                f"Pulado: Template '{template_name}' já enviado nas últimas 24h para {contact_phone}."
+            )
+            return {"status": "continue", "conversation_id": conversation_id}
+
         p_msg = data.get("privateMessage", "")
         result = await chatwoot.send_template(contact_phone, template_name, language, components)
         
@@ -87,6 +95,7 @@ async def handle_template_node(db, trigger, node, chatwoot, conversation_id, con
             return "abort"
         
         if isinstance(result, dict) and result.get("messages"):
+            record_template_dispatch(db, trigger.client_id, contact_phone, template_name, trigger.id)
             raw_id = result["messages"][0].get("id")
             wamid = raw_id.replace("wamid.", "") if raw_id else raw_id
             if wamid:

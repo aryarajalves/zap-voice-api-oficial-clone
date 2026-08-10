@@ -162,18 +162,21 @@ export const useContactsModalLogic = ({
         else setLocalPage(1);
     };
 
-    const totalCount = (contactsTotal && contactsTotal > 0) ? contactsTotal : contactsModal.contacts.length;
+    const safeModalContacts = Array.isArray(contactsModal.contacts) ? contactsModal.contacts : [];
+    const totalCount = (contactsTotal && contactsTotal > 0) ? contactsTotal : safeModalContacts.length;
     const totalPages = perPage > 0 ? Math.ceil(totalCount / perPage) : 1;
 
     const isClientSidePaging = !contactsTotal || contactsTotal === 0;
     const displayContacts = isClientSidePaging
-        ? contactsModal.contacts.slice((currentPage - 1) * perPage, currentPage * perPage)
-        : contactsModal.contacts;
+        ? safeModalContacts.slice((currentPage - 1) * perPage, currentPage * perPage)
+        : safeModalContacts;
 
     React.useEffect(() => {
         setSelectedPhones([]);
         setPage(1);
-        if (!contactsModal.isOpen) {
+        if (contactsModal.isOpen) {
+            setPerPage(20);
+        } else {
             if (setContactsSearchPhone) setContactsSearchPhone('');
             if (setContactsFilterDdi) setContactsFilterDdi('');
             if (setContactsFilterDdd) setContactsFilterDdd('');
@@ -299,7 +302,10 @@ export const useContactsModalLogic = ({
         }
     };
 
-    const handleRestSelectedContacts = async () => {
+    const [restingHours, setRestingHours] = React.useState(24);
+
+    const handleRestSelectedContacts = async (overrideHours) => {
+        const hoursToUse = overrideHours || restingHours || 24;
         setLoadingRest(true);
         try {
             let targetPhones = selectedPhones;
@@ -327,7 +333,8 @@ export const useContactsModalLogic = ({
                     name: contactObj.contact_name || contactObj.name || phone,
                     reason: contactObj.failure_reason 
                         ? `${contactObj.failure_reason} (Falhas — ${contactsModal.title})`
-                        : `Falha no envio (Falhas — ${contactsModal.title})`
+                        : `Falha no envio (Falhas — ${contactsModal.title})`,
+                    hours: hoursToUse
                 };
             });
 
@@ -339,7 +346,7 @@ export const useContactsModalLogic = ({
 
             if (res.ok) {
                 const data = await res.json();
-                toast.success(`${data.success_count} contatos colocados em repouso de 24h.`);
+                toast.success(`${data.success_count} contatos colocados em repouso por ${hoursToUse}h.`);
 
                 // Não fecha mais o modal nem remove os contatos da lista — eles continuam
                 // visíveis no relatório de falhas, só que travados (não podem ser
@@ -373,9 +380,43 @@ export const useContactsModalLogic = ({
         );
     };
 
+    const handleSelectAllTarget = async () => {
+        if (selectedPhones.length >= totalCount && totalCount > 0) {
+            setSelectedPhones([]);
+            return;
+        }
+
+        if (totalCount <= (displayContacts || []).length || isClientSidePaging) {
+            const selectablePhones = safeModalContacts
+                .filter(c => !c?.failure_resolution)
+                .map(getContactPhone)
+                .filter(Boolean);
+            setSelectedPhones(selectablePhones);
+            return;
+        }
+
+        setLoadingAllTarget(true);
+        const loadToast = toast.loading(`Carregando todos os ${totalCount} contatos...`);
+        try {
+            const allContacts = await getAllTargetContacts();
+            const selectablePhones = (allContacts || [])
+                .filter(c => !c?.failure_resolution)
+                .map(getContactPhone)
+                .filter(Boolean);
+            setSelectedPhones(selectablePhones);
+            toast.dismiss(loadToast);
+            toast.success(`Todos os ${selectablePhones.length} contatos foram selecionados!`);
+        } catch (err) {
+            toast.dismiss(loadToast);
+            toast.error("Erro ao buscar todos os contatos.");
+        } finally {
+            setLoadingAllTarget(false);
+        }
+    };
+
     const toggleSelectAll = () => {
         // Contatos já resolvidos (bloqueado/repousado/reenviado) ficam de fora da seleção em massa.
-        const visiblePhones = displayContacts.filter(c => !c.failure_resolution).map(getContactPhone).filter(Boolean);
+        const visiblePhones = (displayContacts || []).filter(c => !c?.failure_resolution).map(getContactPhone).filter(Boolean);
         const allSelected = visiblePhones.length > 0 && visiblePhones.every(p => selectedPhones.includes(p));
         if (allSelected) {
             setSelectedPhones(prev => prev.filter(p => !visiblePhones.includes(p)));
@@ -416,6 +457,8 @@ export const useContactsModalLogic = ({
         displayContacts,
         isConfirmRestOpen,
         setIsConfirmRestOpen,
+        restingHours,
+        setRestingHours,
         loadingRest,
         handleOpenTagModal,
         handleOpenBulkSendModal,
@@ -425,6 +468,8 @@ export const useContactsModalLogic = ({
         isSelected,
         toggleSelectOne,
         toggleSelectAll,
+        handleSelectAllTarget,
+        getAllTargetContacts,
         getContactPhone
     };
 };

@@ -47,6 +47,10 @@ Este documento centraliza as definições de comportamento do sistema e os requi
     - Funis filhos são ocultados da listagem principal para evitar poluição visual.
     - Eles são acessíveis exclusivamente através do botão **"Funis Ativados (🔄)"** presente na linha do disparo pai no histórico de disparos.
 
+### 9. Calendário e Aba de Agendamentos (`schedules`)
+- **Filtro de Visibilidade**: A aba/calendário de Agendamentos exibe **exclusivamente** os disparos em massa agendados e os agendamentos diretos de funis principais criados pelo usuário.
+- **Ocultação de Nós de Delay de Funil**: Execuções individuais de contatos navegando em nós de delay dentro de um funil (`current_node_id`, `contact_phone`, `parent_id` ou `HIDDEN_CHILD`) **não são exibidas no calendário de agendamentos** para evitar poluição visual e manter a clareza da agenda.
+
 ---
 
 ## 🖥️ Detalhamento das Telas e UX
@@ -76,6 +80,9 @@ Abaixo, detalho cada tela identificada no sistema e as dúvidas que precisamos s
 - **Dúvidas UI/UX**:
     - [x] Devemos ter um "Testador de Webhook" integrado que simula um payload para validar se o funil dispara corretamente?
         - **Resposta**: Já existe um botão "Testar" que cumpre essa função.
+- **Integração ZapGroup (Extração de Leads)**:
+    - O payload enviado pelo ZapGroup possui os campos `nome` (telefone ou nome do lead), `grupo` (nome do grupo de origem -> mapeado como `product_name`), `numero` (telefone do contato), `grupo_jid` (JID do grupo no WhatsApp) e `extraido_em` (timestamp).
+    - O evento padrão disparado por essa plataforma é `lead_extraido`.
 
 ### 4. Gestão de Leads (`leads`)
 - **Propósito**: Visualizar os contatos que entraram via webhook e seu status.

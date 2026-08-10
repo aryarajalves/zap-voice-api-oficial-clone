@@ -79,7 +79,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         {id: 'backup_db', label: 'Backup Banco', icon: FiDatabase, roles: ['super_admin'], category: 'admin'},
         {id: 'tutorial', label: 'Tutorial API Oficial', icon: FiHelpCircle, roles: ['super_admin'], category: 'admin'},
         {id: 'log_viewer', label: 'Visualizador de Logs', icon: FiTerminal, roles: ['super_admin'], category: 'admin'},
-        ...(SIMULATE_MESSAGING ? [{ id: 'stress_test', label: 'Teste de Escala', icon: FiZap, roles: ['super_admin'], category: 'admin' }] : []),
+        { id: 'stress_test', label: 'Teste de Escala', icon: FiZap, roles: ['super_admin', 'admin', 'user'], category: 'admin' },
     ];
 
     const handleLogoutClick = () => {
@@ -229,11 +229,6 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
                     <FiLogOut size={18} />
                     Sair
                 </button>
-                <div className="px-4 py-1 mt-1 border-t border-gray-100 dark:border-white/5 opacity-50">
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium tracking-widest uppercase text-center">
-                        ZapVoice v3.9.0
-                    </p>
-                </div>
             </div>
 
             <ConfirmModal

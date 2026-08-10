@@ -114,6 +114,8 @@ async def create_chat_label(
         raise HTTPException(status_code=400, detail="Client ID não fornecido.")
         
     label_name = payload.name.strip()
+    if len(label_name) > 20:
+        raise HTTPException(status_code=400, detail="O nome do marcador deve ter no máximo 20 caracteres.")
     
     # Verificar se etiqueta já existe com este nome para o cliente
     exists = db.query(models.ChatLabel).filter(
@@ -151,6 +153,8 @@ async def update_chat_label(
         raise HTTPException(status_code=400, detail="Client ID não fornecido.")
         
     label_name = payload.name.strip()
+    if len(label_name) > 20:
+        raise HTTPException(status_code=400, detail="O nome do marcador deve ter no máximo 20 caracteres.")
     
     # 1. Se label_id for 0 (dinâmico/legacy), convertemos em um novo registro salvo no banco
     if label_id == 0:

@@ -147,6 +147,11 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         isCreateModalOpen={logic.isCreateModalOpen}
         setIsCreateModalOpen={logic.setIsCreateModalOpen}
         onNavigateToImportHistory={onNavigateToImportHistory}
+        isExportModalOpen={logic.isExportModalOpen}
+        isExporting={logic.isExporting}
+        exportStatus={logic.exportStatus}
+        exportError={logic.exportError}
+        handleCloseExportModal={logic.handleCloseExportModal}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useClient } from '../../../contexts/ClientContext';
 import { fetchWithAuth, useAuth } from '../../../AuthContext';
@@ -8,6 +8,7 @@ import { buildComponentsPayload } from '../utils/payloadBuilder';
 
 export const useBulkSender = (onViewChange, onSuccess) => {
     const { activeClient } = useClient();
+    const prevClientIdRef = useRef(activeClient?.id);
 
     // --- Core State ---
     const [step, setStep] = useState(1);
@@ -47,7 +48,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [isSending, setIsSending] = useState(false);
     const [delaySeconds, setDelaySeconds] = useState(1); // Padrão solicitado: 1s
     const [delayUnit, setDelayUnit] = useState("seconds");
-    const [concurrency, setConcurrency] = useState(4); // Padrão solicitado: 4 jobs
+    const [concurrency, setConcurrency] = useState(10); // Padrão solicitado: 10 jobs
     const [scheduledTime, setScheduledTime] = useState("");
     const [isDynamicLabel, setIsDynamicLabel] = useState(true);
     const [isValidated, setIsValidated] = useState(false);
@@ -152,13 +153,33 @@ export const useBulkSender = (onViewChange, onSuccess) => {
 
     useEffect(() => {
         if (activeClient) {
+            if (prevClientIdRef.current && prevClientIdRef.current !== activeClient.id) {
+                setStep(1);
+                setSelectedTemplate("");
+                setTemplateSearch("");
+                setTemplateParams({});
+                setSendPrivateMessage(false);
+                setPrivateMessageText("");
+                setSelectedChatwootLabels([]);
+                setButtonActions({});
+                setFinalContacts([]);
+                setSelectionMetadata({});
+                setIsValidated(false);
+                setExclusionList([]);
+                setExclusionText("");
+                setSelectedExclusionTag([]);
+                setScheduledTime("");
+                setIsRecurring(false);
+            }
+            prevClientIdRef.current = activeClient.id;
+
             loadTemplates();
             loadChatwootLabels();
             loadExclusionTags();
             loadFunnels();
             loadWhatsAppProfile();
         }
-    }, [activeClient]);
+    }, [activeClient?.id]);
 
     // --- Handlers ---
     const handleTemplateChange = (e) => {

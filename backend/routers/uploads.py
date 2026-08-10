@@ -49,7 +49,7 @@ async def upload_file(
         # Imagens
         '.jpg', '.jpeg', '.png', '.gif', '.webp',
         # Vídeos
-        '.mp4', '.3gp',
+        '.mp4', '.3gp', '.webm', '.mov', '.avi', '.mkv',
         # Documentos
         '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.zip', '.rar',
         # Áudios

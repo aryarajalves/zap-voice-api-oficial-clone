@@ -1478,3 +1478,37 @@ def parse_appmax(payload: dict, result: dict) -> None:
 
     # ---- Raw status ----
     result['raw_status'] = status or None
+
+
+def parse_zapgroup(payload: dict, result: dict) -> None:
+    """
+    Parser para a plataforma ZapGroup (Extração de Leads de Grupos do WhatsApp).
+    
+    Payload de Exemplo:
+    {
+      "nome": "554888668693",
+      "grupo": "Grupo Lancamento Teste",
+      "numero": "554888668693",
+      "grupo_jid": "120363405673797894@g.us",
+      "extraido_em": "2026-08-01T12:37:50.664565-03:00"
+    }
+    """
+    # 1. Nome do Lead / Contato
+    result['name'] = payload.get("nome") or payload.get("name") or payload.get("contact_name")
+    
+    # 2. Telefone / WhatsApp
+    phone_raw = payload.get("numero") or payload.get("phone") or payload.get("whatsapp") or payload.get("celular") or payload.get("telefone") or payload.get("nome")
+    if phone_raw:
+        result['phone'] = str(phone_raw).strip()
+    
+    # 3. Nome do Grupo -> Nome do Produto
+    result['product_name'] = payload.get("grupo") or payload.get("product_name") or payload.get("group_name") or payload.get("group")
+    
+    # 4. Tipo de Evento
+    result['event_type'] = payload.get("event") or payload.get("event_type") or payload.get("status") or "lead_extraido"
+    
+    # 5. Timestamp e Metadados do Evento
+    result['event_time'] = payload.get("extraido_em") or payload.get("created_at") or payload.get("timestamp")
+    result['raw_status'] = "lead_extraido"
+    result['country'] = "BR"
+

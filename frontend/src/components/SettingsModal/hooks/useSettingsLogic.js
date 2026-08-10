@@ -124,8 +124,12 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
         general.setLoading(true);
         const settingsToSend = {};
         for (const [key, value] of Object.entries(general.formData)) {
-            const isMasked = (typeof value === 'string') && (value.includes('*'));
-            if (!isMasked) settingsToSend[key] = value;
+            if (key === 'MANYCHAT_API_KEYS') {
+                if (value) settingsToSend[key] = value;
+            } else {
+                const isMasked = (typeof value === 'string') && (value.includes('*'));
+                if (!isMasked) settingsToSend[key] = value;
+            }
         }
 
         console.log("[SettingsModal] Submitting settings:", { keys: Object.keys(settingsToSend), profileKeys: Object.keys(profile.profileData) });

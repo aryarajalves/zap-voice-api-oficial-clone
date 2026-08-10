@@ -42,6 +42,7 @@ const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLab
           manychat_active: false,
           manychat_name: '',
           manychat_phone: '',
+          manychat_custom_field: 'telefone_whatsapp',
           manychat_tag: '',
           followup_active: false,
           followup_template_id: '',

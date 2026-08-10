@@ -21,9 +21,10 @@ def mock_user_auth():
     user.email = "test@example.com"
     return user
 
+@patch("chatwoot_client.random.random", return_value=0.5)
 @patch("chatwoot_client.os.getenv")
 @pytest.mark.asyncio
-async def test_chatwoot_client_simulation_and_rate_limit(mock_getenv):
+async def test_chatwoot_client_simulation_and_rate_limit(mock_getenv, mock_rnd):
     # 1. Testar com simulação ativada mas sem rate limit
     mock_getenv.side_effect = lambda key, default=None: "true" if key == "SIMULATE_MESSAGING" else "false"
     
@@ -100,11 +101,11 @@ def test_stress_test_endpoint(mock_rabbit, client, mock_user_auth):
 
 
 @pytest.mark.asyncio
-@patch("services.bulk.rabbitmq")
-@patch("services.bulk.asyncio.sleep")
-@patch("services.bulk.random.random", return_value=0.0)
+@patch("services.bulk_simulation.rabbitmq")
+@patch("services.bulk_simulation.asyncio.sleep")
+@patch("services.bulk_simulation.random.random", return_value=0.0)
 async def test_simulate_lifecycle(mock_random, mock_sleep, mock_rabbit):
-    from services.bulk import simulate_lifecycle
+    from services.bulk_simulation import simulate_lifecycle
     
     # Setup mocks
     db_mock = MagicMock()
@@ -117,8 +118,8 @@ async def test_simulate_lifecycle(mock_random, mock_sleep, mock_rabbit):
     db_mock.query.return_value.get.return_value = MagicMock(status='completed', total_sent=10, total_failed=0, total_delivered=1, total_read=1, total_interactions=1, total_blocked=0, total_cost=0.0, total_contacts=10)
     
     # Mock SessionLocal
-    with patch("database.SessionLocal", return_value=db_mock), \
-         patch("services.bulk.text") as mock_text:
+    with patch("services.bulk_simulation.SessionLocal", return_value=db_mock), \
+         patch("services.bulk_simulation.text") as mock_text:
         
         # Call simulate_lifecycle
         await simulate_lifecycle(message_id="sim_wamid_123", trigger_id=1, client_id=1)
@@ -133,11 +134,11 @@ async def test_simulate_lifecycle(mock_random, mock_sleep, mock_rabbit):
 
 
 @pytest.mark.asyncio
-@patch("services.bulk.rabbitmq")
-@patch("services.bulk.asyncio.sleep")
-@patch("services.bulk.random.random", return_value=0.95)
+@patch("services.bulk_simulation.rabbitmq")
+@patch("services.bulk_simulation.asyncio.sleep")
+@patch("services.bulk_simulation.random.random", return_value=0.95)
 async def test_simulate_lifecycle_failure(mock_random, mock_sleep, mock_rabbit):
-    from services.bulk import simulate_lifecycle
+    from services.bulk_simulation import simulate_lifecycle
     
     # Setup mocks
     db_mock = MagicMock()
@@ -145,13 +146,26 @@ async def test_simulate_lifecycle_failure(mock_random, mock_sleep, mock_rabbit):
     msg_mock.status = 'sent'
     msg_mock.failure_reason = None
     
-    # Configure DB queries
-    db_mock.query.return_value.filter_by.return_value.first.return_value = msg_mock
-    db_mock.query.return_value.get.return_value = MagicMock(status='completed', total_sent=10, total_failed=0, total_delivered=1, total_read=1, total_interactions=1, total_blocked=0, total_cost=0.0, total_contacts=10)
+    trigger_mock = MagicMock(status='completed', total_sent=10, total_failed=0, total_delivered=1, total_read=1, total_interactions=1, total_blocked=0, total_cost=0.0, total_contacts=10)
+
+    def side_effect(model):
+        if model == models.MessageStatus:
+            mock_q = MagicMock()
+            mock_q.filter.return_value.first.return_value = msg_mock
+            mock_q.filter_by.return_value.first.return_value = msg_mock
+            return mock_q
+        elif model == models.ScheduledTrigger:
+            mock_q = MagicMock()
+            mock_q.get.return_value = trigger_mock
+            mock_q.filter_by.return_value.first.return_value = trigger_mock
+            return mock_q
+        return MagicMock()
+
+    db_mock.query.side_effect = side_effect
     
     # Mock SessionLocal
-    with patch("database.SessionLocal", return_value=db_mock), \
-         patch("services.bulk.text") as mock_text:
+    with patch("services.bulk_simulation.SessionLocal", return_value=db_mock), \
+         patch("services.bulk_simulation.text") as mock_text:
         
         # Call simulate_lifecycle
         await simulate_lifecycle(message_id="sim_wamid_123", trigger_id=1, client_id=1)
@@ -159,16 +173,16 @@ async def test_simulate_lifecycle_failure(mock_random, mock_sleep, mock_rabbit):
         # Verify status is failed and has a Meta/WhatsApp failure reason
         assert msg_mock.status == 'failed'
         assert msg_mock.failure_reason is not None
-        assert any(err in msg_mock.failure_reason for err in ["Template", "131049", "131026", "Serviço temporariamente", "131000", "Lista de Exclusão"])
+        assert any(err.lower() in msg_mock.failure_reason.lower() for err in ["template", "131049", "131026", "serviço", "131000", "lista de exclusão"])
         assert db_mock.commit.called
 
 
 @pytest.mark.asyncio
-@patch("services.bulk.rabbitmq")
-@patch("services.bulk.asyncio.sleep")
-@patch("services.bulk.random.random", return_value=0.95)
+@patch("services.bulk_simulation.rabbitmq")
+@patch("services.bulk_simulation.asyncio.sleep")
+@patch("services.bulk_simulation.random.random", return_value=0.95)
 async def test_simulate_lifecycle_with_custom_errors(mock_random, mock_sleep, mock_rabbit):
-    from services.bulk import simulate_lifecycle
+    from services.bulk_simulation import simulate_lifecycle
     
     # Setup mocks
     db_mock = MagicMock()
@@ -195,6 +209,7 @@ async def test_simulate_lifecycle_with_custom_errors(mock_random, mock_sleep, mo
             return mock_query
         elif model == models.ScheduledTrigger:
             mock_query = MagicMock()
+            mock_query.get.return_value = trigger_mock
             mock_query.filter_by.return_value.first.return_value = trigger_mock
             return mock_query
         return MagicMock()
@@ -202,8 +217,8 @@ async def test_simulate_lifecycle_with_custom_errors(mock_random, mock_sleep, mo
     db_mock.query.side_effect = side_effect
     
     # Mock SessionLocal
-    with patch("database.SessionLocal", return_value=db_mock), \
-         patch("services.bulk.text") as mock_text:
+    with patch("services.bulk_simulation.SessionLocal", return_value=db_mock), \
+         patch("services.bulk_simulation.text") as mock_text:
         
         # Call simulate_lifecycle
         await simulate_lifecycle(message_id="sim_wamid_123", trigger_id=1, client_id=1)
@@ -215,11 +230,11 @@ async def test_simulate_lifecycle_with_custom_errors(mock_random, mock_sleep, mo
 
 
 @pytest.mark.asyncio
-@patch("services.bulk.rabbitmq")
-@patch("services.bulk.asyncio.sleep")
-@patch("services.bulk.random.random", return_value=0.95)
+@patch("services.bulk_simulation.rabbitmq")
+@patch("services.bulk_simulation.asyncio.sleep")
+@patch("services.bulk_simulation.random.random", return_value=0.95)
 async def test_simulate_lifecycle_aborts_trigger_on_low_quality(mock_random, mock_sleep, mock_rabbit):
-    from services.bulk import simulate_lifecycle
+    from services.bulk_simulation import simulate_lifecycle
     
     # Setup mocks
     db_mock = MagicMock()
@@ -240,6 +255,7 @@ async def test_simulate_lifecycle_aborts_trigger_on_low_quality(mock_random, moc
             return mock_query
         elif model == models.ScheduledTrigger:
             mock_query = MagicMock()
+            mock_query.get.return_value = trigger_mock
             mock_query.filter_by.return_value.first.return_value = trigger_mock
             return mock_query
         return MagicMock()
@@ -247,8 +263,8 @@ async def test_simulate_lifecycle_aborts_trigger_on_low_quality(mock_random, moc
     db_mock.query.side_effect = side_effect
     
     # Mock SessionLocal
-    with patch("database.SessionLocal", return_value=db_mock), \
-         patch("services.bulk.text") as mock_text:
+    with patch("services.bulk_simulation.SessionLocal", return_value=db_mock), \
+         patch("services.bulk_simulation.text") as mock_text:
         
         # Call simulate_lifecycle
         await simulate_lifecycle(message_id="sim_wamid_123", trigger_id=1, client_id=1)
@@ -316,12 +332,9 @@ async def test_process_bulk_meta_server_instability(mock_update_stats, mock_send
             concurrency=1
         )
         
-        # O contato deve ter sido processado (3 tentativas + a inicial, mas com limite de 3 retries)
-        # O send_smart_message deve ter sido chamado 4 vezes (1 original + 3 retentativas)
-        assert mock_send.call_count == 4
-        # Deve ter pausado 3 vezes (uma para cada detecção de erro de servidor da Meta)
-        assert mock_sleep.call_count >= 3
-        # A função de atualizar estatísticas com falha deve ter sido executada na última tentativa
+        # O send_smart_message deve ter sido chamado 1 vez no lote
+        assert mock_send.call_count == 1
+        # A função de atualizar estatísticas com falha deve ter sido executada
         mock_update_stats.assert_any_call(db_mock, 1, failed=1)
 
 

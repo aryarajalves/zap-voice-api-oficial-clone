@@ -6,7 +6,8 @@ const TriggerFilters = ({
     triggerType, setTriggerType, customStart, setCustomStart, customEnd, setCustomEnd,
     itemsPerPage, setItemsPerPage, fetchHistory, onNavigateToBulk, onNavigateToFunnels, onNavigateToChat, setPage,
     showOnlyPinned, setShowOnlyPinned,
-    folders, loadingFolders, selectedFolderId, onSelectFolder, createFolder, updateFolder, deleteFolder
+    folders, loadingFolders, selectedFolderId, onSelectFolder, createFolder, updateFolder, deleteFolder,
+    sortBy, setSortBy
 }) => {
     return (
         <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col gap-4">
@@ -52,6 +53,10 @@ const TriggerFilters = ({
                     <option value="failed">Falha</option>
                     <option value="aborted">Abortado</option>
                     <option value="cancelled">Cancelado</option>
+                </select>
+                <select value={sortBy || 'recent'} onChange={(e) => { setSortBy(e.target.value); setPage(1); }} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-semibold">
+                    <option value="recent">🕒 Mais Recentes</option>
+                    <option value="largest">🚀 Maiores Disparos</option>
                 </select>
 
                 {setShowOnlyPinned && (
