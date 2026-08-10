@@ -7,7 +7,7 @@ from config_loader import get_setting
 from core.logger import setup_logger
 from services.utils.bulk_helpers import render_template_body, extract_body_from_components, resolve_template_body_with_sync
 from services.utils.phone_utils import normalize_phone
-from services.bulk_persistence import get_sent_phones_set, update_trigger_stats, record_blocked_status
+from services.bulk_persistence import get_sent_phones_set, update_trigger_stats, record_blocked_status, record_skipped_status
 from services.bulk_core import send_smart_message
 
 # Re-exportações para compatibilidade retrógrada (Padrão Barrel)
@@ -429,30 +429,36 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                         sent_count += 1
                         sent_message_ids.append(message_id)
                     else:
-                        reason = "Erro na API da Meta ou dados inválidos"
-                        if isinstance(res, dict):
-                            if res.get("detail"):
-                                reason = res.get("detail")
-                            elif res.get("error"):
-                                err_val = res.get("error")
-                                if isinstance(err_val, bool):
-                                    reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
-                                else:
-                                    reason = str(err_val)
-                        reason = translate_meta_error(reason)
-                        
-                        fail_msg = models.MessageStatus(
-                            trigger_id=trigger_id,
-                            phone_number=meta["phone"],
-                            status='failed',
-                            failure_reason=reason,
-                            content=f"[Falha no Envio] {template_name or 'Mensagem Direta'}"
-                        )
-                        db_msg.add(fail_msg)
-                        db_msg.commit()
-                        
-                        update_trigger_stats(db_msg, trigger_id, failed=1)
-                        failed_count += 1
+                        # Verificar se é um skip de 24h (não é falha real)
+                        is_skipped_24h = isinstance(res, dict) and res.get("skipped_24h") is True
+                        if is_skipped_24h:
+                            record_skipped_status(trigger_id, meta["phone"])
+                            update_trigger_stats(db_msg, trigger_id, skipped=1)
+                        else:
+                            reason = "Erro na API da Meta ou dados inválidos"
+                            if isinstance(res, dict):
+                                if res.get("detail"):
+                                    reason = res.get("detail")
+                                elif res.get("error"):
+                                    err_val = res.get("error")
+                                    if isinstance(err_val, bool):
+                                        reason = res.get("detail") or "Erro na API da Meta ou dados inválidos"
+                                    else:
+                                        reason = str(err_val)
+                            reason = translate_meta_error(reason)
+                            
+                            fail_msg = models.MessageStatus(
+                                trigger_id=trigger_id,
+                                phone_number=meta["phone"],
+                                status='failed',
+                                failure_reason=reason,
+                                content=f"[Falha no Envio] {template_name or 'Mensagem Direta'}"
+                            )
+                            db_msg.add(fail_msg)
+                            db_msg.commit()
+                            
+                            update_trigger_stats(db_msg, trigger_id, failed=1)
+                            failed_count += 1
                         
                         if "132015" in reason or "paused due to low quality" in reason:
                             reason = "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade."

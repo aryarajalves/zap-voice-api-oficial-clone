@@ -41,6 +41,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     read = 0
     failed = 0
     blocked = 0
+    skipped = 0
     interactions = 0
     total_cost = 0.0
     paid_templates = 0
@@ -70,6 +71,10 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         if has_delivered: delivered += 1
         if has_read: read += 1
         
+        # Contatos pulados pelo check de 24h (status='skipped')
+        has_skipped = any(ms.status == 'skipped' for ms in group)
+        if has_skipped and not has_sent: skipped += 1
+
         if has_blocked: blocked += 1
         elif has_failed: failed += 1
         if has_interaction: interactions += 1
@@ -95,6 +100,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     failed_phones = set(ms.phone_number for ms in failed_msgs if ms.phone_number)
     trigger.total_failed = len(failed_phones)
     trigger.total_blocked = blocked
+    trigger.total_skipped = max(trigger.total_skipped or 0, skipped)
     trigger.total_interactions = max(trigger.total_interactions or 0, interactions)
     trigger.total_cost = max(float(trigger.total_cost or 0.0), total_cost)
     trigger.total_paid_templates = max(trigger.total_paid_templates or 0, paid_templates)
@@ -138,6 +144,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
         "read": read,
         "failed": failed,
         "blocked": blocked,
+        "skipped": skipped,
         "interactions": interactions,
         "cost": total_cost
     }

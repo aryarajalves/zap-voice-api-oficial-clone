@@ -46,6 +46,7 @@ class ScheduledTrigger(Base):
     total_interactions = Column(Integer, default=0)
     total_paid_templates = Column(Integer, default=0)
     total_blocked = Column(Integer, default=0)
+    total_skipped = Column(Integer, default=0)  # Contatos pulados pelo check de 24h
     total_memory_sent = Column(Integer, default=0)
     total_private_notes = Column(Integer, default=0)
     execution_history = Column(JSON().with_variant(JSONB, "postgresql"), default=list)
