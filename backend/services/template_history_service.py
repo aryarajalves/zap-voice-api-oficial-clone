@@ -4,7 +4,14 @@ from sqlalchemy import or_
 
 def is_template_sent_in_last_24h(db, client_id: int, phone: str, template_name: str) -> bool:
     """
-    Verifica se o mesmo template foi disparado para o número nas últimas 24 horas.
+    Verifica se o mesmo template foi ENTREGUE para o número nas últimas 24 horas.
+
+    Regra de negócio:
+    - Só conta como "enviado nas 24h" se o WhatsApp CONFIRMOU a entrega (status: delivered ou read).
+    - Um disparo que foi aceito pela Meta API (status: sent) mas nunca chegou ao usuário
+      NÃO bloqueia o re-disparo.
+    - O ContactTemplateHistory é gravado para exibição do badge no lead, mas NÃO é
+      usado como critério de bloqueio aqui.
     """
     if not phone or not template_name:
         return False
@@ -16,35 +23,21 @@ def is_template_sent_in_last_24h(db, client_id: int, phone: str, template_name: 
     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
 
-    # 1. Verificar em ContactTemplateHistory
-    history_entry = db.query(models.ContactTemplateHistory).filter(
-        models.ContactTemplateHistory.client_id == client_id,
-        models.ContactTemplateHistory.template_name == template_name,
-        models.ContactTemplateHistory.dispatched_at >= cutoff,
-        or_(
-            models.ContactTemplateHistory.phone == clean_phone,
-            models.ContactTemplateHistory.phone.like(f"%{suffix}")
-        )
-    ).first()
-
-    if history_entry:
-        return True
-
-    # 2. Verificar também em MessageStatus para garantir retrospectiva
+    # Bloqueio baseado em entrega CONFIRMADA pelo WhatsApp (delivered ou read).
+    # Status 'sent' significa apenas ACK da Meta API — o usuário pode não ter recebido.
     msg_status = db.query(models.MessageStatus).filter(
         models.MessageStatus.template_name == template_name,
         models.MessageStatus.timestamp >= cutoff,
-        models.MessageStatus.status.in_(["sent", "delivered", "read"]),
+        models.MessageStatus.status.in_(["delivered", "read"]),
         or_(
             models.MessageStatus.phone_number == clean_phone,
             models.MessageStatus.phone_number.like(f"%{suffix}")
         )
     ).first()
 
-    if msg_status:
-        return True
+    return msg_status is not None
 
-    return False
+
 
 def record_template_dispatch(db, client_id: int, phone: str, template_name: str, trigger_id: int = None):
     """
