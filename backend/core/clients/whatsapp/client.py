@@ -563,50 +563,47 @@ class WhatsAppClient:
         if media_data.get("id"):
             return
 
-        # Upload ANY S3, Backblaze B2, localhost, 127.0.0.1 or non-http URLs to Meta to avoid CORS/crawler errors
-        is_external_hosting = any(domain in url for domain in ["backblazeb2.com", "backblazebb2.com", "amazonaws.com", "localhost", "127.0.0.1"])
-        is_local_or_relative = not url.startswith("http")
+        # Para garantir que vídeos, imagens e mídias de templates rodem perfeitamente no WhatsApp mobile (Android/iPhone),
+        # convertemos a URL da mídia em um Media ID nativo da Meta via Media API.
+        import mimetypes
+        from urllib.parse import unquote
+        file_path = None
+        temp_download_path = None
         
-        if is_external_hosting or is_local_or_relative:
-            import mimetypes
-            from urllib.parse import unquote
-            file_path = None
-            temp_download_path = None
-            
-            # Resolve Local Path
-            if "static/uploads" in url:
-                try:
-                    file_name_part = unquote(url.split("/static/")[1])
-                    base_path = os.path.dirname(os.path.abspath(__file__))
-                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(base_path)))
-                    file_path = os.path.join(project_root, "static", *file_name_part.split('/'))
-                except Exception as e:
-                    logger.error(f"Error resolving local path for media: {e}")
+        # Resolve Local Path
+        if "static/uploads" in url:
+            try:
+                file_name_part = unquote(url.split("/static/")[1])
+                base_path = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(base_path)))
+                file_path = os.path.join(project_root, "static", *file_name_part.split('/'))
+            except Exception as e:
+                logger.error(f"Error resolving local path for media: {e}")
 
-            if not file_path or not os.path.exists(file_path):
-                file_path, temp_download_path = await self._download_file_with_ext(url)
+        if not file_path or not os.path.exists(file_path):
+            file_path, temp_download_path = await self._download_file_with_ext(url)
 
-            if file_path and os.path.exists(file_path):
-                try:
-                    mime_type, _ = mimetypes.guess_type(file_path)
-                    if not mime_type:
-                        if media_type == "video": mime_type = "video/mp4"
-                        elif media_type == "image": mime_type = "image/png"
-                        elif media_type == "document": mime_type = "application/pdf"
-                        else: mime_type = "application/octet-stream"
-                    
-                    media_id = await self.upload_media_to_meta(file_path, mime_type)
-                    if media_id:
-                        logger.info(f"✅ Mídia de template ({media_type}) carregada com sucesso na Meta. ID: {media_id}")
-                        media_data["id"] = media_id
-                        if "link" in media_data:
-                            del media_data["link"]
-                except Exception as e:
-                    logger.error(f"Erro ao carregar mídia do template para a Meta: {e}")
-                finally:
-                    if temp_download_path and os.path.exists(temp_download_path):
-                        try: os.remove(temp_download_path)
-                        except: pass
+        if file_path and os.path.exists(file_path):
+            try:
+                mime_type, _ = mimetypes.guess_type(file_path)
+                if not mime_type:
+                    if media_type == "video": mime_type = "video/mp4"
+                    elif media_type == "image": mime_type = "image/png"
+                    elif media_type == "document": mime_type = "application/pdf"
+                    else: mime_type = "application/octet-stream"
+                
+                media_id = await self.upload_media_to_meta(file_path, mime_type)
+                if media_id:
+                    logger.info(f"✅ Mídia de template/mensagem ({media_type}) convertida em Media ID nativo da Meta: {media_id}")
+                    media_data["id"] = media_id
+                    if "link" in media_data:
+                        del media_data["link"]
+            except Exception as e:
+                logger.error(f"Erro ao carregar mídia ({media_type}) para a Meta: {e}")
+            finally:
+                if temp_download_path and os.path.exists(temp_download_path):
+                    try: os.remove(temp_download_path)
+                    except: pass
 
     async def _download_file_with_ext(self, url):
         import tempfile
