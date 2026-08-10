@@ -137,8 +137,10 @@ class WhatsAppClient:
                 response = await client.post(url, json=payload, headers=headers)
                 if response.status_code not in [200, 201]:
                     logger.error(f"❌ Erro ao criar template na Meta (Status {response.status_code}): {response.text}")
-                    err = response.json().get("error", {})
-                    return {"error": err.get("message", "Erro desconhecido na Meta API"), "status_code": response.status_code, "meta_raw": response.text}
+                    err_json = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+                    err = err_json.get("error", {}) if isinstance(err_json, dict) else {}
+                    err_msg = err.get("error_user_msg") or (err.get("error_data") or {}).get("details") or err.get("message") or "Erro desconhecido na Meta API"
+                    return {"error": err_msg, "status_code": response.status_code, "meta_raw": response.text}
                 
                 logger.info(f"✅ Template '{payload.get('name')}' criado com sucesso!")
                 return response.json()
@@ -341,7 +343,8 @@ class WhatsAppClient:
         h_type = data.get("header_type", "NONE").upper()
         if h_type != "NONE":
             h_comp = {"type": "HEADER", "format": h_type}
-            if h_type == "TEXT": h_comp["text"] = data.get("header_text")
+            if h_type == "TEXT": 
+                h_comp["text"] = data.get("header_text", "")
             elif h_type in ["IMAGE", "VIDEO", "DOCUMENT"]:
                 h_url = data.get("header_media_url")
                 if h_url:
@@ -353,11 +356,43 @@ class WhatsAppClient:
         body_text = data.get("body_text", "")
         body_comp = {"type": "BODY", "text": body_text}
         vars = sorted(set(int(v) for v in re.findall(r'\{\{(\d+)\}\}', body_text)))
-        if vars: body_comp["example"] = {"body_text": [["Exemplo" + str(i) for i in vars]]}
+        if vars: 
+            body_comp["example"] = {"body_text": [["Exemplo" + str(i) for i in vars]]}
         components.append(body_comp)
         
-        if data.get("footer_text"): components.append({"type": "FOOTER", "text": data.get("footer_text")})
-        if data.get("buttons"): components.append({"type": "BUTTONS", "buttons": data.get("buttons")})
+        footer_text = data.get("footer_text")
+        if footer_text and str(footer_text).strip():
+            components.append({"type": "FOOTER", "text": str(footer_text).strip()})
+
+        raw_buttons = data.get("buttons") or []
+        if raw_buttons:
+            cleaned_buttons = []
+            for btn in raw_buttons:
+                if not isinstance(btn, dict):
+                    continue
+                b_type = (btn.get("type") or "QUICK_REPLY").upper()
+                b_text = (btn.get("text") or "").strip()
+                if not b_text:
+                    continue
+
+                b_obj = {"type": b_type, "text": b_text}
+                if b_type == "URL":
+                    b_url = (btn.get("url") or "").strip()
+                    if b_url:
+                        b_obj["url"] = b_url
+                        url_vars = re.findall(r'\{\{(\d+)\}\}', b_url)
+                        if url_vars:
+                            b_obj["example"] = ["https://example.com"]
+                elif b_type == "PHONE_NUMBER":
+                    b_phone = (btn.get("phone_number") or "").strip()
+                    if b_phone:
+                        b_obj["phone_number"] = b_phone
+
+                cleaned_buttons.append(b_obj)
+
+            if cleaned_buttons:
+                components.append({"type": "BUTTONS", "buttons": cleaned_buttons})
+
         return components
 
     async def edit_whatsapp_template(self, template_id: str, data: dict):
@@ -373,7 +408,13 @@ class WhatsAppClient:
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(url, json=payload, headers=headers)
-                return response.json() if response.status_code in [200, 201] else {"error": response.text}
+                if response.status_code not in [200, 201]:
+                    logger.error(f"❌ Erro ao editar template na Meta (Status {response.status_code}): {response.text}")
+                    err_json = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+                    err = err_json.get("error", {}) if isinstance(err_json, dict) else {}
+                    err_msg = err.get("error_user_msg") or (err.get("error_data") or {}).get("details") or err.get("message") or "Erro ao editar template na Meta"
+                    return {"error": err_msg, "status_code": response.status_code, "meta_raw": response.text}
+                return response.json()
             except Exception as e:
                 return {"error": str(e)}
 
