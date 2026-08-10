@@ -886,8 +886,42 @@ async def reset_24h_window(
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")
 
     # Forçar expiração definindo o último contato para 25 horas atrás
-    convo.last_contact_message_at = datetime.now(timezone.utc) - timedelta(hours=25)
-    
+    old_time = datetime.now(timezone.utc) - timedelta(hours=25)
+    convo.last_contact_message_at = old_time
+
+    # 1. Limpar / Atualizar ContactWindow para forçar inexistência de interação recente no Smart Send
+    target_phone = convo.phone or getattr(convo, 'contact_phone', None)
+    if target_phone:
+        clean_phone = ''.join(filter(str.isdigit, str(target_phone)))
+        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+        
+        # Deletar ContactWindow para este contato (garante que Smart Send veja sem interação recente)
+        db.query(models.ContactWindow).filter(
+            models.ContactWindow.client_id == client_id,
+            or_(
+                models.ContactWindow.phone == clean_phone,
+                models.ContactWindow.phone.like(f"%{suffix}")
+            )
+        ).delete(synchronize_session=False)
+
+        # 2. Limpar ContactTemplateHistory para o contato (libera re-disparo de template)
+        db.query(models.ContactTemplateHistory).filter(
+            models.ContactTemplateHistory.client_id == client_id,
+            or_(
+                models.ContactTemplateHistory.phone == clean_phone,
+                models.ContactTemplateHistory.phone.like(f"%{suffix}")
+            )
+        ).delete(synchronize_session=False)
+
+        # 3. Limpar MessageStatus de templates avulsos (sem trigger_id) para o contato
+        db.query(models.MessageStatus).filter(
+            or_(
+                models.MessageStatus.phone_number == clean_phone,
+                models.MessageStatus.phone_number.like(f"%{suffix}")
+            ),
+            models.MessageStatus.trigger_id.is_(None)
+        ).delete(synchronize_session=False)
+
     # Remover marcadores de janela se houver configuração
     window_labels_setting = get_setting("AUTO_REMOVE_WINDOW_LABELS", "", client_id=client_id)
     if window_labels_setting and convo.labels:
@@ -898,9 +932,11 @@ async def reset_24h_window(
     db.commit()
     db.refresh(convo)
 
+    logger.info(f"🧹 [RESET_24H_WINDOW] Janela de 24h e ContactWindow zeradas para conversa #{conversation_id} (Telefone: {convo.contact_phone}) por Client {client_id}.")
+
     return {
         "status": "ok",
-        "message": "Janela de 24h encerrada com sucesso.",
+        "message": "Janela de 24h e histórico de interações zerados com sucesso.",
         "conversation": {
             "id": convo.id,
             "labels": convo.labels,
