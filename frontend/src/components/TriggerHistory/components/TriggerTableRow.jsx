@@ -326,6 +326,13 @@ const TriggerTableRow = ({
                                     <span className="text-xs font-black text-rose-500">{triggerWithActions.total_blocked || 0}</span>
                                 </button>
 
+                                {(triggerWithActions.total_skipped > 0) && (
+                                    <button onClick={() => handleViewContacts(triggerWithActions, 'skipped')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Pulados — Template já enviado nas últimas 24h">
+                                        <span className="text-sm">⏭️</span>
+                                        <span className="text-xs font-black text-amber-500">{triggerWithActions.total_skipped || 0}</span>
+                                    </button>
+                                )}
+
                                 <button onClick={() => handleViewContacts(triggerWithActions, 'failed')} className="flex items-center gap-1.5 hover:opacity-80 transition" title="Ver Falhas">
                                     <span className="text-sm">❌</span>
                                     <span className="text-xs font-black text-red-500">{triggerWithActions.total_failed || 0}</span>
@@ -333,7 +340,7 @@ const TriggerTableRow = ({
 
                                 {(() => {
                                      const total = triggerWithActions.total_contacts || (triggerWithActions.contacts_list?.length) || 0;
-                                     const processedNum = (triggerWithActions.total_sent || 0) + (triggerWithActions.total_failed || 0);
+                                     const processedNum = (triggerWithActions.total_sent || 0) + (triggerWithActions.total_failed || 0) + (triggerWithActions.total_skipped || 0);
                                      const processedArr = triggerWithActions.processed_contacts?.length || 0;
                                      const processed = Math.max(processedArr, processedNum);
                                      const remaining = Math.max(0, total - processed);
