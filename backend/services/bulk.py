@@ -459,21 +459,21 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                             
                             update_trigger_stats(db_msg, trigger_id, failed=1)
                             failed_count += 1
-                        
-                        if "132015" in reason or "paused due to low quality" in reason:
-                            reason = "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade."
-                            fail_msg.failure_reason = reason
                             
-                            db_abort = SessionLocal()
-                            try:
-                                t_abort = db_abort.query(models.ScheduledTrigger).get(trigger_id)
-                                if t_abort:
-                                    t_abort.status = 'aborted'
-                                    t_abort.failure_reason = reason
-                                    db_abort.commit()
-                                    logger.error(f"🛑 [ABORT] Disparo {trigger_id} abortado. Template pausado por baixa qualidade.")
-                            finally:
-                                db_abort.close()
+                            if "132015" in reason or "paused due to low quality" in reason:
+                                reason = "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade."
+                                fail_msg.failure_reason = reason
+                                
+                                db_abort = SessionLocal()
+                                try:
+                                    t_abort = db_abort.query(models.ScheduledTrigger).get(trigger_id)
+                                    if t_abort:
+                                        t_abort.status = 'aborted'
+                                        t_abort.failure_reason = reason
+                                        db_abort.commit()
+                                        logger.error(f"🛑 [ABORT] Disparo {trigger_id} abortado. Template pausado por baixa qualidade.")
+                                finally:
+                                    db_abort.close()
                 except Exception as e_db_single:
                     db_msg.rollback()
                     logger.error(f"❌ Erro de banco de dados ao persistir status para o telefone {meta['phone']}: {e_db_single}")
