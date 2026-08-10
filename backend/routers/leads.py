@@ -225,8 +225,12 @@ def reset_lead_template_history(
         raise HTTPException(status_code=404, detail="Contato não encontrado.")
 
     clean_phone = re.sub(r"\D", "", lead.phone or "")
+    template_name_to_clear = lead.last_template_name
+
     if clean_phone:
         suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+
+        # 1. Limpar ContactTemplateHistory
         db.query(models.ContactTemplateHistory).filter(
             models.ContactTemplateHistory.client_id == client_id,
             or_(
@@ -235,10 +239,22 @@ def reset_lead_template_history(
             )
         ).delete(synchronize_session=False)
 
+        # 2. Limpar MessageStatus — também verificado pelo is_template_sent_in_last_24h
+        # Isso garante que o contato possa receber o template novamente imediatamente.
+        if template_name_to_clear:
+            db.query(models.MessageStatus).filter(
+                models.MessageStatus.template_name == template_name_to_clear,
+                or_(
+                    models.MessageStatus.phone_number == clean_phone,
+                    models.MessageStatus.phone_number.like(f"%{suffix}")
+                )
+            ).delete(synchronize_session=False)
+
     lead.last_template_name = None
     lead.last_template_dispatched_at = None
     db.commit()
 
+    logger.info(f"🗑️ [Template History] Histórico do template '{template_name_to_clear}' removido para {clean_phone}. Contato liberado para novo disparo.")
     return {"success": True, "message": "Histórico do último template removido com sucesso. O contato pode receber o mesmo template novamente."}
 
 
