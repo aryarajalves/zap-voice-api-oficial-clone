@@ -7,7 +7,7 @@ from core.deps import get_db, get_current_user
 from core.logger import setup_logger
 import models
 from core.clients.whatsapp.client import WhatsAppClient
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 from chatwoot_client import ChatwootClient
 import httpx
@@ -868,6 +868,45 @@ async def mark_as_read(
     convo.unread_count = 0
     db.commit()
     return {"status": "ok"}
+
+
+@router.post("/chat/conversations/{conversation_id}/reset-24h-window")
+async def reset_24h_window(
+    conversation_id: int,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from config_loader import get_setting
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    # Forçar expiração definindo o último contato para 25 horas atrás
+    convo.last_contact_message_at = datetime.now(timezone.utc) - timedelta(hours=25)
+    
+    # Remover marcadores de janela se houver configuração
+    window_labels_setting = get_setting("AUTO_REMOVE_WINDOW_LABELS", "", client_id=client_id)
+    if window_labels_setting and convo.labels:
+        target_labels = [l.strip().lower() for l in window_labels_setting.split(",") if l.strip()]
+        if target_labels:
+            convo.labels = [lbl for lbl in convo.labels if lbl.lower() not in target_labels]
+
+    db.commit()
+    db.refresh(convo)
+
+    return {
+        "status": "ok",
+        "message": "Janela de 24h encerrada com sucesso.",
+        "conversation": {
+            "id": convo.id,
+            "labels": convo.labels,
+            "last_contact_message_at": convo.last_contact_message_at.isoformat() if convo.last_contact_message_at else None
+        }
+    }
 
 
 

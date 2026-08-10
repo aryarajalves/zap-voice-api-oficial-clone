@@ -2188,7 +2188,9 @@ export default function ChatConversations({ onClose, onNavigate }) {
                 {selectedConvo && showRightSidebar && (
                     <ChatContactSidebar
                         selectedConvo={selectedConvo}
+                        setSelectedConvo={setSelectedConvo}
                         timeLeft24h={engine.timeLeft24h}
+                        handleClose24hWindow={engine.handleClose24hWindow}
                         isAssigning={engine.isAssigning}
                         availableAgents={engine.availableAgents}
                         handleAssignConversation={engine.handleAssignConversation}

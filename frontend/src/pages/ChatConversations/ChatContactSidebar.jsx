@@ -4,7 +4,9 @@ import { BsJournalText } from 'react-icons/bs';
 
 export default function ChatContactSidebar({
     selectedConvo,
+    setSelectedConvo,
     timeLeft24h,
+    handleClose24hWindow,
     isAssigning,
     availableAgents,
     handleAssignConversation,
@@ -52,9 +54,21 @@ export default function ChatContactSidebar({
                 <div className="text-[11px] text-gray-400">
                     ID da Conversa: #{selectedConvo.id}
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mt-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Janela 24h: {timeLeft24h}</span>
+                <div className="flex flex-col items-center gap-1.5 mt-1">
+                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${timeLeft24h === 'Janela Fechada' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${timeLeft24h === 'Janela Fechada' ? 'bg-red-500' : 'bg-emerald-500 animate-pulse'}`} />
+                        <span>{timeLeft24h === 'Janela Fechada' ? '🔴 Janela Fechada' : `Janela 24h: ${timeLeft24h}`}</span>
+                    </div>
+                    {timeLeft24h !== 'Janela Fechada' && handleClose24hWindow && (
+                        <button
+                            type="button"
+                            onClick={() => handleClose24hWindow(selectedConvo, setSelectedConvo)}
+                            className="text-[10px] text-red-500 hover:text-red-600 hover:underline flex items-center gap-1 font-medium transition cursor-pointer mt-0.5"
+                            title="Encerrar a janela de 24h deste contato para realizar testes"
+                        >
+                            🚫 Encerrar Janela 24h (Teste)
+                        </button>
+                    )}
                 </div>
             </div>
 

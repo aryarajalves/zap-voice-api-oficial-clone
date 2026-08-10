@@ -397,6 +397,35 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         }
     };
 
+    const handleClose24hWindow = async (selectedConvo, setSelectedConvo) => {
+        if (!selectedConvo || !activeClient) return;
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/chat/conversations/${selectedConvo.id}/reset-24h-window`,
+                { method: 'POST' },
+                activeClient.id
+            );
+            if (res.ok) {
+                const data = await res.json();
+                toast.success("Janela de 24h encerrada para testes!");
+                setTimeLeft24h('Janela Fechada');
+                if (setSelectedConvo) {
+                    setSelectedConvo(prev => prev ? {
+                        ...prev,
+                        last_contact_message_at: null,
+                        labels: data.conversation?.labels || prev.labels
+                    } : prev);
+                }
+                loadConversations();
+            } else {
+                const errData = await res.json();
+                toast.error(errData.detail || "Erro ao encerrar janela de 24h.");
+            }
+        } catch (err) {
+            toast.error("Erro de conexão ao encerrar janela de 24h.");
+        }
+    };
+
     return {
         conversations, setConversations,
         messages, setMessages,
@@ -446,6 +475,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         hasMoreMessages,
         isLoadingMoreMessages,
         loadMoreMessages,
-        handleTriggerFunnel
+        handleTriggerFunnel,
+        handleClose24hWindow
     };
 }
