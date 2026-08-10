@@ -157,6 +157,17 @@ export const getStatusBadge = (trigger) => {
         setForceNormal(false);
     }, [processed_data?.temp_paused, processed_data?.temp_paused_until]);
 
+    let effectiveStatus = status;
+    if (status === 'processing' && trigger.total_contacts > 0) {
+        const sent = trigger.total_sent || 0;
+        const failed = trigger.total_failed || 0;
+        const skipped = trigger.total_skipped || 0;
+        const blocked = trigger.total_blocked || 0;
+        if (sent + failed + skipped + blocked >= trigger.total_contacts) {
+            effectiveStatus = 'completed';
+        }
+    }
+
     if (isTempPaused && !forceNormal) {
         const untilTime = processed_data?.temp_paused_until;
         const secondsLeft = untilTime ? Math.max(0, Math.ceil((new Date(untilTime).getTime() - new Date().getTime()) / 1000)) : 0;
@@ -171,7 +182,7 @@ export const getStatusBadge = (trigger) => {
         }
     }
 
-    switch (status) {
+    switch (effectiveStatus) {
         case 'completed':
             return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Enviado</span>;
         case 'pending':
