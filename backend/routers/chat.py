@@ -2369,6 +2369,10 @@ async def react_to_message(
 
     if not target_wamid or not str(target_wamid).startswith("wamid."):
         logger.warning(f"⚠️ [REACT] Mensagem {payload.message_id} não possui wamid válido da Meta (recebido: {target_wamid})")
+        raise HTTPException(
+            status_code=400,
+            detail="Não foi possível reagir: esta mensagem não possui o ID oficial do WhatsApp (wamid)."
+        )
 
     # 2. Enviar reação via WhatsAppClient (Meta Cloud API)
     wa_client = WhatsAppClient(client_id=client_id)
