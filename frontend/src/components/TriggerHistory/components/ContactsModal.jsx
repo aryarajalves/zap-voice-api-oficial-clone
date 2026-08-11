@@ -24,8 +24,11 @@ function ChatwootLabelModal({ isOpen, onClose, onConfirm, loading, count, client
                 fetchWithAuth(`${API_URL}/chat/labels`, {}, clientId)
                     .then(r => r.ok ? r.json() : [])
                     .then(data => {
-                        // O backend retorna uma lista de strings. Mapeamos para o formato esperado.
-                        const items = Array.isArray(data) ? data.map(str => ({ title: str, name: str, color: '#6366f1' })) : [];
+                        const items = Array.isArray(data) ? data.map(item => {
+                            if (typeof item === 'string') return { title: item, name: item, color: '#6366f1' };
+                            if (item && typeof item === 'object') return { title: item.name || item.title || '', name: item.name || item.title || '', color: item.color || '#6366f1' };
+                            return { title: String(item || ''), name: String(item || ''), color: '#6366f1' };
+                        }).filter(l => l.title) : [];
                         setLabels(items);
                     })
                     .catch(() => setLabels([]))

@@ -52,7 +52,11 @@ const CrmActionsNode = ({ id, data }) => {
             fetchWithAuth(`${API_URL}/chat/labels`, { headers: { 'X-Client-ID': activeClient.id } })
                 .then(res => res.json())
                 .then(data => {
-                    const formatted = Array.isArray(data) ? data.map((str, idx) => ({ id: idx, title: str })) : [];
+                    const formatted = Array.isArray(data) ? data.map((item, idx) => {
+                        if (typeof item === 'string') return { id: idx, title: item };
+                        if (item && typeof item === 'object') return { id: item.id || idx, title: item.name || item.title || item.label || '' };
+                        return { id: idx, title: String(item || '') };
+                    }).filter(l => l.title) : [];
                     setLabels(formatted);
                 })
                 .catch(console.error)
