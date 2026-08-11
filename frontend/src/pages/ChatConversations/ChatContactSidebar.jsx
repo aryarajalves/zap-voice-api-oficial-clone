@@ -173,13 +173,14 @@ export default function ChatContactSidebar({
                         </div>
                         <button
                             type="button"
-                            onClick={() => {
+                            onMouseDown={(e) => {
+                                e.preventDefault();
                                 if (tagSearchQuery.trim()) {
                                     handleTagSubmit(tagSearchQuery);
                                 }
                             }}
                             disabled={!tagSearchQuery.trim()}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm shrink-0"
+                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm shrink-0 cursor-pointer"
                         >
                             Adicionar
                         </button>
@@ -198,10 +199,11 @@ export default function ChatContactSidebar({
                                         <button
                                             key={label}
                                             type="button"
-                                            onMouseDown={() => {
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
                                                 handleTagSubmit(label);
                                             }}
-                                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium"
+                                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium cursor-pointer"
                                         >
                                             <span 
                                                 className="w-2 h-2 rounded-full shrink-0" 
@@ -218,10 +220,11 @@ export default function ChatContactSidebar({
                             {tagSearchQuery.trim() && !(availableLabels || []).map(l => l.toLowerCase()).includes(tagSearchQuery.trim().toLowerCase()) && (
                                 <button
                                     type="button"
-                                    onMouseDown={() => {
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
                                         handleTagSubmit(tagSearchQuery);
                                     }}
-                                    className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border-t border-gray-100 dark:border-white/5 flex items-center gap-1.5"
+                                    className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border-t border-gray-100 dark:border-white/5 flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <span>+ Criar novo marcador:</span>
                                     <span className="italic pr-2 break-all">"{tagSearchQuery.trim().slice(0, 20)}" ({tagSearchQuery.trim().slice(0, 20).length}/20)</span>

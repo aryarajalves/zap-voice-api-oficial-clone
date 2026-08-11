@@ -715,6 +715,61 @@ async def send_chat_template(
         "sent_as_text": sent_as_text  # True = enviado como texto livre (janela aberta), False = template HSM
     }
 
+class LabelCreateRequest(BaseModel):
+    name: str
+    color: Optional[str] = "#3B82F6"
+
+@router.get("/chat/labels")
+async def list_custom_labels(
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna a lista de etiquetas customizadas do cliente.
+    """
+    labels = db.query(models.ChatLabel).filter(models.ChatLabel.client_id == client_id).all()
+    return [{"id": l.id, "name": l.name, "color": l.color} for l in labels]
+
+@router.post("/chat/labels")
+async def create_custom_label(
+    payload: LabelCreateRequest,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Cria uma nova etiqueta customizada com nome e cor para o cliente ativo.
+    """
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
+
+    clean_name = payload.name.strip().slice(0, 20) if hasattr(payload.name.strip(), 'slice') else payload.name.strip()[:20]
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Nome da etiqueta é obrigatório.")
+
+    # Verificar se já existe
+    existing = db.query(models.ChatLabel).filter(
+        models.ChatLabel.client_id == client_id,
+        func.lower(models.ChatLabel.name) == clean_name.lower()
+    ).first()
+
+    if existing:
+        existing.color = payload.color or existing.color
+        db.commit()
+        return {"id": existing.id, "name": existing.name, "color": existing.color, "created": False}
+
+    new_label = models.ChatLabel(
+        client_id=client_id,
+        name=clean_name,
+        color=payload.color or "#3B82F6"
+    )
+    db.add(new_label)
+    db.commit()
+    db.refresh(new_label)
+    logger.info(f"🏷️ [CREATE_LABEL] Nova etiqueta criada para Client #{client_id}: '{clean_name}' ({payload.color})")
+    return {"id": new_label.id, "name": new_label.name, "color": new_label.color, "created": True}
+
 @router.post("/chat/conversations/{conversation_id}/labels")
 async def update_conversation_labels(
     conversation_id: int,
