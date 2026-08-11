@@ -241,8 +241,17 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 blocked_set.add(p_norm)
                 if len(p_norm) >= 8:
                     blocked_set.add(p_norm[-8:])
+                    
+        # Carregar contatos da lista de exclusão do disparo (Filtro de Exclusão)
+        if init_trig and init_trig.exclusion_list:
+            for excl in init_trig.exclusion_list:
+                p_norm = normalize_phone(excl)
+                if p_norm:
+                    blocked_set.add(p_norm)
+                    if len(p_norm) >= 8:
+                        blocked_set.add(p_norm[-8:])
     except Exception as e_prefetch_block:
-        logger.error(f"⚠️ [BULK] Erro ao carregar contatos bloqueados/descanso: {e_prefetch_block}")
+        logger.error(f"⚠️ [BULK] Erro ao carregar contatos bloqueados/descanso/exclusao: {e_prefetch_block}")
     finally:
         db_check_init.close()
 

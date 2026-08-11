@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.7.4 — Versão Estável (2026-08-11)
+- ✅ **Correção na Aplicação da Lista de Exclusão (`exclusion_list`)**: Corrigida a persistência e o consumo do Filtro de Exclusão no disparo em massa. O backend agora salva a `exclusion_list` no modelo `ScheduledTrigger` e o worker carrega todos esses telefones no `blocked_set` no início do envio, bloqueando rigorosamente qualquer disparo para contatos/etiquetas presentes na Base de Exclusão.
+
 ### v1.7.3 — Versão Estável (2026-08-11)
 - ✅ **Busca de Contatos em Massa (`Filters.jsx` e `leads.py`)**: O campo "Buscar Contato" na aba de Contatos agora aceita colar múltiplos contatos ou telefones (separados por quebra de linha ou vírgula). O backend realiza a busca flexível por sufixos numéricos (ignorando formatações ou DDI/DDD), filtrando instantaneamente todos os contatos colados.
 
