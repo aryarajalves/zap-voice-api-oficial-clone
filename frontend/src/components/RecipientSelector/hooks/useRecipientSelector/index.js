@@ -138,6 +138,7 @@ export const useRecipientSelector = ({
 
     const validation = useValidation({ 
         contacts, 
+        selectedList,
         filteredContacts,
         setContacts, 
         activeClient, 

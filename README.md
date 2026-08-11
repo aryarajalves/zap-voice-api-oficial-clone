@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.6.7 — Versão Estável (2026-08-11)
+- ✅ **Validação Focada no Alcance do Disparo (N Primeiros Contatos Aptos)**: Ao clicar no botão `VALIDAR CANAIS & JANELAS`, o sistema agora valida exclusivamente os N primeiros contatos configurados em "Disparar para os N Primeiros" (ex: 80 contatos), evitando requisições ou requisições desnecessárias para a lista inteira de contatos.
+
 ### v1.6.6 — Versão Estável (2026-08-11)
 - ✅ **Exportação CSV de Todos os Contatos Selecionados (Suporte Global a `selectAllPages`)**: Ao marcar a opção "Todos os X contatos estão selecionados", a exportação via CSV passa a baixar **todos os 1.277+ contatos** da base (respeitando os filtros ativos) em vez de limitar aos 50 contatos da primeira página visível.
 

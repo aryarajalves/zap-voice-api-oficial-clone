@@ -3,13 +3,15 @@ import { toast } from 'react-hot-toast';
 import { API_URL } from '../../../../config';
 import { fetchWithAuth } from '../../../../AuthContext';
 
-export const useValidation = ({ contacts, filteredContacts, setContacts, activeClient, selectedInbox, setIsValidated }) => {
+export const useValidation = ({ contacts, selectedList, filteredContacts, setContacts, activeClient, selectedInbox, setIsValidated }) => {
     const [isValidating, setIsValidating] = useState(false);
     const [progress, setProgress] = useState({ current: 0, total: 0 });
 
     const startValidation = async () => {
         if (!activeClient) return toast.error("Selecione um cliente primeiro");
-        const targets = filteredContacts && filteredContacts.length > 0 ? filteredContacts : contacts;
+        const targets = (selectedList && selectedList.length > 0)
+            ? selectedList
+            : ((filteredContacts && filteredContacts.length > 0) ? filteredContacts : contacts);
         if (targets.length === 0) return toast.error("Adicione contatos primeiro");
 
         setIsValidating(true);
