@@ -10,6 +10,8 @@ export default function ContactList({
     paginatedContacts,
     searchTerm,
     setSearchTerm,
+    reasonFilter,
+    setReasonFilter,
     selectedIds,
     toggleSelectRow,
     toggleSelectAll,
@@ -27,11 +29,14 @@ export default function ContactList({
 
     return (
         <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-sm border border-white/5 overflow-hidden transition-all duration-200">
-            <Filters 
-                searchTerm={searchTerm} 
-                setSearchTerm={setSearchTerm} 
-                selectedCount={selectedIds.size} 
-                onBulkDelete={onBulkDelete} 
+            <Filters
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                reasonFilter={reasonFilter}
+                setReasonFilter={setReasonFilter}
+                contacts={contacts}
+                selectedCount={selectedIds.size}
+                onBulkDelete={onBulkDelete}
                 onExport={onExport}
             />
 
@@ -41,21 +46,21 @@ export default function ContactList({
                 </div>
             ) : filteredContacts.length === 0 ? (
                 <div className="p-12 text-center text-gray-400 font-medium">
-                    {searchTerm ? 'Nenhum resultado encontrado para sua busca.' : 'Nenhum contato bloqueado no momento.'}
+                    {searchTerm || reasonFilter ? 'Nenhum resultado encontrado para os filtros aplicados.' : 'Nenhum contato bloqueado no momento.'}
                 </div>
             ) : (
                 <>
-                    <ContactTable 
-                        contacts={paginatedContacts} 
-                        selectedIds={selectedIds} 
+                    <ContactTable
+                        contacts={paginatedContacts}
+                        selectedIds={selectedIds}
                         toggleSelectRow={toggleSelectRow}
                         toggleSelectAll={toggleSelectAll}
                         isAllVisibleSelected={isAllVisibleSelected}
                         onUnblock={onUnblock}
                         listTab={listTab}
                     />
-                    
-                    <Pagination 
+
+                    <Pagination
                         currentPage={currentPage}
                         totalPages={totalPages}
                         setCurrentPage={setCurrentPage}

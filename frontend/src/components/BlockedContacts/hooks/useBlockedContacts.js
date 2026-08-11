@@ -13,6 +13,7 @@ export function useBlockedContacts() {
     const [manualInput, setManualInput] = useState('');
     const [adding, setAdding] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [reasonFilter, setReasonFilter] = useState(''); // filtro por motivo
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [mode, setMode] = useState('manual'); // 'manual' | 'upload'
 
@@ -334,14 +335,23 @@ export function useBlockedContacts() {
     };
 
     const filteredContacts = useMemo(() => {
-        if (!searchTerm) return contacts;
+        let result = contacts;
+
+        // Filtro por motivo (dropdown)
+        if (reasonFilter) {
+            result = result.filter(c =>
+                (c.reason || '').toLowerCase().includes(reasonFilter.toLowerCase())
+            );
+        }
+
+        if (!searchTerm) return result;
         const cleanSearch = searchTerm.trim();
 
         if (/[\n, ]/.test(cleanSearch)) {
             const searchNumbers = cleanNumbers(cleanSearch);
             if (searchNumbers.length > 0) {
                 const searchSuffixes = searchNumbers.map(n => getLast8(n));
-                return contacts.filter(c => {
+                return result.filter(c => {
                     const contactSuffix = getLast8(c.phone);
                     return searchSuffixes.some(suffix => {
                         if (suffix.length === 8) return contactSuffix.endsWith(suffix);
@@ -351,7 +361,7 @@ export function useBlockedContacts() {
             }
         }
 
-        return contacts.filter(c => {
+        return result.filter(c => {
             if (c.reason?.toLowerCase().includes(cleanSearch.toLowerCase())) return true;
             if (c.name?.toLowerCase().includes(cleanSearch.toLowerCase())) return true;
             const singleSuffix = getLast8(cleanSearch);
@@ -359,7 +369,7 @@ export function useBlockedContacts() {
             if (singleSuffix.length === 8) return contactSuffix.endsWith(singleSuffix);
             return (singleSuffix && c.phone.includes(singleSuffix)) || c.phone.includes(cleanSearch);
         });
-    }, [contacts, searchTerm]);
+    }, [contacts, searchTerm, reasonFilter]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -433,6 +443,7 @@ export function useBlockedContacts() {
         phoneColSearch, setPhoneColSearch, nameColSearch, setNameColSearch,
         handleFileUpload, processMappedImport, handleBlockManual,
         add55ToManualInput, performUnblock, handleBulkDelete, filteredContacts,
+        reasonFilter, setReasonFilter,
         paginatedContacts, totalPages, toggleSelectAll, toggleSelectRow, exportBlockedContacts
     };
 }

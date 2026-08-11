@@ -131,13 +131,15 @@ export default function BlockedContactsModular() {
             </div>
 
             {/* Lista de Contatos */}
-            <ContactList 
+            <ContactList
                 loading={hook.loading}
                 contacts={hook.contacts}
                 filteredContacts={hook.filteredContacts}
                 paginatedContacts={hook.paginatedContacts}
                 searchTerm={hook.searchTerm}
                 setSearchTerm={hook.setSearchTerm}
+                reasonFilter={hook.reasonFilter}
+                setReasonFilter={hook.setReasonFilter}
                 selectedIds={hook.selectedIds}
                 toggleSelectRow={hook.toggleSelectRow}
                 toggleSelectAll={hook.toggleSelectAll}
