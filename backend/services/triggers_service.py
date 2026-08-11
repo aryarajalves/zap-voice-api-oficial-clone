@@ -100,7 +100,7 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     failed_phones = set(ms.phone_number for ms in failed_msgs if ms.phone_number)
     trigger.total_failed = len(failed_phones)
     trigger.total_blocked = blocked
-    trigger.total_skipped = max(trigger.total_skipped or 0, skipped)
+    trigger.total_skipped = skipped
     trigger.total_interactions = max(trigger.total_interactions or 0, interactions)
     trigger.total_cost = max(float(trigger.total_cost or 0.0), total_cost)
     trigger.total_paid_templates = max(trigger.total_paid_templates or 0, paid_templates)

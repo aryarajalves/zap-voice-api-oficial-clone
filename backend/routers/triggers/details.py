@@ -382,6 +382,7 @@ async def get_trigger_messages(
                 "read": trigger.total_read or 0,
                 "failed": trigger.total_failed or 0,
                 "blocked": trigger.total_blocked or 0,
+                "skipped": trigger.total_skipped or 0,
                 "interaction": trigger.total_interactions or 0,
                 "queue": getattr(trigger, "queue_count", None) if getattr(trigger, "queue_count", None) is not None else max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0)),
                 "free": counts_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
@@ -410,6 +411,7 @@ async def get_trigger_messages(
                 "free": full_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
                 "template": full_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
                 "blocked": full_query.filter(models.MessageStatus.failure_reason == 'BLOCKED_VIA_BUTTON').count(),
+                "skipped": full_query.filter(models.MessageStatus.status == 'skipped').count(),
                 "interaction": full_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True)).count(),
                 "private_note": full_query.filter(models.MessageStatus.private_note_posted == True).count(),
                 "queue": 0 if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted'] else full_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False).count()

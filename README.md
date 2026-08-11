@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.7.0 — Versão Estável (2026-08-11)
+- ✅ **Sincronização Exata do Contador de Pulados (`⏭️ total_skipped`)**: Corrigida a função `reconcile` que mantinha o valor anterior em `trigger.total_skipped` através de `max()`. Agora, o contador na linha do disparo reflete de forma dinâmica e precisa o número de contatos com status `skipped` (6 pulados), batendo 100% com a lista exibida ao abrir o modal.
+
 ### v1.6.9 — Versão Estável (2026-08-11)
 - ✅ **Botão de Acesso Direto ao Chat nos Modais de Relatório**: Adicionado um botão roxo estilizado `💬 Chat` ao lado do número de cada contato no modal de detalhes do disparo (Enviados, Lidos, Interações, Fila, etc.). Quando o contato possui conversa criada/existente no Chatwoot / ZapVoice, o botão permite abrir diretamente o atendimento daquele contato em uma nova aba. (Disponíveis tags `backend-1.6.9` e `worker-1.6.9`).
 
