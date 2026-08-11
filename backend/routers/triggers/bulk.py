@@ -317,8 +317,7 @@ async def schedule_bulk_send(
         chatwoot_label=payload.get("chatwoot_label"),
         button_actions=payload.get("button_actions"),
         is_dynamic_label=payload.get("is_dynamic_label", False),
-        dynamic_label_name=payload.get("dynamic_label_name"),
-        exclusion_list=payload.get("exclusion_list")
+        dynamic_label_name=payload.get("dynamic_label_name")
     )
     db.add(trigger)
     db.commit()
