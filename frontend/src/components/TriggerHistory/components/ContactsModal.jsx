@@ -601,18 +601,13 @@ const ContactsModal = ({
                                 }
 
                                 const count = phonesToCopy.length;
-                                const msg = count === 1 ? '1 contato copiado!' : `${count} contatos copiados!`;
-                                if (copyToast) {
-                                    toast.success(msg, { id: copyToast });
-                                } else {
-                                    toast.success(msg);
-                                }
+                                const msg = count === 1 ? '1 contato copiado para a área de transferência!' : `${count} contatos copiados para a área de transferência!`;
+                                if (copyToast) toast.dismiss(copyToast);
+                                toast.success(msg);
                             } catch (err) {
-                                if (copyToast) {
-                                    toast.error('Erro ao copiar contatos.', { id: copyToast });
-                                } else {
-                                    toast.error('Erro ao copiar contatos.');
-                                }
+                                console.error('Erro ao copiar contatos:', err);
+                                if (copyToast) toast.dismiss(copyToast);
+                                toast.error('Erro ao copiar contatos.');
                             }
                         }}
                         className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition font-medium flex items-center gap-2"

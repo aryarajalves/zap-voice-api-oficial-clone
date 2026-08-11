@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.7.2 — Versão Estável (2026-08-11)
+- ✅ **Notificação Toast de Confirmação no Botão Copiar Lista (`ContactsModal`)**: Garantido o disparo imediato do toast verde de sucesso (`X contatos copiados para a área de transferência!`) ao clicar no botão de cópia de lista, fechando o toast de carregamento prévio.
+
 ### v1.7.1 — Versão Estável (2026-08-11)
 - ✅ **Correção na Aplicação de Etiquetas em Lote (`TagContactsModal`)**: Ajustada a correspondência de telefones na adição de etiquetas para utilizar sanitização apenas de dígitos numéricos (`replace(/\D/g, '')`). Isso impede falhas na vinculação de etiquetas quando os telefones possuem formatações de string ligeiramente distintas.
 
