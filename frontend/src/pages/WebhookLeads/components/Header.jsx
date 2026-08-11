@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiUser, FiTrash2, FiTag, FiSlash, FiPlus, FiUpload, FiDownload, FiRefreshCw, FiClock, FiZap, FiSend, FiActivity, FiMessageCircle } from 'react-icons/fi';
+import { FiUser, FiTrash2, FiTag, FiSlash, FiUnlock, FiPlus, FiUpload, FiDownload, FiRefreshCw, FiClock, FiZap, FiSend, FiActivity, FiMessageCircle } from 'react-icons/fi';
 
 export default function Header({
   selectedLeads,
@@ -9,6 +9,7 @@ export default function Header({
   setLeadToDelete,
   setIsBulkTagModalOpen,
   onOpenBlockModal,
+  onUnblockSelected,
   setIsCleanConfirmOpen,
   isCleaningTags,
   setIsCreateModalOpen,
@@ -96,6 +97,14 @@ export default function Header({
               >
                 <FiSlash />
                 Bloquear ({selectAllPages ? total.toLocaleString('pt-BR') : selectedLeads.length})
+              </button>
+
+              <button
+                onClick={onUnblockSelected}
+                className="flex items-center gap-2 px-4 py-2 bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400 rounded-xl text-sm font-medium hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-all border border-teal-200 dark:border-teal-800/30"
+              >
+                <FiUnlock />
+                Desbloquear ({selectAllPages ? total.toLocaleString('pt-BR') : selectedLeads.length})
               </button>
 
               <button

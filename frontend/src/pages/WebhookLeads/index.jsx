@@ -24,6 +24,7 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         setLeadToDelete={logic.setLeadToDelete}
         setIsBulkTagModalOpen={logic.setIsBulkTagModalOpen}
         onOpenBlockModal={logic.handleOpenBlockModal}
+        onUnblockSelected={logic.handleUnblockSelected}
         setIsCleanConfirmOpen={logic.setIsCleanConfirmOpen}
         isCleaningTags={logic.isCleaningTags}
         setIsCreateModalOpen={logic.setIsCreateModalOpen}

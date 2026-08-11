@@ -591,6 +591,56 @@ export function useWebhookLeads(activeClient) {
     } catch (err) {
       console.error(err);
       toast.error("Erro ao processar bloqueio.");
+  const handleUnblockSelected = async () => {
+    if (!activeClient) return;
+    if (selectedLeads.length === 0 && !selectAllPages) {
+      toast.error("Nenhum contato selecionado para desbloquear.");
+      return;
+    }
+
+    setIsBlocking(true);
+    try {
+      let res;
+      if (selectAllPages) {
+        const { from, to } = resolveDateRange(datePreset, customDateFrom, customDateTo);
+        const commonFilters = {
+          search: search || null,
+          event_type: eventType || null,
+          tag_filter: selectedTags.length > 0 ? selectedTags : null,
+          date_from: from || null,
+          date_to: to || null,
+          imported_by_client_id: importedByClientId || null,
+          origin: origin || null,
+          is_locked: lockedFilter !== '' ? lockedFilter : null,
+          has_bsud: bsudFilter !== '' ? bsudFilter : null,
+          filter_ddi: filterDdi || null,
+          filter_ddd: filterDdd || null,
+        };
+        res = await fetchWithAuth(`${API_URL}/leads/bulk-unblock-all`, {
+          method: 'POST',
+          body: JSON.stringify(commonFilters)
+        }, activeClient.id);
+      } else {
+        res = await fetchWithAuth(`${API_URL}/leads/bulk-unblock`, {
+          method: 'POST',
+          body: JSON.stringify({ lead_ids: selectedLeads })
+        }, activeClient.id);
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message);
+        setSelectedLeads([]);
+        setSelectAllPages(false);
+        fetchLeads();
+        fetchDdiDddOptions();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || "Erro ao desbloquear contato(s).");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao processar desbloqueio.");
     } finally {
       setIsBlocking(false);
     }
@@ -674,6 +724,6 @@ export function useWebhookLeads(activeClient) {
     // Etiquetar em massa
     isBulkTagModalOpen, setIsBulkTagModalOpen, isBulkTagging, handleBulkTag,
     // Bloquear / repouso (individual ou em massa)
-    blockTarget, handleOpenBlockModal, closeBlockModal, handleConfirmBlock, isBlocking
+    blockTarget, handleOpenBlockModal, closeBlockModal, handleConfirmBlock, handleUnblockSelected, isBlocking
   };
 }

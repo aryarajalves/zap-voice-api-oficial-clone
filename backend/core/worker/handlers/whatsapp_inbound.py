@@ -713,6 +713,13 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                                         except Exception as e_resolve:
                                             logger.warning(f"⚠️ [BUTTON_ACTION] Não foi possível resolver conversation_id local para {phone}: {e_resolve}")
 
+                                    # Herdar skip_block_check do trigger pai, ou definir True se for ação de bloqueio
+                                    parent_trigger_for_check = db_btn.query(models.ScheduledTrigger).filter(
+                                        models.ScheduledTrigger.id == block_trigger_id
+                                    ).first() if block_trigger_id else None
+                                    parent_skip = getattr(parent_trigger_for_check, 'skip_block_check', False) if parent_trigger_for_check else False
+                                    inherited_skip = (act_type == "block") or parent_skip
+
                                     new_t = models.ScheduledTrigger(
                                         client_id=cid,
                                         funnel_id=act_funnel_id,
@@ -723,7 +730,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                                         scheduled_time=datetime.now(timezone.utc),
                                         is_bulk=False,
                                         is_interaction=(act_type == "interaction"),
-                                        skip_block_check=(act_type == "block"),
+                                        skip_block_check=inherited_skip,
                                         parent_id=block_trigger_id,
                                         processed_data=meta_payload
                                     )

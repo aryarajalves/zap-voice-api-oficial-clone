@@ -1617,6 +1617,57 @@ def bulk_block_leads(
     }
 
 
+@router.post("/leads/bulk-unblock", summary="Desbloquear múltiplos leads selecionados")
+def bulk_unblock_leads(
+    request: BulkBlockRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """Remove os leads informados da lista de bloqueio permanente (BlockedContact) e de repouso (RestingContact)."""
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = db.query(models.WebhookLead).filter(
+        models.WebhookLead.id.in_(request.lead_ids),
+        models.WebhookLead.client_id == client_id
+    ).all()
+
+    related_client_ids = _get_related_client_ids(db, client_id)
+    suffixes = [_phone_suffix(lead.phone) for lead in leads if _phone_suffix(lead.phone)]
+
+    unblocked_count = 0
+    unrested_count = 0
+
+    if suffixes:
+        # Remover de BlockedContact por sufixo dos telefones selecionados
+        blocked_entries = db.query(models.BlockedContact).filter(
+            models.BlockedContact.client_id.in_(related_client_ids)
+        ).all()
+        for b in blocked_entries:
+            b_suf = _phone_suffix(b.phone)
+            if b_suf and b_suf in suffixes:
+                db.delete(b)
+                unblocked_count += 1
+
+        # Remover também de RestingContact se estiver em repouso
+        resting_entries = db.query(models.RestingContact).filter(
+            models.RestingContact.client_id.in_(related_client_ids)
+        ).all()
+        for r in resting_entries:
+            r_suf = _phone_suffix(r.phone)
+            if r_suf and r_suf in suffixes:
+                db.delete(r)
+                unrested_count += 1
+
+    db.commit()
+    total_removed = unblocked_count + unrested_count
+    return {
+        "status": "success",
+        "unblocked_count": unblocked_count,
+        "unrested_count": unrested_count,
+        "message": f"{total_removed} contato(s) desbloqueado(s) com sucesso."
+    }
+
+
 class BulkBlockAllRequest(BaseModel):
     search: Optional[str] = None
     event_type: Optional[str] = None
@@ -1629,6 +1680,52 @@ class BulkBlockAllRequest(BaseModel):
     has_bsud: Optional[str] = None
     filter_ddi: Optional[str] = None
     filter_ddd: Optional[str] = None
+
+
+@router.post("/leads/bulk-unblock-all", summary="Desbloquear todos os leads dos filtros ativos")
+def bulk_unblock_all_leads(
+    request: BulkBlockAllRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """Remove todos os contatos que batem com os filtros ativos da lista de bloqueio e repouso."""
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = _filter_leads_by_active_filters(db, client_id, request).all()
+
+    related_client_ids = _get_related_client_ids(db, client_id)
+    suffixes = set(_phone_suffix(lead.phone) for lead in leads if _phone_suffix(lead.phone))
+
+    unblocked_count = 0
+    unrested_count = 0
+
+    if suffixes:
+        blocked_entries = db.query(models.BlockedContact).filter(
+            models.BlockedContact.client_id.in_(related_client_ids)
+        ).all()
+        for b in blocked_entries:
+            b_suf = _phone_suffix(b.phone)
+            if b_suf and b_suf in suffixes:
+                db.delete(b)
+                unblocked_count += 1
+
+        resting_entries = db.query(models.RestingContact).filter(
+            models.RestingContact.client_id.in_(related_client_ids)
+        ).all()
+        for r in resting_entries:
+            r_suf = _phone_suffix(r.phone)
+            if r_suf and r_suf in suffixes:
+                db.delete(r)
+                unrested_count += 1
+
+    db.commit()
+    total_removed = unblocked_count + unrested_count
+    return {
+        "status": "success",
+        "unblocked_count": unblocked_count,
+        "unrested_count": unrested_count,
+        "message": f"{total_removed} contato(s) desbloqueado(s) com sucesso."
+    }
 
 
 @router.post("/leads/bulk-block-all", summary="Bloquear permanentemente todos os leads dos filtros ativos")

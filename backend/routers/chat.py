@@ -1301,6 +1301,8 @@ async def trigger_funnel_for_conversation(
         raise HTTPException(status_code=400, detail="Este funil já está em execução para este contato.")
 
     # Criar trigger de execução
+    # skip_block_check=True: disparo manual via chat ignora bloqueio.
+    # O bloqueio só é respeitado em disparos automáticos (webhooks, agendamentos).
     trigger = models.ScheduledTrigger(
         client_id=client_id,
         funnel_id=funnel_id,
@@ -1309,6 +1311,7 @@ async def trigger_funnel_for_conversation(
         is_bulk=False,
         contact_phone=convo.phone,
         contact_name=convo.contact_name or convo.phone,
+        skip_block_check=True,
         contacts_list=[{
             "id": str(convo.id),
             "meta": {"sender": {"name": convo.contact_name or convo.phone, "phone_number": convo.phone}}
