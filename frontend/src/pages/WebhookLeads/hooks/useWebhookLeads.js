@@ -591,6 +591,11 @@ export function useWebhookLeads(activeClient) {
     } catch (err) {
       console.error(err);
       toast.error("Erro ao processar bloqueio.");
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   const handleUnblockSelected = async () => {
     if (!activeClient) return;
     if (selectedLeads.length === 0 && !selectAllPages) {
