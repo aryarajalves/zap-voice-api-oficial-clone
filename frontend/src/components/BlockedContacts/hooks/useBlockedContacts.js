@@ -427,6 +427,17 @@ export function useBlockedContacts() {
         }
     };
 
+    // Selecionar TODOS os contatos filtrados (todas as páginas)
+    const selectAllFiltered = () => {
+        const allIds = filteredContacts.map(c => c.id);
+        setSelectedIds(new Set(allIds));
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const isAllFilteredSelected = filteredContacts.length > 0 && filteredContacts.every(c => selectedIds.has(c.id));
+
+
     const toggleSelectRow = (id) => {
         const newSet = new Set(selectedIds);
         if (newSet.has(id)) newSet.delete(id);
@@ -444,6 +455,7 @@ export function useBlockedContacts() {
         handleFileUpload, processMappedImport, handleBlockManual,
         add55ToManualInput, performUnblock, handleBulkDelete, filteredContacts,
         reasonFilter, setReasonFilter,
-        paginatedContacts, totalPages, toggleSelectAll, toggleSelectRow, exportBlockedContacts
+        paginatedContacts, totalPages, toggleSelectAll, toggleSelectRow, exportBlockedContacts,
+        selectAllFiltered, clearSelection, isAllFilteredSelected
     };
 }

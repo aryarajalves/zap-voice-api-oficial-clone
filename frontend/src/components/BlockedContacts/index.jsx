@@ -143,6 +143,9 @@ export default function BlockedContactsModular() {
                 selectedIds={hook.selectedIds}
                 toggleSelectRow={hook.toggleSelectRow}
                 toggleSelectAll={hook.toggleSelectAll}
+                selectAllFiltered={hook.selectAllFiltered}
+                clearSelection={hook.clearSelection}
+                isAllFilteredSelected={hook.isAllFilteredSelected}
                 onBulkDelete={confirmBulkDelete}
                 onUnblock={confirmUnblockSingle}
                 onExport={hook.exportBlockedContacts}
