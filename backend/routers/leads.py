@@ -81,12 +81,44 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
         )
 
     if search:
-        search_filter = or_(
-            models.WebhookLead.name.ilike(f"%{search}%"),
-            models.WebhookLead.phone.ilike(f"%{search}%"),
-            models.WebhookLead.email.ilike(f"%{search}%")
-        )
-        query = query.filter(search_filter)
+        # Se contiver quebras de linha (\n ou \r) ou vírgulas, trata como busca por lista de telefones/nomes em massa
+        raw_items = [s.strip() for s in search.replace('\r', '').split('\n') if s.strip()]
+        if len(raw_items) > 1 or any(',' in item for item in raw_items):
+            multi_items = []
+            for item in raw_items:
+                parts = [p.strip() for p in item.split(',') if p.strip()]
+                multi_items.extend(parts)
+            
+            if multi_items:
+                conds = []
+                for item in multi_items:
+                    clean_digits = "".join(filter(str.isdigit, item))
+                    if clean_digits and len(clean_digits) >= 8:
+                        # Busca por sufixo de telefone para ignorar DDI/DDD se necessário
+                        suf = clean_digits[-8:]
+                        conds.append(models.WebhookLead.phone.like(f"%{suf}%"))
+                    else:
+                        conds.append(models.WebhookLead.name.ilike(f"%{item}%"))
+                        conds.append(models.WebhookLead.phone.ilike(f"%{item}%"))
+                        conds.append(models.WebhookLead.email.ilike(f"%{item}%"))
+                query = query.filter(or_(*conds))
+        else:
+            clean_search = search.strip()
+            clean_digits = "".join(filter(str.isdigit, clean_search))
+            if clean_digits and len(clean_digits) >= 8:
+                # Busca flexível por telefone (seja pelo número completo ou pelos últimos 8 dígitos)
+                suf = clean_digits[-8:]
+                query = query.filter(or_(
+                    models.WebhookLead.name.ilike(f"%{clean_search}%"),
+                    models.WebhookLead.phone.like(f"%{suf}%"),
+                    models.WebhookLead.email.ilike(f"%{clean_search}%")
+                ))
+            else:
+                query = query.filter(or_(
+                    models.WebhookLead.name.ilike(f"%{clean_search}%"),
+                    models.WebhookLead.phone.ilike(f"%{clean_search}%"),
+                    models.WebhookLead.email.ilike(f"%{clean_search}%")
+                ))
 
     if event_type:
         query = query.filter(models.WebhookLead.last_event_type == event_type)

@@ -92,15 +92,25 @@ export default function Filters({
               Buscar Contato
             </label>
             <div className="relative">
-              <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
+              <FiSearch className="absolute left-3.5 top-3 text-gray-400" size={16} />
+              <textarea
                 id="contacts-search-input"
-                type="text"
-                placeholder="Buscar por nome ou telefone..."
-                className="w-full pl-11 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-600 outline-none transition-all text-gray-700 dark:text-gray-200"
+                rows={search && search.includes('\n') ? Math.min(6, search.split('\n').length) : 1}
+                placeholder="Buscar por nome, telefone ou colar lista em massa..."
+                className="w-full pl-11 pr-8 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-600 outline-none transition-all text-gray-700 dark:text-gray-200 resize-none font-mono placeholder:font-sans"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs font-bold"
+                  title="Limpar busca"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 

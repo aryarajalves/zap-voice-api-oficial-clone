@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.7.3 — Versão Estável (2026-08-11)
+- ✅ **Busca de Contatos em Massa (`Filters.jsx` e `leads.py`)**: O campo "Buscar Contato" na aba de Contatos agora aceita colar múltiplos contatos ou telefones (separados por quebra de linha ou vírgula). O backend realiza a busca flexível por sufixos numéricos (ignorando formatações ou DDI/DDD), filtrando instantaneamente todos os contatos colados.
+
 ### v1.7.2 — Versão Estável (2026-08-11)
 - ✅ **Notificação Toast de Confirmação no Botão Copiar Lista (`ContactsModal`)**: Garantido o disparo imediato do toast verde de sucesso (`X contatos copiados para a área de transferência!`) ao clicar no botão de cópia de lista, fechando o toast de carregamento prévio.
 
