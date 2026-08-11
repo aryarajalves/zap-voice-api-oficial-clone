@@ -71,7 +71,17 @@ async def get_trigger_messages(
                 )
             )
         elif status_filter == 'sent':
-            base_query = base_query.filter(or_(models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']), models.MessageStatus.delivered_counted == True, models.MessageStatus.read_counted == True))
+            base_query = base_query.filter(
+                or_(
+                    models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']),
+                    models.MessageStatus.delivered_counted == True,
+                    models.MessageStatus.read_counted == True
+                ),
+                or_(
+                    models.MessageStatus.failure_reason == None,
+                    models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'
+                )
+            )
         elif status_filter == 'queue':
             base_query = db.query(models.MessageStatus).filter(
                 models.MessageStatus.trigger_id.in_(all_trigger_ids),
@@ -152,9 +162,9 @@ async def get_trigger_messages(
                 ))
 
     if trigger.is_bulk:
-        from sqlalchemy import func, select
-        subquery = base_query.with_entities(func.max(models.MessageStatus.id)).group_by(models.MessageStatus.phone_number).subquery()
-        base_query = base_query.filter(models.MessageStatus.id.in_(select(subquery)))
+        from sqlalchemy import func
+        subquery = base_query.with_entities(func.max(models.MessageStatus.id)).group_by(models.MessageStatus.phone_number)
+        base_query = db.query(models.MessageStatus).filter(models.MessageStatus.id.in_(subquery))
 
     total = base_query.count()
     items = base_query.order_by(models.MessageStatus.updated_at.desc()).offset(skip).limit(limit).all()
