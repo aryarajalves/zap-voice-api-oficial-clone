@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.6.9 — Versão Estável (2026-08-11)
+- ✅ **Botão de Acesso Direto ao Chat nos Modais de Relatório**: Adicionado um botão roxo estilizado `💬 Chat` ao lado do número de cada contato no modal de detalhes do disparo (Enviados, Lidos, Interações, Fila, etc.). Quando o contato possui conversa criada/existente no Chatwoot / ZapVoice, o botão permite abrir diretamente o atendimento daquele contato em uma nova aba.
+
 ### v1.6.8 — Versão Estável (2026-08-11)
 - ✅ **Filtro de Contatos Pulados (Skipped 24h)**: Ao clicar no ícone de pular `⏭️`, o modal agora aplica corretamente o filtro `status_filter=skipped` no backend. A lista agora exibe exclusivamente os contatos que realmente foram pulados por envio recente de template nas últimas 24h, sem misturar com a lista completa do disparo. (Disponíveis tags `backend-1.6.8` e `worker-1.6.8`).
 

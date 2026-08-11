@@ -68,8 +68,22 @@ const ContactRow = ({
                 {/* Info do contato */}
                 <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <div className="text-sm font-black text-gray-900 dark:text-white font-mono">
-                            {phone || 'Desconhecido'}
+                        <div className="text-sm font-black text-gray-900 dark:text-white font-mono flex items-center gap-1.5">
+                            <span>{phone || 'Desconhecido'}</span>
+                            {contact.chatwoot_url && (
+                                <a
+                                    href={contact.chatwoot_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1 text-purple-600 dark:text-purple-400 hover:text-purple-700 bg-purple-500/10 hover:bg-purple-500/20 rounded-md border border-purple-500/20 transition-all flex items-center gap-1 text-[10px] font-bold"
+                                    title="Abrir Atendimento / Chat no Chatwoot"
+                                >
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                    Chat
+                                </a>
+                            )}
                         </div>
                         {contact.lead_tags && (() => {
                             const allTags = contact.lead_tags.split(',').map(t => t.trim()).filter(Boolean);
