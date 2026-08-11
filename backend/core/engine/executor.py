@@ -1,6 +1,5 @@
 from core.logger import setup_logger
 from datetime import datetime, timezone
-from sqlalchemy import or_
 import asyncio
 import models
 from chatwoot_client import ChatwootClient
@@ -49,38 +48,11 @@ async def execute_funnel(
         trigger.updated_at = datetime.now(timezone.utc)
         db.commit()
 
-    # Block Check & Resting Cooldown Check (with Project Sharing inheritance)
+    # NOTA: O sistema de bloqueio (BlockedContact / RestingContact) se aplica
+    # EXCLUSIVAMENTE a disparos em massa (bulk sends).
+    # Funis NÃO são bloqueados por esse sistema — contatos bloqueados ainda podem
+    # receber funis via webhook, agendamento ou disparo manual pelo chat.
     clean_phone = ''.join(filter(str.isdigit, contact_phone))
-    if not skip_block_check:
-        suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-        
-        # Resolving sibling clients if client belongs to a project
-        client = db.query(models.Client).filter(models.Client.id == trigger.client_id).first()
-        client_ids = [trigger.client_id]
-        if client and client.project_id:
-            sibling_clients = db.query(models.Client.id).filter(models.Client.project_id == client.project_id).all()
-            client_ids = [c.id for c in sibling_clients]
-
-        if db.query(models.BlockedContact).filter(
-            models.BlockedContact.client_id.in_(client_ids),
-            or_(models.BlockedContact.phone == clean_phone, models.BlockedContact.phone.like(f"%{suffix}"))
-        ).first():
-            trigger.status = 'failed'
-            trigger.failure_reason = "Bloqueado na Plataforma"
-            db.commit()
-            return
-
-        # Check resting cooldown block
-        now = datetime.utcnow()
-        if db.query(models.RestingContact).filter(
-            models.RestingContact.client_id.in_(client_ids),
-            or_(models.RestingContact.phone == clean_phone, models.RestingContact.phone.like(f"%{suffix}")),
-            models.RestingContact.expires_at > now
-        ).first():
-            trigger.status = 'failed'
-            trigger.failure_reason = "Contato em Repouso"
-            db.commit()
-            return
 
     # Discovery Log
     resolved_account_id = chatwoot_account_id or trigger.chatwoot_account_id
