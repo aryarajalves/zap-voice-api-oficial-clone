@@ -213,6 +213,27 @@ class WhatsAppClient:
         }
         return await self._meta_request("POST", "messages", json=payload)
 
+    async def send_reaction_official(self, phone_number: str, message_id: str, emoji: str):
+        """
+        Envia uma reação de emoji a uma mensagem específica do WhatsApp.
+        :param phone_number: Número do destinatário
+        :param message_id: ID wamid da mensagem no WhatsApp (ex: wamid.HBgM...)
+        :param emoji: Emoji da reação (ex: "👍", "❤️", "😂") ou "" para remover
+        """
+        clean_phone = phone_number.strip() if re.search(r'[a-zA-Z]', phone_number) else ''.join(filter(str.isdigit, phone_number))
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": clean_phone,
+            "type": "reaction",
+            "reaction": {
+                "message_id": message_id,
+                "emoji": emoji
+            }
+        }
+        return await self._meta_request("POST", "messages", json=payload)
+
+
     async def upload_media_to_meta(self, file_path: str, mime_type: str = 'audio/ogg') -> str:
         wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=self.client_id)
         wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=self.client_id)

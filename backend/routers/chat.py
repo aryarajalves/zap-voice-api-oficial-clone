@@ -2322,4 +2322,81 @@ async def seed_conversations(
     }
 
 
+class ReactRequest(BaseModel):
+    phone: str
+    message_id: str  # Pode ser o wamid da Meta (wamid.xxx) ou o ID numérico local
+    emoji: str       # Emoji (ex: "👍", "❤️", "😂") ou "" para remover
+
+
+@router.post("/chat/react")
+async def react_to_message(
+    payload: ReactRequest,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Envia uma reação de emoji para uma mensagem do WhatsApp recebida pelo contato.
+    """
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
+
+    if not payload.phone or not payload.message_id:
+        raise HTTPException(status_code=400, detail="Telefone e message_id são obrigatórios.")
+
+    # 1. Tentar encontrar a mensagem no banco de dados local (models.ChatMessage)
+    target_wamid = payload.message_id
+    msg_obj = None
+
+    if not target_wamid.startswith("wamid."):
+        # Se for ID numérico local, busca o wamid salvo
+        try:
+            msg_id_num = int(payload.message_id)
+            msg_obj = db.query(models.ChatMessage).filter(models.ChatMessage.id == msg_id_num).first()
+        except (ValueError, TypeError):
+            pass
+    else:
+        msg_obj = db.query(models.ChatMessage).filter(
+            or_(
+                models.ChatMessage.wa_message_id == target_wamid,
+                models.ChatMessage.wamid == target_wamid,
+                models.ChatMessage.message_id == target_wamid
+            )
+        ).first()
+
+    if msg_obj:
+        target_wamid = getattr(msg_obj, "wa_message_id", None) or getattr(msg_obj, "wamid", None) or getattr(msg_obj, "message_id", None) or target_wamid
+
+    if not target_wamid or not str(target_wamid).startswith("wamid."):
+        logger.warning(f"⚠️ [REACT] Mensagem {payload.message_id} não possui wamid válido da Meta (recebido: {target_wamid})")
+
+    # 2. Enviar reação via WhatsAppClient (Meta Cloud API)
+    wa_client = WhatsAppClient(client_id=client_id)
+    try:
+        res = await wa_client.send_reaction_official(
+            phone_number=payload.phone,
+            message_id=target_wamid,
+            emoji=payload.emoji
+        )
+        logger.info(f"👍 [REACT] Reação '{payload.emoji}' enviada para {payload.phone} na mensagem {target_wamid}: {res}")
+
+        # 3. Atualizar reação localmente no registro da mensagem
+        if msg_obj:
+            meta = dict(msg_obj.meta_data or {})
+            reactions = dict(meta.get("reactions") or {})
+            if payload.emoji:
+                reactions["agent"] = payload.emoji
+            else:
+                reactions.pop("agent", None)
+            meta["reactions"] = reactions
+            msg_obj.meta_data = meta
+            db.commit()
+
+        return {"status": "success", "response": res, "message_id": target_wamid, "emoji": payload.emoji}
+    except Exception as e:
+        logger.error(f"❌ [REACT] Erro ao enviar reação: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao enviar reação: {str(e)}")
+
+
+
 

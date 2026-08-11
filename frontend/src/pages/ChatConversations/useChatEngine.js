@@ -426,7 +426,51 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         }
     };
 
+    const sendReaction = async (messageId, emoji) => {
+        if (!selectedConvo || !selectedConvo.phone) {
+            toast.error("Nenhuma conversa selecionada.");
+            return;
+        }
+
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/react`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    phone: selectedConvo.phone,
+                    message_id: String(messageId),
+                    emoji: emoji
+                })
+            }, activeClient?.id);
+
+            if (res.ok) {
+                // Atualiza o estado local das mensagens para exibir a reação imediatamente
+                setMessages(prev => prev.map(m => {
+                    if (String(m.id) === String(messageId) || m.wa_message_id === messageId || m.wamid === messageId || m.message_id === messageId) {
+                        const meta = { ...(m.meta_data || {}) };
+                        const reactions = Array.isArray(meta.reactions) ? [...meta.reactions] : [];
+                        // Atualiza ou remove reação do agente
+                        const filtered = reactions.filter(r => r.sender !== 'agent');
+                        if (emoji) {
+                            filtered.push({ sender: 'agent', emoji: emoji });
+                        }
+                        meta.reactions = filtered;
+                        return { ...m, meta_data: meta };
+                    }
+                    return m;
+                }));
+                toast.success(emoji ? `Reação ${emoji} enviada!` : "Reação removida");
+            } else {
+                const err = await res.json().catch(() => ({}));
+                toast.error(err.detail || "Erro ao enviar reação.");
+            }
+        } catch (e) {
+            console.error("Erro ao reagir:", e);
+            toast.error("Falha ao comunicar com o servidor.");
+        }
+    };
+
     return {
+        sendReaction,
         conversations, setConversations,
         messages, setMessages,
         newMessage, setNewMessage,

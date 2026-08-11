@@ -79,6 +79,15 @@ class ChatwootClient:
             return {"id": random.randint(10000, 99999), "content": content}
         return await self._cw.send_private_note(conversation_id, content, *args, **kwargs)
 
+    async def send_reaction(self, phone_number: str, message_id: str, emoji: str):
+        if self.simulate:
+            self._maybe_raise_ratelimit()
+            await asyncio.sleep(random.uniform(0.01, 0.05))
+            logger.info(f"🤖 [MOCK send_reaction] Reagindo com {emoji} na mensagem {message_id} ({phone_number})")
+            return {"success": True}
+        return await self._wa.send_reaction_official(phone_number, message_id, emoji)
+
+
     async def create_private_note(self, conversation_id, content, *args, **kwargs):
         if self.simulate:
             self._maybe_raise_ratelimit()

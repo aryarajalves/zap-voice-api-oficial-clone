@@ -1898,6 +1898,25 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                         : 'bg-white dark:bg-[#1e293b] text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-white/5 rounded-tl-none'
                                                     }`}
                                                 >
+                                                    {/* Barra de Reação Rápida (Hover) */}
+                                                    <div className={`absolute -top-4 ${isMe ? 'right-2' : 'left-2'} hidden group-hover/msg:flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-1 rounded-full shadow-lg z-20 transition-all scale-90 hover:scale-100`}>
+                                                        {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+                                                            <button
+                                                                key={emoji}
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const targetMsgId = msg.wa_message_id || msg.wamid || msg.message_id || msg.id;
+                                                                    engine.sendReaction(targetMsgId, emoji);
+                                                                }}
+                                                                className="hover:scale-125 transition-transform text-xs p-0.5 cursor-pointer leading-none"
+                                                                title={`Reagir com ${emoji}`}
+                                                            >
+                                                                {emoji}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
                                                     {/* Se for template, exibe badge superior exclusivo */}
                                                     {isTemplate && (
                                                         <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-wider text-indigo-300 mb-2 bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-500/20 w-fit">
