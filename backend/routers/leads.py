@@ -1425,6 +1425,93 @@ def bulk_tag_all_leads(
     }
 
 
+def _remove_tags_from_lead(lead, remove_tags_str: str, db: Optional[Session] = None) -> bool:
+    """Remove etiqueta(s) do campo 'tags' do lead e das labels da conversa correspondente.
+    Aceita múltiplas etiquetas separadas por vírgula. Retorna True se algo mudou."""
+    existing = [t.strip() for t in (lead.tags or '').split(',') if t.strip()]
+    to_remove = [t.strip().lower() for t in (remove_tags_str or '').split(',') if t.strip()]
+    if not existing or not to_remove:
+        return False
+
+    new_existing = [t for t in existing if t.lower() not in to_remove]
+    changed = len(new_existing) != len(existing)
+
+    if changed:
+        from sqlalchemy.orm.attributes import flag_modified
+        lead.tags = ', '.join(new_existing)
+        lead.updated_at = datetime.now()
+        flag_modified(lead, "tags")
+
+        if db and lead.phone and lead.client_id:
+            clean_phone = str(lead.phone).replace('+', '').strip()
+            target_phones = [lead.phone, clean_phone, f"+{clean_phone}"]
+            convos = db.query(models.ChatConversation).filter(
+                models.ChatConversation.client_id == lead.client_id,
+                models.ChatConversation.phone.in_(target_phones)
+            ).all()
+            for convo in convos:
+                c_labels = convo.labels if isinstance(convo.labels, list) else []
+                c_new = [x for x in c_labels if isinstance(x, str) and x.lower() not in to_remove]
+                if len(c_new) != len(c_labels):
+                    convo.labels = c_new
+                    flag_modified(convo, "labels")
+    return changed
+
+
+@router.post("/leads/bulk-untag", summary="Remover etiqueta de múltiplos leads selecionados")
+def bulk_untag_leads(
+    request: BulkTagRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """Remove uma (ou mais, separadas por vírgula) etiqueta(s) dos leads informados."""
+    if not request.tag or not request.tag.strip():
+        raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta para remover.")
+
+    client_id = x_client_id if x_client_id else current_user.client_id
+    leads = db.query(models.WebhookLead).filter(
+        models.WebhookLead.id.in_(request.lead_ids),
+        models.WebhookLead.client_id == client_id
+    ).all()
+
+    untagged_count = sum(1 for lead in leads if _remove_tags_from_lead(lead, request.tag, db=db))
+    db.commit()
+
+    return {
+        "status": "success",
+        "untagged_count": untagged_count,
+        "total": len(leads),
+        "message": f"Etiqueta removida de {untagged_count} de {len(leads)} contato(s) selecionado(s)."
+    }
+
+
+@router.post("/leads/bulk-untag-all", summary="Remover etiqueta de todos os leads dos filtros ativos")
+def bulk_untag_all_leads(
+    request: BulkTagAllRequest,
+    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_premium)
+):
+    """Remove uma etiqueta de TODOS os leads que correspondem aos filtros informados."""
+    if not request.tag or not request.tag.strip():
+        raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta para remover.")
+
+    client_id = x_client_id if x_client_id else current_user.client_id
+    query = _filter_leads_by_active_filters(db, client_id, request)
+
+    leads = query.all()
+    untagged_count = sum(1 for lead in leads if _remove_tags_from_lead(lead, request.tag, db=db))
+    db.commit()
+
+    return {
+        "status": "success",
+        "untagged_count": untagged_count,
+        "total": len(leads),
+        "message": f"Etiqueta removida de {untagged_count} de {len(leads)} contato(s)."
+    }
+
+
 def _filter_leads_by_active_filters(db: Session, client_id: int, filters):
     """Reconstrói a query de leads a partir de um objeto de filtros (Bulk*AllRequest),
     espelhando exatamente os filtros usados em /leads. Usado pelas rotas

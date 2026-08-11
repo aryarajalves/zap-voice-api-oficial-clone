@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 const ConfirmationDialog = ({
     isOpen,
@@ -18,9 +19,9 @@ const ConfirmationDialog = ({
 }) => {
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden p-6 border border-gray-100 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-200">
+    return createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                 <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                     <span className="shrink-0">{icon}</span> {title}
                 </h4>
@@ -69,7 +70,8 @@ const ConfirmationDialog = ({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

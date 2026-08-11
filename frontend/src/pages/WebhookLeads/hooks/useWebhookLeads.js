@@ -71,6 +71,7 @@ export function useWebhookLeads(activeClient) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [eventType, setEventType] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
+  const [excludedTags, setExcludedTags] = useState([]);
   const [importedByClientId, setImportedByClientId] = useState('');
   const [origin, setOrigin] = useState('');
   const [lockedFilter, setLockedFilter] = useState(''); // '' = todos, 'true' = protegidos, 'false' = não protegidos
@@ -131,6 +132,7 @@ export function useWebhookLeads(activeClient) {
     const currentSearch = overrides.search !== undefined ? overrides.search : debouncedSearch;
     const currentEventType = overrides.eventType !== undefined ? overrides.eventType : eventType;
     const currentTags = overrides.tags !== undefined ? overrides.tags : selectedTags;
+    const currentExcludedTags = overrides.excludedTags !== undefined ? overrides.excludedTags : excludedTags;
     const currentPage = overrides.page !== undefined ? overrides.page : page;
     const currentDatePreset = overrides.datePreset !== undefined ? overrides.datePreset : datePreset;
     const currentCustomFrom = overrides.customDateFrom !== undefined ? overrides.customDateFrom : customDateFrom;
@@ -162,6 +164,11 @@ export function useWebhookLeads(activeClient) {
           url += `&tag=${encodeURIComponent(t)}`;
         });
       }
+      if (currentExcludedTags && currentExcludedTags.length > 0) {
+        currentExcludedTags.forEach(t => {
+          url += `&exclude_tag=${encodeURIComponent(t)}`;
+        });
+      }
       if (from) url += `&date_from=${from}`;
       if (to) url += `&date_to=${to}`;
 
@@ -177,7 +184,7 @@ export function useWebhookLeads(activeClient) {
     } finally {
       setLoading(false);
     }
-  }, [activeClient?.id, limit, debouncedSearch, eventType, selectedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
+  }, [activeClient?.id, limit, debouncedSearch, eventType, selectedTags, excludedTags, page, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
 
   const fetchFilters = useCallback(async () => {
     if (!activeClient?.id) return;
@@ -442,14 +449,15 @@ export function useWebhookLeads(activeClient) {
     }
   };
 
-  const handleBulkTag = async (tagValue) => {
-    if (!activeClient || !tagValue || !tagValue.trim()) return;
+  const handleBulkTag = async (tagValue, actionType = 'add') => {
+    if (!activeClient || !tagValue) return;
     setIsBulkTagging(true);
     try {
       if (selectAllPages) {
-        // Etiquetar todos os contatos que batem com os filtros ativos
+        // Etiquetar ou remover etiqueta de todos os contatos que batem com os filtros ativos
         const { from, to } = resolveDateRange(datePreset, customDateFrom, customDateTo);
-        const res = await fetchWithAuth(`${API_URL}/leads/bulk-tag-all`, {
+        const endpoint = actionType === 'remove' ? `${API_URL}/leads/bulk-untag-all` : `${API_URL}/leads/bulk-tag-all`;
+        const res = await fetchWithAuth(endpoint, {
           method: 'POST',
           body: JSON.stringify({
             tag: tagValue,
@@ -475,22 +483,23 @@ export function useWebhookLeads(activeClient) {
           fetchLeads();
           fetchFilters();
         } else {
-          toast.error("Erro ao etiquetar todos os contatos.");
+          toast.error("Erro ao alterar etiquetas de todos os contatos.");
         }
       } else {
-        const res = await fetchWithAuth(`${API_URL}/leads/bulk-tag`, {
+        const endpoint = actionType === 'remove' ? `${API_URL}/leads/bulk-untag` : `${API_URL}/leads/bulk-tag`;
+        const res = await fetchWithAuth(endpoint, {
           method: 'POST',
           body: JSON.stringify({ lead_ids: selectedLeads, tag: tagValue })
         }, activeClient.id);
         if (res.ok) {
           const data = await res.json();
-          toast.success(data.message || `Etiqueta aplicada a ${selectedLeads.length} contato(s).`);
+          toast.success(data.message || `Etiqueta alterada em ${selectedLeads.length} contato(s).`);
           setSelectedLeads([]);
           setIsBulkTagModalOpen(false);
           fetchLeads();
           fetchFilters();
         } else {
-          toast.error("Erro ao etiquetar contatos selecionados.");
+          toast.error("Erro ao alterar etiquetas dos contatos selecionados.");
         }
       }
     } catch (err) {
@@ -625,7 +634,7 @@ export function useWebhookLeads(activeClient) {
 
   return {
     leads, total, loading, page, setPage, limit, setLimit,
-    search, setSearch, eventType, setEventType, selectedTags, setSelectedTags, availableFilters,
+    search, setSearch, eventType, setEventType, selectedTags, setSelectedTags, excludedTags, setExcludedTags, availableFilters,
     importedByClientId, setImportedByClientId,
     origin, setOrigin,
     lockedFilter, setLockedFilter,

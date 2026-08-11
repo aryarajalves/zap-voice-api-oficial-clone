@@ -121,7 +121,6 @@ const TagSelector = ({
                                     </div>
                                     <div className="flex items-center gap-3 mt-2 px-1 text-[8px] font-black uppercase tracking-wider text-slate-500">
                                         <span className="flex items-center gap-1"><FiCheck size={10} className="text-emerald-400" /> Precisa ter</span>
-                                        <span className="flex items-center gap-1"><FiSlash size={10} className="text-red-400" /> Não pode ter</span>
                                     </div>
                                 </div>
 
@@ -131,23 +130,18 @@ const TagSelector = ({
                                         ?.filter(tag => !tagSearch || tag.toLowerCase().includes(tagSearch.toLowerCase()))
                                         .map(tag => {
                                             const isSelected = selectedTags.includes(tag);
-                                            const isExcluded = excludedTags.includes(tag);
                                             return (
                                                 <div
                                                     key={tag}
-                                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-colors
+                                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer
                                                         ${isSelected
                                                             ? 'bg-emerald-500/10 text-emerald-400'
-                                                            : isExcluded
-                                                                ? 'bg-red-500/10 text-red-400'
-                                                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                                                         }`}
+                                                    onClick={() => handleToggleTag(tag)}
                                                     title={tag}
                                                 >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleToggleTag(tag)}
-                                                        title="Precisa ter esta etiqueta"
+                                                    <div
                                                         className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg border transition-all ${
                                                             isSelected
                                                                 ? 'bg-emerald-500 border-emerald-500 text-black'
@@ -155,26 +149,8 @@ const TagSelector = ({
                                                         }`}
                                                     >
                                                         <FiCheck size={12} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleToggleExcludedTag(tag)}
-                                                        title="Não pode ter esta etiqueta"
-                                                        className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg border transition-all ${
-                                                            isExcluded
-                                                                ? 'bg-red-500 border-red-500 text-white'
-                                                                : 'border-white/10 bg-black/20 text-transparent hover:border-red-500/50'
-                                                        }`}
-                                                    >
-                                                        <FiSlash size={12} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleToggleTag(tag)}
-                                                        className="flex-1 text-left truncate"
-                                                    >
-                                                        <span className="truncate">{tag}</span>
-                                                    </button>
+                                                    </div>
+                                                    <span className="flex-1 text-left truncate">{tag}</span>
                                                 </div>
                                             );
                                         })

@@ -108,6 +108,7 @@ Abaixo, detalho cada tela identificada no sistema e as dúvidas que precisamos s
     - 👀 **Lidos**: Visualizados pelo usuário.
     - 👆 **Interações**: Cliques em botões ou respostas.
     - 🚫 **Bloqueios**: Números inválidos ou bloqueados.
+    - ⏭️ **Pulados**: Contatos ignorados pelo check de 24h (template já enviado recentemente).
     - ❌ **Falhas**: Erros de processamento ou API.
     - 🔄 **Funis Ativados**: Automações disparadas via botão.
     - 🆓 **Grátis**: Mensagens de sessão (janela 24h).

@@ -169,6 +169,13 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.6.4 — Versão Estável (2026-08-11)
+- ✅ **Dropdown Inteligente de Seleção de Etiquetas no Modal de Gerenciamento**: Substituição do campo de texto simples no `BulkTagModal` por seletor suspenso inteligente com campo de busca interna, suporte à criação de novas etiquetas na aba "Adicionar" e visualização de etiquetas existentes na aba "Remover".
+- ✅ **Filtro Duplo de Etiquetas no Cabeçalho (Inclusão "Ter" vs Exclusão "Não Ter")**: Permite filtrar a lista de contatos para exibir leads com determinada etiqueta ou ocultar contatos que possuem determinada tag (`exclude_tag`).
+- ✅ **Organização da Barra de Ações em 2 Linhas**: Reestruturação visual do cabeçalho da lista de contatos com divisão equilibrada das ferramentas de gestão e importação/exportação.
+- ✅ **Rotação Condicional por Sucesso no ManyChat**: A ponteira de rotação das contas do ManyChat só avança após o sucesso (`status == 'success'`) da integração, garantindo retentativa na mesma conta em caso de falha.
+- ✅ **Ajustes Finos de Interface e Camadas**: Correção do z-index e eliminação da barra de rolagem horizontal (`overflow-x-hidden`) no menu do modal de etiquetas.
+
 ### v4.5.0 — Versão Estável (2026-08-10)
 - ✅ **Análise de Dúvidas de Atendimento com IA (OpenAI)**: Análise inteligente individual e em lote para conversas, gerando relatório de dúvidas não respondidas e opção de exportação em HTML e PDF.
 - ✅ **Popup Modal de Escolha de Cor para Novas Etiquetas**: Ao criar um novo marcador no chat, exibe modal centralizado com paleta de cores predefinidas + seletor customizado `<input type="color">` e pré-visualização ao vivo.

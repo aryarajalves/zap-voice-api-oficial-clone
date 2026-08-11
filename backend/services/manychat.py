@@ -192,11 +192,10 @@ def get_manychat_tokens(client_id: int) -> list:
 
 _MANYCHAT_ROTATION_POINTERS = {}
 
-def get_next_rotated_manychat_token(client_id: int) -> tuple:
+def get_current_manychat_token_info(client_id: int) -> tuple:
     """
-    Retorna (token_info, position, total) selecionando a próxima conta via rotação sequencial (Round-Robin).
-    Se houver 1 conta, retorna (token, 1, 1).
-    Se houver N contas, alterna (1 -> 2 -> ... -> N -> 1).
+    Retorna (token_info, position, total) apontando para a conta atual na fila de rotação.
+    NÃO avança a ponteira.
     """
     tokens = get_manychat_tokens(client_id)
     if not tokens:
@@ -208,16 +207,28 @@ def get_next_rotated_manychat_token(client_id: int) -> tuple:
     current_idx = _MANYCHAT_ROTATION_POINTERS.get(client_id, 0)
     selected_idx = current_idx % len(tokens)
     
-    _MANYCHAT_ROTATION_POINTERS[client_id] = (selected_idx + 1) % len(tokens)
-    
     return (tokens[selected_idx], selected_idx + 1, len(tokens))
+
+
+def advance_manychat_rotation_pointer(client_id: int):
+    """
+    Avança a ponteira de rotação do ManyChat para a próxima conta após uma sincronização BEM-SUCEDIDA.
+    """
+    tokens = get_manychat_tokens(client_id)
+    if not tokens or len(tokens) <= 1:
+        return
+    
+    current_idx = _MANYCHAT_ROTATION_POINTERS.get(client_id, 0)
+    _MANYCHAT_ROTATION_POINTERS[client_id] = (current_idx + 1) % len(tokens)
+    logger.info(f"🔄 [MANYCHAT-ROTATION] Ponteira avançada para o próximo ManyChat (Cliente #{client_id}).")
+
 
 async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, email: str = None, custom_field_name: str = None) -> dict:
     """
-    Sincroniza contato com ManyChat utilizando rotação sequencial (Round-Robin) entre as contas cadastradas.
-    Retorna dicionário com o resultado da operação.
+    Sincroniza contato com ManyChat utilizando rotação sequencial (Round-Robin).
+    A ponteira de rotação só avança para a próxima conta se esta integração for 100% BEM-SUCEDIDA (status == 'success').
     """
-    token_info, pos, total = get_next_rotated_manychat_token(client_id)
+    token_info, pos, total = get_current_manychat_token_info(client_id)
     if not token_info:
         return {
             "status": "skipped",
@@ -233,7 +244,11 @@ async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, emai
     if key_str:
         res["key_preview"] = f"...{key_str[-4:]}" if len(key_str) >= 4 else key_str
 
-    logger.info(f"🔄 [MANYCHAT-ROTATION] Sincronizado contato {phone} na conta '{token_info['name']}' ({pos}/{total}).")
+    if res.get("status") == "success":
+        advance_manychat_rotation_pointer(client_id)
+        logger.info(f"✅ [MANYCHAT-ROTATION] Sincronização BEM-SUCEDIDA na conta '{token_info['name']}' ({pos}/{total}). Rotação avançada.")
+    else:
+        logger.warning(f"⚠️ [MANYCHAT-ROTATION] Falha na sincronização na conta '{token_info['name']}' ({pos}/{total}). Ponteira MANTIDA na mesma conta para o próximo contato.")
 
     return res
 
@@ -260,7 +275,7 @@ async def _sync_to_manychat_with_key(api_key: str, name: str, phone: str, tag: s
 
     if not api_key or api_key == "seu_token_aqui":
         result_status["status"] = "skipped"
-        result_status["error"] = "API Key not configured"
+        result_status["error"] = "Apikey do manychat"
         return result_status
 
     headers = {
@@ -272,8 +287,6 @@ async def _sync_to_manychat_with_key(api_key: str, name: str, phone: str, tag: s
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Limpa o telefone
-            clean_phone_digits = "".join(filter(str.isdigit, str(phone)))
 
             # --- 1. TENTATIVA DE CRIAÇÃO DIRETA ---
             create_url = f"https://api.manychat.com/fb/subscriber/createSubscriber"

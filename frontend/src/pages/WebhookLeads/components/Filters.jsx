@@ -7,6 +7,7 @@ import DateFilter from './DateFilter';
 export default function Filters({
   search, setSearch,
   selectedTags = [], setSelectedTags,
+  excludedTags = [], setExcludedTags,
   importedByClientId, setImportedByClientId,
   origin, setOrigin,
   lockedFilter, setLockedFilter,
@@ -44,11 +45,23 @@ export default function Filters({
     return () => document.removeEventListener('mousedown', handleTagClickOutside);
   }, [tagDropdownOpen]);
 
-  const handleToggleTag = (tag) => {
+  const handleToggleIncludeTag = (tag) => {
+    // Se estivesse em exclusão, remove da exclusão e adiciona na inclusão
+    setExcludedTags(prev => prev.filter(t => t !== tag));
     setSelectedTags(prev =>
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
     );
   };
+
+  const handleToggleExcludeTag = (tag) => {
+    // Se estivesse em inclusão, remove da inclusão e adiciona na exclusão
+    setSelectedTags(prev => prev.filter(t => t !== tag));
+    setExcludedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const totalActiveTagFilters = selectedTags.length + excludedTags.length;
 
   const blockStatusOptions = [
     ...(hasBlockedLeads ? [{ value: 'blocked', label: '🚫 Bloqueados' }] : []),
@@ -59,14 +72,14 @@ export default function Filters({
   const activeAdvancedCount = 
     (importedByClientId ? 1 : 0) + 
     (origin ? 1 : 0) + 
-    (lockedFilter ? 1 : 0) + 
+    (lockedFilter !== '' ? 1 : 0) + 
     (blockStatusFilter ? 1 : 0) + 
-    (bsudFilter ? 1 : 0) + 
+    (bsudFilter !== '' ? 1 : 0) + 
     (filterDdi ? 1 : 0) + 
     (filterDdd ? 1 : 0);
 
   return (
-    <div className="mb-6 space-y-4">
+    <div className="space-y-4 mb-6">
       {/* Container Principal de Filtros */}
       <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-300">
         
@@ -118,7 +131,7 @@ export default function Filters({
                 type="button"
                 onClick={() => setTagDropdownOpen(o => !o)}
                 className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all outline-none
-                  ${selectedTags.length > 0
+                  ${totalActiveTagFilters > 0
                     ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-200 dark:shadow-purple-900/40 font-semibold'
                     : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-purple-400'
                   }`}
@@ -126,10 +139,8 @@ export default function Filters({
                 <span className="flex items-center gap-2 truncate">
                   <FiTag size={15} className="flex-shrink-0" />
                   <span className="truncate">
-                    {selectedTags.length > 0
-                      ? (selectedTags.length === 1 
-                          ? selectedTags[0] 
-                          : `${selectedTags[0]} +${selectedTags.length - 1}`)
+                    {totalActiveTagFilters > 0
+                      ? `${selectedTags.length > 0 ? `+${selectedTags.length}` : ''} ${excludedTags.length > 0 ? `-${excludedTags.length}` : ''}`
                       : 'Todas as Etiquetas'
                     }
                   </span>
@@ -143,7 +154,7 @@ export default function Filters({
               {tagDropdownOpen && (
                 <div
                   className="absolute top-full left-0 right-0 mt-2 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden"
-                  style={{ minWidth: '260px' }}
+                  style={{ minWidth: '280px' }}
                 >
                   <div className="p-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                     <div className="relative">
@@ -169,13 +180,13 @@ export default function Filters({
                     </div>
                   </div>
 
-                  <div className="max-h-60 overflow-y-auto p-2 space-y-0.5">
+                  <div className="max-h-60 overflow-y-auto p-2 space-y-1">
                     <button
                       id="contacts-tag-option-all"
                       type="button"
-                      onClick={() => { setSelectedTags([]); setTagDropdownOpen(false); setTagSearch(''); }}
+                      onClick={() => { setSelectedTags([]); setExcludedTags([]); setTagDropdownOpen(false); setTagSearch(''); }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                        ${selectedTags.length === 0
+                        ${totalActiveTagFilters === 0
                           ? 'bg-purple-600 text-white'
                           : 'text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-700'
                         }`}
@@ -192,28 +203,48 @@ export default function Filters({
                     {availableFilters.tags
                       ?.filter(tag => !tagSearch || tag.toLowerCase().includes(tagSearch.toLowerCase()))
                       .map(tag => {
-                        const isSelected = selectedTags.includes(tag);
+                        const isIncluded = selectedTags.includes(tag);
+                        const isExcluded = excludedTags.includes(tag);
                         return (
-                          <button
+                          <div
                             key={tag}
-                            id={`contacts-tag-option-${tag}`}
-                            type="button"
-                            onClick={() => handleToggleTag(tag)}
-                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors truncate
-                              ${isSelected
-                                ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-semibold'
-                                : 'text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-700'
-                              }`}
-                            title={tag}
+                            className={`flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl transition-all ${
+                              isIncluded
+                                ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40'
+                                : isExcluded
+                                ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40'
+                                : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                            }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              readOnly
-                              className="rounded text-purple-600 focus:ring-purple-500 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                            />
-                            <span className="truncate">{tag}</span>
-                          </button>
+                            <span className="truncate text-xs font-bold">{tag}</span>
+                            
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                type="button"
+                                title="Precisa Ter (Incluir)"
+                                onClick={() => handleToggleIncludeTag(tag)}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                                  isIncluded
+                                    ? 'bg-purple-600 text-white shadow-sm'
+                                    : 'bg-gray-200/60 dark:bg-gray-700 text-gray-500 hover:bg-purple-100 hover:text-purple-600'
+                                }`}
+                              >
+                                {isIncluded ? '✓ Ter' : '+ Ter'}
+                              </button>
+                              <button
+                                type="button"
+                                title="Não Pode Ter (Excluir)"
+                                onClick={() => handleToggleExcludeTag(tag)}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                                  isExcluded
+                                    ? 'bg-rose-600 text-white shadow-sm'
+                                    : 'bg-gray-200/60 dark:bg-gray-700 text-gray-500 hover:bg-rose-100 hover:text-rose-600'
+                                }`}
+                              >
+                                {isExcluded ? '✕ Não Ter' : '- Não Ter'}
+                              </button>
+                            </div>
+                          </div>
                         );
                       })
                     }

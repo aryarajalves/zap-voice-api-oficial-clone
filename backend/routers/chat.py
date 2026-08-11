@@ -610,12 +610,26 @@ async def send_chat_template(
         meta_data["is_free_message"] = True
 
 
+    # Extrair media_url do componente de cabeçalho se enviado
+    template_media_url = None
+    if components:
+        for comp in components:
+            if comp.get("type") == "header":
+                params = comp.get("parameters", [])
+                if params and isinstance(params, list):
+                    header_param = params[0]
+                    p_type = header_param.get("type")
+                    if p_type in ["image", "video", "document"]:
+                        media_obj = header_param.get(p_type, {})
+                        template_media_url = media_obj.get("link")
+
     new_message = models.ChatMessage(
         conversation_id=convo.id,
         sender_type="user",
         user_id=current_user.id,
         message_type="text",
         content=content,
+        media_url=template_media_url,
         wa_message_id=wa_msg_id,
         meta_data=meta_data
     )
@@ -932,7 +946,7 @@ async def reset_24h_window(
     db.commit()
     db.refresh(convo)
 
-    logger.info(f"🧹 [RESET_24H_WINDOW] Janela de 24h e ContactWindow zeradas para conversa #{conversation_id} (Telefone: {convo.contact_phone}) por Client {client_id}.")
+    logger.info(f"🧹 [RESET_24H_WINDOW] Janela de 24h e ContactWindow zeradas para conversa #{conversation_id} (Telefone: {convo.phone}) por Client {client_id}.")
 
     return {
         "status": "ok",
@@ -2212,9 +2226,97 @@ async def analyze_conversations_doubts_bulk(
     except Exception as exc:
         logger.error(f"Erro ao analisar dúvidas por IA em massa: {exc}")
         raise HTTPException(status_code=500, detail=f"Falha no serviço de análise por IA em massa: {exc}")
-    else:
-        convo.human_handover_at = None
+
+
+@router.post("/chat/seed-conversations")
+async def seed_conversations(
+    count: int = Query(5000, ge=1, le=10000),
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Gera automaticamente N conversas fictícias (com contatos e mensagens únicas) para o cliente ativo.
+    Utiliza inserção em lote para gerar 5.000 conversas em poucos segundos.
+    """
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
+
+    first_names = ["Ana", "Bruno", "Carlos", "Daniela", "Eduardo", "Fernanda", "Gabriel", "Helena", "Igor", "Juliana", "Lucas", "Mariana", "Natan", "Patricia", "Rafael", "Sophia", "Thiago", "Vanessa", "Wagner", "Yasmin"]
+    last_names = ["Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira", "Lima", "Gomes", "Costa", "Ribeiro", "Martins", "Carvalho", "Almeida", "Lopes", "Soares", "Fernandes", "Vieira", "Barbosa"]
+    sample_messages = [
+        "Olá, gostaria de saber mais informações sobre os cursos de astrologia.",
+        "Boa tarde! Como funciona a consulta individual com o Crassos?",
+        "Oi! Recebi o convite para o evento de quinta-feira, como faço para confirmar?",
+        "Tudo bem? Qual é o valor do mapa astral completo?",
+        "Olá! Vocês têm atendimento nos finais de semana?",
+        "Oi, preciso de ajuda com o meu acesso à plataforma de membros.",
+        "Boa tarde! O evento Astrowake é gratuito mesmo?",
+        "Olá, gostaria de agendar uma consulta para a próxima semana.",
+        "Oi! Consegue me mandar o link do grupo VIP?",
+        "Boa tarde, tentei fazer o pagamento mas deu erro na página."
+    ]
+
+    import random
+    start_phone_base = 558590000000
+    now = datetime.now(timezone.utc)
+
+    # Buscar maior ID existente para evitar choque de números fictícios
+    max_id = db.query(func.max(models.ChatConversation.id)).scalar() or 0
+    phone_offset = max_id + random.randint(1000, 9999)
+
+    conversations_to_create = []
+    messages_to_create = []
+
+    for i in range(count):
+        fn = first_names[i % len(first_names)]
+        ln = last_names[(i // len(first_names)) % len(last_names)]
+        name = f"{fn} {ln} #{i+1}"
+        phone = str(start_phone_base + phone_offset + i)
+        msg_text = sample_messages[i % len(sample_messages)]
+        msg_time = now - timedelta(minutes=random.randint(1, 10000))
+
+        convo = models.ChatConversation(
+            client_id=client_id,
+            phone=phone,
+            contact_name=name,
+            last_message_content=msg_text,
+            last_message_at=msg_time,
+            status="open",
+            unread_count=random.choice([0, 1, 2]),
+            last_contact_message_at=msg_time,
+            created_at=msg_time
+        )
+        db.add(convo)
+        db.flush()  # atribui o convo.id
+
+        # Cria mensagem inicial para a conversa
+        msg = models.ChatMessage(
+            conversation_id=convo.id,
+            sender_type="contact",
+            content=msg_text,
+            message_type="text",
+            timestamp=msg_time,
+            status="delivered"
+        )
+        messages_to_create.append(msg)
+
+        if len(messages_to_create) >= 1000:
+            db.add_all(messages_to_create)
+            db.commit()
+            messages_to_create = []
+
+    if messages_to_create:
+        db.add_all(messages_to_create)
         db.commit()
-        return {"status": "success", "labels": convo.labels}
+
+    logger.info(f"✅ [SEED_CONVERSATIONS] {count} conversas geradas com sucesso para o Cliente #{client_id}.")
+
+    return {
+        "status": "success",
+        "message": f"{count} conversas geradas com sucesso para o cliente ativo.",
+        "total_created": count
+    }
+
 
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FiX, FiRefreshCw, FiBookOpen, FiUser, FiChevronRight, FiGitMerge, FiLink, FiPhone, FiMessageSquare, FiSlash, FiZap } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { API_URL } from '../../config';
+import MediaHeaderUploader from '../../components/BulkSender/common/MediaHeaderUploader';
 
 // Extrai o primeiro nome de uma string
 const getFirstName = (name) => name ? name.trim().split(' ')[0] : '';
@@ -119,6 +120,7 @@ export default function SendTemplateModal({ isOpen, onClose, activeClient, selec
     const handleSelectTemplate = (tpl) => {
         setSelectedTemplate(tpl);
         setButtonActions({});
+        setTemplateParams({});
         if (tpl && tpl.body_text) {
             const matches = tpl.body_text.match(/\{\{\d+\}\}/g) || [];
             const uniqueVars = [...new Set(matches.map(m => parseInt(m.replace(/[{}]/g, ''))))].sort((a, b) => a - b);
@@ -170,6 +172,12 @@ export default function SendTemplateModal({ isOpen, onClose, activeClient, selec
         return btnComp?.buttons || [];
     };
 
+    const [templateParams, setTemplateParams] = useState({});
+
+    const handleParamChange = (paramKey, value) => {
+        setTemplateParams(prev => ({ ...prev, [paramKey]: value }));
+    };
+
     const handleSend = async () => {
         if (!selectedTemplate) return;
 
@@ -179,7 +187,31 @@ export default function SendTemplateModal({ isOpen, onClose, activeClient, selec
             return;
         }
 
+        const headerComp = selectedTemplate.components?.find(c => (c.type || '').toUpperCase() === 'HEADER');
+        const headerFormat = (headerComp?.format || '').toUpperCase();
+        const hasMediaHeader = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+
+        if (hasMediaHeader && !templateParams['HEADER_0']) {
+            toast.error(`Selecione uma mídia para o cabeçalho (${headerFormat}) antes de enviar.`);
+            return;
+        }
+
         const components = [];
+
+        if (hasMediaHeader && templateParams['HEADER_0']) {
+            const mediaUrl = templateParams['HEADER_0'];
+            const paramType = headerFormat.toLowerCase();
+            components.push({
+                type: "header",
+                parameters: [
+                    {
+                        type: paramType,
+                        [paramType]: { link: mediaUrl }
+                    }
+                ]
+            });
+        }
+
         const bodyParams = Object.keys(variables)
             .sort((a, b) => parseInt(a) - parseInt(b))
             .map(k => ({ type: "text", text: variables[k] }));
@@ -313,6 +345,21 @@ export default function SendTemplateModal({ isOpen, onClose, activeClient, selec
 
                             {selectedTemplate && (
                                 <div className="space-y-4">
+                                    {/* Mídia do Cabeçalho (HEADER) */}
+                                    {(() => {
+                                        const headerComp = selectedTemplate.components?.find(c => (c.type || '').toUpperCase() === 'HEADER');
+                                        const format = (headerComp?.format || '').toUpperCase();
+                                        if (!['IMAGE', 'VIDEO', 'DOCUMENT'].includes(format)) return null;
+                                        return (
+                                            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                                                <MediaHeaderUploader
+                                                    format={format}
+                                                    templateParams={templateParams}
+                                                    handleParamChange={handleParamChange}
+                                                />
+                                            </div>
+                                        );
+                                    })()}
                                     {/* Variáveis */}
                                     {hasVariables && (
                                         <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
@@ -421,8 +468,8 @@ export default function SendTemplateModal({ isOpen, onClose, activeClient, selec
                                                                             </button>
                                                                         </div>
                                                                     </div>
-                                                                    {/* Funil para ação de interação */}
-                                                                    {actionCfg.type === 'interaction' && (
+                                                                     {/* Funil para ação de interação ou bloqueio */}
+                                                                    {(actionCfg.type === 'interaction' || actionCfg.type === 'block') && (
                                                                         <div className="flex items-center gap-2">
                                                                             <FiGitMerge size={11} className="text-purple-400 shrink-0" />
                                                                             <select
@@ -430,7 +477,7 @@ export default function SendTemplateModal({ isOpen, onClose, activeClient, selec
                                                                                 onChange={(e) => handleButtonActionChange(btnText, 'funnel_id', e.target.value || null)}
                                                                                 className="flex-1 bg-[#0f172a] border border-white/10 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
                                                                             >
-                                                                                <option value="">Nenhum funil (só registrar interação)</option>
+                                                                                <option value="">Nenhum funil (apenas ação principal)</option>
                                                                                 {funnels.map(f => (
                                                                                     <option key={f.id} value={f.id}>{f.name}</option>
                                                                                 ))}

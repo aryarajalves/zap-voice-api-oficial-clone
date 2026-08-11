@@ -1,8 +1,10 @@
 import React from 'react';
 import { FiSearch } from 'react-icons/fi';
+import { toast } from 'react-hot-toast';
 import TemplatePreview from '../common/TemplatePreview';
 import { getTemplateCategoryInfo } from '../utils/templateUtils';
 import MediaHeaderUploader from '../common/MediaHeaderUploader';
+import ConfirmationDialog from '../../TriggerHistory/components/ConfirmationDialog';
 
 const TemplateSelectionSection = ({
     selectedTemplate,
@@ -20,6 +22,8 @@ const TemplateSelectionSection = ({
 }) => {
     const [selectedTag, setSelectedTag] = React.useState(null);
     const [selectedCategory, setSelectedCategory] = React.useState('ALL'); // 'ALL', 'MARKETING', 'UTILITY'
+    const [isReset24hModalOpen, setIsReset24hModalOpen] = React.useState(false);
+    const [resetting24h, setResetting24h] = React.useState(false);
 
     const allTags = React.useMemo(() => {
         if (!templates) return [];
@@ -222,25 +226,7 @@ const TemplateSelectionSection = ({
                         </div>
                         <button
                             type="button"
-                            onClick={async () => {
-                                if (window.confirm(`Deseja zerar a restrição de 24h para o template "${selectedTemplateObj.name}"? Isso permitirá re-disparar este template imediatamente para contatos que já receberam nas últimas 24h.`)) {
-                                    try {
-                                        const { fetchWithAuth, API_URL } = await import('../../../config');
-                                        const activeClient = JSON.parse(localStorage.getItem('activeClient') || '{}');
-                                        const res = await fetchWithAuth(`${API_URL}/whatsapp/templates/${encodeURIComponent(selectedTemplateObj.name)}/24h-history`, {
-                                            method: 'DELETE'
-                                        }, activeClient.id);
-                                        const data = await res.json();
-                                        if (res.ok) {
-                                            alert(`✅ Restrição de 24h limpa com sucesso para "${selectedTemplateObj.name}"!`);
-                                        } else {
-                                            alert(`❌ Erro: ${data.detail || 'Falha ao limpar histórico'}`);
-                                        }
-                                    } catch (err) {
-                                        alert(`❌ Erro de conexão: ${err.message}`);
-                                    }
-                                }
-                            }}
+                            onClick={() => setIsReset24hModalOpen(true)}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
                             title="Zerar restrição de 24h para este template (permite re-envio imediato para todos os contatos)"
                         >
@@ -248,6 +234,39 @@ const TemplateSelectionSection = ({
                             <span>Resetar Janela de 24h</span>
                         </button>
                     </div>
+
+                    <ConfirmationDialog
+                        isOpen={isReset24hModalOpen}
+                        onClose={() => setIsReset24hModalOpen(false)}
+                        onConfirm={async () => {
+                            setResetting24h(true);
+                            try {
+                                const { API_URL } = await import('../../../config');
+                                const { fetchWithAuth } = await import('../../../AuthContext');
+                                const activeClient = JSON.parse(localStorage.getItem('activeClient') || '{}');
+                                const res = await fetchWithAuth(`${API_URL}/whatsapp/templates/${encodeURIComponent(selectedTemplateObj.name)}/24h-history`, {
+                                    method: 'DELETE'
+                                }, activeClient.id);
+                                const data = await res.json();
+                                if (res.ok) {
+                                    toast.success(`Restrição de 24h zerada para "${selectedTemplateObj.name}"!`);
+                                    setIsReset24hModalOpen(false);
+                                } else {
+                                    toast.error(`Erro: ${data.detail || 'Falha ao limpar histórico'}`);
+                                }
+                            } catch (err) {
+                                toast.error(`Erro de conexão: ${err.message}`);
+                            } finally {
+                                setResetting24h(false);
+                            }
+                        }}
+                        title="Zerar Janela de 24h"
+                        message={`Deseja zerar a restrição de 24h para o template "${selectedTemplateObj.name}"? Isso permitirá re-disparar este template imediatamente para contatos que já receberam nas últimas 24h.`}
+                        confirmText="Sim, Zerar Restrição"
+                        confirmColorClass="bg-amber-600 hover:bg-amber-500"
+                        icon="🔄"
+                        loading={resetting24h}
+                    />
 
                     {/* Upload de mídia para cabeçalhos IMAGE/VIDEO/DOCUMENT */}
                     {(() => {

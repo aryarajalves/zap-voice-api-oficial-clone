@@ -44,6 +44,8 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         setSearch={logic.setSearch}
         selectedTags={logic.selectedTags}
         setSelectedTags={logic.setSelectedTags}
+        excludedTags={logic.excludedTags}
+        setExcludedTags={logic.setExcludedTags}
         importedByClientId={logic.importedByClientId}
         setImportedByClientId={logic.setImportedByClientId}
         origin={logic.origin}
@@ -103,6 +105,7 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         isSaving={logic.isBulkTagging}
         count={logic.selectAllPages ? logic.total : logic.selectedLeads.length}
         selectAllPages={logic.selectAllPages}
+        availableTags={logic.availableFilters.tags || []}
       />
 
       <BlockContactModal

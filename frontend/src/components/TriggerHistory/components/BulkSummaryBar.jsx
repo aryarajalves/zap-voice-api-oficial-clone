@@ -13,9 +13,10 @@ const BulkSummaryBar = ({ selectedIds, setSelectedIds, triggers, folders, bulkMo
         read: acc.read + (curr.total_read || 0),
         interactions: acc.interactions + (curr.total_interactions || 0),
         blocked: acc.blocked + (curr.total_blocked || 0),
+        skipped: acc.skipped + (curr.total_skipped || 0),
         failed: acc.failed + (curr.total_failed || 0),
         cost: acc.cost + (curr.total_cost || 0)
-    }), { total_contacts: 0, sent: 0, delivered: 0, read: 0, interactions: 0, blocked: 0, failed: 0, cost: 0 });
+    }), { total_contacts: 0, sent: 0, delivered: 0, read: 0, interactions: 0, blocked: 0, skipped: 0, failed: 0, cost: 0 });
 
     return (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-8 duration-500">
@@ -104,6 +105,11 @@ const BulkSummaryBar = ({ selectedIds, setSelectedIds, triggers, folders, bulkMo
                         <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">🚫</span>
                         <span className="text-lg font-black text-rose-500 leading-none">{totals.blocked}</span>
                         <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter mt-1">Bloqueios</span>
+                    </div>
+                    <div className="flex flex-col items-center group">
+                        <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">⏭️</span>
+                        <span className="text-lg font-black text-amber-500 leading-none">{totals.skipped}</span>
+                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-tighter mt-1">Pulados</span>
                     </div>
                     <div className="flex flex-col items-center group">
                         <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">❌</span>
