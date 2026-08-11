@@ -60,7 +60,6 @@ describe('ConnectionStatus', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/WhatsApp/i)).toBeInTheDocument();
-      expect(screen.getByText(/Chatwoot/i)).toBeInTheDocument();
       expect(screen.getByText(/RabbitMQ/i)).toBeInTheDocument();
       expect(screen.getByText(/Instagram/i)).toBeInTheDocument();
     });

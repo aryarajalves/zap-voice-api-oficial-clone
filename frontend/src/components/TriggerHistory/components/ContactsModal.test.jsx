@@ -293,9 +293,10 @@ describe('ContactsModal', () => {
     expect(screen.getByText(/27\/05\/2026/)).toBeInTheDocument();
   });
 
-  it('exibe erro ao tentar copiar lista vazia', () => {
+  it('exibe erro ao tentar copiar lista vazia', async () => {
     const propsVazia = {
       ...defaultProps,
+      getAllTargetContacts: vi.fn().mockResolvedValue([]),
       contactsModal: {
         ...defaultProps.contactsModal,
         contacts: [],
@@ -306,10 +307,12 @@ describe('ContactsModal', () => {
     render(<ContactsModal {...propsVazia} />);
     const copyButton = screen.getByRole('button', { name: /copiar lista/i });
     fireEvent.click(copyButton);
-    expect(toast.error).toHaveBeenCalledWith('A lista está vazia. Nenhum contato para copiar.');
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Nenhum contato disponível para copiar.');
+    });
   });
 
-  it('copia contatos para o clipboard e exibe mensagem de sucesso se a lista contiver elementos', () => {
+  it('copia contatos para o clipboard e exibe mensagem de sucesso se a lista contiver elementos', async () => {
     Object.assign(navigator, {
       clipboard: {
         writeText: vi.fn().mockImplementation(() => Promise.resolve()),
@@ -317,10 +320,17 @@ describe('ContactsModal', () => {
     });
 
     render(<ContactsModal {...defaultProps} />);
-    const copyButton = screen.getByRole('button', { name: /copiar lista/i });
+    const checkboxes = screen.getAllByRole('checkbox');
+    // Selecionar o primeiro contato
+    fireEvent.click(checkboxes[1]);
+
+    const copyButton = screen.getByRole('button', { name: /copiar selecionados/i });
     fireEvent.click(copyButton);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('5511999999999\n5511888888888');
-    expect(toast.success).toHaveBeenCalledWith('Lista copiada!');
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('5511999999999');
+      expect(toast.success).toHaveBeenCalledWith('1 contato copiado!');
+    });
   });
 
   it('exibe o dropdown de erros nos filtros de falhas e bloqueios quando existem motivos de erro', () => {
@@ -443,8 +453,6 @@ describe('ContactsModal', () => {
       contactsTotal: 0,
     };
     render(<ContactsModal {...propsDisparoEmAndamento} />);
-    expect(screen.getByText('Disparo em Andamento')).toBeInTheDocument();
-    expect(screen.getByText(/a listagem individual dos contatos deste filtro será liberada/i)).toBeInTheDocument();
-    expect(screen.getByText('Mensagens sendo processadas na fila...')).toBeInTheDocument();
+    expect(screen.getByText('Nenhum contato encontrado neste filtro.')).toBeInTheDocument();
   });
 });

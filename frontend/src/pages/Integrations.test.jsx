@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import Integrations from './Integrations';
 import { fetchWithAuth } from '../AuthContext';
@@ -83,6 +83,11 @@ vi.mock('react-icons/fi', () => ({
   FiEye: () => <span />,
   FiUsers: () => <span />,
   FiClock: () => <span />,
+  FiMinus: () => <span />,
+  FiSlash: () => <span />,
+  FiCode: () => <span />,
+  FiUser: () => <span />,
+  FiSliders: () => <span />,
   FiUpload: () => <span />,
   FiDownload: () => <span />,
 }));
@@ -145,7 +150,8 @@ describe('Integrations Page Interactions', () => {
     await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
 
     // Abrir histórico
-    const historicoBtn = screen.getByText(/Histórico/i);
+    const integrationRow = screen.getByText('Test Integration').closest('tr');
+    const historicoBtn = within(integrationRow).getByText(/Histórico/i);
     fireEvent.click(historicoBtn);
 
     await waitFor(() => expect(screen.getByText(/Selecionar Todos os Registros/i)).toBeInTheDocument(), { timeout: 20000 });
@@ -184,27 +190,20 @@ describe('Integrations Page Interactions', () => {
     ];
 
     vi.mocked(fetchWithAuth).mockImplementation((url) => {
-      if (url.includes('history')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => mockHistory,
-        });
+      if (url.includes('/history')) {
+        return Promise.resolve({ ok: true, json: async () => mockHistory });
       }
-      return Promise.resolve({
-        ok: true,
-        json: async () => mockIntegrations,
-      });
+      return Promise.resolve({ ok: true, json: async () => mockIntegrations });
     });
 
     await act(async () => {
       render(<Integrations />);
     });
 
-    // Removido runOnlyPendingTimers para usar real timers
-
     await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
 
-    const historicoBtn = screen.getByText(/Histórico/i);
+    const integrationRow = screen.getByText('Test Integration').closest('tr');
+    const historicoBtn = within(integrationRow).getByText(/Histórico/i);
     fireEvent.click(historicoBtn);
 
     await waitFor(() => expect(screen.getByText(/Mapeamento:/i)).toBeInTheDocument(), { timeout: 20000 });

@@ -509,19 +509,28 @@ const MediaHeaderUploader = ({ format, templateParams, handleParamChange }) => {
                     </div>
                 ) : isUploading ? (
                     /* Barra de progresso */
-                    <div className="p-4 space-y-3">
+                    <div className="p-4 space-y-3 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
                         <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                                Enviando...
+                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                {uploadProgress < 100 ? (
+                                    <><span>📤 Enviando arquivo...</span></>
+                                ) : (
+                                    <><span className="animate-pulse">🎬 Processando e Otimizando Vídeo para WhatsApp...</span></>
+                                )}
                             </span>
                             <span className="text-[10px] font-black text-white">{uploadProgress}%</span>
                         </div>
                         <div className="h-2 bg-black/40 rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-300"
+                                className={`h-full rounded-full transition-all duration-300 ${uploadProgress < 100 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' : 'bg-gradient-to-r from-blue-500 to-indigo-500 animate-pulse'}`}
                                 style={{ width: `${uploadProgress}%` }}
                             />
                         </div>
+                        {uploadProgress >= 100 && (
+                            <p className="text-[10px] text-amber-300/80 font-medium">
+                                ⚙️ O arquivo foi enviado. Convertendo formato para reprodução perfeita no WhatsApp...
+                            </p>
+                        )}
                     </div>
                 ) : (
                     /* Área de upload */
@@ -553,7 +562,15 @@ const MediaHeaderUploader = ({ format, templateParams, handleParamChange }) => {
             </div>
 
             {/* Indicador de status */}
-            {!currentUrl && (
+            {isUploading && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl animate-pulse">
+                    <span className="text-amber-400 text-xs">⚙️</span>
+                    <p className="text-[10px] text-amber-400 font-bold">
+                        Aguarde... finalizando otimização da mídia no servidor.
+                    </p>
+                </div>
+            )}
+            {!isUploading && !currentUrl && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-red-400 flex-shrink-0">
                         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>

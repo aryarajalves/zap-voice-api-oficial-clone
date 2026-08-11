@@ -22,6 +22,7 @@ describe('ChatwootLabelNode Component', () => {
     const mockData = {
         label: 'LabelOne',
         remove_label: 'LabelTwo',
+        labels: mockLabels,
         onChange: mockOnChange,
         onDelete: vi.fn(),
         isStart: false
@@ -31,13 +32,10 @@ describe('ChatwootLabelNode Component', () => {
         vi.clearAllMocks();
         useClient.mockReturnValue({ activeClient: mockClient });
         fetchWithAuth.mockImplementation((url) => {
-            if (url.includes('/chatwoot/labels')) {
-                return Promise.resolve({
-                    ok: true,
-                    json: () => Promise.resolve(mockLabels)
-                });
-            }
-            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(mockLabels)
+            });
         });
     });
 

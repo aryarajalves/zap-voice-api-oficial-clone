@@ -23,6 +23,8 @@ vi.mock('react-icons/fi', () => ({
   FiX: () => <span />,
   FiBook: () => <span />,
   FiLayout: () => <span />,
+  FiKey: () => <span />,
+  FiTag: () => <span />,
   FiMessageSquare: () => <span />,
   FiSmartphone: () => <span />,
   FiInstagram: () => <span />,
@@ -59,7 +61,7 @@ vi.mock('react-hot-toast', () => ({
 describe('SettingsModal', () => {
   it('renders correctly when open', () => {
     render(<SettingsModal isOpen={true} onClose={() => {}} />);
-    expect(screen.getByText('Configurações do Sistema')).toBeInTheDocument();
+    expect(screen.getByText('Configurações')).toBeInTheDocument();
   });
 
   it('does not render when closed', () => {

@@ -22,9 +22,9 @@ const TemplateBulkSender = ({ onViewChange, onSuccess }) => {
         // Tenta scrollar o elemento <main> pai (que tem overflow-y-auto no AppContent)
         if (containerRef.current) {
             const mainEl = containerRef.current.closest('main');
-            if (mainEl) {
+            if (mainEl && typeof mainEl.scrollTo === 'function') {
                 mainEl.scrollTo({ top: 0, behavior: 'smooth' });
-            } else {
+            } else if (typeof window.scrollTo === 'function') {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         }

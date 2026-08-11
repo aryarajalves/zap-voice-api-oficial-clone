@@ -32,9 +32,20 @@ const ChatwootLabelNode = ({ id, data }) => {
 
     useEffect(() => {
         if (!activeClient) return;
-        setLabels([]);
-        setLoading(false);
-    }, [activeClient]);
+        if (data.labels && Array.isArray(data.labels)) {
+            setLabels(data.labels);
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        fetchWithAuth('/api/chatwoot/labels')
+            .then(res => res.ok ? res.json() : [])
+            .then(data => {
+                setLabels(Array.isArray(data) ? data : (data.labels || []));
+            })
+            .catch(() => setLabels([]))
+            .finally(() => setLoading(false));
+    }, [activeClient, data.labels]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
