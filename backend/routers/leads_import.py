@@ -400,6 +400,102 @@ def _clean_phone_digits(v):
 _ALREADY_COMPLETE_MIN_LEN = 10
 
 
+COUNTRY_TO_DDI = {
+    "brasil": "55",
+    "brazil": "55",
+    "br": "55",
+    "portugal": "351",
+    "pt": "351",
+    "estados unidos": "1",
+    "united states": "1",
+    "eua": "1",
+    "usa": "1",
+    "us": "1",
+    "espanha": "34",
+    "spain": "34",
+    "es": "34",
+    "emirados árabes unidos": "971",
+    "emirados arabes unidos": "971",
+    "uae": "971",
+    "itália": "39",
+    "italia": "39",
+    "italy": "39",
+    "it": "39",
+    "austrália": "61",
+    "australia": "61",
+    "au": "61",
+    "romênia": "40",
+    "romenia": "40",
+    "romania": "40",
+    "ro": "40",
+    "guatemala": "502",
+    "gt": "502",
+    "frança": "33",
+    "franca": "33",
+    "france": "33",
+    "fr": "33",
+    "canadá": "1",
+    "canada": "1",
+    "ca": "1",
+    "suíça": "41",
+    "suica": "41",
+    "switzerland": "41",
+    "ch": "41",
+    "holanda": "31",
+    "paises baixos": "31",
+    "netherlands": "31",
+    "nl": "31",
+    "argentina": "54",
+    "ar": "54",
+    "chile": "56",
+    "cl": "56",
+    "uruguai": "598",
+    "uruguay": "598",
+    "uy": "598",
+    "colômbia": "57",
+    "colombia": "57",
+    "co": "57",
+    "méxico": "52",
+    "mexico": "52",
+    "mx": "52",
+    "angola": "244",
+    "ao": "244",
+    "moçambique": "258",
+    "mocambique": "258",
+    "mozambique": "258",
+    "mz": "258",
+    "japão": "81",
+    "japao": "81",
+    "japan": "81",
+    "jp": "81",
+    "alemanha": "49",
+    "germany": "49",
+    "de": "49",
+    "reino unido": "44",
+    "united kingdom": "44",
+    "uk": "44",
+    "gb": "44",
+}
+
+
+def _clean_ddi_val(v):
+    """
+    Extrai o DDI de um valor de célula.
+    Se for o nome de um país (ex: 'Brasil', 'Portugal', 'Estados Unidos'), converte para o DDI numérico (ex: '55', '351', '1').
+    Caso contrário, extrai somente os dígitos do número.
+    """
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    
+    val_str = str(v).strip().lower()
+    if val_str in COUNTRY_TO_DDI:
+        return COUNTRY_TO_DDI[val_str]
+    
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)
+    return "".join(filter(str.isdigit, str(v)))
+
+
 def _resolve_ddi_for_row(ddd_val, num_val, raw_ddi_val, manual_ddi):
     """Decide o DDI a usar para uma linha do mapeamento composto (DDI/DDD/Número).
 
@@ -446,7 +542,7 @@ def _build_phone_series(df, phone_mapping):
         def compose_row(row):
             ddd_val = _clean_phone_digits(row.get(ddd_col)) if ddd_col else ""
             num_val = _clean_phone_digits(row.get(num_col)) if num_col else ""
-            raw_ddi_val = _clean_phone_digits(row.get(ddi_col)) if ddi_col else ""
+            raw_ddi_val = _clean_ddi_val(row.get(ddi_col)) if ddi_col else ""
             ddi_val = _resolve_ddi_for_row(ddd_val, num_val, raw_ddi_val, manual_ddi)
             return f"{ddi_val}{ddd_val}{num_val}"
 
@@ -471,9 +567,9 @@ def _build_phone_components(df, phone_mapping):
         ddi_col = phone_mapping.get('ddi_column') or None
         ddd_col = phone_mapping.get('ddd_column') or None
         num_col = phone_mapping.get('number_column') or None
-        manual_ddi = _clean_phone_digits(phone_mapping.get('manual_ddi')) if phone_mapping.get('manual_ddi') else ""
+        manual_ddi = _clean_ddi_val(phone_mapping.get('manual_ddi')) if phone_mapping.get('manual_ddi') else ""
 
-        raw_ddi_series = df[ddi_col].apply(_clean_phone_digits) if ddi_col else empty.copy()
+        raw_ddi_series = df[ddi_col].apply(_clean_ddi_val) if ddi_col else empty.copy()
         ddd_series = df[ddd_col].apply(_clean_phone_digits) if ddd_col else empty.copy()
         num_series = df[num_col].apply(_clean_phone_digits) if num_col else empty.copy()
         ddi_series = pd.Series(

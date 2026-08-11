@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.6.5 — Versão Estável (2026-08-11)
+- ✅ **Conversor Automático de Nome de País para DDI na Importação de Contatos**: Ao importar planilhas em que a coluna de DDI contém o nome do país em texto (ex: `Brasil`, `Portugal`, `Estados Unidos`, `Espanha`, `Itália`, `Austrália`, `Emirados Árabes Unidos`, `França`, `Canadá`, `Holanda`, `Suíça`, `Argentina`, etc.), o sistema converte automaticamente o nome para o código numérico do DDI correspondente (ex: `55`, `351`, `1`, `34`, `39`, `61`, `971`, `33`, `1`, `31`, `41`, `54`).
+
 ### v1.6.4 — Versão Estável (2026-08-11)
 - ✅ **Dropdown Inteligente de Seleção de Etiquetas no Modal de Gerenciamento**: Substituição do campo de texto simples no `BulkTagModal` por seletor suspenso inteligente com campo de busca interna, suporte à criação de novas etiquetas na aba "Adicionar" e visualização de etiquetas existentes na aba "Remover".
 - ✅ **Filtro Duplo de Etiquetas no Cabeçalho (Inclusão "Ter" vs Exclusão "Não Ter")**: Permite filtrar a lista de contatos para exibir leads com determinada etiqueta ou ocultar contatos que possuem determinada tag (`exclude_tag`).
