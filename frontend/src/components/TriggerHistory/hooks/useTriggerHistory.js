@@ -384,7 +384,7 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
     };
 
     const handleViewContacts = (trigger, initialFilter = 'all') => {
-        const filterLabels = { total: 'Total na Lista', sent: 'Enviados', queue: 'Fila (Meta)', delivered: 'Recebidas', read: 'Lidos', failed: 'Falhas', interaction: 'Interações', blocked: 'Bloqueados', free: 'Gratuitas', template: 'Templates', private_note: 'Notas Privadas' };
+        const filterLabels = { total: 'Total na Lista', sent: 'Enviados', queue: 'Fila (Meta)', delivered: 'Recebidas', read: 'Lidos', failed: 'Falhas', interaction: 'Interações', blocked: 'Bloqueados', skipped: 'Pulados (24h)', free: 'Gratuitas', template: 'Templates', private_note: 'Notas Privadas' };
         setContactsFilter(initialFilter);
         setContactsPage(1); // Resetar para página 1 ao abrir
         setContactsPerPage(20); // Resetar para 20 itens por página (menor valor) ao abrir popup

@@ -92,6 +92,8 @@ async def get_trigger_messages(
                 base_query = base_query.filter(models.MessageStatus.phone_number.in_(interaction_phones))
             else:
                 base_query = base_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True), or_(models.MessageStatus.failure_reason == None, models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'))
+        elif status_filter == 'skipped':
+            base_query = base_query.filter(models.MessageStatus.status == 'skipped')
         elif status_filter == 'private_note':
             base_query = base_query.filter(models.MessageStatus.private_note_posted == True)
 
