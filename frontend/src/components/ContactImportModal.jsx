@@ -473,6 +473,39 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
     if (/^-?\d+\.0+$/.test(s)) s = s.replace(/\.0+$/, '');
     return s.replace(/\D/g, '');
   };
+  const COUNTRY_TO_DDI_MAP = {
+    "brasil": "55", "brazil": "55", "br": "55",
+    "portugal": "351", "pt": "351",
+    "estados unidos": "1", "united states": "1", "eua": "1", "usa": "1", "us": "1",
+    "espanha": "34", "spain": "34", "es": "34",
+    "emirados árabes unidos": "971", "emirados arabes unidos": "971", "uae": "971",
+    "itália": "39", "italia": "39", "italy": "39", "it": "39",
+    "austrália": "61", "australia": "61", "au": "61",
+    "romênia": "40", "romenia": "40", "romania": "40", "ro": "40",
+    "guatemala": "502", "gt": "502",
+    "frança": "33", "franca": "33", "france": "33", "fr": "33",
+    "canadá": "1", "canada": "1", "ca": "1",
+    "suíça": "41", "suica": "41", "switzerland": "41", "ch": "41",
+    "holanda": "31", "paises baixos": "31", "netherlands": "31", "nl": "31",
+    "argentina": "54", "ar": "54",
+    "chile": "56", "cl": "56",
+    "uruguai": "598", "uruguay": "598", "uy": "598",
+    "colômbia": "57", "colombia": "57", "co": "57",
+    "méxico": "52", "mexico": "52", "mx": "52",
+    "angola": "244", "ao": "244",
+    "moçambique": "258", "mocambique": "258", "mozambique": "258", "mz": "258",
+    "japão": "81", "japao": "81", "japan": "81", "jp": "81",
+    "alemanha": "49", "germany": "49", "de": "49",
+    "reino unido": "44", "united kingdom": "44", "uk": "44", "gb": "44"
+  };
+
+  const parseDdiVal = (v) => {
+    if (!v) return '';
+    const strVal = String(v).trim().toLowerCase();
+    if (COUNTRY_TO_DDI_MAP[strVal]) return COUNTRY_TO_DDI_MAP[strVal];
+    return digitsOnly(v);
+  };
+
   const getPhonePreviewSamples = () => {
     if (!previewData || !isPhoneComposite) return [];
     const { ddi_column, ddd_column, number_column, manual_ddi } = mapping.phone;
@@ -487,11 +520,11 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
       // Sem DDD nessa linha e o Número já tem 10+ dígitos: provavelmente já é um
       // telefone completo (internacional, ou já veio com DDD embutido) — não gruda
       // o DDI em cima disso, senão corrompe o número.
-      if (!dddVal && numVal.length >= 10) {
+      let ddiVal = ddiIdx !== -1 ? parseDdiVal(row[ddiIdx]) : '';
+      if (!ddiVal && !dddVal && numVal.length >= 10) {
         return { ddi: '', ddd: dddVal, number: numVal };
       }
-      let ddiVal = ddiIdx !== -1 ? digitsOnly(row[ddiIdx]) : '';
-      if (!ddiVal) ddiVal = digitsOnly(manual_ddi);
+      if (!ddiVal) ddiVal = parseDdiVal(manual_ddi);
       return { ddi: ddiVal, ddd: dddVal, number: numVal };
     });
   };

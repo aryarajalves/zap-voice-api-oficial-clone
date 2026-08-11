@@ -883,20 +883,35 @@ def export_leads_csv(
     event_type: Optional[str] = None,
     product_name: Optional[str] = None,
     tag: Optional[List[str]] = Query(None),
+    exclude_tag: Optional[List[str]] = Query(None),
+    tag_mode: Optional[str] = "OR",
     ids: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    imported_by_client_id: Optional[int] = None,
     origin: Optional[str] = None,
+    is_locked: Optional[str] = None,
+    has_bsud: Optional[str] = None,
+    filter_ddi: Optional[str] = None,
+    filter_ddd: Optional[str] = None,
+    block_status: Optional[str] = None,
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
 ):
     """
-    Gera um arquivo CSV com os leads filtrados.
-    Se 'ids' for informado (ex: ids=1,2,3), exporta apenas esses leads.
+    Gera um arquivo CSV com todos os leads filtrados ou com os leads selecionados.
+    Se 'ids' for informado, exporta apenas esses IDs. Caso contrário, exporta todos
+    os contatos que batem com os filtros ativos.
     """
     client_id = x_client_id if x_client_id else current_user.client_id
-    query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    if proj_id:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.project_id == proj_id)
+    else:
+        query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
 
     # Se IDs específicos forem passados, ignora os demais filtros
     if ids:
@@ -904,63 +919,44 @@ def export_leads_csv(
         if id_list:
             query = query.filter(models.WebhookLead.id.in_(id_list))
     else:
-        if search:
-            search_filter = or_(
-                models.WebhookLead.name.ilike(f"%{search}%"),
-                models.WebhookLead.phone.ilike(f"%{search}%"),
-                models.WebhookLead.email.ilike(f"%{search}%")
-            )
-            query = query.filter(search_filter)
+        query = _apply_common_lead_filters(
+            query, search, event_type, product_name, tag, tag_mode,
+            is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin,
+            exclude_tag=exclude_tag
+        )
 
-        if event_type:
-            query = query.filter(models.WebhookLead.last_event_type == event_type)
+        # Filtros de DDI/DDD
+        if filter_ddi or filter_ddd:
+            filtered_ids = []
+            for lead_obj in query.all():
+                ddi, ddd = extract_ddi_ddd(lead_obj.phone)
+                if filter_ddi and ddi != filter_ddi:
+                    continue
+                if filter_ddd and ddd != filter_ddd:
+                    continue
+                filtered_ids.append(lead_obj.id)
+            query = query.filter(models.WebhookLead.id.in_(filtered_ids)) if filtered_ids else query.filter(False)
 
-        if origin == "manual":
-            query = query.filter(models.WebhookLead.platform == "manual")
-        elif origin == "manual_bulk":
-            query = query.filter(models.WebhookLead.platform == "manual_bulk")
-        elif origin == "webhook":
-            query = query.filter(
-                and_(
-                    models.WebhookLead.platform != "manual",
-                    models.WebhookLead.platform != "manual_bulk",
-                    models.WebhookLead.platform != "chatwoot_import"
-                )
-            )
+        # Filtro de status de bloqueio / repouso
+        if block_status:
+            related_client_ids = _get_related_client_ids(db, client_id)
+            blocked_suffixes = _get_blocked_suffixes(db, related_client_ids)
+            resting_suffix_map = _get_resting_suffix_map(db, related_client_ids)
 
-        if product_name:
-            query = query.filter(models.WebhookLead.product_name.ilike(f"%{product_name}%"))
+            matching_ids = []
+            for lead_obj in query.all():
+                suffix = _phone_suffix(lead_obj.phone)
+                is_blocked = suffix in blocked_suffixes
+                is_resting = suffix in resting_suffix_map
 
-        if tag:
-            if isinstance(tag, str):
-                tag = [tag]
-            tags_filter = []
-            for t in tag:
-                if t:
-                    parts = [x.strip() for x in t.split(",") if x.strip()]
-                    tags_filter.extend(parts)
-            if tags_filter:
-                query = query.filter(
-                    or_(*(
-                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
-                        for t in tags_filter
-                    ))
-                )
+                if block_status == 'normal' and not is_blocked and not is_resting:
+                    matching_ids.append(lead_obj.id)
+                elif block_status == 'blocked' and is_blocked:
+                    matching_ids.append(lead_obj.id)
+                elif block_status == 'resting' and is_resting:
+                    matching_ids.append(lead_obj.id)
 
-        # Filtro de data (exportação também respeita o range selecionado)
-        if date_from:
-            try:
-                dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-                query = query.filter(models.WebhookLead.created_at >= dt_from)
-            except ValueError:
-                pass
-
-        if date_to:
-            try:
-                dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1, seconds=-1)
-                query = query.filter(models.WebhookLead.created_at <= dt_to)
-            except ValueError:
-                pass
+            query = query.filter(models.WebhookLead.id.in_(matching_ids)) if matching_ids else query.filter(False)
 
     leads = query.order_by(desc(models.WebhookLead.updated_at)).all()
 

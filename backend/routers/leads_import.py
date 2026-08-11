@@ -499,13 +499,14 @@ def _clean_ddi_val(v):
 def _resolve_ddi_for_row(ddd_val, num_val, raw_ddi_val, manual_ddi):
     """Decide o DDI a usar para uma linha do mapeamento composto (DDI/DDD/Número).
 
-    Se não há DDD nessa linha e o Número já parece um telefone completo (10+ dígitos),
-    não usa nenhum DDI (nem de coluna, nem manual) — o Número é usado como está.
-    Caso contrário, usa o DDI da coluna (se preenchido) ou cai para o DDI manual.
+    Se raw_ddi_val foi fornecido pela coluna (ex: país ou DDI numérico), respeita ele.
+    Se não há raw_ddi_val nem ddd_val e o número tem 10+ dígitos, não usa DDI manual para não corromper.
     """
+    if raw_ddi_val:
+        return raw_ddi_val
     if not ddd_val and len(num_val) >= _ALREADY_COMPLETE_MIN_LEN:
         return ""
-    return raw_ddi_val if raw_ddi_val else manual_ddi
+    return manual_ddi
 
 
 def _get_phone_mapping_columns(phone_mapping):

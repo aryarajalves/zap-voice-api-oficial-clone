@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.6.6 — Versão Estável (2026-08-11)
+- ✅ **Exportação CSV de Todos os Contatos Selecionados (Suporte Global a `selectAllPages`)**: Ao marcar a opção "Todos os X contatos estão selecionados", a exportação via CSV passa a baixar **todos os 1.277+ contatos** da base (respeitando os filtros ativos) em vez de limitar aos 50 contatos da primeira página visível.
+
 ### v1.6.5 — Versão Estável (2026-08-11)
 - ✅ **Conversor Automático de Nome de País para DDI na Importação de Contatos**: Ao importar planilhas em que a coluna de DDI contém o nome do país em texto (ex: `Brasil`, `Portugal`, `Estados Unidos`, `Espanha`, `Itália`, `Austrália`, `Emirados Árabes Unidos`, `França`, `Canadá`, `Holanda`, `Suíça`, `Argentina`, etc.), o sistema converte automaticamente o nome para o código numérico do DDI correspondente (ex: `55`, `351`, `1`, `34`, `39`, `61`, `971`, `33`, `1`, `31`, `41`, `54`).
 

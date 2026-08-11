@@ -335,14 +335,26 @@ export function useWebhookLeads(activeClient) {
       const { from, to } = resolveDateRange(datePreset, customDateFrom, customDateTo);
       let url = `${API_URL}/leads/export?`;
 
-      if (selectedLeads.length > 0) {
+      if (!selectAllPages && selectedLeads.length > 0) {
         url += `ids=${selectedLeads.join(',')}&`;
       } else {
         if (search) url += `search=${encodeURIComponent(search)}&`;
         if (eventType) url += `event_type=${encodeURIComponent(eventType)}&`;
+        if (importedByClientId) url += `imported_by_client_id=${importedByClientId}&`;
+        if (origin) url += `origin=${encodeURIComponent(origin)}&`;
+        if (lockedFilter !== '') url += `is_locked=${lockedFilter}&`;
+        if (bsudFilter !== '') url += `has_bsud=${bsudFilter}&`;
+        if (filterDdi) url += `filter_ddi=${encodeURIComponent(filterDdi)}&`;
+        if (filterDdd) url += `filter_ddd=${encodeURIComponent(filterDdd)}&`;
+        if (blockStatusFilter) url += `block_status=${encodeURIComponent(blockStatusFilter)}&`;
         if (selectedTags && selectedTags.length > 0) {
           selectedTags.forEach(t => {
             url += `tag=${encodeURIComponent(t)}&`;
+          });
+        }
+        if (excludedTags && excludedTags.length > 0) {
+          excludedTags.forEach(t => {
+            url += `exclude_tag=${encodeURIComponent(t)}&`;
           });
         }
         if (from) url += `date_from=${from}&`;
