@@ -70,53 +70,55 @@ const TagContactsModal = ({ isOpen, onClose, selectedPhones, contacts, setContac
     
     try {
       const safeContacts = contacts || [];
-      const leadsPayload = selectedPhones.map(phone => {
-        const match = safeContacts.find(c => getContactPhone(c) === phone);
-        return {
-          phone: phone,
-          name: match?.contact_name || match?.name || null,
-          email: match?.email || null
-        };
-      });
-      
-      const tagsString = tagsToSend.join(',');
-      const res = await fetchWithAuth(`${API_URL}/leads/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leads: leadsPayload,
-          tags: tagsString
-        })
-      }, activeClient.id);
-      
-      if (res.ok) {
-        const data = await res.json();
-        toast.dismiss(loadingToast);
-        toast.success(`${data.imported} contatos atualizados na aba Contatos!`, { icon: '✅' });
+        const cleanSelectedSet = new Set((selectedPhones || []).map(p => (p || '').replace(/\D/g, '')));
+        const leadsPayload = selectedPhones.map(phone => {
+          const cleanP = (phone || '').replace(/\D/g, '');
+          const match = safeContacts.find(c => (getContactPhone(c) || '').replace(/\D/g, '') === cleanP);
+          return {
+            phone: phone,
+            name: match?.contact_name || match?.name || null,
+            email: match?.email || null
+          };
+        });
         
-        // Atualiza contatos localmente imediatamente
-        if (setContactsModal) {
-          setContactsModal(prev => {
-            const updatedContacts = (prev.contacts || []).map(c => {
-              const phone = c.phone_number || c.phone || '';
-              if (phone && selectedPhones.includes(phone)) {
-                const existing = c.lead_tags 
-                  ? c.lead_tags.split(',').map(t => t.trim()).filter(Boolean) 
-                  : [];
-                const combined = Array.from(new Set([...existing, ...tagsToSend]));
-                return {
-                  ...c,
-                  lead_tags: combined.join(', ')
-                };
-              }
-              return c;
+        const tagsString = tagsToSend.join(',');
+        const res = await fetchWithAuth(`${API_URL}/leads/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leads: leadsPayload,
+            tags: tagsString
+          })
+        }, activeClient.id);
+        
+        if (res.ok) {
+          const data = await res.json();
+          toast.dismiss(loadingToast);
+          toast.success(`${data.imported || selectedPhones.length} contatos atualizados na aba Contatos!`, { icon: '✅' });
+          
+          // Atualiza contatos localmente imediatamente
+          if (setContactsModal) {
+            setContactsModal(prev => {
+              const updatedContacts = (prev.contacts || []).map(c => {
+                const cPhoneClean = (c.phone_number || c.phone || '').replace(/\D/g, '');
+                if (cPhoneClean && cleanSelectedSet.has(cPhoneClean)) {
+                  const existing = c.lead_tags 
+                    ? c.lead_tags.split(',').map(t => t.trim()).filter(Boolean) 
+                    : [];
+                  const combined = Array.from(new Set([...existing, ...tagsToSend]));
+                  return {
+                    ...c,
+                    lead_tags: combined.join(', ')
+                  };
+                }
+                return c;
+              });
+              return {
+                ...prev,
+                contacts: updatedContacts
+              };
             });
-            return {
-              ...prev,
-              contacts: updatedContacts
-            };
-          });
-        }
+          }
         
         onClearSelection();
         onClose();

@@ -169,6 +169,9 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
+### v1.7.1 — Versão Estável (2026-08-11)
+- ✅ **Correção na Aplicação de Etiquetas em Lote (`TagContactsModal`)**: Ajustada a correspondência de telefones na adição de etiquetas para utilizar sanitização apenas de dígitos numéricos (`replace(/\D/g, '')`). Isso impede falhas na vinculação de etiquetas quando os telefones possuem formatações de string ligeiramente distintas.
+
 ### v1.7.0 — Versão Estável (2026-08-11)
 - ✅ **Sincronização Exata do Contador de Pulados (`⏭️ total_skipped`)**: Corrigida a função `reconcile` que mantinha o valor anterior em `trigger.total_skipped` através de `max()`. Agora, o contador na linha do disparo reflete de forma dinâmica e precisa o número de contatos com status `skipped` (6 pulados), batendo 100% com a lista exibida ao abrir o modal.
 
