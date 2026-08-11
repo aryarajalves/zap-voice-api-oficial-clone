@@ -598,6 +598,19 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                             ))
                             db.commit()
                             logger.info(f"🚫 [BLOCK_VIA_BUTTON] Contato {from_phone} bloqueado via botão de template (chat). Client {target_cid}")
+
+                            # Enviar nota privada no Chatwoot informando o bloqueio
+                            if resolved_convo_id:
+                                try:
+                                    from services.block_note import send_block_note_async
+                                    await send_block_note_async(
+                                        client_id=target_cid,
+                                        conversation_id=resolved_convo_id,
+                                        phone=from_phone,
+                                        reason="Botão de Bloqueio (Template - Atendimento)"
+                                    )
+                                except Exception as e_note:
+                                    logger.warning(f"⚠️ [BLOCK_NOTE] Falha ao enviar nota privada: {e_note}")
                         else:
                             logger.info(f"🚫 [BLOCK_VIA_BUTTON] Contato {from_phone} já estava bloqueado. Nenhuma ação.")
                     except Exception as e_block_direct:
@@ -687,6 +700,19 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                                         ))
                                         db_btn.commit()
                                         logger.info(f"🚫 [BUTTON_BLOCK] Contato {phone} bloqueado via botão de disparo.")
+
+                                        # Enviar nota privada no Chatwoot informando o bloqueio
+                                        if convo_id:
+                                            try:
+                                                from services.block_note import send_block_note_async
+                                                await send_block_note_async(
+                                                    client_id=cid,
+                                                    conversation_id=convo_id,
+                                                    phone=phone,
+                                                    reason="Botão de Bloqueio (Disparo em Massa)"
+                                                )
+                                            except Exception as e_note:
+                                                logger.warning(f"⚠️ [BLOCK_NOTE] Falha ao enviar nota de bloqueio: {e_note}")
                                     
                                     # Atualizar o status da mensagem original para registrar o bloqueio no histórico
                                     msg_rec = db_btn.query(models.MessageStatus).filter(

@@ -64,6 +64,29 @@ async def handle_local_segment_node(db, trigger, node, contact_phone):
                     )
                     db.add(block_entry)
                     db.commit()
+
+                    # Enviar nota privada no Chatwoot informando o bloqueio
+                    if trigger.conversation_id:
+                        try:
+                            import asyncio
+                            from services.block_note import send_block_note_async
+                            loop = asyncio.get_event_loop()
+                            if loop.is_running():
+                                loop.create_task(send_block_note_async(
+                                    client_id=trigger.client_id,
+                                    conversation_id=trigger.conversation_id,
+                                    phone=clean_phone,
+                                    reason="Bloqueado dinamicamente via Funil"
+                                ))
+                            else:
+                                loop.run_until_complete(send_block_note_async(
+                                    client_id=trigger.client_id,
+                                    conversation_id=trigger.conversation_id,
+                                    phone=clean_phone,
+                                    reason="Bloqueado dinamicamente via Funil"
+                                ))
+                        except Exception as e_note:
+                            pass  # Nota é não-crítica, não deve interromper o funil
                 log_node_execution(
                     db, trigger, current_node_id, "completed",
                     f"Contato {clean_phone} adicionado à Blacklist local com sucesso."
