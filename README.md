@@ -170,7 +170,7 @@ Content-Type: application/json
 ## 🗒️ Changelog
 
 ### v1.6.8 — Versão Estável (2026-08-11)
-- ✅ **Filtro de Contatos Pulados (Skipped 24h)**: Ao clicar no ícone de pular `⏭️`, o modal agora aplica corretamente o filtro `status_filter=skipped` no backend. A lista agora exibe exclusivamente os contatos que realmente foram pulados por envio recente de template nas últimas 24h, sem misturar com a lista completa do disparo.
+- ✅ **Filtro de Contatos Pulados (Skipped 24h)**: Ao clicar no ícone de pular `⏭️`, o modal agora aplica corretamente o filtro `status_filter=skipped` no backend. A lista agora exibe exclusivamente os contatos que realmente foram pulados por envio recente de template nas últimas 24h, sem misturar com a lista completa do disparo. (Disponíveis tags `backend-1.6.8` e `worker-1.6.8`).
 
 ### v1.6.7 — Versão Estável (2026-08-11)
 - ✅ **Validação Focada no Alcance do Disparo (N Primeiros Contatos Aptos)**: Ao clicar no botão `VALIDAR CANAIS & JANELAS`, o sistema agora valida exclusivamente os N primeiros contatos configurados em "Disparar para os N Primeiros" (ex: 80 contatos), evitando requisições ou requisições desnecessárias para a lista inteira de contatos.
