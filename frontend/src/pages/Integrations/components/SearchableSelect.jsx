@@ -178,7 +178,26 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
               )}
             </div>
             <div className="max-h-60 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-white/10">
-              {displayOptions.length === 0 ? (
+              {/* Opção para criar nova etiqueta caso o termo digitado ainda não exista */}
+              {searchTerm.trim() && !rawOptions.some(opt => opt && String(opt.value).toLowerCase() === searchTerm.trim().toLowerCase() || String(opt.label).toLowerCase() === searchTerm.trim().toLowerCase()) && (
+                <div
+                  className="p-2.5 text-xs rounded-lg cursor-pointer transition-colors flex items-center justify-between mb-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-bold border border-blue-500/20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newTag = searchTerm.trim();
+                    handleToggle(newTag);
+                  }}
+                >
+                  <span className="truncate">
+                    + Criar etiqueta: <strong className="underline">{searchTerm.trim()}</strong>
+                  </span>
+                  <span className="text-[10px] bg-blue-500 text-white px-2 py-0.5 rounded font-extrabold shrink-0">
+                    ADICIONAR
+                  </span>
+                </div>
+              )}
+
+              {displayOptions.length === 0 && !searchTerm.trim() ? (
                 <div className="p-3 text-center text-gray-500 text-[10px] italic">Nenhum resultado encontrado</div>
               ) : (
                 displayOptions.map(opt => {
