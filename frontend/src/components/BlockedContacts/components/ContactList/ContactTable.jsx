@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiTrash2 } from 'react-icons/fi';
+import { FiUnlock } from 'react-icons/fi';
 
 export default function ContactTable({ 
     contacts, 
@@ -105,10 +105,10 @@ export default function ContactTable({
                             <td className="px-6 py-4 text-right">
                                 <button
                                     onClick={() => onUnblock(contact.id)}
-                                    className="text-red-400 hover:text-red-500 p-2 rounded-lg transition-all hover:bg-red-500/10"
-                                    title={isResting ? 'Remover do Repouso' : 'Desbloquear'}
+                                    className="text-emerald-400 hover:text-emerald-300 p-2 rounded-lg transition-all hover:bg-emerald-500/10"
+                                    title={isResting ? 'Remover do Repouso' : 'Desbloquear Contato'}
                                 >
-                                    <FiTrash2 size={18} />
+                                    <FiUnlock size={18} />
                                 </button>
                             </td>
                         </tr>

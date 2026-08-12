@@ -105,6 +105,10 @@ async def sync_message_to_local_chat(db, client_id: int, phone: str, contact_nam
             db.add(chat_convo)
             db.flush()
             
+        formatted_wamid = None
+        if wa_message_id and wa_message_id != "direct_meta":
+            formatted_wamid = wa_message_id if wa_message_id.startswith("wamid.") else f"wamid.{wa_message_id}"
+
         # Registrar a mensagem disparada
         chat_message = models.ChatMessage(
             conversation_id=chat_convo.id,
@@ -112,7 +116,7 @@ async def sync_message_to_local_chat(db, client_id: int, phone: str, contact_nam
             message_type=message_type,
             content=content,
             media_url=media_url,
-            wa_message_id=wa_message_id
+            wa_message_id=formatted_wamid
         )
         db.add(chat_message)
         

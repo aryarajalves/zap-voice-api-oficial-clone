@@ -45,6 +45,7 @@ export default function ContactList({
                 selectedCount={selectedCount}
                 onBulkDelete={onBulkDelete}
                 onExport={onExport}
+                listTab={listTab}
             />
 
             {/* Banner: Selecionar todos os filtrados */}

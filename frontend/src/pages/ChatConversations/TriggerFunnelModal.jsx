@@ -18,12 +18,16 @@ export default function TriggerFunnelModal({
     const [isLoading, setIsLoading] = useState(false);
     const [selectedFunnelId, setSelectedFunnelId] = useState(null);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
     useEffect(() => {
         if (isOpen && clientId) {
             loadFunnels();
         } else {
             setSearch('');
             setSelectedFunnelId(null);
+            setCurrentPage(1);
         }
     }, [isOpen, clientId]);
 
@@ -37,7 +41,7 @@ export default function TriggerFunnelModal({
                 console.log('Funnels API raw response data:', data);
                 // Filter only active and non-archived funnels, sorting pinned ones to the top
                 setFunnels((data || [])
-                    .filter(f => f.is_active && !f.is_archived)
+                    .filter(f => f.is_active !== false && !f.is_archived)
                     .sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0))
                 );
             } else {
@@ -58,13 +62,16 @@ export default function TriggerFunnelModal({
         (f.description || '').toLowerCase().includes(search.toLowerCase())
     );
 
+    const totalPages = Math.ceil(filteredFunnels.length / itemsPerPage) || 1;
+    const paginatedFunnels = filteredFunnels.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
     return (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
 
             {/* Modal Container */}
-            <div className="relative w-full max-w-md bg-[#0f172a]/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] z-10 animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-md bg-[#0f172a]/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-10 animate-in fade-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#1e293b]/50">
                     <h3 className="text-base font-semibold text-white flex items-center gap-2">
@@ -90,7 +97,10 @@ export default function TriggerFunnelModal({
                             type="text"
                             placeholder="Buscar funil pelo nome..."
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="w-full pl-9 pr-4 py-2 bg-[#1e293b]/40 text-gray-200 text-xs border border-white/5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                     </div>
@@ -103,12 +113,12 @@ export default function TriggerFunnelModal({
                             <FiRefreshCw className="animate-spin" size={24} />
                             <span className="text-xs">Carregando funis...</span>
                         </div>
-                    ) : filteredFunnels.length === 0 ? (
+                    ) : paginatedFunnels.length === 0 ? (
                         <div className="text-center py-12 text-gray-500 text-xs">
                             Nenhum funil ativo encontrado.
                         </div>
                     ) : (
-                        filteredFunnels.map(funnel => {
+                        paginatedFunnels.map(funnel => {
                             const isSelected = selectedFunnelId === funnel.id;
                             return (
                                 <button
@@ -146,6 +156,31 @@ export default function TriggerFunnelModal({
                         })
                     )}
                 </div>
+
+                {/* Controles de Paginação */}
+                {filteredFunnels.length > itemsPerPage && (
+                    <div className="px-6 py-2.5 bg-[#0b0f19] border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+                        <span>Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong> ({filteredFunnels.length} funis)</span>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-white font-medium transition"
+                            >
+                                Anterior
+                            </button>
+                            <button
+                                type="button"
+                                disabled={currentPage === totalPages}
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-white font-medium transition"
+                            >
+                                Próxima
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Footer Actions */}
                 <div className="flex items-center justify-end px-6 py-4 border-t border-white/5 bg-[#1e293b]/50 gap-3">

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from database import Base
@@ -14,6 +14,9 @@ class ImportRowResult(Base):
     arquivo desapareciam silenciosamente, sem nenhum rastro.
     """
     __tablename__ = "import_row_results"
+    __table_args__ = (
+        Index("idx_import_row_results_import_status", "import_id", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     import_id = Column(Integer, ForeignKey("contact_import_history.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -37,3 +40,4 @@ class ImportRowResult(Base):
     # acima. Sem isso, deletar uma importação com milhares de linhas geraria um
     # IntegrityError (tentativa de UPDATE ... SET import_id = NULL numa coluna NOT NULL).
     import_history = relationship("ContactImportHistory", backref=backref("row_results", passive_deletes=True))
+

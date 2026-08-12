@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../AuthContext';
 import { API_URL } from '../../config';
 
-export function useChatEngine({ activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, selectedConvo, setSelectedConvo }) {
+export function useChatEngine({ activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, selectedConvo, setSelectedConvo }) {
     const [conversations, setConversations] = useState([]);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -31,7 +31,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
     // Resetar para a página 1 ao alterar filtros
     useEffect(() => {
         setPage(1);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel]);
     
     // Preview de mídia antes do envio
     const [mediaPreview, setMediaPreview] = useState(null);
@@ -107,6 +107,9 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
             }
             if (filterHasReplied) {
                 url.searchParams.append('has_replied', 'true');
+            }
+            if (filterHasActiveFunnel) {
+                url.searchParams.append('has_active_funnel', 'true');
             }
             const res = await fetchWithAuth(url.toString(), {}, activeClient.id);
             if (res.ok) {
@@ -311,10 +314,15 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
                     }
                 }
             } else {
+                const bodyPayload = { content: textToSend };
+                if (options?.quotedWaMessageId) {
+                    bodyPayload.quoted_wa_message_id = options.quotedWaMessageId;
+                }
+
                 const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/messages`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: textToSend })
+                    body: JSON.stringify(bodyPayload)
                 }, activeClient.id);
 
                 if (res.ok) {
@@ -397,6 +405,33 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         }
     };
 
+    const handleCancelFunnel = async () => {
+        if (!selectedConvo || isSending) return false;
+        setIsSending(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/cancel-funnel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }, activeClient.id);
+
+            if (res.ok) {
+                toast.success('Execução do funil cancelada com sucesso!');
+                setSelectedConvo(prev => prev ? { ...prev, active_funnel: null } : prev);
+                await loadConversations();
+                return true;
+            } else {
+                const errData = await res.json();
+                toast.error(errData.detail || 'Erro ao cancelar execução do funil.');
+                return false;
+            }
+        } catch (err) {
+            toast.error('Erro de conexão ao cancelar funil.');
+            return false;
+        } finally {
+            setIsSending(false);
+        }
+    };
+
     const handleClose24hWindow = async (selectedConvo, setSelectedConvo) => {
         if (!selectedConvo || !activeClient) return;
         try {
@@ -432,6 +467,36 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
             return;
         }
 
+        // Função auxiliar para normalizar reactions para lista
+        const normalizeReactions = (rawReactions) => {
+            if (Array.isArray(rawReactions)) return rawReactions.filter(Boolean);
+            if (rawReactions && typeof rawReactions === 'object') {
+                return Object.entries(rawReactions).map(([s, val]) => {
+                    if (typeof val === 'object' && val !== null && val.emoji) return val;
+                    if (typeof val === 'string' && val) return { sender: s, emoji: val };
+                    return null;
+                }).filter(Boolean);
+            }
+            return [];
+        };
+
+        // Atualização otimista — mostra o emoji instantaneamente sem esperar a API
+        let previousMessages = null;
+        setMessages(prev => {
+            previousMessages = prev;
+            return prev.map(m => {
+                if (String(m.id) === String(messageId) || m.wa_message_id === messageId || m.wamid === messageId || m.message_id === messageId) {
+                    const meta = { ...(m.meta_data || {}) };
+                    const reactions = normalizeReactions(meta.reactions);
+                    const filtered = reactions.filter(r => r && r.sender !== 'agent');
+                    if (emoji) filtered.push({ sender: 'agent', emoji: emoji });
+                    meta.reactions = filtered;
+                    return { ...m, meta_data: meta };
+                }
+                return m;
+            });
+        });
+
         try {
             const res = await fetchWithAuth(`${API_URL}/chat/react`, {
                 method: 'POST',
@@ -443,27 +508,17 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
             }, activeClient?.id);
 
             if (res.ok) {
-                // Atualiza o estado local das mensagens para exibir a reação imediatamente
-                setMessages(prev => prev.map(m => {
-                    if (String(m.id) === String(messageId) || m.wa_message_id === messageId || m.wamid === messageId || m.message_id === messageId) {
-                        const meta = { ...(m.meta_data || {}) };
-                        const reactions = Array.isArray(meta.reactions) ? [...meta.reactions] : [];
-                        // Atualiza ou remove reação do agente
-                        const filtered = reactions.filter(r => r.sender !== 'agent');
-                        if (emoji) {
-                            filtered.push({ sender: 'agent', emoji: emoji });
-                        }
-                        meta.reactions = filtered;
-                        return { ...m, meta_data: meta };
-                    }
-                    return m;
-                }));
+                // A atualização otimista já foi feita — apenas exibe o toast de confirmação
                 toast.success(emoji ? `Reação ${emoji} enviada!` : "Reação removida");
             } else {
+                // Reverter atualização otimista se a API falhou
+                if (previousMessages) setMessages(previousMessages);
                 const err = await res.json().catch(() => ({}));
                 toast.error(err.detail || "Erro ao enviar reação.");
             }
         } catch (e) {
+            // Reverter atualização otimista em caso de erro de rede
+            if (previousMessages) setMessages(previousMessages);
             console.error("Erro ao reagir:", e);
             toast.error("Falha ao comunicar com o servidor.");
         }
@@ -520,6 +575,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
         isLoadingMoreMessages,
         loadMoreMessages,
         handleTriggerFunnel,
+        handleCancelFunnel,
         handleClose24hWindow
     };
 }

@@ -203,6 +203,8 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
             # Extrair o input do usuário (seja texto ou clique de botão)
             user_input = None
             msg_type = msg.get("type")
+            context = msg.get("context", {})
+            replied_msg_id = context.get("id")
             if msg_type == "text":
                 user_input = msg.get("text", {}).get("body")
             elif msg_type == "reaction":
@@ -346,19 +348,21 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                 if m_type == "reaction":
                     emoji = msg.get("reaction", {}).get("emoji", "")
                     reacted_msg_id = msg.get("reaction", {}).get("message_id", "")
-                    should_create_standalone_message = False
-                    if reacted_msg_id and emoji:
+                    if reacted_msg_id:
                         clean_reacted_id = reacted_msg_id.replace("wamid.", "")
+                        wamid_reacted_id = f"wamid.{clean_reacted_id}"
                         target_msg = db.query(models.ChatMessage).filter(
                             or_(
                                 models.ChatMessage.wa_message_id == reacted_msg_id,
-                                models.ChatMessage.wa_message_id == clean_reacted_id
+                                models.ChatMessage.wa_message_id == clean_reacted_id,
+                                models.ChatMessage.wa_message_id == wamid_reacted_id
                             )
                         ).first()
+
                         if target_msg:
                             existing_meta = dict(target_msg.meta_data or {})
                             reactions = existing_meta.get("reactions", [])
-                            # Remove reação prévia do mesmo sender e substitui
+                            # Remove reação prévia do contato e substitui
                             reactions = [r for r in reactions if r.get("sender") != "contact"]
                             if emoji:  # emoji vazio = remover reação
                                 reactions.append({"emoji": emoji, "sender": "contact"})
@@ -367,17 +371,38 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                             from sqlalchemy.orm.attributes import flag_modified
                             flag_modified(target_msg, "meta_data")
                             db.commit()
-                            logger.info(f"❤️ [CHAT-REACTION] Reação '{emoji}' adicionada à mensagem {reacted_msg_id}")
+                            logger.info(f"❤️ [CHAT-REACTION] Reação '{emoji}' associada à mensagem ID {target_msg.id} ({reacted_msg_id})")
+
+                            # Transmitir atualização via WebSocket
+                            try:
+                                import asyncio
+                                from core.rabbitmq import rabbitmq
+                                payload_ws = {
+                                    "event": "message_reaction_updated",
+                                    "data": {
+                                        "conversation_id": chat_convo.id,
+                                        "message_id": target_msg.id,
+                                        "wa_message_id": target_msg.wa_message_id,
+                                        "meta_data": existing_meta
+                                    }
+                                }
+                                asyncio.create_task(rabbitmq.publish_event("message_reaction_updated", payload_ws))
+                            except Exception as e_ws:
+                                logger.error(f"Erro ao transmitir evento de reação WebSocket: {e_ws}")
                         else:
-                            logger.info(f"⚠️ [CHAT-REACTION] Mensagem alvo {reacted_msg_id} não encontrada, criando reação avulsa")
-                            should_create_standalone_message = True
-                    if not should_create_standalone_message:
-                        continue
+                            logger.info(f"⚠️ [CHAT-REACTION] Mensagem alvo {reacted_msg_id} não encontrada para conversa {chat_convo.id}")
+
+                    # NUNCA cria mensagem duplicada avulsa no chat para eventos do tipo reaction
+                    continue
 
                 # Para cliques de botão: marcar skip_agentflow se activate_agent=False
                 chat_meta = {}
                 if btn_activate_agent is not None and not btn_activate_agent:
                     chat_meta["skip_agentflow"] = True
+
+                formatted_inbound_quoted_id = None
+                if replied_msg_id:
+                    formatted_inbound_quoted_id = replied_msg_id if replied_msg_id.startswith("wamid.") else f"wamid.{replied_msg_id}"
 
                 chat_message = models.ChatMessage(
                     conversation_id=chat_convo.id,
@@ -386,6 +411,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                     content=content_text,
                     media_url=media_url,
                     wa_message_id=msg_id,
+                    quoted_message_id=formatted_inbound_quoted_id,
                     meta_data=chat_meta if chat_meta else None
                 )
                 db.add(chat_message)

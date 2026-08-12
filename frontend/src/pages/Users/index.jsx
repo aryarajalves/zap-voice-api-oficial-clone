@@ -29,6 +29,18 @@ const Users = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
 
+    // Paginação - Usuários
+    const [userCurrentPage, setUserCurrentPage] = useState(1);
+    const [userItemsPerPage, setUserItemsPerPage] = useState(5);
+
+    // Paginação - Convites
+    const [inviteCurrentPage, setInviteCurrentPage] = useState(1);
+    const [inviteItemsPerPage, setInviteItemsPerPage] = useState(5);
+
+    useEffect(() => {
+        setUserCurrentPage(1);
+    }, [searchTerm, roleFilter]);
+
     const [userData, setUserData] = useState({
         email: '',
         password: '',
@@ -360,7 +372,11 @@ const Users = () => {
                         <UserTable 
                             users={filteredUsers} 
                             handleOpenEditModal={handleOpenEditModal} 
-                            confirmDeleteUser={confirmDeleteUser} 
+                            confirmDeleteUser={confirmDeleteUser}
+                            currentPage={userCurrentPage}
+                            setCurrentPage={setUserCurrentPage}
+                            itemsPerPage={userItemsPerPage}
+                            setItemsPerPage={setUserItemsPerPage}
                         />
                     )}
                 </>
@@ -375,6 +391,10 @@ const Users = () => {
                             invitations={invitations}
                             clients={clients}
                             confirmDeleteInvitation={confirmDeleteInvitation}
+                            currentPage={inviteCurrentPage}
+                            setCurrentPage={setInviteCurrentPage}
+                            itemsPerPage={inviteItemsPerPage}
+                            setItemsPerPage={setInviteItemsPerPage}
                         />
                     )}
                 </>

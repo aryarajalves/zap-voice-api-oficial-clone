@@ -61,13 +61,13 @@ export function useIntegrations(activeClient) {
   const fetchChatwootLabels = useCallback(async () => {
     if (!activeClient) return;
     try {
-      const res = await fetchWithAuth(`${API_URL}/whatsapp/labels`, {}, activeClient.id);
+      const res = await fetchWithAuth(`${API_URL}/chat/labels`, {}, activeClient.id);
       if (res.ok) {
         const labels = await res.json();
         setChatwootLabels(labels || []);
       }
     } catch (err) {
-      console.error("Erro ao buscar etiquetas do Chatwoot:", err);
+      console.error("Erro ao buscar etiquetas da conversa:", err);
     }
   }, [activeClient]);
 

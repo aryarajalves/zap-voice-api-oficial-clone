@@ -137,8 +137,10 @@ export function useAppLogic() {
 
     useEffect(() => {
         if (user && user.role === 'vendedor') {
-            if (currentView !== 'hot_leads') {
-                setCurrentView('hot_leads');
+            // vendedor_home é a tela de boas-vindas após fechar o chat
+            const allowedVendedorViews = ['chat_conversations', 'vendedor_home'];
+            if (!allowedVendedorViews.includes(currentView)) {
+                setCurrentView('chat_conversations');
             }
         } else if (user && user.role === 'user') {
             const allowedViews = ['history', 'schedules'];

@@ -228,7 +228,8 @@ const UserModal = ({
                                     } else if (nextRole === 'user') {
                                         defaultBlocked = ['settings', 'schedules', 'funnels', 'leads'];
                                     } else if (nextRole === 'vendedor') {
-                                        defaultBlocked = ['settings', 'schedules', 'funnels'];
+                                        // Vendedor só acessa o chat de atendimento — bloqueia tudo mais
+                                        defaultBlocked = ['settings', 'schedules', 'funnels', 'leads', 'history', 'whatsapp', 'bulk_sender'];
                                     }
                                     setUserData({ ...userData, role: nextRole, blocked_features: defaultBlocked });
                                 }}
@@ -240,12 +241,23 @@ const UserModal = ({
                                 <option value="admin">Administrador (Configurações Totais)</option>
                                 <option value="premium">Usuário Premium (Sem Configurações Avançadas)</option>
                                 <option value="user">Usuário (Histórico Apenas)</option>
-                                <option value="vendedor">Vendedor (Leads Quentes)</option>
+                                <option value="vendedor">Vendedor (Painel de Atendimento)</option>
                             </select>
                         </div>
 
                         {/* Configuração de Painéis — Acesso + Status de Construção */}
-                        {userData.role !== 'super_admin' && (
+                        {userData.role === 'vendedor' && (
+                            <div className="p-3 border border-blue-200 dark:border-blue-800/50 rounded-xl bg-blue-50/50 dark:bg-blue-900/20">
+                                <div className="flex items-start gap-2">
+                                    <span className="text-blue-500 text-lg">🔒</span>
+                                    <div>
+                                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Acesso restrito ao Painel de Atendimento</p>
+                                        <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-0.5">O cargo <strong>Vendedor</strong> tem acesso exclusivo ao chat de atendimento. Todos os outros módulos (Campanhas, Funis, Integrações, Contatos, etc.) ficam automaticamente bloqueados.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {userData.role !== 'super_admin' && userData.role !== 'vendedor' && (
                             <div>
                                 <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Painéis e Status de Construção</label>
                                 <div className="space-y-0 p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-900/30 max-h-80 overflow-y-auto custom-scrollbar">
@@ -373,7 +385,7 @@ const UserModal = ({
                         )}
 
                         {/* Configuração de Restrições de Nós do Funil */}
-                        {userData.role !== 'super_admin' && !(userData.blocked_features || []).includes('funnels') && (
+                        {userData.role !== 'super_admin' && userData.role !== 'vendedor' && !(userData.blocked_features || []).includes('funnels') && (
                             <div>
                                 <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Restringir Nós do Funil</label>
                                 <div className="space-y-2.5 p-3.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-900/30 max-h-48 overflow-y-auto custom-scrollbar">

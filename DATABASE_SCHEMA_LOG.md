@@ -28,6 +28,7 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
 | :--- | :--- | :--- | :--- | :--- |
+| 12/08/2026 | Índice Composto de Resultados de Importação | `import_row_results` | Índice composto `idx_import_row_results_import_status` em `(import_id, status)` | `backend/scripts/add_import_row_results_composite_index.py` |
 | 07/08/2026 | Índices de Performance em Status de Mensagem | `message_status` | Índices nas colunas `phone_number`, `status` e índices compostos `(trigger_id, status)` e `(trigger_id, phone_number)` | `backend/scripts/add_message_status_indexes.py` |
 | 06/08/2026 | Histórico de Templates e Validação 24h | `contact_template_history`, `webhook_leads` | Tabela `contact_template_history` inteira, colunas `last_template_name`, `last_template_dispatched_at` em `webhook_leads` | `backend/scripts/add_template_history_table.py` |
 | 06/08/2026 | Campo Customizado Dinâmico do ManyChat | `webhook_event_mappings` | `manychat_custom_field` | `backend/scripts/add_manychat_custom_field_column.py` |

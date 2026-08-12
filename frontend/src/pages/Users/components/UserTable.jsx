@@ -1,7 +1,22 @@
 import React from 'react';
 import { FiShield, FiUser, FiUserPlus, FiCheck, FiX, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import TablePagination from './TablePagination';
 
-const UserTable = ({ users, handleOpenEditModal, confirmDeleteUser }) => {
+const UserTable = ({
+    users,
+    handleOpenEditModal,
+    confirmDeleteUser,
+    currentPage,
+    setCurrentPage,
+    itemsPerPage,
+    setItemsPerPage
+}) => {
+    const totalItems = users.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * itemsPerPage;
+    const paginatedUsers = users.slice(startIndex, startIndex + itemsPerPage);
+
     return (
         <div className="bg-white dark:bg-[#1e293b] rounded-xl shadow-sm border border-gray-200 dark:border-white/5 overflow-hidden">
             <div className="overflow-x-auto">
@@ -15,7 +30,7 @@ const UserTable = ({ users, handleOpenEditModal, confirmDeleteUser }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {users.length > 0 ? users.map((user) => (
+                        {paginatedUsers.length > 0 ? paginatedUsers.map((user) => (
                             <tr key={user.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="font-semibold text-gray-800 dark:text-gray-200">{user.full_name || 'Sem nome'}</div>
@@ -71,6 +86,14 @@ const UserTable = ({ users, handleOpenEditModal, confirmDeleteUser }) => {
                     </tbody>
                 </table>
             </div>
+
+            <TablePagination
+                currentPage={safePage}
+                setCurrentPage={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                setItemsPerPage={setItemsPerPage}
+                totalItems={totalItems}
+            />
         </div>
     );
 };

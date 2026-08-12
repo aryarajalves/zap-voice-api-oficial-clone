@@ -184,6 +184,9 @@ def sync_contact_to_custom_table(
         return
 
     try:
+        # Usar savepoint aninhado para que falhas de banco (ex: no SQLite de testes) não anulem a transação externa
+        nested = db.begin_nested()
+        
         # 1. Garantir que a tabela existe com as colunas base
         create_sql = text(f"""
             CREATE TABLE IF NOT EXISTS {safe_table} (
@@ -196,7 +199,6 @@ def sync_contact_to_custom_table(
             )
         """)
         db.execute(create_sql)
-        db.commit()
 
         # 1b. Garantir que colunas novas existam em tabelas já criadas anteriormente (migração online)
         for col_name, col_type in [
@@ -204,12 +206,13 @@ def sync_contact_to_custom_table(
             ("meeting_at", "TIMESTAMP WITH TIME ZONE"),
         ]:
             try:
-                db.execute(text(f'ALTER TABLE {safe_table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}'))
-                db.commit()
+                db.execute(text(f"SELECT {col_name} FROM {safe_table} LIMIT 1"))
             except Exception:
-                db.rollback()
+                try:
+                    db.execute(text(f"ALTER TABLE {safe_table} ADD COLUMN {col_name} {col_type}"))
+                except Exception:
+                    pass
 
-        
         # 2. Executar o UPSERT (compatível com SQLite e PostgreSQL)
         upsert_sql = text(f"""
             INSERT INTO {safe_table} (phone, name, inbox_id, last_interaction_at)
@@ -225,9 +228,12 @@ def sync_contact_to_custom_table(
             "inbox_id": inbox_id,
             "last_interaction_at": last_interaction_at
         })
-        db.commit()
+        nested.commit()
         logger.info(f"✨ [SYNC-TABLE] Contato {clean_phone} sincronizado com sucesso na tabela {safe_table}!")
     except Exception as e:
-        db.rollback()
+        try:
+            nested.rollback()
+        except Exception:
+            pass
         logger.error(f"❌ [SYNC-TABLE] Erro ao sincronizar contato na tabela {safe_table}: {e}")
 

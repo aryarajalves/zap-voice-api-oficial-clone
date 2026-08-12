@@ -200,6 +200,7 @@ def get_financial_sales(
     status: str = "all",      # all, approved, pending, refunded, canceled
     platform: str = "all",    # all, hotmart, kiwify, eduzz, etc.
     product: str = "all",     # all, ou nomes separados por vírgula
+    label: Optional[str] = None,       # all, ou marcadores/etiquetas da aba de contatos
     start_date: Optional[str] = None, # YYYY-MM-DD
     end_date: Optional[str] = None,   # YYYY-MM-DD
     x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
@@ -290,6 +291,27 @@ def get_financial_sales(
     # Todos os produtos distintos (para popular dropdown no frontend)
     all_product_names: set = set()
 
+    # Buscar todas as etiquetas/marcadores do cliente para o dropdown
+    available_labels_details = db.query(models.ChatLabel).filter(models.ChatLabel.client_id == client_id).all()
+    all_labels_list = sorted([l.name for l in available_labels_details]) if available_labels_details else []
+
+    # Se houver filtro por etiqueta de contato, extrai os telefones que possuem essa(s) etiqueta(s) em ChatConversation
+    matching_phones_for_label = None
+    if label and label.strip() and label.strip() != 'all':
+        req_labels = [lb.strip().lower() for lb in label.split(',') if lb.strip() and lb.strip() != 'all']
+        if req_labels:
+            convos = db.query(models.ChatConversation).filter(
+                models.ChatConversation.client_id == client_id
+            ).all()
+            matching_phones_set = set()
+            for c in convos:
+                c_labels = [str(l).strip().lower() for l in (c.labels or [])]
+                if any(rl in c_labels for rl in req_labels):
+                    digits = "".join(filter(str.isdigit, str(c.phone)))
+                    if len(digits) >= 8:
+                        matching_phones_set.add(digits[-8:])
+            matching_phones_for_label = matching_phones_set
+
     # Filtro por produto (suporta múltiplos nomes separados por vírgula)
     product_list = [p.strip() for p in product.split(',') if p.strip() and p.strip() != 'all']
 
@@ -312,6 +334,14 @@ def get_financial_sales(
         payment_method = data.get("payment_method") or "—"
         raw_status = data.get("raw_status") or h.status
         buyer_name = data.get("name") or "—"
+        buyer_phone = data.get("phone") or ""
+        
+        # Filtro de etiqueta de contato (compara os 8 últimos dígitos do comprador com a conversa etiquetada)
+        if matching_phones_for_label is not None:
+            phone_digits = "".join(filter(str.isdigit, str(buyer_phone)))
+            phone_suf = phone_digits[-8:] if len(phone_digits) >= 8 else phone_digits
+            if not phone_suf or phone_suf not in matching_phones_for_label:
+                continue
         
         evt = h.event_type or ""
 
@@ -468,6 +498,7 @@ def get_financial_sales(
         "rows": sorted_rows,
         "top_products": sorted_products,
         "all_products": all_products_list,
+        "all_labels": all_labels_list,
         "transactions": transactions
     }
 

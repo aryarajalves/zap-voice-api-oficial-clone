@@ -72,7 +72,10 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
   const currentValues = isMulti
     ? (Array.isArray(value) ? value : (typeof value === 'string' && value.trim() ? value.split(',').map(v => v.trim()) : []))
     : [value];
-  const selectedOptions = rawOptions.filter(opt => opt && currentValues.some(v => String(v) === String(opt.value)));
+  const selectedOptions = currentValues.filter(Boolean).map(v => {
+    const found = rawOptions.find(opt => opt && String(opt.value) === String(v));
+    return found || { value: v, label: v };
+  });
 
   const handleToggle = (optValue) => {
     if (isMulti) {
@@ -186,6 +189,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
                     e.stopPropagation();
                     const newTag = searchTerm.trim();
                     handleToggle(newTag);
+                    setSearchTerm("");
                   }}
                 >
                   <span className="truncate">

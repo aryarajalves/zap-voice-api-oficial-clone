@@ -68,6 +68,7 @@ class ChatMessage(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     wa_message_id = Column(String, nullable=True, index=True)
     meta_data = Column(JSON, nullable=True)
+    quoted_message_id = Column(String, nullable=True)  # wamid da mensagem citada (quote reply)
     
     # Logs do Webhook de mensagens do AgentFlow
     agentflow_webhook_status = Column(String, nullable=True)

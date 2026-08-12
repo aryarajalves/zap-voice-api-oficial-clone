@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { FiSearch, FiTrash2, FiDownload, FiFilter, FiChevronDown, FiCheck } from 'react-icons/fi';
+import { FiSearch, FiTrash2, FiDownload, FiFilter, FiChevronDown, FiCheck, FiUnlock, FiCheckCircle } from 'react-icons/fi';
 
 export default function Filters({
     searchTerm, setSearchTerm,
     reasonFilter, setReasonFilter,
     contacts,
-    selectedCount, onBulkDelete, onExport
+    selectedCount, onBulkDelete, onExport,
+    listTab
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -39,9 +40,15 @@ export default function Filters({
                     {selectedCount > 0 && (
                         <button
                             onClick={onBulkDelete}
-                            className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-sm font-bold hover:bg-red-500/20 transition-all flex items-center gap-2 animate-in slide-in-from-right-2 cursor-pointer"
+                            className={`px-4 py-2 rounded-lg text-sm font-bold border transition-all flex items-center gap-2 animate-in slide-in-from-right-2 cursor-pointer shadow-md ${
+                                listTab === 'resting'
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                            }`}
+                            title={listTab === 'resting' ? "Remover do repouso os contatos selecionados" : "Desbloquear os contatos selecionados"}
                         >
-                            <FiTrash2 /> Excluir {selectedCount} selecionados
+                            {listTab === 'resting' ? <FiCheckCircle size={16} /> : <FiUnlock size={16} />}
+                            <span>{listTab === 'resting' ? `Remover ${selectedCount} do repouso` : `Desbloquear ${selectedCount} selecionados`}</span>
                         </button>
                     )}
 

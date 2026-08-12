@@ -122,6 +122,7 @@ async def list_conversations(
     template_sent_24h_only: Optional[bool] = None,
     urgent_only: Optional[bool] = None,
     has_replied: Optional[bool] = None,
+    has_active_funnel: Optional[bool] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1),
     client_id: int = Depends(get_client_id),
@@ -212,6 +213,29 @@ async def list_conversations(
     # Filtro: contatos que responderam/enviaram mensagem
     if has_replied:
         query = query.filter(models.ChatConversation.last_contact_message_at.isnot(None))
+
+    # Filtro: contatos com funil em execução no momento (ScheduledTrigger em queued/processing/paused_waiting_delivery/suspended)
+    if has_active_funnel:
+        raw_active_phones = [
+            r[0] for r in db.query(models.ScheduledTrigger.contact_phone)
+            .filter(
+                models.ScheduledTrigger.client_id == client_id,
+                models.ScheduledTrigger.status.in_(['queued', 'processing', 'paused_waiting_delivery', 'suspended']),
+                models.ScheduledTrigger.contact_phone.isnot(None)
+            ).all() if r[0]
+        ]
+        
+        clean_suffixes = set()
+        for p in raw_active_phones:
+            digits = "".join(filter(str.isdigit, str(p)))
+            if len(digits) >= 8:
+                clean_suffixes.add(digits[-8:])
+        
+        if clean_suffixes:
+            funnel_conditions = [models.ChatConversation.phone.like(f"%{suf}") for suf in clean_suffixes]
+            query = query.filter(or_(*funnel_conditions))
+        else:
+            query = query.filter(models.ChatConversation.id == -1)
 
     # Filtro por Datas
     if start_date:
@@ -310,6 +334,7 @@ async def list_conversations(
                 if funnel:
                     active_funnels_map[digits[-8:]] = {
                         "id": funnel.id,
+                        "trigger_id": t.id,
                         "name": funnel.name,
                         "status": t.status
                     }
@@ -403,7 +428,8 @@ async def list_messages(
             "media_url": m.media_url,
             "timestamp": m.timestamp.isoformat() if m.timestamp else None,
             "wa_message_id": m.wa_message_id,
-            "meta_data": m.meta_data
+            "meta_data": m.meta_data,
+            "quoted_message_id": m.quoted_message_id
         })
     return result
 
@@ -424,6 +450,7 @@ async def send_chat_message(
 
     content = payload.get("content")
     is_private = payload.get("is_private", False)
+    quoted_wa_message_id = payload.get("quoted_wa_message_id")  # wamid da mensagem citada (opcional)
     if not content:
         raise HTTPException(status_code=400, detail="O conteúdo da mensagem é obrigatório.")
 
@@ -456,7 +483,7 @@ async def send_chat_message(
         # Enviar mensagem real usando o WhatsAppClient
         wa_client = WhatsAppClient(client_id=client_id)
         try:
-            response = await wa_client.send_text_official(convo.phone, content)
+            response = await wa_client.send_text_official(convo.phone, content, quoted_message_id=quoted_wa_message_id)
             if isinstance(response, dict) and response.get("error"):
                 logger.error(f"❌ Erro de envio de WhatsApp: {response}")
                 raise HTTPException(status_code=400, detail=response.get("detail") or "Erro ao enviar mensagem pelo WhatsApp.")
@@ -474,7 +501,8 @@ async def send_chat_message(
         user_id=current_user.id,
         message_type="text",
         content=content,
-        wa_message_id=wa_msg_id
+        wa_message_id=wa_msg_id,
+        quoted_message_id=quoted_wa_message_id if not is_private else None
     )
     db.add(new_message)
 
@@ -506,7 +534,8 @@ async def send_chat_message(
         "message_type": new_message.message_type,
         "content": new_message.content,
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
-        "wa_message_id": new_message.wa_message_id
+        "wa_message_id": new_message.wa_message_id,
+        "quoted_message_id": new_message.quoted_message_id
     }
 
 @router.post("/chat/conversations/{conversation_id}/template")
@@ -1124,6 +1153,7 @@ async def send_chat_media_message(
     media_url = payload.get("media_url")
     m_type = payload.get("message_type")  # image, video, audio, document
     caption = payload.get("caption", "")
+    quoted_wa_message_id = payload.get("quoted_wa_message_id")  # wamid da mensagem citada (opcional)
     if not media_url or not m_type:
         raise HTTPException(status_code=400, detail="Mídia URL e Tipo de Mensagem são obrigatórios.")
 
@@ -1147,37 +1177,46 @@ async def send_chat_media_message(
     try:
         if m_type == "image":
             if meta_media_id:
-                response = await wa_client._meta_request("POST", "messages", json={
+                json_payload = {
                     "messaging_product": "whatsapp",
                     "recipient_type": "individual",
                     "to": ''.join(filter(str.isdigit, convo.phone)),
                     "type": "image",
                     "image": {"id": meta_media_id, "caption": caption}
-                })
+                }
+                if quoted_wa_message_id:
+                    json_payload["context"] = {"message_id": quoted_wa_message_id}
+                response = await wa_client._meta_request("POST", "messages", json=json_payload)
             else:
                 response = await wa_client.send_image_official(convo.phone, media_url, caption=caption)
         elif m_type == "video":
             if meta_media_id:
-                response = await wa_client._meta_request("POST", "messages", json={
+                json_payload = {
                     "messaging_product": "whatsapp",
                     "recipient_type": "individual",
                     "to": ''.join(filter(str.isdigit, convo.phone)),
                     "type": "video",
                     "video": {"id": meta_media_id, "caption": caption}
-                })
+                }
+                if quoted_wa_message_id:
+                    json_payload["context"] = {"message_id": quoted_wa_message_id}
+                response = await wa_client._meta_request("POST", "messages", json=json_payload)
             else:
                 response = await wa_client.send_video_official(convo.phone, media_url, caption=caption)
         elif m_type in ["audio", "voice"]:
             response = await wa_client.send_audio_official(convo.phone, media_url)
         elif m_type == "document":
             if meta_media_id:
-                response = await wa_client._meta_request("POST", "messages", json={
+                json_payload = {
                     "messaging_product": "whatsapp",
                     "recipient_type": "individual",
                     "to": ''.join(filter(str.isdigit, convo.phone)),
                     "type": "document",
                     "document": {"id": meta_media_id, "caption": caption, "filename": "documento"}
-                })
+                }
+                if quoted_wa_message_id:
+                    json_payload["context"] = {"message_id": quoted_wa_message_id}
+                response = await wa_client._meta_request("POST", "messages", json=json_payload)
             else:
                 response = await wa_client.send_document_official(convo.phone, media_url, caption=caption)
         else:
@@ -1213,7 +1252,8 @@ async def send_chat_media_message(
         message_type=m_type,
         content=content_text,
         media_url=media_url,
-        wa_message_id=wa_msg_id
+        wa_message_id=wa_msg_id,
+        quoted_message_id=quoted_wa_message_id
     )
     db.add(new_message)
 
@@ -1231,7 +1271,8 @@ async def send_chat_media_message(
         "content": new_message.content,
         "media_url": new_message.media_url,
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
-        "wa_message_id": new_message.wa_message_id
+        "wa_message_id": new_message.wa_message_id,
+        "quoted_message_id": new_message.quoted_message_id
     }
 
 
@@ -1398,6 +1439,55 @@ async def trigger_funnel_for_conversation(
         "funnel_id": funnel_id,
         "funnel_name": funnel.name,
         "trigger_status": trigger.status
+    }
+
+
+@router.post("/chat/conversations/{conversation_id}/cancel-funnel")
+async def cancel_funnel_for_conversation(
+    conversation_id: int,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    # Buscar qualquer ScheduledTrigger ativo para este telefone (ou para a conversa)
+    triggers = db.query(models.ScheduledTrigger).filter(
+        models.ScheduledTrigger.client_id == client_id,
+        models.ScheduledTrigger.status.in_(['queued', 'processing', 'paused_waiting_delivery', 'suspended'])
+    ).all()
+
+    target_trigger = None
+    if convo.phone:
+        digits = "".join(filter(str.isdigit, convo.phone))
+        suffix_key = digits[-8:] if len(digits) >= 8 else None
+        for t in triggers:
+            if t.conversation_id == convo.id:
+                target_trigger = t
+                break
+            if t.contact_phone:
+                t_digits = "".join(filter(str.isdigit, t.contact_phone))
+                if len(t_digits) >= 8 and t_digits[-8:] == suffix_key:
+                    target_trigger = t
+                    break
+
+    if not target_trigger:
+        raise HTTPException(status_code=404, detail="Nenhum funil em execução encontrado para este contato.")
+
+    # Atualizar o status do disparo para cancelado
+    target_trigger.status = 'cancelled'
+    db.commit()
+
+    logger.info(f"🛑 [FUNNEL_CANCEL] Trigger {target_trigger.id} cancelado pelo usuário {current_user.email} para o contato {convo.phone}")
+
+    return {
+        "message": "Funil cancelado com sucesso!",
+        "trigger_id": target_trigger.id
     }
 
 
@@ -2411,16 +2501,10 @@ async def react_to_message(
         except (ValueError, TypeError):
             pass
     else:
-        msg_obj = db.query(models.ChatMessage).filter(
-            or_(
-                models.ChatMessage.wa_message_id == target_wamid,
-                models.ChatMessage.wamid == target_wamid,
-                models.ChatMessage.message_id == target_wamid
-            )
-        ).first()
+        msg_obj = db.query(models.ChatMessage).filter(models.ChatMessage.wa_message_id == target_wamid).first()
 
     if msg_obj:
-        target_wamid = getattr(msg_obj, "wa_message_id", None) or getattr(msg_obj, "wamid", None) or getattr(msg_obj, "message_id", None) or target_wamid
+        target_wamid = getattr(msg_obj, "wa_message_id", None) or target_wamid
 
     if not target_wamid or not str(target_wamid).startswith("wamid."):
         logger.warning(f"⚠️ [REACT] Mensagem {payload.message_id} não possui wamid válido da Meta (recebido: {target_wamid})")
@@ -2442,13 +2526,22 @@ async def react_to_message(
         # 3. Atualizar reação localmente no registro da mensagem
         if msg_obj:
             meta = dict(msg_obj.meta_data or {})
-            reactions = dict(meta.get("reactions") or {})
-            if payload.emoji:
-                reactions["agent"] = payload.emoji
+            raw_reactions = meta.get("reactions") or []
+            if isinstance(raw_reactions, dict):
+                reactions_list = [{"emoji": v, "sender": k} for k, v in raw_reactions.items() if v]
+            elif isinstance(raw_reactions, list):
+                reactions_list = [r for r in raw_reactions if isinstance(r, dict) and r.get("emoji")]
             else:
-                reactions.pop("agent", None)
-            meta["reactions"] = reactions
+                reactions_list = []
+            
+            reactions_list = [r for r in reactions_list if r.get("sender") != "agent"]
+            if payload.emoji:
+                reactions_list.append({"emoji": payload.emoji, "sender": "agent"})
+            
+            meta["reactions"] = reactions_list
             msg_obj.meta_data = meta
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(msg_obj, "meta_data")
             db.commit()
 
         return {"status": "success", "response": res, "message_id": target_wamid, "emoji": payload.emoji}

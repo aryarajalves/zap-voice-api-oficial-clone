@@ -1,9 +1,24 @@
 import React, { useState } from 'react';
 import { FiShield, FiUser, FiUserPlus, FiCheck, FiX, FiCopy, FiTrash2, FiClock } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
+import TablePagination from './TablePagination';
 
-const InvitationTable = ({ invitations, clients, confirmDeleteInvitation }) => {
+const InvitationTable = ({
+    invitations,
+    clients,
+    confirmDeleteInvitation,
+    currentPage,
+    setCurrentPage,
+    itemsPerPage,
+    setItemsPerPage
+}) => {
     const [copiedId, setCopiedId] = useState(null);
+
+    const totalItems = invitations.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * itemsPerPage;
+    const paginatedInvitations = invitations.slice(startIndex, startIndex + itemsPerPage);
 
     const handleCopy = async (id, token) => {
         try {
@@ -78,7 +93,7 @@ const InvitationTable = ({ invitations, clients, confirmDeleteInvitation }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {invitations.length > 0 ? invitations.map((invite) => {
+                        {paginatedInvitations.length > 0 ? paginatedInvitations.map((invite) => {
                             const status = getStatus(invite);
                             return (
                                 <tr key={invite.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors group">
@@ -146,6 +161,14 @@ const InvitationTable = ({ invitations, clients, confirmDeleteInvitation }) => {
                     </tbody>
                 </table>
             </div>
+
+            <TablePagination
+                currentPage={safePage}
+                setCurrentPage={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                setItemsPerPage={setItemsPerPage}
+                totalItems={totalItems}
+            />
         </div>
     );
 };

@@ -1,12 +1,26 @@
 import React, { useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe, FiMaximize2, FiUploadCloud, FiFileText, FiEdit2, FiCheck, FiTrash2, FiCpu } from 'react-icons/fi';
+import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe, FiMaximize2, FiUploadCloud, FiFileText, FiEdit2, FiCheck, FiTrash2, FiCpu, FiCornerUpLeft } from 'react-icons/fi';
 import { BsPinAngle, BsPinAngleFill, BsJournalText, BsExclamationCircle, BsExclamationCircleFill, BsStars } from 'react-icons/bs';
 import { fetchWithAuth } from '../AuthContext';
+import { useAuth } from '../AuthContext';
 import { API_URL } from '../config';
 import { useClient } from '../contexts/ClientContext';
 import BlockContactModal from './WebhookLeads/components/BlockContactModal';
 import { getFirstName } from '../utils/nameFormatter';
+
+const getReactionsList = (raw) => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(r => r && r.emoji);
+    if (typeof raw === 'object') {
+        return Object.entries(raw).map(([sender, val]) => {
+            if (typeof val === 'object' && val !== null && val.emoji) return val;
+            if (typeof val === 'string' && val) return { sender, emoji: val };
+            return null;
+        }).filter(Boolean);
+    }
+    return [];
+};
 
 // Subcomponentes modularizados
 import MediaPreviewModal from './ChatConversations/MediaPreviewModal';
@@ -29,6 +43,7 @@ const NAV_SHORTCUTS = [
 
 export default function ChatConversations({ onClose, onNavigate }) {
     const { activeClient } = useClient();
+    const { user } = useAuth();
     const [selectedConvo, setSelectedConvo] = React.useState(null);
     const [activeTab, setActiveTab] = React.useState('todos'); // minha, nao_atribuida, todos
     const [statusFilter, setStatusFilter] = React.useState('open'); // open, resolved
@@ -40,6 +55,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [filterHasNote, setFilterHasNote] = React.useState(false); // só conversas com anotação privada preenchida
     const [filterUrgent, setFilterUrgent] = React.useState(false); // só conversas com marcação de urgência
     const [filterHasReplied, setFilterHasReplied] = React.useState(false); // só contatos que enviaram pelo menos 1 mensagem
+    const [filterHasActiveFunnel, setFilterHasActiveFunnel] = React.useState(false); // só contatos com funil ativo em execução
     const [filterBlockStatus, setFilterBlockStatus] = React.useState(null); // null | 'blocked' | 'resting'
     const [filterStartDate, setFilterStartDate] = React.useState('');
     const [filterEndDate, setFilterEndDate] = React.useState('');
@@ -53,7 +69,10 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [selectedBulkTag, setSelectedBulkTag] = React.useState('');
     const [customBulkTag, setCustomBulkTag] = React.useState('');
     const [isApplyingBulkTag, setIsApplyingBulkTag] = React.useState(false);
-
+    const [replyingTo, setReplyingTo] = React.useState(null); // { id, content, sender_type, wa_message_id }
+    const [isCancelFunnelModalOpen, setIsCancelFunnelModalOpen] = React.useState(false);
+    const [isCancelingFunnel, setIsCancelingFunnel] = React.useState(false);
+    const chatInputRef = React.useRef(null);
     const engine = useChatEngine({
         activeClient,
         activeTab,
@@ -69,9 +88,16 @@ export default function ChatConversations({ onClose, onNavigate }) {
         filterTemplate24h,
         filterUrgent,
         filterHasReplied,
+        filterHasActiveFunnel,
         selectedConvo,
         setSelectedConvo
     });
+
+    React.useEffect(() => {
+        if (!engine?.newMessage && chatInputRef.current) {
+            chatInputRef.current.style.height = 'auto';
+        }
+    }, [engine?.newMessage]);
 
     React.useEffect(() => {
         if (engine.selectedConvoIds.length === 0) {
@@ -397,6 +423,20 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const processFileAttachment = (file) => {
         if (!file || !selectedConvo) return;
 
+        // Lista de extensões permitidas pelo backend / WhatsApp
+        const ALLOWED_EXTENSIONS = [
+            '.jpg', '.jpeg', '.png', '.gif', '.webp',
+            '.mp4', '.3gp', '.webm', '.mov', '.avi', '.mkv',
+            '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.zip', '.rar',
+            '.mp3', '.ogg', '.wav', '.aac', '.m4a'
+        ];
+
+        const ext = file.name ? file.name.substring(file.name.lastIndexOf('.')).toLowerCase() : '';
+        if (ext && !ALLOWED_EXTENSIONS.includes(ext)) {
+            toast.error(`Extensão '${ext}' não permitida. Aceitamos formatos de imagem (JPG, PNG, WEBP, GIF), vídeo, áudio e documentos.`);
+            return;
+        }
+
         let messageType = 'document';
         if (file.type.startsWith('image/')) messageType = 'image';
         else if (file.type.startsWith('video/')) messageType = 'video';
@@ -510,14 +550,19 @@ export default function ChatConversations({ onClose, onNavigate }) {
             const uploadResult = await uploadRes.json();
             const fileUrl = uploadResult.url;
 
+            const mediaPayload = {
+                media_url: fileUrl,
+                message_type: messageType,
+                caption: caption || ''
+            };
+            if (replyingTo?.wa_message_id) {
+                mediaPayload.quoted_wa_message_id = replyingTo.wa_message_id;
+            }
+
             const sendRes = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/media`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    media_url: fileUrl,
-                    message_type: messageType,
-                    caption: caption || ''
-                })
+                body: JSON.stringify(mediaPayload)
             }, activeClient.id);
 
             if (sendRes.ok) {
@@ -529,6 +574,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                 engine.setMediaPreview(null);
                 engine.setPreviewCaption('');
                 engine.setNewMessage('');
+                setReplyingTo(null);
             } else {
                 const errData = await sendRes.json();
                 throw new Error(errData.detail || 'Erro ao enviar mídia.');
@@ -1028,6 +1074,17 @@ export default function ChatConversations({ onClose, onNavigate }) {
         return () => clearInterval(interval);
     }, [selectedConvo?.last_contact_message_at, selectedConvo?.id]);
 
+    React.useEffect(() => {
+        const isModalOpen = isNoteModalMaximized || isMaximizedInputOpen || !!deleteNoteConfirmMsgId || isBulkTagModalOpen || isAiReportModalOpen || showTemplateModal || showFunnelModal || !!engine?.confirmDeleteConvos || !!engine?.mediaPreview;
+        if (isModalOpen) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [isNoteModalMaximized, isMaximizedInputOpen, deleteNoteConfirmMsgId, isBulkTagModalOpen, isAiReportModalOpen, showTemplateModal, showFunnelModal, engine?.confirmDeleteConvos, engine?.mediaPreview]);
+
     const visibleConversations = engine.conversations;
 
     return (
@@ -1095,7 +1152,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {NAV_SHORTCUTS.map(s => {
+                    {user?.role !== 'vendedor' && NAV_SHORTCUTS.map(s => {
                         const Icon = s.icon;
                         return (
                             <button
@@ -1113,6 +1170,16 @@ export default function ChatConversations({ onClose, onNavigate }) {
                             </button>
                         );
                     })}
+                    {/* Botão fechar — sempre visível (especialmente importante para o cargo Vendedor) */}
+                    {onClose && (
+                        <button
+                            onClick={onClose}
+                            title="Fechar painel de atendimento"
+                            className="ml-1 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition"
+                        >
+                            <FiX size={18} />
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -1234,6 +1301,13 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                      title="Filtrar contatos que enviaram pelo menos 1 mensagem"
                                  >
                                      Respondeu
+                                 </button>
+                                 <button
+                                     onClick={() => setFilterHasActiveFunnel(!filterHasActiveFunnel)}
+                                     className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterHasActiveFunnel ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30 font-bold ring-1 ring-cyan-500/40' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                                     title="Filtrar contatos que possuem um funil em execução no momento"
+                                 >
+                                     Funil Ativo
                                  </button>
                              </div>
                          )}
@@ -1736,8 +1810,16 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                             </span>
                                         </span>
                                     </div>
-                                    <div className="text-[10px] text-gray-400">
-                                        Atualiza automaticamente
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => setIsCancelFunnelModalOpen(true)}
+                                            className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 rounded-lg transition text-[11px] font-bold flex items-center gap-1.5"
+                                        >
+                                            <FiX size={13} /> Cancelar Funil
+                                        </button>
+                                        <span className="text-[10px] text-gray-400 hidden sm:inline">
+                                            Atualiza automaticamente
+                                        </span>
                                     </div>
                                 </div>
                             )}
@@ -1887,10 +1969,12 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                         return (
                                             <div
                                                 key={msg.id}
-                                                className={`flex ${isMe ? 'justify-end' : 'justify-start'} group/msg ${msg.meta_data?.reactions?.length > 0 ? 'mb-4' : ''}`}
+                                                id={`msg-${msg.id}`}
+                                                data-wamid={msg.wa_message_id}
+                                                className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${msg.meta_data?.reactions?.length > 0 ? 'mb-4' : ''}`}
                                             >
                                                 <div
-                                                    className={`relative max-w-lg rounded-2xl px-4 py-2.5 shadow-sm text-sm ${
+                                                    className={`group/msg relative max-w-lg rounded-2xl px-4 py-2.5 shadow-sm text-sm transition-all duration-300 ${
                                                         isTemplate
                                                         ? 'bg-gradient-to-br from-[#1e1b4b] to-[#1e293b] text-gray-100 border border-indigo-500/30 rounded-tr-none'
                                                         : isMe
@@ -1898,24 +1982,102 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                         : 'bg-white dark:bg-[#1e293b] text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-white/5 rounded-tl-none'
                                                     }`}
                                                 >
-                                                    {/* Barra de Reação Rápida (Hover) */}
+                                                    {/* Barra de Reação Rápida & Reply (Hover) */}
                                                     <div className={`absolute -top-4 ${isMe ? 'right-2' : 'left-2'} hidden group-hover/msg:flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-1 rounded-full shadow-lg z-20 transition-all scale-90 hover:scale-100`}>
-                                                        {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
-                                                            <button
-                                                                key={emoji}
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const targetMsgId = msg.wa_message_id || msg.wamid || msg.message_id || msg.id;
-                                                                    engine.sendReaction(targetMsgId, emoji);
-                                                                }}
-                                                                className="hover:scale-125 transition-transform text-xs p-0.5 cursor-pointer leading-none"
-                                                                title={`Reagir com ${emoji}`}
-                                                            >
-                                                                {emoji}
-                                                            </button>
-                                                        ))}
+                                                        {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => {
+                                                             const reactionList = getReactionsList(msg.meta_data?.reactions);
+                                                             const myReaction = reactionList.find(r => r.sender !== 'contact');
+                                                             const isSelected = myReaction?.emoji === emoji;
+
+                                                             return (
+                                                                 <button
+                                                                     key={emoji}
+                                                                     type="button"
+                                                                     onClick={(e) => {
+                                                                         e.stopPropagation();
+                                                                         const targetMsgId = msg.wa_message_id || msg.wamid || msg.message_id || msg.id;
+                                                                         // Se já estiver selecionado, envia string vazia para remover a reação
+                                                                         engine.sendReaction(targetMsgId, isSelected ? '' : emoji);
+                                                                     }}
+                                                                     className={`hover:scale-125 transition-transform text-xs p-0.5 cursor-pointer leading-none rounded-full ${isSelected ? 'bg-blue-500/20 ring-1 ring-blue-400' : ''}`}
+                                                                     title={isSelected ? `Remover reação ${emoji}` : `Reagir com ${emoji}`}
+                                                                 >
+                                                                     {emoji}
+                                                                 </button>
+                                                             );
+                                                         })}
+                                                        <div className="w-[1px] h-3 bg-gray-300 dark:bg-gray-600 mx-0.5" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setReplyingTo({
+                                                                    id: msg.id,
+                                                                    content: msg.content || (msg.media_url ? '[Mídia]' : ''),
+                                                                    sender_type: msg.sender_type,
+                                                                    wa_message_id: msg.wa_message_id || msg.wamid || msg.message_id || String(msg.id)
+                                                                });
+                                                                if (chatInputRef.current) chatInputRef.current.focus();
+                                                            }}
+                                                            className="hover:scale-125 text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-transform p-0.5 cursor-pointer flex items-center justify-center"
+                                                            title="Responder a esta mensagem"
+                                                        >
+                                                            <FiCornerUpLeft size={13} />
+                                                        </button>
                                                     </div>
+
+                                                    {/* Citação de mensagem respondida (Quote Box) */}
+                                                    {msg.quoted_message_id && (() => {
+                                                         const qId = String(msg.quoted_message_id);
+                                                         const cleanQId = qId.replace('wamid.', '');
+                                                         const quotedMsg = engine.messages.find(m => {
+                                                             if (!m) return false;
+                                                             const mWaId = String(m.wa_message_id || '');
+                                                             const mCleanWaId = mWaId.replace('wamid.', '');
+                                                             const mId = String(m.id || '');
+                                                             return mWaId === qId || mCleanWaId === cleanQId || mId === qId || mId === cleanQId;
+                                                         });
+                                                         const isQuotedMe = quotedMsg ? (quotedMsg.sender_type === 'user' || quotedMsg.sender_type === 'agent') : false;
+                                                         const authorLabel = isQuotedMe ? 'Você' : (selectedConvo?.contact_name || getFirstName(selectedConvo?.phone) || 'Contato');
+                                                         const quotedText = quotedMsg?.content || 'Mensagem citada';
+
+                                                         const scrollToQuotedMsg = (e) => {
+                                                             e.stopPropagation();
+                                                             if (!quotedMsg) return;
+                                                             let targetEl = document.getElementById(`msg-${quotedMsg.id}`);
+                                                             if (!targetEl && quotedMsg.wa_message_id) {
+                                                                 targetEl = document.querySelector(`[data-wamid="${quotedMsg.wa_message_id}"]`);
+                                                             }
+                                                             if (targetEl) {
+                                                                 targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                 const bubbleEl = targetEl.lastElementChild || targetEl;
+                                                                 bubbleEl.classList.add('ring-4', 'ring-yellow-400', 'scale-105');
+                                                                 setTimeout(() => {
+                                                                     bubbleEl.classList.remove('ring-4', 'ring-yellow-400', 'scale-105');
+                                                                 }, 1500);
+                                                             }
+                                                         };
+
+                                                         return (
+                                                             <div 
+                                                                 onClick={scrollToQuotedMsg}
+                                                                 className={`mb-2 p-2 rounded-lg border-l-4 text-xs font-sans select-none overflow-hidden cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all ${
+                                                                     isMe
+                                                                     ? 'bg-black/20 border-white/70 text-white/90'
+                                                                     : 'bg-gray-100 dark:bg-black/30 border-blue-500 text-gray-700 dark:text-gray-300'
+                                                                 }`}
+                                                                 title="Clique para ir até a mensagem original"
+                                                             >
+                                                                 <div className="flex items-center gap-1 font-semibold text-[11px] mb-0.5 text-blue-400 dark:text-blue-300">
+                                                                     <FiCornerUpLeft size={11} />
+                                                                     <span>{authorLabel}</span>
+                                                                 </div>
+                                                                 <p className="line-clamp-2 text-[11px] opacity-90 leading-tight">
+                                                                     {quotedText}
+                                                                 </p>
+                                                             </div>
+                                                         );
+                                                    })()}
 
                                                     {/* Se for template, exibe badge superior exclusivo */}
                                                     {isTemplate && (
@@ -2058,19 +2220,33 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                     </div>
 
                                                     {/* Badge de reação — dentro do div relative da bolha */}
-                                                    {msg.meta_data?.reactions?.length > 0 && (
-                                                        <div className={`absolute -bottom-3 ${isMe ? 'left-2' : 'right-2'} flex gap-0.5`}>
-                                                            {msg.meta_data.reactions.map((r, i) => (
-                                                                <span
-                                                                    key={i}
-                                                                    className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full px-1.5 py-0.5 shadow-sm leading-none"
-                                                                    title={r.sender === 'contact' ? 'Contato reagiu' : 'Você reagiu'}
-                                                                >
-                                                                    {r.emoji}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    )}
+                                                    {(() => {
+                                                        const reactionList = getReactionsList(msg.meta_data?.reactions);
+                                                        if (reactionList.length === 0) return null;
+                                                        return (
+                                                            <div className={`absolute -bottom-3 ${isMe ? 'left-2' : 'right-2'} flex gap-0.5 z-10`}>
+                                                                {reactionList.map((r, i) => {
+                                                                    const isMyReaction = r.sender !== 'contact';
+                                                                    return (
+                                                                        <span
+                                                                            key={i}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                if (isMyReaction) {
+                                                                                    const targetMsgId = msg.wa_message_id || msg.wamid || msg.message_id || msg.id;
+                                                                                    engine.sendReaction(targetMsgId, '');
+                                                                                }
+                                                                            }}
+                                                                            className={`text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full px-1.5 py-0.5 shadow-sm leading-none flex items-center justify-center transition-transform ${isMyReaction ? 'cursor-pointer hover:scale-110 hover:bg-red-500/10 hover:border-red-400' : ''}`}
+                                                                            title={isMyReaction ? 'Clique para remover sua reação' : 'Contato reagiu'}
+                                                                        >
+                                                                            {r.emoji}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         );
@@ -2080,8 +2256,41 @@ export default function ChatConversations({ onClose, onNavigate }) {
 
                             </div>
 
+                            {/* Barra de Preview de Resposta (quando replyingTo está ativo) */}
+                            {replyingTo && (
+                                <div className="px-4 py-2 bg-blue-500/10 border-t border-blue-500/20 flex items-center justify-between gap-2 text-xs animate-in slide-in-from-bottom-2 duration-200">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <div className="w-1 h-8 bg-blue-500 rounded-full shrink-0" />
+                                        <div className="overflow-hidden">
+                                            <div className="flex items-center gap-1 text-[11px] font-semibold text-blue-500 dark:text-blue-400">
+                                                <FiCornerUpLeft size={12} />
+                                                <span>Respondendo a {replyingTo.sender_type === 'user' || replyingTo.sender_type === 'agent' ? 'Você' : (selectedConvo?.contact_name || getFirstName(selectedConvo?.phone) || 'Contato')}</span>
+                                            </div>
+                                            <p className="text-gray-600 dark:text-gray-300 truncate text-[11px]">
+                                                {replyingTo.content || '[Mídia]'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReplyingTo(null)}
+                                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition shrink-0"
+                                        title="Cancelar resposta"
+                                    >
+                                        <FiX size={15} />
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Input de Envio */}
-                            <form onSubmit={engine.handleSendMessage} className="p-4 border-t border-gray-200 dark:border-white/5 bg-gray-50/20 dark:bg-[#111827]/20 flex gap-2 relative">
+                            <form 
+                                onSubmit={(e) => {
+                                    const opts = replyingTo?.wa_message_id ? { quotedWaMessageId: replyingTo.wa_message_id } : {};
+                                    engine.handleSendMessage(e, opts);
+                                    setReplyingTo(null);
+                                }} 
+                                className="p-4 border-t border-gray-200 dark:border-white/5 bg-gray-50/20 dark:bg-[#111827]/20 flex gap-2 relative"
+                            >
                                 {/* Upload de arquivos de mídia */}
                                 <input
                                     type="file"
@@ -2144,12 +2353,27 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                         </button>
                                     </div>
                                 ) : (
-                                    <input
-                                        type="text"
+                                    <textarea
+                                        ref={chatInputRef}
+                                        rows={1}
                                         placeholder={engine.timeLeft24h === 'Janela Fechada' ? "Janela de 24h fechada. O cliente precisa enviar uma nova mensagem." : "Digite sua mensagem de resposta..."}
                                         value={engine.newMessage}
-                                        onChange={(e) => engine.setNewMessage(e.target.value)}
-                                        className="flex-1 px-4 py-2.5 bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-200 text-sm rounded-xl border border-gray-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-55 disabled:bg-gray-100 dark:disabled:bg-gray-800"
+                                        onChange={(e) => {
+                                            engine.setNewMessage(e.target.value);
+                                            e.target.style.height = 'auto';
+                                            e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                if (engine.newMessage.trim() && !engine.isSending && engine.timeLeft24h !== 'Janela Fechada') {
+                                                    const opts = replyingTo?.wa_message_id ? { quotedWaMessageId: replyingTo.wa_message_id } : {};
+                                                    engine.handleSendMessage(e, opts);
+                                                    setReplyingTo(null);
+                                                }
+                                            }
+                                        }}
+                                        className="flex-1 px-4 py-2.5 bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-200 text-sm rounded-xl border border-gray-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-55 disabled:bg-gray-100 dark:disabled:bg-gray-800 resize-none max-h-36 min-h-[42px] font-sans leading-relaxed overflow-y-auto"
                                         disabled={engine.isSending || engine.timeLeft24h === 'Janela Fechada'}
                                     />
                                 )}
@@ -2383,6 +2607,61 @@ export default function ChatConversations({ onClose, onNavigate }) {
                     }}
                     isTriggering={engine.isSending}
                 />
+            )}
+            {/* Modal de Confirmação de Cancelamento do Funil Em Execução */}
+            {isCancelFunnelModalOpen && selectedConvo?.active_funnel && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center shrink-0">
+                                <FiX size={22} />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-white">Cancelar execução do funil?</h3>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                    Funil: <strong className="text-slate-200">{selectedConvo.active_funnel.name}</strong>
+                                </p>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-slate-300 leading-relaxed bg-slate-800/50 p-3 rounded-xl border border-slate-800">
+                            Tem certeza que deseja interromper a execução deste funil para <strong className="text-white">{selectedConvo.contact_name || selectedConvo.phone}</strong>? As próximas etapas e disparos deste contato serão cancelados.
+                        </p>
+
+                        <div className="flex items-center justify-end gap-3 pt-2">
+                            <button
+                                type="button"
+                                disabled={isCancelingFunnel}
+                                onClick={() => setIsCancelFunnelModalOpen(false)}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition disabled:opacity-50"
+                            >
+                                Voltar / Manter Execução
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isCancelingFunnel}
+                                onClick={async () => {
+                                    setIsCancelingFunnel(true);
+                                    const success = await engine.handleCancelFunnel();
+                                    setIsCancelingFunnel(false);
+                                    if (success) {
+                                        setIsCancelFunnelModalOpen(false);
+                                    }
+                                }}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isCancelingFunnel ? (
+                                    <>
+                                        <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                        <span>Cancelando...</span>
+                                    </>
+                                ) : (
+                                    <span>Sim, Cancelar Funil</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
             {/* Modal de Etiquetagem em Massa */}
             {isBulkTagModalOpen && (

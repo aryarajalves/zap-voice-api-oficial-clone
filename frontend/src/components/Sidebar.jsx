@@ -55,7 +55,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         // Criação de Páginas
         { id: 'capture_page', label: 'Página de Captura', icon: FiGlobe, roles: ['super_admin', 'admin', 'premium'], category: 'paginas' },
         { id: 'pagina_captura', label: 'Checkout Prepopulado', icon: FiGlobe, roles: ['super_admin', 'admin', 'premium'], category: 'paginas' },
-        { id: 'hot_leads', label: 'Leads Quentes', icon: FiZap, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'paginas' },
+        { id: 'hot_leads', label: 'Leads Quentes', icon: FiZap, roles: ['super_admin', 'admin', 'premium'], category: 'paginas' },
 
         // Automação
         { id: 'templates', label: 'Criar Template', icon: FiPlus, roles: ['super_admin', 'admin', 'premium'], category: 'automacao' },
@@ -65,7 +65,7 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
 
         // Contatos
         { id: 'chat_conversations', label: 'Atendimento', icon: FiMessageSquare, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'contatos' },
-        { id: 'human_agents', label: 'Atendente humano', icon: FiUsers, roles: ['super_admin', 'admin', 'premium', 'vendedor'], category: 'contatos' },
+        { id: 'human_agents', label: 'Atendente humano', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
         { id: 'leads', label: 'Contatos', icon: FiUsers, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
         { id: 'appointments', label: 'Agendamentos', icon: FiCalendar, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },
         { id: 'import_history', label: 'Histórico importação de contatos', icon: FiClock, roles: ['super_admin', 'admin', 'premium'], category: 'contatos' },

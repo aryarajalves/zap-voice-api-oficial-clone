@@ -202,7 +202,7 @@ class WhatsAppClient:
 
         return await self._meta_request("POST", "messages", json=payload)
 
-    async def send_text_official(self, phone_number: str, text: str):
+    async def send_text_official(self, phone_number: str, text: str, quoted_message_id: str = None):
         clean_phone = phone_number.strip() if re.search(r'[a-zA-Z]', phone_number) else ''.join(filter(str.isdigit, phone_number))
         payload = {
             "messaging_product": "whatsapp",
@@ -211,6 +211,9 @@ class WhatsAppClient:
             "type": "text",
             "text": {"body": text}
         }
+        # Se houver mensagem citada, adiciona o contexto para quote reply
+        if quoted_message_id:
+            payload["context"] = {"message_id": quoted_message_id}
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_reaction_official(self, phone_number: str, message_id: str, emoji: str):

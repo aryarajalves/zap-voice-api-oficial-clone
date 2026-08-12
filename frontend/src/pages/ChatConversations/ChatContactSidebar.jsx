@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { FiUser, FiTag, FiX, FiMaximize2, FiRefreshCw } from 'react-icons/fi';
 import { BsJournalText } from 'react-icons/bs';
 
@@ -26,6 +27,16 @@ export default function ChatContactSidebar({
 }) {
     const [isMaximizedOpen, setIsMaximizedOpen] = React.useState(false);
     const [newTagModalData, setNewTagModalData] = React.useState(null);
+
+    React.useEffect(() => {
+        if (isMaximizedOpen || newTagModalData?.isOpen) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [isMaximizedOpen, newTagModalData?.isOpen]);
 
     const handleTagSubmit = (rawName) => {
         if (!rawName || !rawName.trim()) return;
@@ -277,9 +288,9 @@ export default function ChatContactSidebar({
             </div>
 
             {/* Modal de Maximizar Anotação Privada */}
-            {isMaximizedOpen && (
+            {isMaximizedOpen && createPortal(
                 <div
-                    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div
@@ -344,7 +355,8 @@ export default function ChatContactSidebar({
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
             {/* Modal de Escolha de Cor para Novo Marcador */}
             {newTagModalData && newTagModalData.isOpen && (

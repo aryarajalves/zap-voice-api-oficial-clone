@@ -53,9 +53,29 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
     setPage(0);
   }, [activeTab, debouncedSearch, limit]);
 
+  const rejectedTotal = (statusCounts.rejected_invalid_phone || 0) + (statusCounts.rejected_duplicate_file || 0);
+  const countFor = useCallback((key) => {
+    if (key === '') return Object.values(statusCounts).reduce((a, b) => a + b, 0);
+    if (key === 'rejected') return rejectedTotal;
+    return statusCounts[key] || 0;
+  }, [statusCounts, rejectedTotal]);
+
   const fetchResults = useCallback(async () => {
     if (!isOpen || !importItem?.id || !activeClient?.id) return;
+
+    // Se já conhecemos os contadores de status, não há busca por texto e a aba tem 0 itens,
+    // responde instantaneamente sem fazer requisição de rede nem travar a UI no spinner.
+    if (!debouncedSearch.trim() && Object.keys(statusCounts).length > 0 && countFor(activeTab) === 0) {
+      setRows([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setRows([]);
+    setTotal(countFor(activeTab));
+
     try {
       const params = new URLSearchParams({
         skip: String(page * limit),
@@ -80,18 +100,11 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
     } finally {
       setLoading(false);
     }
-  }, [isOpen, importItem?.id, activeClient?.id, activeTab, debouncedSearch, page, limit]);
+  }, [isOpen, importItem?.id, activeClient?.id, activeTab, debouncedSearch, page, limit, countFor, statusCounts]);
 
   useEffect(() => { fetchResults(); }, [fetchResults]);
 
   if (!isOpen || !importItem) return null;
-
-  const rejectedTotal = (statusCounts.rejected_invalid_phone || 0) + (statusCounts.rejected_duplicate_file || 0);
-  const countFor = (key) => {
-    if (key === '') return Object.values(statusCounts).reduce((a, b) => a + b, 0);
-    if (key === 'rejected') return rejectedTotal;
-    return statusCounts[key] || 0;
-  };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
