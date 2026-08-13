@@ -375,8 +375,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
 
                             # Transmitir atualização via WebSocket
                             try:
-                                import asyncio
-                                from core.rabbitmq import rabbitmq
+                                from rabbitmq_client import rabbitmq
                                 payload_ws = {
                                     "event": "message_reaction_updated",
                                     "data": {
@@ -750,6 +749,23 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                                         db_btn.commit()
 
                                 if act_funnel_id:
+                                    # Trava de Idempotência: evitar disparar 2x o mesmo funil se houver webhook repetido nos últimos 10 segundos
+                                    recent_cutoff = datetime.now(timezone.utc) - timedelta(seconds=10)
+                                    suffix_dup = phone[-8:] if len(phone) >= 8 else phone
+                                    recent_duplicate = db_btn.query(models.ScheduledTrigger).filter(
+                                        models.ScheduledTrigger.client_id == cid,
+                                        models.ScheduledTrigger.funnel_id == act_funnel_id,
+                                        or_(
+                                            models.ScheduledTrigger.contact_phone == phone,
+                                            models.ScheduledTrigger.contact_phone.like(f"%{suffix_dup}")
+                                        ),
+                                        models.ScheduledTrigger.scheduled_time >= recent_cutoff
+                                    ).first()
+
+                                    if recent_duplicate:
+                                        logger.warning(f"🚫 [BUTTON_ACTION_DEDUP] Ignorando disparo duplicado do Funil {act_funnel_id} para {phone} (Trigger #{recent_duplicate.id} criado há menos de 10s)")
+                                        return
+
                                     # Resolver conversation_id via ChatConversation local (ZapVoice-native, sem Chatwoot)
                                     resolved_cid = convo_id
                                     if not resolved_cid:

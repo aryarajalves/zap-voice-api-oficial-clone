@@ -27,19 +27,19 @@ async def handle_funnel_execution(data: dict):
     lock_id = 2000000 + int(trigger_id)
     
     # Lock não-bloqueante para evitar travar o event loop do worker
+    # Lock não-bloqueante: se outra thread/worker já estiver processando este Trigger, descarta a duplicata imediatamente
     if db.bind.dialect.name == 'postgresql':
-        while True:
-            locked = db.execute(text("SELECT pg_try_advisory_xact_lock(:id)"), {"id": lock_id}).scalar()
-            if locked: break
-            import asyncio
-            await asyncio.sleep(0.1)
-    
+        locked = db.execute(text("SELECT pg_try_advisory_xact_lock(:id)"), {"id": lock_id}).scalar()
+        if not locked:
+            logger.warning(f"⚠️ [FUNNEL_LOCK] Trigger {trigger_id} já está bloqueado por outro worker ativo. Descartando job duplicado.")
+            return
+
     try:
         # Refresh do estado do trigger
-        trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id).with_for_update(skip_locked=True).first()
+        trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id).first()
         
         if not trigger:
-            logger.warning(f"⚠️ Trigger {trigger_id} não encontrado ou já está sendo processado.")
+            logger.warning(f"⚠️ Trigger {trigger_id} não encontrado.")
             return
 
         if trigger.status in ['completed', 'failed'] and not data.get("force"):

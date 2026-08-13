@@ -20,7 +20,11 @@ const EventDetailsModal = ({
     activeClient,
     setEvents
 }) => {
+    const [confirmDispatch, setConfirmDispatch] = React.useState(false);
+    const [isDispatching, setIsDispatching] = React.useState(false);
+
     const handleImmediateDispatch = async () => {
+        setIsDispatching(true);
         try {
             const res = await fetchWithAuth(`${API_URL}/schedules/${selectedEvent.id}/dispatch`, {
                 method: 'POST'
@@ -35,6 +39,9 @@ const EventDetailsModal = ({
             }
         } catch (e) {
             toast.error("Erro de conexão");
+        } finally {
+            setIsDispatching(false);
+            setConfirmDispatch(false);
         }
     };
 
@@ -125,7 +132,7 @@ const EventDetailsModal = ({
                                 {['pending', 'queued', 'Queued'].includes(selectedEvent.status) && (
                                     <>
                                         <button
-                                            onClick={handleImmediateDispatch}
+                                            onClick={() => setConfirmDispatch(true)}
                                             className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/50 transition-colors font-bold text-xs"
                                         >
                                             <FiZap size={14} /> Disparar Agora
@@ -199,6 +206,60 @@ const EventDetailsModal = ({
                     )}
                 </div>
             </div>
+
+            {/* Modal de Confirmação de Disparo Imediato */}
+            {confirmDispatch && (
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+                    {/* Backdrop sem onClick para proibir o fechamento clicando fora */}
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" />
+
+                    {/* Card de Confirmação Centralizado */}
+                    <div 
+                        className="relative bg-white dark:bg-[#1e293b] rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden border border-gray-100 dark:border-white/10 p-6 animate-in zoom-in-95 fade-in duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 absolute top-0 left-0" />
+                        
+                        <div className="flex flex-col items-center text-center gap-4 pt-2">
+                            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 shadow-lg shadow-emerald-500/10">
+                                <FiZap size={36} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                                    Disparar Agora?
+                                </h3>
+                                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
+                                    Tem certeza que deseja antecipar e iniciar o disparo deste agendamento neste momento?
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-center gap-3 mt-6">
+                            <button
+                                onClick={() => setConfirmDispatch(false)}
+                                disabled={isDispatching}
+                                className="flex-1 py-2.5 rounded-xl text-gray-700 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px] hover:bg-gray-100 dark:hover:bg-white/5 transition border border-gray-200 dark:border-white/10 active:scale-95 disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleImmediateDispatch}
+                                disabled={isDispatching}
+                                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase tracking-wider text-[11px] shadow-lg shadow-emerald-500/20 transition active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            >
+                                {isDispatching ? (
+                                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                                ) : (
+                                    <>
+                                        <FiZap size={14} /> Confirmo
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
