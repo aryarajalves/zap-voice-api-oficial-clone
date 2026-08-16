@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe, FiMaximize2, FiUploadCloud, FiFileText, FiEdit2, FiCheck, FiTrash2, FiCpu, FiCornerUpLeft } from 'react-icons/fi';
+import { FiSearch, FiSend, FiUser, FiCheckCircle, FiRefreshCw, FiTag, FiX, FiMessageSquare, FiSidebar, FiPaperclip, FiArrowDown, FiMic, FiSquare, FiHome, FiClock, FiLayers, FiUsers, FiSlash, FiCalendar, FiGlobe, FiMaximize2, FiUploadCloud, FiFileText, FiEdit2, FiCheck, FiTrash2, FiCpu, FiCornerUpLeft, FiZap } from 'react-icons/fi';
 import { BsPinAngle, BsPinAngleFill, BsJournalText, BsExclamationCircle, BsExclamationCircleFill, BsStars } from 'react-icons/bs';
 import { fetchWithAuth } from '../AuthContext';
 import { useAuth } from '../AuthContext';
@@ -30,6 +30,7 @@ import DeleteConvoModal from './ChatConversations/DeleteConvoModal';
 import ResendAgentflowModal from './ChatConversations/ResendAgentflowModal';
 import SendTemplateModal from './ChatConversations/SendTemplateModal';
 import ChatContactSidebar from './ChatConversations/ChatContactSidebar';
+import AutomationPipelineModal from '../components/TriggerHistory/components/AutomationPipelineModal';
 import { useChatEngine } from './ChatConversations/useChatEngine';
 import { exportConversationToDoc } from './ChatConversations/exportConversationToDoc';
 
@@ -72,6 +73,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [replyingTo, setReplyingTo] = React.useState(null); // { id, content, sender_type, wa_message_id }
     const [isCancelFunnelModalOpen, setIsCancelFunnelModalOpen] = React.useState(false);
     const [isCancelingFunnel, setIsCancelingFunnel] = React.useState(false);
+    const [pipelineTrigger, setPipelineTrigger] = React.useState(null);
+    const [isLoadingPipeline, setIsLoadingPipeline] = React.useState(false);
     const chatInputRef = React.useRef(null);
     const engine = useChatEngine({
         activeClient,
@@ -108,6 +111,51 @@ export default function ChatConversations({ onClose, onNavigate }) {
     React.useEffect(() => {
         setSelectAllPages(false);
     }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel]);
+
+    const handleOpenActiveFunnelPipeline = async () => {
+        if (!selectedConvo?.active_funnel) return;
+        const triggerId = selectedConvo.active_funnel.trigger_id;
+        setIsLoadingPipeline(true);
+        try {
+            if (triggerId) {
+                const res = await fetchWithAuth(`${API_URL}/triggers/${triggerId}`, {}, activeClient?.id);
+                if (res.ok) {
+                    const data = await res.json();
+                    setPipelineTrigger(data);
+                    return;
+                }
+            }
+
+            // Fallback: buscar o trigger ativo do contato pelo telefone
+            const phoneDigits = (selectedConvo.phone || "").replace(/\D/g, '');
+            const searchParam = phoneDigits.length >= 8 ? phoneDigits.slice(-8) : phoneDigits;
+            const resSearch = await fetchWithAuth(`${API_URL}/triggers?search=${encodeURIComponent(searchParam)}&limit=10`, {}, activeClient?.id);
+            if (resSearch.ok) {
+                const listData = await resSearch.json();
+                const triggers = listData.triggers || listData.items || listData || [];
+                const activeTrig = Array.isArray(triggers) ? triggers.find(t => 
+                    ['queued', 'processing', 'paused_waiting_delivery', 'suspended'].includes(t.status)
+                ) || triggers[0] : null;
+
+                if (activeTrig) {
+                    const fullRes = await fetchWithAuth(`${API_URL}/triggers/${activeTrig.id}`, {}, activeClient?.id);
+                    if (fullRes.ok) {
+                        const fullData = await fullRes.json();
+                        setPipelineTrigger(fullData);
+                        return;
+                    }
+                    setPipelineTrigger(activeTrig);
+                    return;
+                }
+            }
+            toast.error("Não foi possível carregar o pipeline do funil ativo.");
+        } catch (err) {
+            console.error("Erro ao carregar pipeline:", err);
+            toast.error("Erro de conexão ao carregar pipeline.");
+        } finally {
+            setIsLoadingPipeline(false);
+        }
+    };
 
     const formatTime = (isoString) => {
         if (!isoString) return '';
@@ -1662,13 +1710,21 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                             {selectedConvo.phone}
                                         </span>
                                         {!showRightSidebar && (
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                                                engine.timeLeft24h === 'Janela Fechada'
-                                                ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
-                                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                            }`}>
-                                                {engine.timeLeft24h === 'Janela Fechada' ? '🔴 Janela Fechada' : `🟢 Janela 24h: ${engine.timeLeft24h}`}
-                                            </span>
+                                            (() => {
+                                                const isWindowClosed = !engine.timeLeft24h || engine.timeLeft24h === 'Janela Fechada' || String(engine.timeLeft24h).toLowerCase().includes('fechada');
+                                                return (
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 border transition-colors ${
+                                                        isWindowClosed
+                                                        ? 'bg-red-500/15 text-red-500 dark:text-red-400 border-red-500/30'
+                                                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                                    }`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${isWindowClosed ? 'bg-red-500' : 'bg-emerald-500 animate-pulse'}`} />
+                                                        <span className={isWindowClosed ? 'text-red-500 dark:text-red-400' : ''}>
+                                                            {isWindowClosed ? 'Janela 24h: Janela Fechada' : `Janela 24h: ${engine.timeLeft24h}`}
+                                                        </span>
+                                                    </span>
+                                                );
+                                            })()
                                         )}
                                     </div>
                                 </div>
@@ -1811,6 +1867,15 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={handleOpenActiveFunnelPipeline}
+                                            disabled={isLoadingPipeline}
+                                            className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:text-blue-300 rounded-lg transition text-[11px] font-bold flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
+                                            title="Abrir pipeline da automação em tempo real"
+                                        >
+                                            <FiZap size={13} className={isLoadingPipeline ? "animate-spin" : ""} />
+                                            {isLoadingPipeline ? "Carregando..." : "Ver Pipeline"}
+                                        </button>
                                         <button
                                             onClick={() => setIsCancelFunnelModalOpen(true)}
                                             className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 rounded-lg transition text-[11px] font-bold flex items-center gap-1.5"
@@ -2113,9 +2178,10 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                                             href={getMediaSrc(msg)} 
                                                                             target="_blank" 
                                                                             rel="noopener noreferrer"
-                                                                            className="flex items-center gap-2 p-2 bg-indigo-950/60 hover:bg-indigo-900/40 text-indigo-200 rounded-lg transition"
+                                                                            className="flex items-center gap-2 p-2 bg-indigo-950/60 hover:bg-indigo-900/40 text-indigo-200 rounded-lg transition max-w-full truncate"
+                                                                            title={msg.meta_data?.filename || 'Documento'}
                                                                         >
-                                                                            <span>📄 Baixar Documento</span>
+                                                                            <span>📄 <span className="truncate">{msg.meta_data?.filename || (msg.media_url && !msg.media_url.startsWith('media_id:') && msg.media_url.includes('/') ? msg.media_url.split('/').pop().split('?')[0] : 'Baixar Documento')}</span></span>
                                                                         </a>
                                                                     )}
                                                                 </div>
@@ -2168,9 +2234,10 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                                                     href={getMediaSrc(msg)} 
                                                                     target="_blank" 
                                                                     rel="noopener noreferrer"
-                                                                    className="flex items-center gap-2 text-xs font-bold underline bg-gray-100 dark:bg-black/20 p-2.5 rounded-lg text-blue-600 dark:text-blue-400"
+                                                                    className="flex items-center gap-2 text-xs font-bold underline bg-gray-100 dark:bg-black/20 p-2.5 rounded-lg text-blue-600 dark:text-blue-400 max-w-full truncate"
+                                                                    title={msg.meta_data?.filename || (msg.media_url?.includes('/') ? msg.media_url.split('/').pop().split('?')[0] : 'Documento')}
                                                                 >
-                                                                    📎 Baixar Documento
+                                                                    📎 <span className="truncate">{msg.meta_data?.filename || (msg.media_url && !msg.media_url.startsWith('media_id:') && msg.media_url.includes('/') ? msg.media_url.split('/').pop().split('?')[0] : 'Baixar Documento')}</span>
                                                                 </a>
                                                             )}
                                                             {/* Legenda opcional */}
@@ -2662,6 +2729,18 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         </div>
                     </div>
                 </div>
+            )}
+            {/* Modal do Pipeline de Automação em Tempo Real */}
+            {pipelineTrigger && (
+                <AutomationPipelineModal
+                    trigger={pipelineTrigger}
+                    onClose={() => setPipelineTrigger(null)}
+                    onStop={async () => {
+                        await engine.handleCancelFunnel();
+                        setPipelineTrigger(null);
+                    }}
+                    hideTabs={true}
+                />
             )}
             {/* Modal de Etiquetagem em Massa */}
             {isBulkTagModalOpen && (

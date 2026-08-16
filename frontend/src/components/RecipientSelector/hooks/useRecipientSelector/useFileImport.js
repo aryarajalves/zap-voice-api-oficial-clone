@@ -80,6 +80,21 @@ export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing,
         const phoneIdx = Object.keys(columnMapping).find(k => columnMapping[k] === 'phone');
         if (phoneIdx === undefined) return toast.error("Selecione a coluna de TELEFONE");
 
+        for (const [colIdxStr, mappingValue] of Object.entries(columnMapping)) {
+            if (mappingValue && mappingValue !== 'ignore') {
+                const colIdx = parseInt(colIdxStr, 10);
+                const colName = csvData.headers?.[colIdx] || `Coluna ${colIdx + 1}`;
+                const hasData = csvData.rows?.some(row => {
+                    const cellVal = row?.[colIdx];
+                    return cellVal !== undefined && cellVal !== null && String(cellVal).trim() !== '';
+                });
+
+                if (!hasData) {
+                    return toast.error(`A coluna "${colName}" foi selecionada, mas não possui nenhuma informação no arquivo.`);
+                }
+            }
+        }
+
         const tagsIdx = Object.keys(columnMapping).find(k => columnMapping[k] === 'tags');
 
         setWorkingMessage('Importando contatos e mapeando variáveis...');

@@ -63,7 +63,7 @@ const InputDataNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-rose-500 min-w-[310px] max-w-[340px] transition-all hover:shadow-2xl">
-            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-rose-500" />
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-rose-500" />}
             
             <NodeHeader
                 label="Entrada de Dados"
@@ -247,25 +247,45 @@ const InputDataNode = ({ id, data }) => {
                 </div>
             </div>
 
-            {/* Portas de Saída */}
-            <div className="flex justify-between mt-4 pt-2 border-t border-gray-100 dark:border-gray-700 relative text-[9px] font-black uppercase tracking-wider select-none">
-                <div className="flex flex-col items-start relative">
-                    <span className="text-emerald-500 flex items-center gap-0.5">
+            {/* Portas de Saída (Lado Direito) */}
+            <div className="flex flex-col gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 animate-in fade-in duration-200">
+                {/* SUCESSO */}
+                <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded-lg relative border border-emerald-200 dark:border-emerald-900/40 shadow-sm">
+                    <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase flex items-center gap-1">
                         <FiCheck className="stroke-[3]" /> Sucesso
                     </span>
-                    <Handle type="source" position={Position.Right} id="success" className="w-3 h-3 bg-emerald-500 !left-6" />
+                    <Handle 
+                        type="source" 
+                        position={Position.Right} 
+                        id="success" 
+                        className="w-3 h-3 bg-emerald-500 !-right-1.5" 
+                    />
                 </div>
-                <div className="flex flex-col items-center relative">
-                    <span className="text-rose-500 flex items-center gap-0.5">
+
+                {/* FALHA */}
+                <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/30 p-2 rounded-lg relative border border-rose-200 dark:border-rose-900/40 shadow-sm">
+                    <span className="text-[10px] font-black text-rose-700 dark:text-rose-400 uppercase flex items-center gap-1">
                         <FiX className="stroke-[3]" /> Falha
                     </span>
-                    <Handle type="source" position={Position.Right} id="fail" className="w-3 h-3 bg-rose-500 !left-1/2 !-translate-x-1/2" />
+                    <Handle 
+                        type="source" 
+                        position={Position.Right} 
+                        id="fail" 
+                        className="w-3 h-3 bg-rose-500 !-right-1.5" 
+                    />
                 </div>
-                <div className="flex flex-col items-end relative">
-                    <span className="text-amber-500 flex items-center gap-0.5">
+
+                {/* TIMEOUT */}
+                <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg relative border border-amber-200 dark:border-amber-900/40 shadow-sm">
+                    <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase flex items-center gap-1">
                         <FiClock className="stroke-[3]" /> Timeout
                     </span>
-                    <Handle type="source" position={Position.Right} id="timeout" className="w-3 h-3 bg-amber-500 !left-auto !right-6" />
+                    <Handle 
+                        type="source" 
+                        position={Position.Right} 
+                        id="timeout" 
+                        className="w-3 h-3 bg-amber-500 !-right-1.5" 
+                    />
                 </div>
             </div>
 

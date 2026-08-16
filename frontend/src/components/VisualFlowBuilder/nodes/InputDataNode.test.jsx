@@ -71,5 +71,17 @@ describe('InputDataNode', () => {
 
         expect(screen.queryByText('Confirmar')).not.toBeInTheDocument();
     });
+
+    test('renderiza as 3 saídas (Sucesso, Falha, Timeout) no lado direito', () => {
+        render(
+            <ReactFlowProvider>
+                <InputDataNode id="node-input-1" data={mockData} />
+            </ReactFlowProvider>
+        );
+
+        expect(screen.getByText('Sucesso')).toBeInTheDocument();
+        expect(screen.getByText('Falha')).toBeInTheDocument();
+        expect(screen.getByText('Timeout')).toBeInTheDocument();
+    });
 });
 

@@ -12,6 +12,7 @@ import WhatsAppProfileSection from '../components/WhatsAppProfileSection';
 import WebhookConfigSection from '../components/WebhookConfigSection';
 import WhatsAppAutoReplySection from '../components/WhatsAppAutoReplySection';
 import TemplatePreview from '../../BulkSender/common/TemplatePreview';
+import WabaPaymentCard from '../components/WabaPaymentCard';
 
 const WhatsAppTab = ({
     user, formData, setFormData, handleChange, visibleFields, handleRevealSetting, copyToClipboard,
@@ -353,6 +354,9 @@ const WhatsAppTab = ({
                                     </p>
                                 </div>
                             )}
+
+                            {/* Monitor de Saúde e Pagamento WABA */}
+                            <WabaPaymentCard />
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">

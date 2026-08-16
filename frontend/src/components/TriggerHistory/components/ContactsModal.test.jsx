@@ -329,7 +329,7 @@ describe('ContactsModal', () => {
 
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('5511999999999');
-      expect(toast.success).toHaveBeenCalledWith('1 contato copiado!');
+      expect(toast.success).toHaveBeenCalledWith('1 contato copiado para a área de transferência!');
     });
   });
 

@@ -83,9 +83,10 @@
 ---
 
 ## 12. Limites de Código (Clean Code)
-- **Backend:** Máximo de **1.000 linhas** por arquivo.
-- **Frontend:** Máximo de **500 linhas** por arquivo.
-- **Ação:** Modularize antes de ultrapassar esses limites.
+- **Backend (Python):** Máximo 1.000 linhas por arquivo.
+- **Frontend (React/JSX):** Máximo 500 linhas por arquivo.
+- **Ação:** Sempre alertar o usuário e perguntar antes se ele deseja realizar a modularização antes de prosseguir com a implementação.
+
 
 ---
 

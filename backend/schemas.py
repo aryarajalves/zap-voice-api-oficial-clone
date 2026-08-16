@@ -29,7 +29,10 @@ class FunnelStep(BaseModel):
 class FunnelBase(BaseModel):
     name: str = Field(..., description="Nome de identificação do funil", example="Funil de Boas Vindas")
     description: Optional[str] = Field(None, description="Descrição opcional para uso interno")
-    trigger_phrase: Optional[str] = Field(None, description="Frase exata que dispara este funil (Match exato)", example="#start")
+    trigger_phrase: Optional[str] = Field(None, description="Palavra(s)-chave que disparam este funil", example="VALIDAR, AULA")
+    trigger_match_type: Optional[str] = Field("contains", description="Tipo de correspondência: 'contains' ou 'exact'")
+    trigger_limit_type: Optional[str] = Field("none", description="Limite de reativação por contato: 'none', 'once_per_day', 'once_24h', 'once_lifetime'")
+    is_trigger_active: Optional[bool] = Field(True, description="Se o gatilho por palavra-chave está ativo")
     allowed_phones: Optional[List[str]] = Field(None, description="Lista de telefones permitidos (Whitelist)")
     blocked_phones: Optional[List[str]] = Field(None, description="Lista de telefones bloqueados (Blacklist)")
     allowed_phone: Optional[str] = Field(None, description="Legado: apenas este número pode disparar", example="5511999999999")

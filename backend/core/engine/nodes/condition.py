@@ -2,7 +2,7 @@ import zoneinfo
 from core.logger import setup_logger
 import json
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from ..utils import normalize_text, get_next_node
 from ..logging import log_node_execution
 from config_loader import get_setting
@@ -34,15 +34,36 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
             start_dt = datetime.fromisoformat(start_str).replace(tzinfo=tz)
             end_dt = datetime.fromisoformat(end_str).replace(tzinfo=tz)
             
-            if now_dt < start_dt: result = 'before'
-            elif now_dt > end_dt: result = 'after'
-            else: result = 'between'
+            try:
+                near_end_val = int(data.get("nearEndValue", 30))
+            except (ValueError, TypeError):
+                near_end_val = 30
+            near_end_unit = data.get("nearEndUnit", "minutes")
+            
+            if near_end_unit == "hours":
+                near_delta = timedelta(hours=near_end_val)
+            else:
+                near_delta = timedelta(minutes=near_end_val)
+            
+            approach_dt = end_dt - near_delta
+            if approach_dt < start_dt:
+                approach_dt = start_dt
+            
+            if now_dt < start_dt:
+                result = 'before'
+            elif now_dt > end_dt:
+                result = 'after'
+            elif near_end_val > 0 and now_dt >= approach_dt:
+                result = 'approach'
+            else:
+                result = 'between'
             
             action = data.get(f"{result}Action", "follow")
-            if action == "stop": return "break"
+            if action == "stop":
+                return "break"
             elif action == "wait":
-                wait_until = start_dt if result == "before" else (end_dt if result == "between" else None)
-                next_h = "between" if result == "before" else ("after" if result == "between" else None)
+                wait_until = start_dt if result == "before" else (end_dt if result in ["between", "approach"] else None)
+                next_h = "between" if result == "before" else ("after" if result in ["between", "approach"] else None)
                 if wait_until:
                     next_node_id = get_next_node(current_node_id, edges, next_h)
                     if next_node_id:
@@ -52,7 +73,12 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
                         db.commit()
                         return "stop"
                 return "break"
-            else: source_handle = result
+            else:
+                # Fallback: se avaliou 'approach' mas não há nó conectado em 'approach', tenta 'between'
+                if result == 'approach' and not get_next_node(current_node_id, edges, 'approach'):
+                    source_handle = 'between'
+                else:
+                    source_handle = result
 
     elif condition_type == "weekday":
         tz = zoneinfo.ZoneInfo('America/Sao_Paulo')

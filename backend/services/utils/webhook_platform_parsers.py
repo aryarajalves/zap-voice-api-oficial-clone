@@ -1482,33 +1482,67 @@ def parse_appmax(payload: dict, result: dict) -> None:
 
 def parse_zapgroup(payload: dict, result: dict) -> None:
     """
-    Parser para a plataforma ZapGroup (Extração de Leads de Grupos do WhatsApp).
+    Parser para a plataforma ZapGroup (Extração de Leads e Votos de Enquete de Grupos do WhatsApp).
     
     Payload de Exemplo:
     {
-      "nome": "554888668693",
-      "grupo": "Grupo Lancamento Teste",
-      "numero": "554888668693",
-      "grupo_jid": "120363405673797894@g.us",
-      "extraido_em": "2026-08-01T12:37:50.664565-03:00"
+      "grupo": {
+        "id": "teste-preview-id",
+        "jid": "120363405673797894@g.us",
+        "nome": "WhatsApp - Teste - Astrologia"
+      },
+      "evento": "voto_enquete_teste",
+      "usuario": {
+        "nome": "Lead de Demonstração",
+        "numero": "5511999998888"
+      }
     }
     """
-    # 1. Nome do Lead / Contato
-    result['name'] = payload.get("nome") or payload.get("name") or payload.get("contact_name")
+    # 1. Nome e Telefone do Contato / Usuário
+    usuario = payload.get("usuario")
+    if isinstance(usuario, dict):
+        result['name'] = usuario.get("nome") or usuario.get("name") or usuario.get("contact_name")
+        phone_raw = usuario.get("numero") or usuario.get("phone") or usuario.get("whatsapp") or usuario.get("celular") or usuario.get("telefone") or usuario.get("jid")
+        if phone_raw:
+            phone_str = str(phone_raw).split("@")[0]
+            result['phone'] = "".join(filter(str.isdigit, phone_str))
+    else:
+        result['name'] = payload.get("nome") or payload.get("name") or payload.get("contact_name")
+        phone_raw = payload.get("numero") or payload.get("phone") or payload.get("whatsapp") or payload.get("celular") or payload.get("telefone")
+        if phone_raw:
+            result['phone'] = str(phone_raw).strip()
     
-    # 2. Telefone / WhatsApp
-    phone_raw = payload.get("numero") or payload.get("phone") or payload.get("whatsapp") or payload.get("celular") or payload.get("telefone") or payload.get("nome")
-    if phone_raw:
-        result['phone'] = str(phone_raw).strip()
+    # 2. Grupo -> Nome do Produto (Garante extração de string se grupo for um dict)
+    grupo = payload.get("grupo") or payload.get("product_name") or payload.get("group_name") or payload.get("group")
+    if isinstance(grupo, dict):
+        result['product_name'] = grupo.get("nome") or grupo.get("name") or grupo.get("id") or str(grupo)
+    elif grupo:
+        result['product_name'] = str(grupo).strip()
     
-    # 3. Nome do Grupo -> Nome do Produto
-    result['product_name'] = payload.get("grupo") or payload.get("product_name") or payload.get("group_name") or payload.get("group")
-    
+    # 3. Enquete / Variáveis personalizadas
+    enquete = payload.get("enquete")
+    if isinstance(enquete, dict):
+        if not result.get('variables'):
+            result['variables'] = {}
+        if enquete.get("titulo"):
+            result['variables']['titulo_enquete'] = str(enquete.get("titulo"))
+        if enquete.get("opcao_marcada"):
+            result['variables']['opcao_marcada'] = str(enquete.get("opcao_marcada"))
+        if enquete.get("opcoes_marcadas"):
+            result['variables']['opcoes_marcadas'] = ", ".join(map(str, enquete.get("opcoes_marcadas")))
+
     # 4. Tipo de Evento
-    result['event_type'] = payload.get("event") or payload.get("event_type") or payload.get("status") or "lead_extraido"
+    event_val = payload.get("evento") or payload.get("event") or payload.get("event_type") or payload.get("status") or "lead_extraido"
+    event_str = str(event_val).lower().strip()
+    if "voto" in event_str or "enquete" in event_str:
+        result['event_type'] = "voto_enquete"
+    elif "lead" in event_str or "extra" in event_str:
+        result['event_type'] = "lead_extraido"
+    else:
+        result['event_type'] = event_str
     
     # 5. Timestamp e Metadados do Evento
-    result['event_time'] = payload.get("extraido_em") or payload.get("created_at") or payload.get("timestamp")
-    result['raw_status'] = "lead_extraido"
+    result['event_time'] = payload.get("data_hora") or payload.get("extraido_em") or payload.get("created_at") or payload.get("timestamp")
+    result['raw_status'] = str(event_val)
     result['country'] = "BR"
 

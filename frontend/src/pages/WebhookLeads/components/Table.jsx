@@ -29,6 +29,7 @@ export default function Table({
   handleClearSelectAllPages,
   updateLeadInPlace,
   onOpenBlockModal,
+  onUnblockSingle,
 }) {
   const { activeClient } = useClient();
   const [togglingLock, setTogglingLock] = useState(null);
@@ -237,6 +238,7 @@ export default function Table({
                   onOpenVariables={(l) => { setLeadForVariables(l); setIsVariablesModalOpen(true); }}
                   onOpenTagsModal={handleOpenTagsModal}
                   onOpenBlockModal={onOpenBlockModal}
+                  onUnblockSingle={onUnblockSingle}
                   updateLeadInPlace={updateLeadInPlace}
                 />
               ))

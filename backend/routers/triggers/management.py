@@ -458,9 +458,7 @@ async def list_triggers(
         trigger.block_child_count = block_child_counts_map.get(trigger.id, 0)
         
         if trigger.is_bulk:
-            trigger.queue_count = queue_counts_map.get(trigger.id, 0)
-            if trigger.id in failed_counts_map:
-                trigger.total_failed = failed_counts_map[trigger.id]
+            trigger.queue_count = queue_counts_map.get(trigger.id, max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0)))
 
         # Preencher follow-up filho a partir do mapa pré-buscado
         followup = followups_map.get(trigger.id)

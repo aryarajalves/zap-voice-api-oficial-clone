@@ -108,15 +108,17 @@ async def upload_file(
 
     # Gerar nome único
     unique_name = f"{uuid.uuid4()}{ext}"
+    final_content_type = file.content_type or "application/octet-stream"
 
     try:
         from storage import storage
         
-        # Se for vídeo, transcodificar com FFmpeg para garantir compatibilidade com WhatsApp (H.264 + AAC + faststart)
+        # Se for vídeo, transcodificar e comprimir com FFmpeg para garantir compatibilidade com WhatsApp (H.264 + AAC + faststart e < 15.5MB)
         if detected_type == "video":
-            logger.info(f"🎬 [UPLOAD_TRANSCODE] Transcodificando vídeo para H.264+AAC+FastStart: {file.filename}")
+            logger.info(f"🎬 [UPLOAD_TRANSCODE] Transcodificando/comprimindo vídeo para WhatsApp: {file.filename}")
             input_tmp = None
             output_tmp = None
+            MAX_WPP_BYTES = int(15.5 * 1024 * 1024)  # 15.5 MB (limite seguro da Meta: 16 MB)
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as f_in:
                     file.file.seek(0)
@@ -125,23 +127,53 @@ async def upload_file(
 
                 output_tmp = input_tmp.replace(ext, "_wpp.mp4")
 
-                ffmpeg_result = subprocess.run(
-                    [
-                        "ffmpeg", "-y",
-                        "-i", input_tmp,
-                        "-c:v", "libx264",
-                        "-pix_fmt", "yuv420p",
-                        "-preset", "fast",
-                        "-crf", "23",
-                        "-c:a", "aac",
-                        "-b:a", "128k",
-                        "-movflags", "+faststart",
-                        output_tmp
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=300
-                )
+                # Passo 1: H.264, CRF 26, Max 720p, Maxrate 2.0M, AAC 128k, Faststart
+                cmd_pass1 = [
+                    "ffmpeg", "-y",
+                    "-i", input_tmp,
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "fast",
+                    "-crf", "26",
+                    "-maxrate", "2.0M",
+                    "-bufsize", "4.0M",
+                    "-vf", "scale='min(1280,iw)':-2",
+                    "-c:a", "aac",
+                    "-b:a", "128k",
+                    "-movflags", "+faststart",
+                    output_tmp
+                ]
+                ffmpeg_result = subprocess.run(cmd_pass1, capture_output=True, text=True, timeout=300)
+
+                # Passo 2: Se ainda passar de 15.5 MB, re-comprime com 480p e CRF 30
+                if ffmpeg_result.returncode == 0 and os.path.exists(output_tmp):
+                    curr_size = os.path.getsize(output_tmp)
+                    if curr_size > MAX_WPP_BYTES:
+                        logger.info(f"🎬 [UPLOAD_TRANSCODE] Vídeo com {curr_size / 1024 / 1024:.2f}MB excedeu 15.5MB. Aplicando compressão passo 2 (480p)...")
+                        pass2_tmp = input_tmp.replace(ext, "_wpp_p2.mp4")
+                        cmd_pass2 = [
+                            "ffmpeg", "-y",
+                            "-i", input_tmp,
+                            "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p",
+                            "-preset", "fast",
+                            "-crf", "30",
+                            "-maxrate", "1.2M",
+                            "-bufsize", "2.4M",
+                            "-vf", "scale='min(854,iw)':-2",
+                            "-c:a", "aac",
+                            "-b:a", "96k",
+                            "-movflags", "+faststart",
+                            pass2_tmp
+                        ]
+                        res2 = subprocess.run(cmd_pass2, capture_output=True, text=True, timeout=300)
+                        if res2.returncode == 0 and os.path.exists(pass2_tmp):
+                            if os.path.getsize(pass2_tmp) < curr_size:
+                                shutil.move(pass2_tmp, output_tmp)
+                                logger.info(f"✅ [UPLOAD_TRANSCODE] Vídeo reduzido com sucesso no passo 2 para {os.path.getsize(output_tmp) / 1024 / 1024:.2f}MB")
+                            elif os.path.exists(pass2_tmp):
+                                try: os.remove(pass2_tmp)
+                                except: pass
 
                 if ffmpeg_result.returncode == 0 and os.path.exists(output_tmp):
                     with open(output_tmp, "rb") as f_out:
@@ -149,9 +181,9 @@ async def upload_file(
                     
                     file.file = io.BytesIO(transcoded_bytes)
                     file_size = len(transcoded_bytes)
-                    file.content_type = "video/mp4"
+                    final_content_type = "video/mp4"
                     unique_name = f"{uuid.uuid4()}.mp4"
-                    logger.info(f"✅ [UPLOAD_TRANSCODE] Vídeo transcodificado com sucesso. Novo tamanho: {file_size / 1024 / 1024:.2f} MB")
+                    logger.info(f"✅ [UPLOAD_TRANSCODE] Vídeo transcodificado e otimizado com sucesso. Tamanho final: {file_size / 1024 / 1024:.2f} MB")
                 else:
                     logger.warning(f"⚠️ [UPLOAD_TRANSCODE] FFmpeg retornou erro ({ffmpeg_result.returncode}), utilizando vídeo original: {ffmpeg_result.stderr[-200:]}")
                     file.file.seek(0)
@@ -168,15 +200,15 @@ async def upload_file(
 
         # Realizar Upload (Local ou MinIO conforme ENV)
         logger.info(f"📤 [STORAGE_UPLOADING] Enviando para storage: {unique_name}")
-        file_url = storage.upload_file(file.file, unique_name, file.content_type)
+        file_url = storage.upload_file(file.file, unique_name, final_content_type)
         
         logger.info(f"✅ [UPLOAD_SUCCESS] Arquivo disponível em: {file_url}")
         
         # Determinar tipo de mídia
         media_type = "DOCUMENT"
-        if file.content_type.startswith("image/"):
+        if final_content_type.startswith("image/"):
             media_type = "IMAGE"
-        elif file.content_type.startswith("video/"):
+        elif final_content_type.startswith("video/"):
             media_type = "VIDEO"
 
         # Registrar no banco de dados
@@ -195,7 +227,7 @@ async def upload_file(
         return {
             "filename": unique_name,
             "url": file_url,
-            "type": file.content_type,
+            "type": final_content_type,
             "size": file_size
         }
         

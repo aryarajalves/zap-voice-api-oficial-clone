@@ -33,6 +33,7 @@ from .chat_label import ChatLabel
 from .checkout_presell import CheckoutConfig, CheckoutLead
 from .capture_page import CapturePageConfig, CapturePageLead
 from .email import EmailConfig, EmailTemplate, EmailDispatch, EmailInbound
+from .payment_monitor import WabaPaymentCheck
 
 # This allows importing all models from the models package
 __all__ = [
@@ -83,6 +84,7 @@ __all__ = [
     "EmailConfig",
     "EmailTemplate",
     "EmailDispatch",
-    "EmailInbound"
+    "EmailInbound",
+    "WabaPaymentCheck"
 ]
 

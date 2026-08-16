@@ -30,10 +30,9 @@ async def get_trigger_messages(
     
     if not trigger: raise HTTPException(status_code=404, detail="Disparo não encontrado")
     
-    child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
-    all_trigger_ids = [trigger_id] + child_ids
+    all_trigger_ids = [trigger_id]
     
-    base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(all_trigger_ids))
+    base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
     
     # Guardar cópia da query base antes de aplicar filtros específicos para calcular a contagem total correta de cada tab
     counts_query = base_query
@@ -76,15 +75,10 @@ async def get_trigger_messages(
                     models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'interaction']),
                     models.MessageStatus.delivered_counted == True,
                     models.MessageStatus.read_counted == True
-                ),
-                or_(
-                    models.MessageStatus.failure_reason == None,
-                    models.MessageStatus.failure_reason != 'BLOCKED_VIA_BUTTON'
                 )
             )
         elif status_filter == 'queue':
-            base_query = db.query(models.MessageStatus).filter(
-                models.MessageStatus.trigger_id.in_(all_trigger_ids),
+            base_query = base_query.filter(
                 models.MessageStatus.status == 'sent',
                 models.MessageStatus.delivered_counted == False,
                 models.MessageStatus.read_counted == False
@@ -183,11 +177,15 @@ async def get_trigger_messages(
                 # Filtrar pelo status solicitado se aplicável
                 if status_filter == 'failed' and child.status not in ('failed', 'aborted', 'cancelled'):
                     continue
-                if status_filter in ('delivered', 'read') and child.status not in ('completed', 'processing'):
+                if status_filter in ('delivered', 'read', 'sent') and child.status not in ('completed', 'processing'):
                     continue
                 if status_filter in ('interaction', 'interactions') and not child.is_interaction:
                     continue
                 if status_filter == 'blocked' and not child.skip_block_check:
+                    continue
+                if status_filter == 'skipped' and child.status != 'skipped':
+                    continue
+                if status_filter in ('queue', 'private_note'):
                     continue
                 
                 # Filter virtual items by failure reason if requested
@@ -199,7 +197,7 @@ async def get_trigger_messages(
                     "trigger_id": trigger_id,
                     "message_id": f"virtual_{child.id}",
                     "phone_number": child.contact_phone,
-                    "status": "sent" if child.status in ('completed', 'processing') else ("failed" if child.status == 'failed' else "cancelled"),
+                    "status": "skipped" if child.status == 'skipped' else ("sent" if child.status in ('completed', 'processing') else ("failed" if child.status == 'failed' else "cancelled")),
                     "failure_reason": child.failure_reason,
                     "is_interaction": False,
                     "message_type": "FREE_MESSAGE",
@@ -375,8 +373,9 @@ async def get_trigger_messages(
             # da linha, sem recalcular com lógica SQL diferente que pode divergir.
             # Campos não armazenados no trigger (free, template, private_note) ainda são
             # calculados via SQL.
+            total_c = trigger.total_contacts or counts_query.count()
             counts = {
-                "all": trigger.total_contacts or counts_query.count(),
+                "all": total_c,
                 "sent": trigger.total_sent or 0,
                 "delivered": trigger.total_delivered or 0,
                 "read": trigger.total_read or 0,
@@ -384,7 +383,11 @@ async def get_trigger_messages(
                 "blocked": trigger.total_blocked or 0,
                 "skipped": trigger.total_skipped or 0,
                 "interaction": trigger.total_interactions or 0,
-                "queue": getattr(trigger, "queue_count", None) if getattr(trigger, "queue_count", None) is not None else max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0)),
+                "queue": counts_query.filter(
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count(),
                 "free": counts_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
                 "template": counts_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
                 "private_note": trigger.total_private_notes or 0,
@@ -414,7 +417,11 @@ async def get_trigger_messages(
                 "skipped": full_query.filter(models.MessageStatus.status == 'skipped').count(),
                 "interaction": full_query.filter(or_(models.MessageStatus.is_interaction == True, models.MessageStatus.interaction_counted == True)).count(),
                 "private_note": full_query.filter(models.MessageStatus.private_note_posted == True).count(),
-                "queue": 0 if trigger.status in ['completed', 'failed', 'cancelled', 'processed', 'aborted'] else full_query.filter(models.MessageStatus.status == 'sent', models.MessageStatus.delivered_counted == False, models.MessageStatus.read_counted == False).count()
+                "queue": full_query.filter(
+                    models.MessageStatus.status == 'sent',
+                    models.MessageStatus.delivered_counted == False,
+                    models.MessageStatus.read_counted == False
+                ).count()
             }
 
     return {"items": serialized_items, "counts": counts, "total": total, "failure_reasons": unique_reasons}

@@ -122,29 +122,27 @@ load_dotenv()
 # auto_migrate(engine) # Movido para run_migrations() para evitar deadlock
 
 # Habilita o /docs apenas em ambiente local (DEBUG=true no .env)
-# Em produção o /docs fica desabilitado para não expor as rotas publicamente
-DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+# Documentação de API Swagger (/docs) e ReDoc (/redoc)
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "true").lower() == "true"
 
 app = FastAPI(
-    title="ZapVoice API Oficial",
-    version="1.4.8",
-    docs_url=None,
-    redoc_url="/redoc" if DEBUG else None,
-    openapi_url="/openapi.json" if DEBUG else None,
+    title="ZapVoice - API Oficial de Automação & Mensageria",
+    version="1.8.0",
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url="/redoc" if ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None,
     description="""
-## 🚀 ZapVoice API v4.0.5
+## ⚡ ZapVoice API Oficial (Meta Cloud API & Webhooks)
 
-Esta API fornece todo o backend para automação de mensagens no chat local do ZapVoice.
-
-### Funcionalidades
-* **Funis de Vendas:** Crie fluxos automáticos com delays, áudios, etc. Bem-vindo à versão **4.0.5** do **ZapVoice**!
-* **Agendamento Inteligente:** Otimização de filas e prevenção de bloqueios.
-
-### Autenticação
-Use o endpoint `/auth/token` para obter seu `access_token`.
+Esta API fornece endpoints completos para integração externa e automações:
+* 📤 **Disparo de Mensagens e Templates:** Envio via API Oficial da Meta (Cloud API WhatsApp)
+* 👥 **Gestão de Leads e Contatos:** Cadastro, consulta e atualização de leads
+* 🔄 **Recepção de Webhooks:** Integração com plataformas de checkout (Kiwify, Hotmart, Eduzz, ZapGroup, etc.)
+* 🚀 **Funis Automáticos e Agendamentos:** Execução de fluxos inteligentes
+* 🔑 **Autenticação:** Suporte a Bearer JWT Token (`/auth/token`) e API Keys (`X-API-Key`)
     """,
     contact={
-        "name": "Documentação Oficial",
+        "name": "ZapVoice API Documentation",
         "url": "http://localhost:8000/docs",
     }
 )
@@ -287,6 +285,8 @@ app.include_router(api_keys.router, prefix="/api")
 app.include_router(reminders.router, prefix="/api")
 from routers import email_marketing
 app.include_router(email_marketing.router, prefix="/api/email", tags=["Email Marketing"])
+from routers import waba_payment
+app.include_router(waba_payment.router, prefix="/api", tags=["WABA Payment"])
 
 
 # Router público para atualização de campos de contatos via API Key

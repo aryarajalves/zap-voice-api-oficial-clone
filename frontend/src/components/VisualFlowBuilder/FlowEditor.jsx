@@ -10,7 +10,7 @@ import ControlsPanel from './Panels/ControlsPanel';
 import ContextMenu from './components/ContextMenu';
 import ConfirmModal from '../ConfirmModal';
 
-const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, refreshKey }) => {
+const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, onDelete, refreshKey }) => {
     const portalContainer = React.useContext(PortalContext);
     const {
         nodes, edges, saving, funnelName, setFunnelName,
@@ -18,6 +18,9 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
         blockedPhones, setBlockedPhones, showRestrictions, setShowRestrictions,
         businessHoursStart, setBusinessHoursStart, businessHoursEnd, setBusinessHoursEnd,
         businessHoursDays, setBusinessHoursDays, showBusinessHours, setShowBusinessHours,
+        showKeywords, setShowKeywords,
+        triggerPhrase, setTriggerPhrase, triggerMatchType, setTriggerMatchType,
+        triggerLimitType, setTriggerLimitType, isTriggerActive, setIsTriggerActive,
         globalVars, nodeToDelete, menu, setMenu, reactFlowWrapper,
         onNodesChange, onEdgesChange, onConnect, onConnectStart, onConnectEnd,
         onPaneContextMenu, onPaneClick, handleAddNode, handleSave, confirmDelete, cancelDelete
@@ -57,11 +60,16 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
                         businessHoursStart={businessHoursStart} setBusinessHoursStart={setBusinessHoursStart}
                         businessHoursEnd={businessHoursEnd} setBusinessHoursEnd={setBusinessHoursEnd}
                         businessHoursDays={businessHoursDays} setBusinessHoursDays={setBusinessHoursDays}
+                        showKeywords={showKeywords} setShowKeywords={setShowKeywords}
+                        triggerPhrase={triggerPhrase} setTriggerPhrase={setTriggerPhrase}
+                        triggerMatchType={triggerMatchType} setTriggerMatchType={setTriggerMatchType}
+                        triggerLimitType={triggerLimitType} setTriggerLimitType={setTriggerLimitType}
+                        isTriggerActive={isTriggerActive} setIsTriggerActive={setIsTriggerActive}
                     />
 
                     <ControlsPanel
                         onBack={onBack} isFullScreen={isFullScreen} toggleFullScreen={toggleFullScreen}
-                        handleSave={handleSave} saving={saving}
+                        handleSave={handleSave} saving={saving} onDelete={onDelete}
                     />
 
                     {menu && <ContextMenu top={menu.top} left={menu.left} onClose={() => setMenu(null)} onAddNode={handleAddNode} />}

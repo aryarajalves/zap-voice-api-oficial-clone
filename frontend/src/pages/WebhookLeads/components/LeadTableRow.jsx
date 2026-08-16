@@ -118,6 +118,7 @@ export default function LeadTableRow({
   onOpenVariables,
   onOpenTagsModal,
   onOpenBlockModal,
+  onUnblockSingle,
   updateLeadInPlace,
 }) {
   const { activeClient } = useClient();
@@ -289,18 +290,30 @@ export default function LeadTableRow({
             <FiEdit2 size={15} />
           </button>
           <button
-            onClick={() => onOpenBlockModal(lead)}
+            onClick={() => {
+              if (lead.is_really_blocked || lead.resting_expires_at) {
+                if (onUnblockSingle) {
+                  onUnblockSingle(lead);
+                } else {
+                  onOpenBlockModal(lead);
+                }
+              } else {
+                onOpenBlockModal(lead);
+              }
+            }}
             className={`p-1.5 rounded-lg transition-colors ${
-              lead.is_really_blocked || lead.resting_expires_at
-                ? 'text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20'
+              lead.is_really_blocked
+                ? 'text-rose-500 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                : lead.resting_expires_at
+                ? 'text-amber-500 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
                 : 'text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20'
             }`}
             title={
               lead.is_really_blocked
-                ? 'Contato Bloqueado — clique para gerenciar'
+                ? 'Contato Bloqueado — clique para desbloquear'
                 : lead.resting_expires_at
-                ? 'Contato em Repouso — clique para gerenciar'
-                : 'Gerenciar Bloqueio / Repouso'
+                ? 'Contato em Repouso — clique para remover do repouso'
+                : 'Bloquear ou Colocar em Repouso'
             }
           >
             <FiSlash size={15} />

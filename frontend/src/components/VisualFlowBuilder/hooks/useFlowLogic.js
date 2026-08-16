@@ -21,6 +21,13 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
     const [blockedPhones, setBlockedPhones] = useState('');
     const [showRestrictions, setShowRestrictions] = useState(false);
 
+    // Keyword Trigger State
+    const [triggerPhrase, setTriggerPhrase] = useState('');
+    const [triggerMatchType, setTriggerMatchType] = useState('contains');
+    const [triggerLimitType, setTriggerLimitType] = useState('none');
+    const [isTriggerActive, setIsTriggerActive] = useState(true);
+    const [showKeywords, setShowKeywords] = useState(false);
+
     // Business Hours State
     const [businessHoursStart, setBusinessHoursStart] = useState('08:00');
     const [businessHoursEnd, setBusinessHoursEnd] = useState('18:00');
@@ -321,7 +328,10 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             const updatePayload = {
                 name: funnelName,
                 description: currentFunnel.description,
-                trigger_phrase: null,
+                trigger_phrase: triggerPhrase.trim() || null,
+                trigger_match_type: triggerMatchType,
+                trigger_limit_type: triggerLimitType,
+                is_trigger_active: isTriggerActive,
                 allowed_phones: allowedPhones.split(',').map(p => p.trim()).filter(p => p),
                 blocked_phones: blockedPhones.split(',').map(p => p.trim()).filter(p => p),
                 allowed_phone: null,
@@ -383,6 +393,10 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
             if (res.ok) {
                 const data = await res.json();
                 setFunnelName(data.name || '');
+                setTriggerPhrase(data.trigger_phrase || '');
+                setTriggerMatchType(data.trigger_match_type || 'contains');
+                setTriggerLimitType(data.trigger_limit_type || 'none');
+                setIsTriggerActive(data.is_trigger_active !== false);
                 setAllowedPhones(Array.isArray(data.allowed_phones) ? data.allowed_phones.join(', ') : (data.allowed_phone || ''));
                 setBlockedPhones(Array.isArray(data.blocked_phones) ? data.blocked_phones.join(', ') : '');
                 setBusinessHoursStart(data.business_hours_start || '08:00');
@@ -421,6 +435,9 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
         blockedPhones, setBlockedPhones, showRestrictions, setShowRestrictions,
         businessHoursStart, setBusinessHoursStart, businessHoursEnd, setBusinessHoursEnd,
         businessHoursDays, setBusinessHoursDays, showBusinessHours, setShowBusinessHours,
+        showKeywords, setShowKeywords,
+        triggerPhrase, setTriggerPhrase, triggerMatchType, setTriggerMatchType,
+        triggerLimitType, setTriggerLimitType, isTriggerActive, setIsTriggerActive,
         globalVars, nodeToDelete, menu, setMenu, reactFlowWrapper,
         onNodesChange, onEdgesChange, onConnect, onConnectStart, onConnectEnd,
         onPaneContextMenu, onPaneClick, handleAddNode, handleSave, confirmDelete, cancelDelete

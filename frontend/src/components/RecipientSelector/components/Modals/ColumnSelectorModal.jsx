@@ -53,7 +53,56 @@ const ColumnSelectorModal = ({
             toast.error("Selecione a coluna de TELEFONE");
             return;
         }
+
+        // Validação: verificar se alguma coluna selecionada (diferente de ignore) está totalmente vazia no arquivo
+        for (const [colIdxStr, mappingValue] of Object.entries(columnMapping)) {
+            if (mappingValue && mappingValue !== 'ignore') {
+                const colIdx = parseInt(colIdxStr, 10);
+                const colName = csvData.headers?.[colIdx] || `Coluna ${colIdx + 1}`;
+                const hasData = csvData.rows?.some(row => {
+                    const cellVal = row?.[colIdx];
+                    return cellVal !== undefined && cellVal !== null && String(cellVal).trim() !== '';
+                });
+
+                if (!hasData) {
+                    toast.error(`A coluna "${colName}" foi selecionada, mas não possui nenhuma informação no arquivo.`);
+                    return;
+                }
+            }
+        }
+
         setStep(2);
+    };
+
+    const handleConfirm = (shouldSaveToLeads) => {
+        if (shouldSaveToLeads) {
+            if (nameColumn !== '') {
+                const colIdx = parseInt(nameColumn, 10);
+                const colName = csvData.headers?.[colIdx] || `Coluna ${colIdx + 1}`;
+                const hasData = csvData.rows?.some(row => {
+                    const cellVal = row?.[colIdx];
+                    return cellVal !== undefined && cellVal !== null && String(cellVal).trim() !== '';
+                });
+                if (!hasData) {
+                    toast.error(`A coluna "${colName}" selecionada para Nome não possui dados no arquivo.`);
+                    return;
+                }
+            }
+
+            if (emailColumn !== '') {
+                const colIdx = parseInt(emailColumn, 10);
+                const colName = csvData.headers?.[colIdx] || `Coluna ${colIdx + 1}`;
+                const hasData = csvData.rows?.some(row => {
+                    const cellVal = row?.[colIdx];
+                    return cellVal !== undefined && cellVal !== null && String(cellVal).trim() !== '';
+                });
+                if (!hasData) {
+                    toast.error(`A coluna "${colName}" selecionada para E-mail não possui dados no arquivo.`);
+                    return;
+                }
+            }
+        }
+        onConfirm(shouldSaveToLeads);
     };
 
     return createPortal(
@@ -305,13 +354,13 @@ const ColumnSelectorModal = ({
                             </button>
                             <div className="flex-1 flex flex-col sm:flex-row gap-3">
                                 <button
-                                    onClick={() => onConfirm(false)}
+                                    onClick={() => handleConfirm(false)}
                                     className="flex-1 py-3 bg-white/[0.05] border border-white/10 hover:bg-white/[0.08] text-slate-300 hover:text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all duration-200"
                                 >
                                     Pular e Importar
                                 </button>
                                 <button
-                                    onClick={() => onConfirm(true)}
+                                    onClick={() => handleConfirm(true)}
                                     className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-200 shadow-lg shadow-emerald-900/30 active:scale-[0.98]"
                                 >
                                     Salvar e Importar

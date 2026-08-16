@@ -19,6 +19,7 @@ _last_cleanup_history: str | None = None
 _last_cleanup_stale: str | None = None
 _last_bulk_crash_check: str | None = None  # controle por minuto
 _last_closed_window_cleanup: str | None = None
+_last_waba_payment_check: datetime | None = None
 
 async def run_log_file_cleanup():
     """Remove linhas antigas do zapvoice_debug.log com mais de LOG_RETENTION_DAYS dias."""
@@ -974,6 +975,16 @@ async def scheduler_task():
 
             # --- 1.2. PROCESS CALENDAR APPOINTMENTS REMINDERS ---
             await process_calendar_reminders(db, now_utc)
+
+            # --- 1.3. AUDIT META WABA PAYMENT HEALTH EVERY 2 HOURS (7200s) ---
+            global _last_waba_payment_check
+            if _last_waba_payment_check is None or (now_utc - _last_waba_payment_check).total_seconds() >= 7200:
+                _last_waba_payment_check = now_utc
+                try:
+                    from services.waba_payment_service import WabaPaymentService
+                    await WabaPaymentService.check_all_active_clients_payment(db)
+                except Exception as e_waba_pay:
+                    logger.error(f"❌ [WABA_PAYMENT_SCHEDULER] Erro ao executar auditoria periódica de pagamentos: {e_waba_pay}")
 
             # --- 2. PROCESS PENDING ONE-OFF TRIGGERS ---
             pending_triggers = db.query(models.ScheduledTrigger).filter(

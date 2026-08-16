@@ -287,6 +287,7 @@ export default function AppContent() {
                         funnelId={logic.editingFunnel?.id}
                         onBack={() => { logic.setShowBuilder(false); logic.setEditingFunnel(null); logic.fetchFunnels(); }}
                         onSave={logic.fetchFunnels}
+                        onDelete={() => logic.confirmDelete(logic.editingFunnel?.id)}
                       />
                     </div>
                   ) : (

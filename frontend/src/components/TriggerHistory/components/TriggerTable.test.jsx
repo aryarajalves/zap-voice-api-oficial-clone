@@ -141,6 +141,25 @@ describe('TriggerTable Component', () => {
     expect(economyText).toBeInTheDocument();
   });
 
+  it('deve exibir o nome do contato e o número de telefone no disparo individual de funil', () => {
+    const singleFunnelTrigger = {
+      id: 99,
+      is_bulk: false,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      scheduled_time: new Date().toISOString(),
+      contact_name: 'Maria Silva',
+      contact_phone: '5511999998888',
+      funnel: { name: 'Funil de Vendas VIP' }
+    };
+
+    render(<TriggerTable {...defaultProps} triggers={[singleFunnelTrigger]} />);
+
+    expect(screen.getByText('Funil de Vendas VIP')).toBeInTheDocument();
+    expect(screen.getByText('Maria Silva')).toBeInTheDocument();
+    expect(screen.getByText('(5511999998888)')).toBeInTheDocument();
+  });
+
   it('deve renderizar estatísticas de economia quando há disparos gratuitos, independente de funnel_id', () => {
     // A condição de exibição é total_delivered > 0 e totalFree > 0,
     // não depende de funnel_id estar ou não preenchido.

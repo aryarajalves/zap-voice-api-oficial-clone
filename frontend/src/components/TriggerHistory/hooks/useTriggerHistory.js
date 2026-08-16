@@ -307,6 +307,8 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
                 }
             }
 
+
+
             if (contactsFilter !== 'all') params.append('status_filter', contactsFilter);
             if (contactsTypeFilter !== 'all') params.append('message_type', contactsTypeFilter);
             if ((contactsFilter === 'failed' || contactsFilter === 'blocked') && contactsErrorFilter !== 'all') {

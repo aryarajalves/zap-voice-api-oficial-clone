@@ -412,50 +412,60 @@ export default function ImportHistoryPage({ onNavigateToLeads }) {
                       </div>
 
                       {/* Progress details */}
-                      {(item.status === 'processing' || item.status === 'pending' || item.status === 'completed') && totalRows > 0 && (
+                      {(item.status === 'processing' || item.status === 'pending' || item.status === 'completed') && (totalRows > 0 || originalTotalRows > 0 || hasDetails) && (
                         <div className="space-y-2 max-w-xl">
-                          <div className="w-full bg-gray-100 dark:bg-gray-700/50 rounded-full h-2 overflow-hidden shadow-inner">
-                            <div
-                              className={`h-full transition-all duration-500 rounded-full ${
-                                item.status === 'completed' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            ></div>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                            <span className={item.status === 'completed' ? 'text-emerald-500' : 'text-blue-500'}>
-                              {percentage}% Concluído
-                            </span>
-                            <span>•</span>
-                            <span>
-                              {processed.toLocaleString('pt-BR')} de {totalRows.toLocaleString('pt-BR')} contatos
-                              {originalTotalRows > totalRows && (
-                                <span className="text-gray-400 font-normal"> (arquivo tinha {originalTotalRows.toLocaleString('pt-BR')} linhas)</span>
-                              )}
-                            </span>
-                            {errorRows > 0 && (
-                              <>
-                                <span>•</span>
-                                <span className="text-red-500">{errorRows.toLocaleString('pt-BR')} erros</span>
-                              </>
-                            )}
-                            {/* Cronômetro ao vivo */}
-                            {item.status === 'processing' && elapsedStr && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1 text-gray-400">
-                                  <FiClock size={11} /> {elapsedStr} decorridos
+                          {totalRows > 0 ? (
+                            <>
+                              <div className="w-full bg-gray-100 dark:bg-gray-700/50 rounded-full h-2 overflow-hidden shadow-inner">
+                                <div
+                                  className={`h-full transition-all duration-500 rounded-full ${
+                                    item.status === 'completed' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                                  }`}
+                                  style={{ width: `${percentage}%` }}
+                                ></div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                <span className={item.status === 'completed' ? 'text-emerald-500' : 'text-blue-500'}>
+                                  {percentage}% Concluído
                                 </span>
-                              </>
-                            )}
-                          </div>
+                                <span>•</span>
+                                <span>
+                                  {processed.toLocaleString('pt-BR')} de {totalRows.toLocaleString('pt-BR')} contatos
+                                  {originalTotalRows > totalRows && (
+                                    <span className="text-gray-400 font-normal"> (arquivo tinha {originalTotalRows.toLocaleString('pt-BR')} linhas)</span>
+                                  )}
+                                </span>
+                                {errorRows > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-red-500">{errorRows.toLocaleString('pt-BR')} erros</span>
+                                  </>
+                                )}
+                                {/* Cronômetro ao vivo */}
+                                {item.status === 'processing' && elapsedStr && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="flex items-center gap-1 text-gray-400">
+                                      <FiClock size={11} /> {elapsedStr} decorridos
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs font-medium text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
+                              <span>⚠ Nenhum contato válido importado (arquivo com {originalTotalRows.toLocaleString('pt-BR')} linhas)</span>
+                            </div>
+                          )}
 
                           {/* Resumo final quando concluído */}
                           {item.status === 'completed' && (
                             <div className="flex flex-wrap items-center gap-2 pt-1">
-                              <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/30 rounded-lg text-[11px] font-bold">
-                                ✓ {importedRows.toLocaleString('pt-BR')} importados com sucesso
-                              </span>
+                              {importedRows > 0 && (
+                                <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/30 rounded-lg text-[11px] font-bold">
+                                  ✓ {importedRows.toLocaleString('pt-BR')} importados com sucesso
+                                </span>
+                              )}
                               {errorRows > 0 && (
                                 <span className="px-2.5 py-1 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/20 rounded-lg text-[11px] font-bold">
                                   ✗ {errorRows.toLocaleString('pt-BR')} falharam

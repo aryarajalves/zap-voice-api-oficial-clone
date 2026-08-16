@@ -43,7 +43,7 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
         if not start_node and nodes:
             logger.warning(f"⚠️ [GRAPH] Nenhum nó de início (start) encontrado para o Funil {funnel.id}. Usando fallback para o primeiro nó disponível.")
             # Priorizar tipos de conteúdo
-            priority_nodes = [n for n in nodes.values() if n.get("type") in ["message", "messageNode", "audioNode", "mediaNode", "templateNode", "delayNode", "delay", "httpRequestNode", "http_request"]]
+            priority_nodes = [n for n in nodes.values() if n.get("type") in ["message", "messageNode", "audioNode", "mediaNode", "templateNode", "delayNode", "delay", "httpRequestNode", "http_request", "conditionNode", "condition", "businessHoursNode"]]
             if priority_nodes:
                 start_node = priority_nodes[0]
             else:

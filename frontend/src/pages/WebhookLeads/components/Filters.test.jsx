@@ -56,7 +56,7 @@ describe('Filters Component', () => {
     );
 
     // Should render search input
-    expect(screen.getByPlaceholderText('Buscar por nome ou telefone...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Buscar por nome/i)).toBeInTheDocument();
 
     // Advanced filters should be hidden initially
     expect(screen.queryByText('Criado por')).not.toBeInTheDocument();

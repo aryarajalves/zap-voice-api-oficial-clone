@@ -336,6 +336,14 @@ const MediaHeaderUploader = ({ format, templateParams, handleParamChange }) => {
                                             key={media.id}
                                             onClick={() => {
                                                 if (editingMediaId === media.id) return; // Evitar clique ao renomear
+                                                const mediaSizeMB = media.size ? media.size / 1024 / 1024 : 0;
+                                                if (format === 'VIDEO' && mediaSizeMB > 16.0) {
+                                                    toast.error(
+                                                        `⚠️ Este vídeo possui ${mediaSizeMB.toFixed(1)}MB e ultrapassa o limite de 16MB da Meta/WhatsApp. O envio da mídia falharia. Faça um novo upload para comprimi-lo automaticamente.`,
+                                                        { duration: 6000, icon: '⚠️', style: { borderRadius: '16px', background: '#1e293b', color: '#fff', border: '1px solid rgba(239,68,68,0.4)' } }
+                                                    );
+                                                    return;
+                                                }
                                                 setUploadedFile({ name: media.filename, url: media.url, type: format });
                                                 handleParamChange('HEADER_0', media.url);
                                                 toast.success('Mídia selecionada! 🎯', {
@@ -415,8 +423,15 @@ const MediaHeaderUploader = ({ format, templateParams, handleParamChange }) => {
                                             </div>
                                             
                                             <div className="flex items-center gap-3 ml-2 flex-shrink-0">
-                                                <div className="text-[10px] text-slate-500 font-bold">
-                                                    {(media.size / 1024 / 1024).toFixed(2)} MB
+                                                <div className="text-right">
+                                                    <span className={`text-[10px] font-bold ${format === 'VIDEO' && (media.size / 1024 / 1024) > 16.0 ? 'text-red-400' : 'text-slate-500'}`}>
+                                                        {(media.size / 1024 / 1024).toFixed(2)} MB
+                                                    </span>
+                                                    {format === 'VIDEO' && (media.size / 1024 / 1024) > 16.0 && (
+                                                        <span className="block text-[8px] text-red-400 font-extrabold uppercase tracking-tight">
+                                                            Excede 16MB
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <button
                                                     type="button"

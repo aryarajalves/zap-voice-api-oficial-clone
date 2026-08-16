@@ -97,6 +97,7 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         handleClearSelectAllPages={logic.handleClearSelectAllPages}
         updateLeadInPlace={logic.updateLeadInPlace}
         onOpenBlockModal={logic.handleOpenBlockModal}
+        onUnblockSingle={logic.handleUnblockSingle}
       />
 
       <BulkTagModal

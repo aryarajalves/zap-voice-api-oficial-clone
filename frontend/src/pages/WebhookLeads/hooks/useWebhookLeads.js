@@ -651,6 +651,32 @@ export function useWebhookLeads(activeClient) {
     }
   };
 
+  const handleUnblockSingle = async (lead) => {
+    if (!activeClient || !lead) return;
+    setIsBlocking(true);
+    try {
+      const res = await fetchWithAuth(`${API_URL}/leads/bulk-unblock`, {
+        method: 'POST',
+        body: JSON.stringify({ lead_ids: [lead.id] })
+      }, activeClient.id);
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message || "Contato desbloqueado com sucesso!");
+        fetchLeads();
+        fetchDdiDddOptions();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || "Erro ao desbloquear contato.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao processar desbloqueio.");
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedLeads(leads.filter(lead => !lead.is_locked).map(lead => lead.id));
@@ -729,6 +755,6 @@ export function useWebhookLeads(activeClient) {
     // Etiquetar em massa
     isBulkTagModalOpen, setIsBulkTagModalOpen, isBulkTagging, handleBulkTag,
     // Bloquear / repouso (individual ou em massa)
-    blockTarget, handleOpenBlockModal, closeBlockModal, handleConfirmBlock, handleUnblockSelected, isBlocking
+    blockTarget, handleOpenBlockModal, closeBlockModal, handleConfirmBlock, handleUnblockSelected, handleUnblockSingle, isBlocking
   };
 }

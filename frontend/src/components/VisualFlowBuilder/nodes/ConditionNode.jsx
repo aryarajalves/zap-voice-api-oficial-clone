@@ -10,7 +10,7 @@ const ConditionNode = ({ id, data }) => {
 
     return (
         <div className="px-4 py-3 shadow-lg rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-500 min-w-[300px]">
-            <Handle type="target" position={Position.Left} className="w-3 h-3 bg-purple-500" />
+            {!data.isStart && <Handle type="target" position={Position.Left} className="w-3 h-3 bg-purple-500" />}
             <NodeHeader
                 label="Condição Inteligente"
                 icon={FiCpu}
@@ -18,6 +18,7 @@ const ConditionNode = ({ id, data }) => {
                 onDelete={() => data.onDelete(id)}
                 onDuplicate={() => data.onDuplicate(id)}
                 isStart={data.isStart}
+                onSetStart={() => data.onSetStart && data.onSetStart(id, 'conditionNode')}
             />
 
             <div className="space-y-4">
@@ -103,6 +104,32 @@ const ConditionNode = ({ id, data }) => {
                                 value={data.endDateTime || ''}
                                 onChange={(e) => data.onChange(id, { endDateTime: e.target.value })}
                             />
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 space-y-1.5">
+                            <label className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase flex items-center gap-1">
+                                ⚡ Janela de Reta Final (Antes do Fim)
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    placeholder="30"
+                                    className="nodrag nopan w-20 p-1.5 text-sm font-bold text-center border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm"
+                                    value={data.nearEndValue ?? 30}
+                                    onChange={(e) => data.onChange(id, { nearEndValue: e.target.value })}
+                                />
+                                <select
+                                    className="nodrag nopan flex-1 p-1.5 text-xs font-semibold border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm cursor-pointer"
+                                    value={data.nearEndUnit || 'minutes'}
+                                    onChange={(e) => data.onChange(id, { nearEndUnit: e.target.value })}
+                                >
+                                    <option value="minutes">Minutos antes do fim</option>
+                                    <option value="hours">Horas antes do fim</option>
+                                </select>
+                            </div>
+                            <p className="text-[9px] text-gray-400 dark:text-gray-500 italic">
+                                Leads no período próximo ao encerramento seguirão pela saída 'Durante (Próximo do Fim)'.
+                            </p>
                         </div>
                     </div>
                 )}
@@ -198,11 +225,11 @@ const ConditionNode = ({ id, data }) => {
                                 </div>
                             </div>
 
-                            {/* DURANTE */}
+                            {/* DURANTE - INÍCIO / NORMAL */}
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded-lg relative border border-green-100 dark:border-green-900 shadow-sm">
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-green-700 dark:text-green-400 uppercase">✅ Durante</span>
+                                        <span className="text-[10px] font-black text-green-700 dark:text-green-400 uppercase">✅ Durante (Início / Normal)</span>
                                         <select
                                             className="text-[9px] bg-transparent border-none outline-none font-bold text-green-600 cursor-pointer"
                                             value={data.betweenAction || 'follow'}
@@ -214,6 +241,26 @@ const ConditionNode = ({ id, data }) => {
                                     </div>
                                     {(data.betweenAction === 'follow' || !data.betweenAction) && (
                                         <Handle id="between" type="source" position={Position.Right} className="w-3 h-3 bg-green-500 !-right-2" />
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* DURANTE - PRÓXIMO DO FIM (RETA FINAL) */}
+                            <div className="space-y-1">
+                                <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg relative border border-amber-200 dark:border-amber-900 shadow-sm">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase">⚡ Durante (Próximo do Fim)</span>
+                                        <select
+                                            className="text-[9px] bg-transparent border-none outline-none font-bold text-amber-600 cursor-pointer"
+                                            value={data.approachAction || 'follow'}
+                                            onChange={(e) => data.onChange(id, { approachAction: e.target.value })}
+                                        >
+                                            <option value="follow">SEGUIR FLUXO</option>
+                                            <option value="wait">AGUARDAR FIM</option>
+                                        </select>
+                                    </div>
+                                    {(data.approachAction === 'follow' || !data.approachAction) && (
+                                        <Handle id="approach" type="source" position={Position.Right} className="w-3 h-3 bg-amber-500 !-right-2" />
                                     )}
                                 </div>
                             </div>

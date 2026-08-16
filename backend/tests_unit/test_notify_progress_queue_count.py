@@ -85,10 +85,10 @@ class TestNotifyProgressQueueCount:
         async def mock_publish(event_name, payload):
             published_payload.update(payload)
 
-        with patch("services.bulk.rabbitmq") as mock_rabbitmq:
+        with patch("services.bulk_simulation.rabbitmq") as mock_rabbitmq:
             mock_rabbitmq.publish_event = AsyncMock(side_effect=mock_publish)
             
-            from services.bulk import notify_progress
+            from services.bulk_simulation import notify_progress
             await notify_progress(db, 42)
         
         # Verificar que queue_count está no payload
@@ -121,10 +121,10 @@ class TestNotifyProgressQueueCount:
         async def mock_publish(event_name, payload):
             published_payload.update(payload)
 
-        with patch("services.bulk.rabbitmq") as mock_rabbitmq:
+        with patch("services.bulk_simulation.rabbitmq") as mock_rabbitmq:
             mock_rabbitmq.publish_event = AsyncMock(side_effect=mock_publish)
             
-            from services.bulk import notify_progress
+            from services.bulk_simulation import notify_progress
             await notify_progress(db, 42)
         
         # No fallback: total_sent(20) - total_delivered(10) - total_failed(3) = 7
@@ -164,10 +164,10 @@ class TestNotifyProgressQueueCount:
         async def mock_publish(event_name, payload):
             published_payload.update(payload)
 
-        with patch("services.bulk.rabbitmq") as mock_rabbitmq:
+        with patch("services.bulk_simulation.rabbitmq") as mock_rabbitmq:
             mock_rabbitmq.publish_event = AsyncMock(side_effect=mock_publish)
             
-            from services.bulk import notify_progress
+            from services.bulk_simulation import notify_progress
             await notify_progress(db, 42)
         
         # Mesmo com dados inconsistentes, queue_count não deve ser negativo
@@ -198,10 +198,10 @@ class TestNotifyProgressQueueCount:
         async def mock_publish(event_name, payload):
             published_payload.update(payload)
 
-        with patch("services.bulk.rabbitmq") as mock_rabbitmq:
+        with patch("services.bulk_simulation.rabbitmq") as mock_rabbitmq:
             mock_rabbitmq.publish_event = AsyncMock(side_effect=mock_publish)
             
-            from services.bulk import notify_progress
+            from services.bulk_simulation import notify_progress
             await notify_progress(db, 42)
         
         required_fields = [

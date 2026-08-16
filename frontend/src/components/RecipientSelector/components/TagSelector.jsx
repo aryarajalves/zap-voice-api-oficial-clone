@@ -58,11 +58,11 @@ const TagSelector = ({
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="p-8 bg-slate-800/20 border border-white/5 rounded-3xl space-y-6">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative z-30">
+            <div className="p-8 bg-slate-800/20 border border-white/5 rounded-3xl space-y-6 relative z-30">
                 <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Selecione as Etiquetas Internas</label>
-                    <div className="relative" ref={tagDropdownRef}>
+                    <div className={`relative ${tagDropdownOpen ? 'z-50' : 'z-20'}`} ref={tagDropdownRef}>
                         <button
                             type="button"
                             onClick={() => !isLoadingTags && setTagDropdownOpen(o => !o)}
@@ -95,7 +95,7 @@ const TagSelector = ({
                         {/* Dropdown de etiquetas com busca e multi-seleção */}
                         {tagDropdownOpen && (
                             <div
-                                className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                                className="absolute top-full left-0 right-0 mt-2 z-[999] bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
                             >
                                 {/* Header com campo de busca */}
                                 <div className="p-3 border-b border-white/5 bg-slate-900/50">

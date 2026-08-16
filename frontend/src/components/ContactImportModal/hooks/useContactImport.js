@@ -114,6 +114,41 @@ export function useContactImport(onClose, onImportComplete) {
       return;
     }
 
+    // Validação preventiva: se alguma coluna selecionada estiver vazia em todas as linhas de prévia
+    if (previewData && previewData.headers && previewData.preview_rows && previewData.preview_rows.length > 0) {
+      const headers = previewData.headers;
+      const rows = previewData.preview_rows;
+
+      const isColEmpty = (colName) => {
+        const idx = headers.indexOf(colName);
+        if (idx === -1) return false;
+        return rows.every(r => !r[idx] || String(r[idx]).trim() === '' || String(r[idx]).toLowerCase() === 'nan' || String(r[idx]).toLowerCase() === 'null');
+      };
+
+      // 1. Validar coluna de telefone
+      if (typeof mapping.phone === 'string' && mapping.phone) {
+        if (isColEmpty(mapping.phone)) {
+          toast.error(`A coluna "${mapping.phone}" foi selecionada para Telefone, mas não possui nenhuma informação no arquivo.`);
+          return;
+        }
+      } else if (typeof mapping.phone === 'object' && mapping.phone) {
+        if (mapping.phone.number_column && isColEmpty(mapping.phone.number_column)) {
+          toast.error(`A coluna "${mapping.phone.number_column}" selecionada para o Número não possui nenhuma informação no arquivo.`);
+          return;
+        }
+      }
+
+      // 2. Validar outras colunas mapeadas
+      for (const [key, colName] of Object.entries(mapping)) {
+        if (key !== 'phone' && typeof colName === 'string' && colName) {
+          if (isColEmpty(colName)) {
+            toast.error(`A coluna "${colName}" foi selecionada, mas não possui nenhuma informação no arquivo.`);
+            return;
+          }
+        }
+      }
+    }
+
     setLoading(true);
     const formData = new FormData();
     formData.append('file', file);

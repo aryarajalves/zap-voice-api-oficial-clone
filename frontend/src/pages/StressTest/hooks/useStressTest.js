@@ -1239,9 +1239,9 @@ export function useStressTest(onStartSuccess) {
   const [delaySeconds, setDelaySeconds] = useState(() => localStorage.getItem('stress_test_delay') ? parseInt(localStorage.getItem('stress_test_delay')) : 0);
   const [concurrencyLimit, setConcurrencyLimit] = useState(() => localStorage.getItem('stress_test_concurrency') ? parseInt(localStorage.getItem('stress_test_concurrency')) : 5);
   const [simulateRateLimit, setSimulateRateLimit] = useState(() => localStorage.getItem('stress_test_simulate_rl') === 'true');
-  const [pricingCategory, setPricingCategory] = useState(() => localStorage.getItem('stress_test_pricing_category') || 'marketing'); // 'marketing' | 'utility'
-  const [interactionFunnelId, setInteractionFunnelId] = useState(() => localStorage.getItem('stress_test_interaction_funnel_id') || '');
-  const [blockFunnelId, setBlockFunnelId] = useState(() => localStorage.getItem('stress_test_block_funnel_id') || '');
+  const [pricingCategory, setPricingCategory] = useState(() => localStorage.getItem('stress_test_pricing_category') || 'MARKETING');
+  const [interactionFunnelId, setInteractionFunnelId] = useState('');
+  const [blockFunnelId, setBlockFunnelId] = useState('');
 
   const ALL_ERRORS = [
     "(#132015) O template está temporariamente indisponível para uso porque foi pausado devido à baixa qualidade.",
@@ -1330,10 +1330,8 @@ export function useStressTest(onStartSuccess) {
       localStorage.setItem('stress_test_concurrency', concurrencyLimit.toString());
       localStorage.setItem('stress_test_simulate_rl', simulateRateLimit.toString());
       localStorage.setItem('stress_test_pricing_category', pricingCategory);
-      localStorage.setItem('stress_test_interaction_funnel_id', interactionFunnelId);
-      localStorage.setItem('stress_test_block_funnel_id', blockFunnelId);
       localStorage.setItem('stress_test_selected_errors', JSON.stringify(selectedErrors));
-  }, [testType, funnelId, templateName, numberOfContacts, delaySeconds, concurrencyLimit, simulateRateLimit, pricingCategory, interactionFunnelId, blockFunnelId, selectedErrors]);
+  }, [testType, funnelId, templateName, numberOfContacts, delaySeconds, concurrencyLimit, simulateRateLimit, pricingCategory, selectedErrors]);
 
   useEffect(() => {
       localStorage.setItem('stress_test_contacts_count', contactsCount.toString());

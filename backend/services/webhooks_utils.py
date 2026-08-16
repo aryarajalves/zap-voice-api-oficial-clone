@@ -254,6 +254,21 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
                 get_val(["form", "form_name"])
             )
 
+    # Final String Sanitization for product_name, name, and event_type
+    if result.get('product_name'):
+        if isinstance(result['product_name'], dict):
+            result['product_name'] = result['product_name'].get('nome') or result['product_name'].get('name') or result['product_name'].get('title') or result['product_name'].get('id') or str(result['product_name'])
+        elif isinstance(result['product_name'], list):
+            result['product_name'] = ", ".join(map(str, result['product_name']))
+        else:
+            result['product_name'] = str(result['product_name']).strip()
+
+    if result.get('name') and isinstance(result['name'], dict):
+        result['name'] = result['name'].get('nome') or result['name'].get('name') or str(result['name'])
+
+    if result.get('event_type') and not isinstance(result['event_type'], str):
+        result['event_type'] = str(result['event_type'])
+
     # Kirvano / Eduzz: mesmo payload com OB embutido → event_type diferente
     if result.get('order_bump_products') and result.get('event_type') == 'compra_aprovada':
         result['event_type'] = 'compra_aprovada_com_ob'

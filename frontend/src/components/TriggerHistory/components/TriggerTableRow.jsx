@@ -514,6 +514,17 @@ const TriggerTableRow = ({
                                 👥 {triggerWithActions.concurrency_limit ?? 1}
                             </span>
                         </div>
+                        {(triggerWithActions.contact_name || triggerWithActions.contact_phone) && (
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="inline-flex items-center gap-1.5 bg-blue-500/10 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-md font-semibold text-xs">
+                                    <span>👤</span>
+                                    <span>{triggerWithActions.contact_name || 'Contato'}</span>
+                                    {triggerWithActions.contact_phone && (
+                                        <span className="text-gray-500 dark:text-gray-400 font-mono text-[11px]">({triggerWithActions.contact_phone})</span>
+                                    )}
+                                </span>
+                            </div>
+                        )}
                         {triggerWithActions.total_delivered > 0 && (
                             <div className={`text-[10px] font-bold mt-0.5 ${triggerWithActions.total_cost > 0 ? 'text-green-600 dark:text-green-400' : 'text-blue-500'}`}>
                                 {triggerWithActions.total_cost > 0 ? `💰 R$ ${triggerWithActions.total_cost.toFixed(2)}` : '🆓 de graça'}

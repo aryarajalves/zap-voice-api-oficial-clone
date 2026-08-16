@@ -66,11 +66,22 @@ export default function ChatContactSidebar({
                     ID da Conversa: #{selectedConvo.id}
                 </div>
                 <div className="flex flex-col items-center gap-1.5 mt-1">
-                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${timeLeft24h === 'Janela Fechada' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${timeLeft24h === 'Janela Fechada' ? 'bg-red-500' : 'bg-emerald-500 animate-pulse'}`} />
-                        <span>{timeLeft24h === 'Janela Fechada' ? '🔴 Janela Fechada' : `Janela 24h: ${timeLeft24h}`}</span>
-                    </div>
-                    {timeLeft24h !== 'Janela Fechada' && handleClose24hWindow && (
+                    {(() => {
+                        const isWindowClosed = !timeLeft24h || timeLeft24h === 'Janela Fechada' || String(timeLeft24h).toLowerCase().includes('fechada');
+                        return (
+                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
+                                isWindowClosed
+                                    ? 'bg-red-500/15 text-red-500 dark:text-red-400 border-red-500/30'
+                                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                            }`}>
+                                <span className={`w-2 h-2 rounded-full ${isWindowClosed ? 'bg-red-500' : 'bg-emerald-500 animate-pulse'}`} />
+                                <span className={isWindowClosed ? 'text-red-500 dark:text-red-400' : ''}>
+                                    {isWindowClosed ? 'Janela 24h: Janela Fechada' : `Janela 24h: ${timeLeft24h}`}
+                                </span>
+                            </div>
+                        );
+                    })()}
+                    {(!timeLeft24h || timeLeft24h !== 'Janela Fechada' && !String(timeLeft24h).toLowerCase().includes('fechada')) && handleClose24hWindow && (
                         <button
                             type="button"
                             onClick={() => handleClose24hWindow(selectedConvo, setSelectedConvo)}

@@ -5,7 +5,7 @@ import FlowEditor from './FlowEditor';
 export const PortalContext = React.createContext(null);
 export const GlobalVarsContext = React.createContext([]);
 
-const VisualFlowBuilder = ({ funnelId, onBack, onSave, refreshKey }) => {
+const VisualFlowBuilder = ({ funnelId, onBack, onSave, onDelete, refreshKey }) => {
     const validId = funnelId || 1;
     const wrapperRef = useRef(null);
     const [isFullScreen, setIsFullScreen] = useState(false);
@@ -75,6 +75,7 @@ const VisualFlowBuilder = ({ funnelId, onBack, onSave, refreshKey }) => {
                         toggleFullScreen={toggleFullScreen}
                         onBack={onBack}
                         onSave={onSave}
+                        onDelete={onDelete}
                         refreshKey={refreshKey}
                     />
                 </ReactFlowProvider>

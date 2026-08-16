@@ -385,8 +385,10 @@ async def list_conversations(
     }
 
 @router.get("/chat/conversations/{conversation_id}/messages")
+@router.get("/v1/accounts/{account_id}/conversations/{conversation_id}/messages")
 async def list_messages(
     conversation_id: int,
+    account_id: Optional[int] = None,
     limit: int = Query(50, ge=1),
     before_id: Optional[int] = None,
     client_id: int = Depends(get_client_id),
@@ -434,9 +436,11 @@ async def list_messages(
     return result
 
 @router.post("/chat/conversations/{conversation_id}/messages")
+@router.post("/v1/accounts/{account_id}/conversations/{conversation_id}/messages")
 async def send_chat_message(
     conversation_id: int,
     payload: dict,
+    account_id: Optional[int] = None,
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)

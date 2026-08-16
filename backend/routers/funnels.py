@@ -218,6 +218,9 @@ def create_funnel(
         description=funnel.description, 
         steps=steps_payload,
         trigger_phrase=funnel.trigger_phrase,
+        trigger_match_type=funnel.trigger_match_type or "contains",
+        trigger_limit_type=funnel.trigger_limit_type or "none",
+        is_trigger_active=funnel.is_trigger_active if funnel.is_trigger_active is not None else True,
         allowed_phones=funnel.allowed_phones,
         blocked_phones=funnel.blocked_phones,
         allowed_phone=funnel.allowed_phone,
@@ -264,6 +267,10 @@ def update_funnel(
     db_funnel.name = funnel_update.name
     db_funnel.description = funnel_update.description
     db_funnel.trigger_phrase = funnel_update.trigger_phrase
+    db_funnel.trigger_match_type = funnel_update.trigger_match_type or "contains"
+    db_funnel.trigger_limit_type = funnel_update.trigger_limit_type or "none"
+    if funnel_update.is_trigger_active is not None:
+        db_funnel.is_trigger_active = funnel_update.is_trigger_active
     db_funnel.allowed_phones = funnel_update.allowed_phones
     db_funnel.blocked_phones = funnel_update.blocked_phones
     db_funnel.allowed_phone = funnel_update.allowed_phone

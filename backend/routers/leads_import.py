@@ -33,16 +33,16 @@ def normalize_name(text: str) -> str:
 
 
 def read_csv_smart(content: bytes, sep: str = ";") -> pd.DataFrame:
-    """Tenta ler CSV detectando encoding automaticamente."""
+    """Tenta ler CSV detectando encoding automaticamente e garantindo que nenhuma coluna vire índice."""
     for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
         try:
-            df = pd.read_csv(io.BytesIO(content), sep=sep, encoding=encoding)
+            df = pd.read_csv(io.BytesIO(content), sep=sep, encoding=encoding, index_col=False)
             if len(df.columns) > 1:
                 return df
         except Exception:
             continue
     # fallback — latin-1 cobre todos os 256 bytes, nunca vai lançar erro de encoding
-    return pd.read_csv(io.BytesIO(content), sep=sep, encoding="latin-1")
+    return pd.read_csv(io.BytesIO(content), sep=sep, encoding="latin-1", index_col=False)
 
 
 def _parse_datetime_smart(val) -> Optional[datetime]:
@@ -960,6 +960,47 @@ async def execute_import(
 
         content = await file.read()
         file_extension = file.filename.split('.')[-1].lower()
+
+        # Validação preventiva de colunas mapeadas e conteúdo de telefone
+        if file_extension == 'csv':
+            df_val = read_csv_smart(content, sep=';')
+            if len(df_val.columns) <= 1:
+                df_val = read_csv_smart(content, sep=',')
+        elif file_extension in ['xls', 'xlsx']:
+            df_val = pd.read_excel(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado. Use CSV ou Excel.")
+
+        phone_cols = _get_phone_mapping_columns(mapping_dict.get('phone'))
+        if not phone_cols:
+            raise HTTPException(status_code=400, detail="A coluna de Telefone é obrigatória.")
+
+        for pcol in phone_cols:
+            if pcol not in df_val.columns:
+                raise HTTPException(status_code=400, detail=f"A coluna de telefone '{pcol}' não foi encontrada no arquivo.")
+            # Checar se a coluna está completamente vazia
+            str_series = df_val[pcol].dropna().astype(str).str.strip()
+            if str_series.empty or str_series.eq('').all() or str_series.str.lower().isin(['nan', 'none', 'null']).all():
+                raise HTTPException(status_code=400, detail=f"A coluna '{pcol}' foi selecionada para Telefone, mas não possui nenhuma informação no arquivo.")
+
+        for k, v in mapping_dict.items():
+            if k != 'phone' and v and isinstance(v, str):
+                if v not in df_val.columns:
+                    raise HTTPException(status_code=400, detail=f"A coluna '{v}' não foi encontrada no arquivo.")
+                str_series = df_val[v].dropna().astype(str).str.strip()
+                if str_series.empty or str_series.eq('').all() or str_series.str.lower().isin(['nan', 'none', 'null']).all():
+                    raise HTTPException(status_code=400, detail=f"A coluna '{v}' foi selecionada, mas não possui nenhuma informação no arquivo.")
+
+        # Validar se após a extração resta ao menos 1 número válido
+        phone_series = _build_phone_series(df_val, mapping_dict.get('phone'))
+        valid_phones = phone_series[phone_series.str.len() >= 8]
+        if valid_phones.empty:
+            p_desc = mapping_dict.get('phone')
+            col_name_desc = p_desc if isinstance(p_desc, str) else (p_desc.get('number_column') if isinstance(p_desc, dict) else 'Telefone')
+            raise HTTPException(
+                status_code=400,
+                detail=f"A coluna '{col_name_desc}' selecionada para Telefone não possui nenhum número válido no arquivo (mínimo 8 dígitos)."
+            )
 
         # Criar registro de histórico inicial
         history = models.ContactImportHistory(

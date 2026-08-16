@@ -116,4 +116,68 @@ describe('ConditionNode', () => {
         fireEvent.change(instructionsTextarea, { target: { value: 'Comprar produto' } });
         expect(mockOnChange).toHaveBeenCalledWith('node-cond', { aiInstructions: 'Comprar produto' });
     });
+
+    test('exibe botão de definir início quando não é início e chama onSetStart ao clicar', () => {
+        const mockOnSetStart = vi.fn();
+        const startData = {
+            ...mockData,
+            isStart: false,
+            onSetStart: mockOnSetStart
+        };
+
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={startData} />
+            </ReactFlowProvider>
+        );
+
+        const setStartButton = screen.getByTitle('Definir como Início');
+        expect(setStartButton).toBeInTheDocument();
+        fireEvent.click(setStartButton);
+        expect(mockOnSetStart).toHaveBeenCalledWith('node-cond', 'conditionNode');
+    });
+
+    test('exibe badge de início quando isStart é true', () => {
+        const startData = {
+            ...mockData,
+            isStart: true
+        };
+
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={startData} />
+            </ReactFlowProvider>
+        );
+
+        expect(screen.getByText('Início')).toBeInTheDocument();
+        expect(screen.queryByTitle('Definir como Início')).not.toBeInTheDocument();
+    });
+
+    test('quando o tipo é datetime_range, renderiza os campos de reta final e as 4 saídas', () => {
+        const rangeData = {
+            ...mockData,
+            conditionType: 'datetime_range',
+            startDateTime: '2026-08-14T19:00',
+            endDateTime: '2026-08-14T22:00',
+            nearEndValue: 30,
+            nearEndUnit: 'minutes'
+        };
+
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={rangeData} />
+            </ReactFlowProvider>
+        );
+
+        // Campos de data e reta final
+        expect(screen.getByText('Data/Hora Início (Brasília)')).toBeInTheDocument();
+        expect(screen.getByText('Data/Hora Fim (Brasília)')).toBeInTheDocument();
+        expect(screen.getByText(/Janela de Reta Final/i)).toBeInTheDocument();
+
+        // 4 Saídas distintas
+        expect(screen.getByText(/🕒 Antes/i)).toBeInTheDocument();
+        expect(screen.getByText(/✅ Durante \(Início \/ Normal\)/i)).toBeInTheDocument();
+        expect(screen.getByText(/⚡ Durante \(Próximo do Fim\)/i)).toBeInTheDocument();
+        expect(screen.getByText(/🚫 Depois/i)).toBeInTheDocument();
+    });
 });

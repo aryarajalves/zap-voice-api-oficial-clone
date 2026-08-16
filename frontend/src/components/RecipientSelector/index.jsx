@@ -61,7 +61,7 @@ const RecipientSelector = ({
             <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-4 px-2">
                 {title}
             </h3>
-            <div className="bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative group">
+            <div className="bg-slate-900/40 backdrop-blur-sm p-1 rounded-3xl border border-white/5 p-8 relative z-30 group">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50"></div>
 
                 <Tabs mode={hook.mode} setMode={hook.setMode} />
@@ -112,8 +112,9 @@ const RecipientSelector = ({
             </div>
 
             {hook.contacts.length > 0 && (
-                <ContactList 
-                    title={title}
+                <div className="relative z-10">
+                    <ContactList 
+                        title={title}
                     contacts={hook.contacts}
                     setContacts={hook.setContacts}
                     searchTerm={hook.searchTerm}
@@ -158,6 +159,7 @@ const RecipientSelector = ({
                     dispatchLimit={hook.dispatchLimit}
                     setDispatchLimit={hook.setDispatchLimit}
                 />
+                </div>
             )}
 
             <ConfirmModal 

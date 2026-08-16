@@ -388,7 +388,7 @@ export function useChatEngine({ activeClient, activeTab, statusFilter, searchQue
                 toast.success(`Funil "${data.funnel_name}" iniciado com sucesso!`);
                 setSelectedConvo(prev => prev ? { 
                     ...prev, 
-                    active_funnel: { id: data.funnel_id, name: data.funnel_name, status: data.trigger_status } 
+                    active_funnel: { id: data.funnel_id, trigger_id: data.trigger_id, name: data.funnel_name, status: data.trigger_status } 
                 } : prev);
                 await loadConversations();
                 return true;

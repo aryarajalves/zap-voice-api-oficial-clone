@@ -321,6 +321,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                 content_text = user_input
                 m_type = msg.get("type", "text")
                 media_url = None
+                chat_meta = {}
                 
                 # Se for anexo/mídia, extrai o id de mídia
                 media_obj = msg.get(m_type)
@@ -336,6 +337,11 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                         content_text = "🎥 Vídeo recebido"
                     elif m_type == "document":
                         content_text = "📄 Documento recebido"
+                        if isinstance(media_obj, dict) and media_obj.get("filename"):
+                            doc_filename = media_obj.get("filename")
+                            if not chat_meta:
+                                chat_meta = {}
+                            chat_meta["filename"] = doc_filename
                     elif m_type == "sticker":
                         content_text = "✨ Sticker recebido"
                     elif m_type == "reaction":
@@ -395,7 +401,6 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                     continue
 
                 # Para cliques de botão: marcar skip_agentflow se activate_agent=False
-                chat_meta = {}
                 if btn_activate_agent is not None and not btn_activate_agent:
                     chat_meta["skip_agentflow"] = True
 
@@ -1075,8 +1080,141 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                 except Exception as e_reply:
                     logger.error(f"❌ [AUTO-REPLY] Erro ao disparar resposta automática com delay: {e_reply}")
 
-            # Lógica de gatilho por palavra-chave (trigger_phrase) desativada conforme solicitação
-            logger.info(f"ℹ️ [WA-TRIGGER] Gatilho por palavra-chave desativado. Ignorando input '{user_input}' para novos funis.")
+            # --- GATILHO POR PALAVRA-CHAVE (TRIGGER_PHRASE) COM TRAVA DE FREQUÊNCIA ---
+            if user_input and isinstance(user_input, str) and user_input.strip():
+                try:
+                    import zoneinfo
+                    from core.engine.utils import normalize_text
+                    clean_input = normalize_text(user_input)
+                    
+                    if clean_input:
+                        candidate_funnels = db.query(models.Funnel).filter(
+                            models.Funnel.client_id == target_cid,
+                            models.Funnel.is_active == True,
+                            models.Funnel.is_archived == False,
+                            models.Funnel.is_trigger_active == True,
+                            models.Funnel.trigger_phrase.isnot(None)
+                        ).all()
+
+                        for funnel in candidate_funnels:
+                            if not funnel.trigger_phrase or not funnel.trigger_phrase.strip():
+                                continue
+                            
+                            # Suporte a múltiplas palavras-chave separadas por vírgula
+                            keywords = [k.strip() for k in funnel.trigger_phrase.split(",") if k.strip()]
+                            matched_keyword = None
+                            match_type = funnel.trigger_match_type or "contains"
+
+                            for kw in keywords:
+                                norm_kw = normalize_text(kw)
+                                if not norm_kw:
+                                    continue
+                                if match_type == "exact":
+                                    if clean_input == norm_kw:
+                                        matched_keyword = kw
+                                        break
+                                else:
+                                    # contains
+                                    if norm_kw in clean_input:
+                                        matched_keyword = kw
+                                        break
+
+                            if not matched_keyword:
+                                continue
+
+                            # 1. Validação de Whitelist / Blacklist
+                            if funnel.allowed_phones and isinstance(funnel.allowed_phones, list) and len(funnel.allowed_phones) > 0:
+                                allowed_list = ["".join(filter(str.isdigit, str(p))) for p in funnel.allowed_phones if str(p).strip()]
+                                if allowed_list and from_phone not in allowed_list:
+                                    logger.info(f"🚫 [KEYWORD_TRIGGER] Contato {from_phone} não está na Whitelist do Funil {funnel.id}. Ignorando.")
+                                    continue
+
+                            if funnel.blocked_phones and isinstance(funnel.blocked_phones, list) and len(funnel.blocked_phones) > 0:
+                                blocked_list = ["".join(filter(str.isdigit, str(p))) for p in funnel.blocked_phones if str(p).strip()]
+                                if blocked_list and from_phone in blocked_list:
+                                    logger.info(f"🚫 [KEYWORD_TRIGGER] Contato {from_phone} está na Blacklist do Funil {funnel.id}. Ignorando.")
+                                    continue
+
+                            # 2. Validação de Trava Anti-Repetição / Frequência
+                            limit_type = funnel.trigger_limit_type or "none"
+                            now_utc = datetime.now(timezone.utc)
+                            skip_by_limit = False
+
+                            if limit_type == "once_per_day":
+                                tz_sp = zoneinfo.ZoneInfo("America/Sao_Paulo")
+                                now_sp = datetime.now(tz_sp)
+                                start_of_day_sp = now_sp.replace(hour=0, minute=0, second=0, microsecond=0)
+                                start_of_day_utc = start_of_day_sp.astimezone(timezone.utc)
+
+                                existing_trigger_today = db.query(models.ScheduledTrigger).filter(
+                                    models.ScheduledTrigger.client_id == target_cid,
+                                    models.ScheduledTrigger.funnel_id == funnel.id,
+                                    models.ScheduledTrigger.contact_phone == from_phone,
+                                    models.ScheduledTrigger.created_at >= start_of_day_utc,
+                                    models.ScheduledTrigger.status.notin_(["failed", "aborted", "error"])
+                                ).first()
+
+                                if existing_trigger_today:
+                                    logger.info(f"🚫 [KEYWORD_LIMIT] Contato {from_phone} já ativou o Funil {funnel.id} hoje ({now_sp.strftime('%d/%m/%Y')}). Trava diária aplicada.")
+                                    skip_by_limit = True
+
+                            elif limit_type == "once_24h":
+                                cutoff_24h = now_utc - timedelta(hours=24)
+                                existing_trigger_24h = db.query(models.ScheduledTrigger).filter(
+                                    models.ScheduledTrigger.client_id == target_cid,
+                                    models.ScheduledTrigger.funnel_id == funnel.id,
+                                    models.ScheduledTrigger.contact_phone == from_phone,
+                                    models.ScheduledTrigger.created_at >= cutoff_24h,
+                                    models.ScheduledTrigger.status.notin_(["failed", "aborted", "error"])
+                                ).first()
+
+                                if existing_trigger_24h:
+                                    logger.info(f"🚫 [KEYWORD_LIMIT] Contato {from_phone} já ativou o Funil {funnel.id} nas últimas 24h. Trava de 24h aplicada.")
+                                    skip_by_limit = True
+
+                            elif limit_type == "once_lifetime":
+                                existing_trigger_ever = db.query(models.ScheduledTrigger).filter(
+                                    models.ScheduledTrigger.client_id == target_cid,
+                                    models.ScheduledTrigger.funnel_id == funnel.id,
+                                    models.ScheduledTrigger.contact_phone == from_phone,
+                                    models.ScheduledTrigger.status.notin_(["failed", "aborted", "error"])
+                                ).first()
+
+                                if existing_trigger_ever:
+                                    logger.info(f"🚫 [KEYWORD_LIMIT] Contato {from_phone} já ativou o Funil {funnel.id} anteriormente. Trava vitalícia aplicada.")
+                                    skip_by_limit = True
+
+                            if skip_by_limit:
+                                continue
+
+                            # 3. Disparar Funil
+                            contact_name_val = contacts_map.get(raw_from, "Contato")
+                            new_trigger = models.ScheduledTrigger(
+                                client_id=target_cid,
+                                funnel_id=funnel.id,
+                                conversation_id=resolved_convo_id,
+                                contact_phone=from_phone,
+                                contact_name=contact_name_val,
+                                status='processing',
+                                scheduled_time=now_utc,
+                                is_bulk=False,
+                                is_interaction=True,
+                                processed_data={"trigger_source": "whatsapp_keyword", "keyword": matched_keyword, "input": user_input}
+                            )
+                            db.add(new_trigger)
+                            db.commit()
+                            db.refresh(new_trigger)
+
+                            await wah.rabbitmq.publish("zapvoice_funnel_executions", {
+                                "trigger_id": new_trigger.id,
+                                "funnel_id": funnel.id,
+                                "conversation_id": resolved_convo_id,
+                                "contact_phone": from_phone
+                            })
+                            logger.info(f"🚀 [KEYWORD_TRIGGER] Funil {funnel.id} ('{funnel.name}') ativado para {from_phone} via palavra-chave '{matched_keyword}' (Trigger ID: {new_trigger.id})")
+                            break
+                except Exception as e_kw:
+                    logger.error(f"❌ [KEYWORD_TRIGGER] Erro ao processar gatilho de palavra-chave: {e_kw}")
         except Exception as e_inner:
             logger.error(f"❌ Erro ao processar mensagem individual: {e_inner}")
             db.rollback()

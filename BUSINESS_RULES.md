@@ -80,9 +80,10 @@ Abaixo, detalho cada tela identificada no sistema e as dúvidas que precisamos s
 - **Dúvidas UI/UX**:
     - [x] Devemos ter um "Testador de Webhook" integrado que simula um payload para validar se o funil dispara corretamente?
         - **Resposta**: Já existe um botão "Testar" que cumpre essa função.
-- **Integração ZapGroup (Extração de Leads)**:
-    - O payload enviado pelo ZapGroup possui os campos `nome` (telefone ou nome do lead), `grupo` (nome do grupo de origem -> mapeado como `product_name`), `numero` (telefone do contato), `grupo_jid` (JID do grupo no WhatsApp) e `extraido_em` (timestamp).
-    - O evento padrão disparado por essa plataforma é `lead_extraido`.
+- **Integração ZapGroup (Extração de Leads e Votos em Enquetes)**:
+    - O payload enviado pelo ZapGroup possui suporte a dois eventos principais: `lead_extraido` (quando um participante é extraído) e `voto_enquete` (quando um participante vota em uma enquete do grupo).
+    - O campo `grupo` (objeto ou string) é mapeado como `product_name` (nome do grupo no WhatsApp).
+    - No evento `voto_enquete`, o sistema extrai e disponibiliza as variáveis personalizadas `titulo_enquete`, `opcao_marcada` e `opcoes_marcadas` para serem usadas nos templates e funis de disparo.
 
 ### 4. Gestão de Leads (`leads`)
 - **Propósito**: Visualizar os contatos que entraram via webhook e seu status.
