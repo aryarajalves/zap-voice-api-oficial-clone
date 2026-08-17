@@ -39,10 +39,10 @@ function App() {
   const isHelp = currentPath.startsWith('/help/');
   const isCheckout = currentPath.startsWith('/c/');
   const isCapturePath = currentPath.startsWith('/p/');
-  const isCaptureHash = currentHash.startsWith('#/p/') || (currentHash.startsWith('#/') && !currentHash.startsWith('#/login') && !currentHash.startsWith('#/dashboard') && !currentHash.startsWith('#/funnels') && !currentHash.startsWith('#/bulk') && !currentHash.startsWith('#/schedules') && !currentHash.startsWith('#/integrations') && !currentHash.startsWith('#/settings') && !currentHash.startsWith('#/users') && !currentHash.startsWith('#/logs') && !currentHash.startsWith('#/financial') && !currentHash.startsWith('#/checkout-presell') && !currentHash.startsWith('#/capture-page') && !currentHash.startsWith('#/blocked') && !currentHash.startsWith('#/hot-leads'));
+  const isCaptureHash = currentHash.startsWith('#/p/') || (currentHash.startsWith('#/') && !currentHash.startsWith('#/login') && !currentHash.startsWith('#/dashboard') && !currentHash.startsWith('#/funnels') && !currentHash.startsWith('#/bulk') && !currentHash.startsWith('#/schedules') && !currentHash.startsWith('#/integrations') && !currentHash.startsWith('#/settings') && !currentHash.startsWith('#/users') && !currentHash.startsWith('#/logs') && !currentHash.startsWith('#/financial') && !currentHash.startsWith('#/checkout-presell') && !currentHash.startsWith('#/capture-page') && !currentHash.startsWith('#/blocked') && !currentHash.startsWith('#/hot-leads') && !currentHash.startsWith('#/chat-conversations') && !currentHash.startsWith('#/atendimento') && !currentHash.startsWith('#/human-agents'));
 
   // Rota limpa via Pathname (ex: /masterclass ou /masterclass/obrigado)
-  const isReservedPath = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads'].includes(currentPath);
+  const isReservedPath = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads', '/chat-conversations', '/atendimento', '/human-agents'].includes(currentPath);
   const isCleanPathCapture = !isReservedPath && !isInvite && !isHelp && !isCheckout && !isCapturePath && currentPath.length > 1;
 
   if (isInvite) {

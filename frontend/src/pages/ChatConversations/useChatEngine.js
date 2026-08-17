@@ -1,581 +1,385 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
+import { API_URL, WS_URL } from '../../config';
 import { fetchWithAuth } from '../../AuthContext';
-import { API_URL } from '../../config';
+import { appendOrUpdateMessage } from './utils/messageDeduplicator';
 
-export function useChatEngine({ activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, selectedConvo, setSelectedConvo }) {
-    const [conversations, setConversations] = useState([]);
-    const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [availableLabels, setAvailableLabels] = useState([]);
-    const [availableLabelsDetails, setAvailableLabelsDetails] = useState([]);
-    const [availableAgents, setAvailableAgents] = useState([]);
-    const [isAssigning, setIsAssigning] = useState(false);
-    const [isLoadingConvos, setIsLoadingConvos] = useState(false);
-    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-    const [isSending, setIsSending] = useState(false);
-    const [timeLeft24h, setTimeLeft24h] = useState('');
-    const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
-    const [showScrollBtn, setShowScrollBtn] = useState(false);
-    const [selectedConvoIds, setSelectedConvoIds] = useState([]);
-    
-    // Paginação
-    const [page, setPage] = useState(1);
-    const [limit, setLimit] = useState(20);
-    const [totalConvos, setTotalConvos] = useState(0);
+// Sub-hooks Modulares
+import { useChatConversationsFetch } from './hooks/useChatConversationsFetch';
+import { useChatMessagesFetch } from './hooks/useChatMessagesFetch';
+import { useChatFunnelAndStatus } from './hooks/useChatFunnelAndStatus';
 
-    // Paginação de Mensagens no Chat
-    const [hasMoreMessages, setHasMoreMessages] = useState(true);
-    const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+export function useChatEngine({
+  activeClient,
+  activeTab,
+  statusFilter,
+  searchQuery,
+  selectedLabelFilter,
+  filterBlockStatus,
+  filterHasNote,
+  filterStartDate,
+  filterEndDate,
+  filterUnread,
+  filterWindowOpen,
+  filterTemplate24h,
+  filterUrgent,
+  filterHasReplied,
+  filterHasActiveFunnel,
+  selectedConvo,
+  setSelectedConvo
+}) {
+  const [timeLeft24h, setTimeLeft24h] = useState('');
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [selectedConvoIds, setSelectedConvoIds] = useState([]);
 
-    // Resetar para a página 1 ao alterar filtros
-    useEffect(() => {
-        setPage(1);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel]);
-    
-    // Preview de mídia antes do envio
-    const [mediaPreview, setMediaPreview] = useState(null);
-    const [previewCaption, setPreviewCaption] = useState('');
-    const [isSendingMedia, setIsSendingMedia] = useState(false);
+  // Preview de mídia antes do envio
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [previewCaption, setPreviewCaption] = useState('');
+  const [isSendingMedia, setIsSendingMedia] = useState(false);
 
-    // Tags dropdown e busca
-    const [tagSearchQuery, setTagSearchQuery] = useState('');
-    const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
+  // Tags dropdown e busca
+  const [tagSearchQuery, setTagSearchQuery] = useState('');
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
 
-    // Notas privadas
-    const [privateNote, setPrivateNote] = useState('');
-    const [isSavingNote, setIsSavingNote] = useState(false);
+  // Notas privadas
+  const [privateNote, setPrivateNote] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
-    // Modais
-    const [confirmDeleteConvos, setConfirmDeleteConvos] = useState(null);
-    const [deletingConvoId, setDeletingConvoId] = useState(null);
-    const [confirmResendAgentflow, setConfirmResendAgentflow] = useState(null);
-    const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
-    const [isBlockingContact, setIsBlockingContact] = useState(false);
+  // Modais
+  const [confirmDeleteConvos, setConfirmDeleteConvos] = useState(null);
+  const [deletingConvoId, setDeletingConvoId] = useState(null);
+  const [isClearChatModalOpen, setIsClearChatModalOpen] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
+  const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+  const [mediaData, setMediaData] = useState({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
 
-    // Gravação de áudio
-    const [isRecording, setIsRecording] = useState(false);
-    const [audioSeconds, setAudioSeconds] = useState(0);
-    const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
-    const audioTimerRef = useRef(null);
+  const loadConversationMedia = async (convoId) => {
+    if (!activeClient || !convoId) return;
+    setIsLoadingMedia(true);
+    try {
+      const res = await fetchWithAuth(`${API_URL}/chat/conversations/${convoId}/media-and-docs`, {}, activeClient.id);
+      if (res.ok) {
+        const data = await res.json();
+        setMediaData(data);
+      } else {
+        setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+      }
+    } catch (err) {
+      setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+    } finally {
+      setIsLoadingMedia(false);
+    }
+  };
 
-    const messagesEndRef = useRef(null);
-    const messagesContainerRef = useRef(null);
+  useEffect(() => {
+    setPrivateNote('');
+    if (selectedConvo?.id) {
+      loadConversationMedia(selectedConvo.id);
+    } else {
+      setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+    }
+  }, [selectedConvo?.id]);
+  const [confirmResendAgentflow, setConfirmResendAgentflow] = useState(null);
+  const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+  const [isBlockingContact, setIsBlockingContact] = useState(false);
 
-    const lastContactMessage = messages.filter(m => m.sender_type === 'contact').slice(-1)[0] || null;
+  // Gravação de áudio
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioSeconds, setAudioSeconds] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const audioTimerRef = useRef(null);
 
-    // Fetch Conversations
-    const loadConversations = async (showLoading = false) => {
-        if (!activeClient) return;
-        if (showLoading) setIsLoadingConvos(true);
-        try {
-            const url = new URL(`${API_URL}/chat/conversations`);
-            url.searchParams.append('tab', activeTab);
-            url.searchParams.append('status', statusFilter);
-            url.searchParams.append('page', page);
-            url.searchParams.append('limit', limit);
-            if (searchQuery) {
-                url.searchParams.append('search', searchQuery);
+  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+
+  // 1. Sub-hook de Conversas e Listagens
+  const {
+    conversations,
+    setConversations,
+    availableLabels,
+    availableLabelsDetails,
+    availableAgents,
+    isAssigning,
+    isLoadingConvos,
+    page,
+    setPage,
+    limit,
+    setLimit,
+    totalConvos,
+    loadConversations,
+    loadAvailableAgents,
+    handleAssignConversation,
+    loadAvailableLabels,
+    getLabelColor
+  } = useChatConversationsFetch({
+    activeClient,
+    activeTab,
+    statusFilter,
+    searchQuery,
+    selectedLabelFilter,
+    filterBlockStatus,
+    filterHasNote,
+    filterStartDate,
+    filterEndDate,
+    filterUnread,
+    filterWindowOpen,
+    filterTemplate24h,
+    filterUrgent,
+    filterHasReplied,
+    filterHasActiveFunnel,
+    selectedConvo,
+    setSelectedConvo
+  });
+
+  // 2. Sub-hook de Mensagens
+  const {
+    messages,
+    setMessages,
+    newMessage,
+    setNewMessage,
+    isLoadingMessages,
+    isSending,
+    hasMoreMessages,
+    isLoadingMoreMessages,
+    loadMessages,
+    loadMoreMessages,
+    handleSendMessage,
+    sendReaction
+  } = useChatMessagesFetch({
+    activeClient,
+    selectedConvo,
+    setSelectedConvo,
+    setConversations,
+    setShouldScrollToBottom
+  });
+
+  // 3. Sub-hook de Funil, Status e Janela de 24h
+  const {
+    handleToggleStatus,
+    handleTriggerFunnel,
+    handleCancelFunnel,
+    handleClose24hWindow
+  } = useChatFunnelAndStatus({
+    activeClient,
+    selectedConvo,
+    setSelectedConvo,
+    loadConversations,
+    isSending,
+    setIsSending: () => {},
+    setTimeLeft24h
+  });
+
+  const lastContactMessage = messages.filter(m => m.sender_type === 'contact').slice(-1)[0] || null;
+
+  // WebSocket Realtime Sync para Mensagens, Mídias, Links e Docs
+  useEffect(() => {
+    if (!activeClient?.id) return;
+
+    let ws = null;
+    let reconnectTimeout = null;
+
+    const connectWs = () => {
+      try {
+        const wsBase = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+        const token = localStorage.getItem('token') || '';
+        const wsUrl = token ? `${wsBase}?token=${token}` : wsBase;
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const evtName = data.event || data.type;
+            const payload = data.data || data.payload || data;
+
+            if (payload?.client_id && String(payload.client_id) !== String(activeClient.id)) {
+              return;
             }
-            if (selectedLabelFilter) {
-                url.searchParams.append('label', selectedLabelFilter);
-            }
-            if (filterBlockStatus) {
-                url.searchParams.append('block_status', filterBlockStatus);
-            }
-            if (filterHasNote) {
-                url.searchParams.append('has_note', 'true');
-            }
-            if (filterStartDate) {
-                url.searchParams.append('start_date', filterStartDate);
-            }
-            if (filterEndDate) {
-                url.searchParams.append('end_date', filterEndDate);
-            }
-            if (filterUnread) {
-                url.searchParams.append('unread_only', 'true');
-            }
-            if (filterWindowOpen) {
-                url.searchParams.append('window_open_only', 'true');
-            }
-            if (filterTemplate24h) {
-                url.searchParams.append('template_sent_24h_only', 'true');
-            }
-            if (filterUrgent) {
-                url.searchParams.append('urgent_only', 'true');
-            }
-            if (filterHasReplied) {
-                url.searchParams.append('has_replied', 'true');
-            }
-            if (filterHasActiveFunnel) {
-                url.searchParams.append('has_active_funnel', 'true');
-            }
-            const res = await fetchWithAuth(url.toString(), {}, activeClient.id);
-            if (res.ok) {
-                const data = await res.json();
-                const convosList = data.conversations || [];
-                setConversations(convosList);
-                setTotalConvos(data.total_count || 0);
 
-                // Sincronizar selectedConvo com dados frescos (atualiza cronômetro de 24h automaticamente)
-                setSelectedConvo(prev => {
-                    if (!prev) return prev;
-                    const updated = convosList.find(c => c.id === prev.id);
-                    if (!updated) return prev;
-                    if (updated.last_contact_message_at !== prev.last_contact_message_at ||
-                        updated.last_message_content !== prev.last_message_content ||
-                        updated.status !== prev.status) {
-                        return { ...prev, ...updated };
-                    }
-                    return prev;
-                });
-            }
-        } catch (err) {
-            console.error('Erro ao buscar conversas:', err);
-        } finally {
-            if (showLoading) setIsLoadingConvos(false);
-        }
-    };
+            if (evtName === 'new_message' || data.event === 'new_message') {
+              const msg = payload.id ? payload : (data.payload || data);
+              const convoId = Number(msg.conversation_id);
 
-    // Fetch Available Agents
-    const loadAvailableAgents = async () => {
-        if (!activeClient) return;
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chat/agents`, {}, activeClient.id);
-            if (res.ok) {
-                const data = await res.json();
-                setAvailableAgents(data || []);
-            }
-        } catch (err) {
-            console.error('Erro ao buscar atendentes:', err);
-        }
-    };
-
-    // Atribuir conversa
-    const handleAssignConversation = async (userId) => {
-        if (!selectedConvo) return;
-        setIsAssigning(true);
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId || null })
-            }, activeClient.id);
-
-            if (res.ok) {
-                const data = await res.json();
-                setSelectedConvo(prev => prev ? { ...prev, assigned_user_id: data.assigned_user_id, assigned_user_name: data.assigned_user_name } : prev);
-                setConversations(prev => prev.map(c =>
-                    c.id === selectedConvo.id ? { ...c, assigned_user_id: data.assigned_user_id, assigned_user_name: data.assigned_user_name } : c
-                ));
-                toast.success(data.assigned_user_id ? `Conversa atribuída a ${data.assigned_user_name}.` : 'Atribuição removida.');
-            } else {
-                const err = await res.json().catch(() => ({}));
-                toast.error(err.detail || 'Erro ao atribuir conversa.');
-            }
-        } catch (err) {
-            toast.error('Erro de conexão ao atribuir conversa.');
-        } finally {
-            setIsAssigning(false);
-        }
-    };
-
-    // Fetch Available Labels
-    const loadAvailableLabels = async () => {
-        if (!activeClient) return;
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chat/labels/details`, {}, activeClient.id);
-            if (res.ok) {
-                const data = await res.json();
-                setAvailableLabelsDetails(data);
-                setAvailableLabels(data.map(l => l.name));
-            }
-        } catch (err) {
-            console.error('Erro ao buscar marcadores detalhados:', err);
-        }
-    };
-
-    const getLabelColor = (labelName) => {
-        if (!labelName) return '#3b82f6';
-        const found = (availableLabelsDetails || []).find(
-            l => l.name.toLowerCase() === labelName.toLowerCase()
-        );
-        return found && found.color ? found.color : '#3b82f6';
-    };
-
-    const loadMessages = async (convoId, showLoading = false) => {
-        if (!activeClient || !convoId) return;
-        if (showLoading) {
-            setIsLoadingMessages(true);
-            setHasMoreMessages(true);
-        }
-        try {
-            const limitVal = 50;
-            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${convoId}/messages?limit=${limitVal}`, {}, activeClient.id);
-            if (res.ok) {
-                const data = await res.json();
-                setMessages(data);
-                if (data.length < limitVal) {
-                    setHasMoreMessages(false);
+              // 1. Atualiza lista de conversas
+              setConversations(prev => {
+                const index = prev.findIndex(c => Number(c.id) === convoId);
+                if (index !== -1) {
+                  const updated = [...prev];
+                  const target = { ...updated[index] };
+                  target.last_message_content = msg.content || (msg.media_url ? '[Mídia]' : '');
+                  target.last_message_at = msg.timestamp || new Date().toISOString();
+                  if (Number(selectedConvo?.id) !== convoId && msg.sender_type === 'contact') {
+                    target.unread_count = (target.unread_count || 0) + 1;
+                  }
+                  updated.splice(index, 1);
+                  return [target, ...updated];
                 }
-                if (showLoading) setShouldScrollToBottom(true);
-            } else {
-                setMessages([]);
-            }
-        } catch (err) {
-            setMessages([]);
-        } finally {
-            if (showLoading) setIsLoadingMessages(false);
-        }
-    };
+                return prev;
+              });
 
-    const loadMoreMessages = async () => {
-        if (!activeClient || !selectedConvo || isLoadingMoreMessages || !hasMoreMessages) return;
-        if (messages.length === 0) return;
-        
-        setIsLoadingMoreMessages(true);
-        try {
-            const oldestMsgId = messages[0].id;
-            const limitVal = 50;
-            const res = await fetchWithAuth(
-                `${API_URL}/chat/conversations/${selectedConvo.id}/messages?limit=${limitVal}&before_id=${oldestMsgId}`,
-                {},
-                activeClient.id
-            );
-            if (res.ok) {
-                const data = await res.json();
-                if (data.length > 0) {
-                    setMessages(prev => [...data, ...prev]);
+              // 2. Se a conversa recebida for a selecionada atualmente
+              if (selectedConvo?.id && Number(selectedConvo.id) === convoId) {
+                setMessages(prev => appendOrUpdateMessage(prev, msg));
+                setShouldScrollToBottom(true);
+
+                // SE tiver mídia, link ou documento, atualiza mediaData na hora!
+                const isMediaMsg = msg.media_url ||
+                  ['image', 'video', 'document', 'audio', 'voice'].includes(msg.message_type) ||
+                  (typeof msg.content === 'string' && (msg.content.includes('http://') || msg.content.includes('https://') || msg.content.includes('www.'))) ||
+                  (msg.meta_data && msg.meta_data.header);
+
+                if (isMediaMsg) {
+                  loadConversationMedia(selectedConvo.id);
                 }
-                if (data.length < limitVal) {
-                    setHasMoreMessages(false);
-                }
+              }
             }
-        } catch (err) {
-            console.error("Erro ao carregar mais mensagens:", err);
-        } finally {
-            setIsLoadingMoreMessages(false);
-        }
-    };
-
-    const handleSendMessage = async (e, options = {}) => {
-        if (e) e.preventDefault();
-        if (!newMessage.trim() || !selectedConvo || isSending) return;
-
-        setIsSending(true);
-        const textToSend = newMessage;
-        setNewMessage('');
-
-        try {
-            if (selectedConvo.status === 'resolved') {
-                await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/status`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 'open' })
-                }, activeClient.id);
-                setSelectedConvo(prev => ({ ...prev, status: 'open' }));
-            }
-
-            if (options?.splitLines) {
-                // Quebrar por linhas/parágrafos e filtrar vazios
-                const parts = textToSend.split('\n').map(p => p.trim()).filter(p => p !== '');
-                if (parts.length === 0) {
-                    setIsSending(false);
-                    return;
-                }
-
-                // Enviar sequencialmente
-                for (let i = 0; i < parts.length; i++) {
-                    const contentPart = parts[i];
-                    const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/messages`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ content: contentPart })
-                    }, activeClient.id);
-
-                    if (res.ok) {
-                        const sentMsg = await res.json();
-                        setMessages(prev => [...prev, sentMsg]);
-                        setShouldScrollToBottom(true);
-                        setConversations(prev => prev.map(c => 
-                            c.id === selectedConvo.id 
-                            ? { ...c, last_message_content: contentPart, last_message_at: new Date().toISOString(), status: 'open' } 
-                            : c
-                        ));
-                        
-                        // Pequeno atraso entre mensagens para garantir ordem de recebimento
-                        if (i < parts.length - 1) {
-                            await new Promise(resolve => setTimeout(resolve, 800));
-                        }
-                    } else {
-                        const errData = await res.json();
-                        toast.error(errData.detail || `Erro ao enviar parte ${i + 1} da mensagem.`);
-                    }
-                }
-            } else {
-                const bodyPayload = { content: textToSend };
-                if (options?.quotedWaMessageId) {
-                    bodyPayload.quoted_wa_message_id = options.quotedWaMessageId;
-                }
-
-                const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/messages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(bodyPayload)
-                }, activeClient.id);
-
-                if (res.ok) {
-                    const sentMsg = await res.json();
-                    setMessages(prev => [...prev, sentMsg]);
-                    setShouldScrollToBottom(true);
-                    setConversations(prev => prev.map(c => 
-                        c.id === selectedConvo.id 
-                        ? { ...c, last_message_content: textToSend, last_message_at: new Date().toISOString(), status: 'open' } 
-                        : c
-                    ));
-                } else {
-                    const errData = await res.json();
-                    toast.error(errData.detail || 'Erro ao enviar mensagem.');
-                    setNewMessage(textToSend);
-                }
-            }
-        } catch (err) {
-            toast.error('Erro de conexão ao enviar mensagem.');
-            setNewMessage(textToSend);
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    const handleToggleStatus = async () => {
-        if (!selectedConvo) return;
-        const newStatus = selectedConvo.status === 'open' ? 'resolved' : 'open';
-        const loadingToast = toast.loading(newStatus === 'resolved' ? 'Resolvendo conversa...' : 'Reabrindo conversa...');
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/status`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            }, activeClient.id);
-
-            if (res.ok) {
-                toast.dismiss(loadingToast);
-                toast.success(newStatus === 'resolved' ? 'Conversa resolvida!' : 'Conversa reaberta!');
-                setSelectedConvo(prev => ({ ...prev, status: newStatus }));
-                loadConversations();
-            } else {
-                throw new Error();
-            }
-        } catch (err) {
-            toast.dismiss(loadingToast);
-            toast.error('Falha ao atualizar status da conversa.');
-        }
-    };
-
-    const handleTriggerFunnel = async (funnelId) => {
-        if (!selectedConvo || isSending) return false;
-        setIsSending(true);
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/funnel`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ funnel_id: funnelId })
-            }, activeClient.id);
-
-            if (res.ok) {
-                const data = await res.json();
-                toast.success(`Funil "${data.funnel_name}" iniciado com sucesso!`);
-                setSelectedConvo(prev => prev ? { 
-                    ...prev, 
-                    active_funnel: { id: data.funnel_id, trigger_id: data.trigger_id, name: data.funnel_name, status: data.trigger_status } 
-                } : prev);
-                await loadConversations();
-                return true;
-            } else {
-                const errData = await res.json();
-                toast.error(errData.detail || 'Erro ao iniciar funil.');
-                return false;
-            }
-        } catch (err) {
-            toast.error('Erro de conexão ao iniciar funil.');
-            return false;
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    const handleCancelFunnel = async () => {
-        if (!selectedConvo || isSending) return false;
-        setIsSending(true);
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/cancel-funnel`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            }, activeClient.id);
-
-            if (res.ok) {
-                toast.success('Execução do funil cancelada com sucesso!');
-                setSelectedConvo(prev => prev ? { ...prev, active_funnel: null } : prev);
-                await loadConversations();
-                return true;
-            } else {
-                const errData = await res.json();
-                toast.error(errData.detail || 'Erro ao cancelar execução do funil.');
-                return false;
-            }
-        } catch (err) {
-            toast.error('Erro de conexão ao cancelar funil.');
-            return false;
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    const handleClose24hWindow = async (selectedConvo, setSelectedConvo) => {
-        if (!selectedConvo || !activeClient) return;
-        try {
-            const res = await fetchWithAuth(
-                `${API_URL}/chat/conversations/${selectedConvo.id}/reset-24h-window`,
-                { method: 'POST' },
-                activeClient.id
-            );
-            if (res.ok) {
-                const data = await res.json();
-                toast.success("Janela de 24h encerrada para testes!");
-                setTimeLeft24h('Janela Fechada');
-                if (setSelectedConvo) {
-                    setSelectedConvo(prev => prev ? {
-                        ...prev,
-                        last_contact_message_at: null,
-                        labels: data.conversation?.labels || prev.labels
-                    } : prev);
-                }
-                loadConversations();
-            } else {
-                const errData = await res.json();
-                toast.error(errData.detail || "Erro ao encerrar janela de 24h.");
-            }
-        } catch (err) {
-            toast.error("Erro de conexão ao encerrar janela de 24h.");
-        }
-    };
-
-    const sendReaction = async (messageId, emoji) => {
-        if (!selectedConvo || !selectedConvo.phone) {
-            toast.error("Nenhuma conversa selecionada.");
-            return;
-        }
-
-        // Função auxiliar para normalizar reactions para lista
-        const normalizeReactions = (rawReactions) => {
-            if (Array.isArray(rawReactions)) return rawReactions.filter(Boolean);
-            if (rawReactions && typeof rawReactions === 'object') {
-                return Object.entries(rawReactions).map(([s, val]) => {
-                    if (typeof val === 'object' && val !== null && val.emoji) return val;
-                    if (typeof val === 'string' && val) return { sender: s, emoji: val };
-                    return null;
-                }).filter(Boolean);
-            }
-            return [];
+          } catch (err) {
+            console.error('Erro ao processar mensagem do WebSocket no Chat:', err);
+          }
         };
 
-        // Atualização otimista — mostra o emoji instantaneamente sem esperar a API
-        let previousMessages = null;
-        setMessages(prev => {
-            previousMessages = prev;
-            return prev.map(m => {
-                if (String(m.id) === String(messageId) || m.wa_message_id === messageId || m.wamid === messageId || m.message_id === messageId) {
-                    const meta = { ...(m.meta_data || {}) };
-                    const reactions = normalizeReactions(meta.reactions);
-                    const filtered = reactions.filter(r => r && r.sender !== 'agent');
-                    if (emoji) filtered.push({ sender: 'agent', emoji: emoji });
-                    meta.reactions = filtered;
-                    return { ...m, meta_data: meta };
-                }
-                return m;
-            });
-        });
+        ws.onclose = () => {
+          reconnectTimeout = setTimeout(connectWs, 3000);
+        };
 
-        try {
-            const res = await fetchWithAuth(`${API_URL}/chat/react`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    phone: selectedConvo.phone,
-                    message_id: String(messageId),
-                    emoji: emoji
-                })
-            }, activeClient?.id);
-
-            if (res.ok) {
-                // A atualização otimista já foi feita — apenas exibe o toast de confirmação
-                toast.success(emoji ? `Reação ${emoji} enviada!` : "Reação removida");
-            } else {
-                // Reverter atualização otimista se a API falhou
-                if (previousMessages) setMessages(previousMessages);
-                const err = await res.json().catch(() => ({}));
-                toast.error(err.detail || "Erro ao enviar reação.");
-            }
-        } catch (e) {
-            // Reverter atualização otimista em caso de erro de rede
-            if (previousMessages) setMessages(previousMessages);
-            console.error("Erro ao reagir:", e);
-            toast.error("Falha ao comunicar com o servidor.");
-        }
+        ws.onerror = () => {
+          if (ws) ws.close();
+        };
+      } catch (err) {
+        console.error('Falha ao conectar WebSocket no Chat:', err);
+      }
     };
 
-    return {
-        sendReaction,
-        conversations, setConversations,
-        messages, setMessages,
-        newMessage, setNewMessage,
-        availableLabels,
-        availableLabelsDetails,
-        availableAgents,
-        isAssigning,
-        isLoadingConvos,
-        isLoadingMessages,
-        isSending,
-        timeLeft24h, setTimeLeft24h,
-        shouldScrollToBottom, setShouldScrollToBottom,
-        showScrollBtn, setShowScrollBtn,
-        selectedConvoIds, setSelectedConvoIds,
-        mediaPreview, setMediaPreview,
-        previewCaption, setPreviewCaption,
-        isSendingMedia, setIsSendingMedia,
-        tagSearchQuery, setTagSearchQuery,
-        isTagDropdownOpen, setIsTagDropdownOpen,
-        privateNote, setPrivateNote,
-        isSavingNote, setIsSavingNote,
-        confirmDeleteConvos, setConfirmDeleteConvos,
-        deletingConvoId, setDeletingConvoId,
-        confirmResendAgentflow, setConfirmResendAgentflow,
-        isBlockModalOpen, setIsBlockModalOpen,
-        isBlockingContact, setIsBlockingContact,
-        isRecording, setIsRecording,
-        audioSeconds, setAudioSeconds,
-        mediaRecorderRef,
-        audioChunksRef,
-        audioTimerRef,
-        messagesEndRef,
-        messagesContainerRef,
-        lastContactMessage,
-        loadConversations,
-        loadAvailableAgents,
-        handleAssignConversation,
-        loadAvailableLabels,
-        getLabelColor,
-        loadMessages,
-        handleSendMessage,
-        handleToggleStatus,
-        page, setPage,
-        limit, setLimit,
-        totalConvos,
-        hasMoreMessages,
-        isLoadingMoreMessages,
-        loadMoreMessages,
-        handleTriggerFunnel,
-        handleCancelFunnel,
-        handleClose24hWindow
+    connectWs();
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
     };
+  }, [activeClient?.id, selectedConvo?.id]);
+
+  const openConversationById = async (convoId) => {
+    if (!convoId || !activeClient?.id) return;
+    const targetId = Number(convoId);
+
+    // 1. Procura na lista local em memória
+    const existing = conversations.find(c => Number(c.id) === targetId);
+    if (existing) {
+      setSelectedConvo(existing);
+      const name = existing.contact_name || existing.phone || `#${targetId}`;
+      toast.success(`Abrindo conversa de ${name}`);
+      return;
+    }
+
+    // 2. Se não estiver na lista visível, busca via API
+    try {
+      const res = await fetchWithAuth(`${API_URL}/chat/conversations/${targetId}`, {}, activeClient.id);
+      if (res.ok) {
+        const convoData = await res.json();
+        setConversations(prev => [convoData, ...prev.filter(c => Number(c.id) !== targetId)]);
+        setSelectedConvo(convoData);
+        const name = convoData.contact_name || convoData.phone || `#${targetId}`;
+        toast.success(`Abrindo conversa de ${name}`);
+      } else {
+        toast.error(`Conversa #${targetId} não encontrada.`);
+      }
+    } catch (err) {
+      toast.error('Erro ao abrir conversa mencionada.');
+    }
+  };
+
+  return {
+    openConversationById,
+    sendReaction,
+    conversations,
+    setConversations,
+    messages,
+    setMessages,
+    newMessage,
+    setNewMessage,
+    availableLabels,
+    availableLabelsDetails,
+    availableAgents,
+    isAssigning,
+    isLoadingConvos,
+    isLoadingMessages,
+    isSending,
+    timeLeft24h,
+    setTimeLeft24h,
+    shouldScrollToBottom,
+    setShouldScrollToBottom,
+    showScrollBtn,
+    setShowScrollBtn,
+    selectedConvoIds,
+    setSelectedConvoIds,
+    mediaPreview,
+    setMediaPreview,
+    previewCaption,
+    setPreviewCaption,
+    isSendingMedia,
+    setIsSendingMedia,
+    tagSearchQuery,
+    setTagSearchQuery,
+    isTagDropdownOpen,
+    setIsTagDropdownOpen,
+    privateNote,
+    setPrivateNote,
+    isSavingNote,
+    setIsSavingNote,
+    confirmDeleteConvos,
+    setConfirmDeleteConvos,
+    deletingConvoId,
+    setDeletingConvoId,
+    isClearChatModalOpen,
+    setIsClearChatModalOpen,
+    isClearingChat,
+    setIsClearingChat,
+    isMediaModalOpen,
+    setIsMediaModalOpen,
+    mediaData,
+    setMediaData,
+    isLoadingMedia,
+    loadConversationMedia,
+    confirmResendAgentflow,
+    setConfirmResendAgentflow,
+    isBlockModalOpen,
+    setIsBlockModalOpen,
+    isBlockingContact,
+    setIsBlockingContact,
+    isRecording,
+    setIsRecording,
+    audioSeconds,
+    setAudioSeconds,
+    mediaRecorderRef,
+    audioChunksRef,
+    audioTimerRef,
+    messagesEndRef,
+    messagesContainerRef,
+    lastContactMessage,
+    loadConversations,
+    loadAvailableAgents,
+    handleAssignConversation,
+    loadAvailableLabels,
+    getLabelColor,
+    loadMessages,
+    handleSendMessage,
+    handleToggleStatus,
+    page,
+    setPage,
+    limit,
+    setLimit,
+    totalConvos,
+    hasMoreMessages,
+    isLoadingMoreMessages,
+    loadMoreMessages,
+    handleTriggerFunnel,
+    handleCancelFunnel,
+    handleClose24hWindow
+  };
 }

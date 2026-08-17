@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.8.0 / v4.5.1 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.8.1 / v4.5.2 — Versão Estável)
 
-Versão estável com suporte à **Deduplicação de Disparo de Funil por Botões de Ação**, **Modal de Confirmação de Disparo Imediato no Calendário**, **Reatividade dos Filtros Avançados de Funil Ativo no Chat**, **Filtragem de Vendas por Etiquetas de Contatos no Financeiro**, **Criação de Etiquetas Dinâmicas no Mapeamento de Webhooks**, **Desbloqueio em Lote de Contatos**, **Análise de Dúvidas de Atendimento com IA**, **Popup Modal de Escolha de Cor para Etiquetas**, **Anotações Privadas com Edição e Exclusão Segura**, **Otimização do Histórico de Disparos**, **Resiliência e Tratamento de Timeout no Worker**, **Exibição da Conta Destino e Rotação do ManyChat no Histórico de Integrações**, **Múltiplos Tokens do ManyChat com Rotação Sequencial (Round-Robin)**, **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Fila de Retentativa de Webhook (Retry Queue)** e **Sincronização com Worker em Container Separado**.
+Versão estável com suporte à **Mensagens Rápidas e Automáticas no Atendimento com Barra / e Modo Maximizado**, **Paginação e Rolagem Estilizada em Respostas Rápidas**, **Modais de Configuração e Exclusão com Backdrop em Tela Cheia via Portal**, **Deduplicação de Disparo de Funil por Botões de Ação**, **Modal de Confirmação de Disparo Imediato no Calendário**, **Reatividade dos Filtros Avançados de Funil Ativo no Chat**, **Filtragem de Vendas por Etiquetas de Contatos no Financeiro**, **Criação de Etiquetas Dinâmicas no Mapeamento de Webhooks**, **Desbloqueio em Lote de Contatos**, **Análise de Dúvidas de Atendimento com IA**, **Popup Modal de Escolha de Cor para Etiquetas**, **Anotações Privadas com Edição e Exclusão Segura**, **Otimização do Histórico de Disparos**, **Resiliência e Tratamento de Timeout no Worker**, **Exibição da Conta Destino e Rotação do ManyChat no Histórico de Integrações**, **Múltiplos Tokens do ManyChat com Rotação Sequencial (Round-Robin)**, **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Fila de Retentativa de Webhook (Retry Queue)** e **Sincronização com Worker em Container Separado**.
 
 
 
@@ -177,6 +177,11 @@ Content-Type: application/json
 
 ### v1.7.2 — Versão Estável (2026-08-11)
 - ✅ **Notificação Toast de Confirmação no Botão Copiar Lista (`ContactsModal`)**: Garantido o disparo imediato do toast verde de sucesso (`X contatos copiados para a área de transferência!`) ao clicar no botão de cópia de lista, fechando o toast de carregamento prévio.
+
+### v1.8.1 — Versão Estável (2026-08-17)
+- ✅ **Mensagens Rápidas e Automáticas no Atendimento**: Suporte completo a atalhos por barra `/` no chat e no modal maximizado, com substituição inteligente de variáveis dinâmicas (`{{nome}}`, `{{primeiro_nome}}`, `{{telefone}}`).
+- ✅ **Paginação e Rolagem Estilizada no Seletor de Respostas Rápidas**: Dropdown suspenso com paginação de 5 itens por página, botões de navegação, rolagem suave e sincronização automática da página com as setas do teclado.
+- ✅ **Modais de Configuração com Backdrop em Tela Cheia**: Integração com React Portals para que os modais de cadastro, edição e exclusão de mensagens rápidas cubram 100% da viewport e tela sem restrições de container.
 
 ### v1.7.1 — Versão Estável (2026-08-11)
 - ✅ **Correção na Aplicação de Etiquetas em Lote (`TagContactsModal`)**: Ajustada a correspondência de telefones na adição de etiquetas para utilizar sanitização apenas de dígitos numéricos (`replace(/\D/g, '')`). Isso impede falhas na vinculação de etiquetas quando os telefones possuem formatações de string ligeiramente distintas.

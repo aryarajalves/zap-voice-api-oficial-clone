@@ -198,6 +198,54 @@ async def upload_file(
                     try: os.remove(output_tmp)
                     except: pass
 
+        # Se for áudio, transcodificar com FFmpeg para OGG Opus para envio como Push-To-Talk (Voice Note gravado na hora) pelo WhatsApp
+        if detected_type == "audio":
+            logger.info(f"🎙️ [UPLOAD_AUDIO_TRANSCODE] Transcodificando áudio para WhatsApp PTT (OGG Opus): {file.filename}")
+            input_tmp = None
+            output_tmp = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as f_in:
+                    file.file.seek(0)
+                    f_in.write(file.file.read())
+                    input_tmp = f_in.name
+
+                output_tmp = input_tmp.replace(ext, "_ptt.ogg")
+                cmd_audio = [
+                    "ffmpeg", "-y",
+                    "-i", input_tmp,
+                    "-c:a", "libopus",
+                    "-b:a", "32k",
+                    "-vbr", "on",
+                    "-compression_level", "10",
+                    "-ar", "48000",
+                    "-ac", "1",
+                    output_tmp
+                ]
+                ffmpeg_result = subprocess.run(cmd_audio, capture_output=True, text=True, timeout=60)
+
+                if ffmpeg_result.returncode == 0 and os.path.exists(output_tmp):
+                    with open(output_tmp, "rb") as f_out:
+                        transcoded_bytes = f_out.read()
+                    
+                    file.file = io.BytesIO(transcoded_bytes)
+                    file_size = len(transcoded_bytes)
+                    final_content_type = "audio/ogg"
+                    unique_name = f"{uuid.uuid4()}.ogg"
+                    logger.info(f"✅ [UPLOAD_AUDIO_TRANSCODE] Áudio transcodificado para OGG Opus com sucesso. Tamanho: {file_size / 1024:.2f} KB")
+                else:
+                    logger.warning(f"⚠️ [UPLOAD_AUDIO_TRANSCODE] FFmpeg retornou erro ({ffmpeg_result.returncode}), utilizando áudio original: {ffmpeg_result.stderr[-200:]}")
+                    file.file.seek(0)
+            except Exception as e_audio:
+                logger.warning(f"⚠️ [UPLOAD_AUDIO_TRANSCODE] Falha na transcodificação de áudio via FFmpeg ({e_audio}), utilizando arquivo original.")
+                file.file.seek(0)
+            finally:
+                if input_tmp and os.path.exists(input_tmp):
+                    try: os.remove(input_tmp)
+                    except: pass
+                if output_tmp and os.path.exists(output_tmp):
+                    try: os.remove(output_tmp)
+                    except: pass
+
         # Realizar Upload (Local ou MinIO conforme ENV)
         logger.info(f"📤 [STORAGE_UPLOADING] Enviando para storage: {unique_name}")
         file_url = storage.upload_file(file.file, unique_name, final_content_type)
@@ -210,6 +258,8 @@ async def upload_file(
             media_type = "IMAGE"
         elif final_content_type.startswith("video/"):
             media_type = "VIDEO"
+        elif final_content_type.startswith("audio/") or detected_type == "audio":
+            media_type = "AUDIO"
 
         # Registrar no banco de dados
         db_media = models.UploadedMedia(

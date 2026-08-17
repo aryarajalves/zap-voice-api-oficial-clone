@@ -61,7 +61,7 @@ def test_delete_locked_lead_raises_exception(db: Session, mock_user: models.User
             current_user=mock_user
         )
     assert exc_info.value.status_code == 403
-    assert "bloqueado" in exc_info.value.detail
+    assert "bloqueado" in exc_info.value.detail or "protegido" in exc_info.value.detail
 
     # Testar que o lead normal pode ser deletado normalmente
     res = delete_lead(

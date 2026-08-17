@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import HistoryItemCard from "./HistoryItemCard";
@@ -15,8 +15,24 @@ const mockItem = {
   status: "processed",
   created_at: new Date().toISOString(),
   event_type: "compra_aprovada",
-  payload: { type: "sale", event: "saleUpdated" },
-  processed_data: null,
+  payload: { type: "sale", event: "saleUpdated", customer: { name: "Maria Silva", phone: "11999998888" } },
+  processed_data: {
+    platform: "kiwify",
+    name: "Maria Silva",
+    phone: "11999998888",
+    email: "maria@example.com",
+    product_name: "Curso ZapVoice PRO",
+    price: "197.00",
+    payment_method: "pix",
+    country: "BR",
+    manychat_enabled: true,
+    manychat_sync: {
+      account_name: "Conta Principal",
+      status: "success",
+      contact: { status: "created" },
+      tag: { status: "applied", name: "Alunos 2026" }
+    }
+  },
   error_message: null,
 };
 
@@ -31,9 +47,11 @@ const defaultProps = {
   setMaximizedJson: vi.fn(),
   handleSyncHistory: vi.fn(),
   isSyncing: {},
+  integration: { id: 1, custom_fields_mapping: { name: 'customer.name' } },
+  handleUpdateCustomFieldsMapping: vi.fn().mockResolvedValue(true)
 };
 
-describe("HistoryItemCard - botao Copiar", () => {
+describe("HistoryItemCard Tests", () => {
   beforeEach(() => {
     Object.assign(navigator, {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -100,5 +118,25 @@ describe("HistoryItemCard - botao Copiar", () => {
       type: "single",
       id: mockItem.id,
     });
+  });
+
+  it("deve renderizar dados extraídos (nome, produto, método, preço)", () => {
+    render(<HistoryItemCard {...defaultProps} />);
+    expect(screen.getByText("Maria Silva")).toBeTruthy();
+    expect(screen.getByText("Curso ZapVoice PRO")).toBeTruthy();
+    expect(screen.getByText("R$ 197.00")).toBeTruthy();
+    expect(screen.getByText("Pix")).toBeTruthy();
+  });
+
+  it("deve alternar a abertura do painel de Mapear Campos", () => {
+    render(<HistoryItemCard {...defaultProps} />);
+    const mapBtn = screen.getByText("Mapear Campos");
+    expect(mapBtn).toBeTruthy();
+
+    fireEvent.click(mapBtn);
+    expect(screen.getByText(/Mapeamento Manual de Campos/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Cancelar"));
+    expect(screen.queryByText(/Mapeamento Manual de Campos/i)).toBeNull();
   });
 });

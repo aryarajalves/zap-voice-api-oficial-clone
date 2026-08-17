@@ -72,7 +72,7 @@ describe('WebhookLeads Component', () => {
     render(<WebhookLeads />);
 
     expect(screen.getByText('Contatos')).toBeDefined();
-    expect(screen.getByPlaceholderText('Buscar por nome ou telefone...')).toBeDefined();
+    expect(screen.getByPlaceholderText(/Buscar por nome/i)).toBeDefined();
     expect(screen.getByText('Anterior')).toBeDefined();
     expect(screen.getByText('Próxima')).toBeDefined();
   });

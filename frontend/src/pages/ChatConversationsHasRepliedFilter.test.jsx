@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 // Mock dependências do ChatConversations
 vi.mock('../AuthContext', () => ({
     useClient: () => ({ activeClient: { id: 1 } }),
+    useAuth: () => ({ user: { id: 1, email: 'admin@teste.com' }, token: 'mock' }),
     fetchWithAuth: vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ conversations: [], total_count: 0 })

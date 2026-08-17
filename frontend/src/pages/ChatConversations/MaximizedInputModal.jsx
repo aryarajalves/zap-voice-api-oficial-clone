@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
-import { FiX, FiSend, FiMaximize2, FiRefreshCw } from 'react-icons/fi';
+import React, { useState, useRef } from 'react';
+import { FiX, FiSend, FiMaximize2, FiRefreshCw, FiSmile } from 'react-icons/fi';
+import EmojiPickerDropdown from './components/EmojiPickerDropdown';
+import QuickRepliesDropdown from './components/QuickRepliesDropdown';
+import { useQuickReplies } from './hooks/useQuickReplies';
 
 export default function MaximizedInputModal({
     isOpen,
@@ -8,15 +11,47 @@ export default function MaximizedInputModal({
     onChange,
     onSend,
     isSending,
-    contactName
+    contactName,
+    selectedConvo,
+    activeClientId
 }) {
     const [splitLines, setSplitLines] = useState(() => {
         return localStorage.getItem('zapvoice_split_lines') === 'true';
+    });
+    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+    const textareaRef = useRef(null);
+
+    const quickReplies = useQuickReplies({
+        engine: {
+            newMessage: value,
+            setNewMessage: onChange
+        },
+        selectedConvo,
+        chatInputRef: textareaRef,
+        activeClientId
     });
 
     const handleSplitLinesChange = (checked) => {
         setSplitLines(checked);
         localStorage.setItem('zapvoice_split_lines', String(checked));
+    };
+
+    const handleSelectEmoji = (emoji) => {
+        const input = textareaRef.current;
+        if (input) {
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const currentVal = value || '';
+            const newVal = currentVal.substring(0, start) + emoji + currentVal.substring(end);
+            onChange(newVal);
+
+            setTimeout(() => {
+                input.focus();
+                input.setSelectionRange(start + emoji.length, start + emoji.length);
+            }, 10);
+        } else {
+            onChange((value || '') + emoji);
+        }
     };
 
     if (!isOpen) return null;
@@ -44,11 +79,36 @@ export default function MaximizedInputModal({
                 </div>
 
                 {/* Body (Textarea) */}
-                <div className="flex-1 p-6 flex flex-col bg-[#0b0f19]">
+                <div className="flex-1 p-6 flex flex-col bg-[#0b0f19] relative">
+                    <QuickRepliesDropdown
+                        isOpen={quickReplies.isOpen}
+                        quickMessages={quickReplies.quickMessages}
+                        selectedIndex={quickReplies.selectedIndex}
+                        onSelect={quickReplies.selectQuickMessage}
+                        className="absolute bottom-8 left-8 right-8 max-w-xl mx-auto z-[9999] bg-[#0f172a]/95 dark:bg-[#090d16]/95 border border-emerald-500/30 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150 flex flex-col"
+                    />
                     <textarea
+                        ref={textareaRef}
                         value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        placeholder="Digite ou cole sua resposta aqui..."
+                        onChange={(e) => {
+                            onChange(e.target.value);
+                            quickReplies.checkSlashTrigger(e.target.value, e.target.selectionStart);
+                        }}
+                        onClick={(e) => {
+                            quickReplies.checkSlashTrigger(e.target.value, e.target.selectionStart);
+                        }}
+                        onKeyUp={(e) => {
+                            if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+                                quickReplies.checkSlashTrigger(e.target.value, e.target.selectionStart);
+                            }
+                        }}
+                        onKeyDown={(e) => {
+                            if (quickReplies.isOpen) {
+                                const handled = quickReplies.handleKeyDown(e);
+                                if (handled) return;
+                            }
+                        }}
+                        placeholder="Digite ou cole sua resposta aqui... (digite / para respostas rápidas)"
                         className="flex-1 w-full p-4 bg-[#1e293b]/40 text-gray-200 text-sm border border-white/5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none font-sans"
                         disabled={isSending}
                         autoFocus
@@ -57,7 +117,32 @@ export default function MaximizedInputModal({
 
                 {/* Footer Actions */}
                 <div className="flex items-center justify-between px-6 py-4 border-t border-white/5 bg-[#1e293b]/50">
-                    <div className="flex items-center gap-2 select-none">
+                    <div className="flex items-center gap-4 select-none">
+                        {/* Botão de Emojis Maximizado */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+                                disabled={isSending}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+                                    isEmojiPickerOpen
+                                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/30'
+                                        : 'bg-white/5 hover:bg-white/10 text-gray-300 border-white/10'
+                                }`}
+                                title="Escolher Emoji"
+                            >
+                                <FiSmile size={16} />
+                                <span>Emojis</span>
+                            </button>
+
+                            <EmojiPickerDropdown
+                                isOpen={isEmojiPickerOpen}
+                                onClose={() => setIsEmojiPickerOpen(false)}
+                                onSelectEmoji={handleSelectEmoji}
+                                position="top"
+                            />
+                        </div>
+
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input 
                                 type="checkbox" 

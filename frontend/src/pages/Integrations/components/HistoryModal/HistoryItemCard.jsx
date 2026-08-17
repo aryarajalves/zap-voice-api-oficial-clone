@@ -1,64 +1,12 @@
-import React from 'react';
-import { FiTrash2, FiPlay, FiCopy, FiEdit2, FiMaximize2, FiZap, FiRefreshCw, FiSettings, FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
-import { toast } from 'react-hot-toast';
-import { EVENT_TYPES } from '../../constants';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FiZap, FiRefreshCw, FiSettings, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
+import { translateError, getFlatKeys } from './utils/HistoryHelpers';
 
-const COUNTRY_INFO = {
-  BR: { flag: '🇧🇷', name: 'Brasil' },
-  US: { flag: '🇺🇸', name: 'Estados Unidos' },
-  PT: { flag: '🇵🇹', name: 'Portugal' },
-  AR: { flag: '🇦🇷', name: 'Argentina' },
-  CL: { flag: '🇨🇱', name: 'Chile' },
-  CO: { flag: '🇨🇴', name: 'Colômbia' },
-  MX: { flag: '🇲🇽', name: 'México' },
-  PE: { flag: '🇵🇪', name: 'Peru' },
-  UY: { flag: '🇺🇾', name: 'Uruguai' },
-  PY: { flag: '🇵🇾', name: 'Paraguai' },
-  BO: { flag: '🇧🇴', name: 'Bolívia' },
-  VE: { flag: '🇻🇪', name: 'Venezuela' },
-  EC: { flag: '🇪🇨', name: 'Equador' },
-  GT: { flag: '🇬🇹', name: 'Guatemala' },
-  SV: { flag: '🇸🇻', name: 'El Salvador' },
-  HN: { flag: '🇭🇳', name: 'Honduras' },
-  NI: { flag: '🇳🇮', name: 'Nicarágua' },
-  CR: { flag: '🇨🇷', name: 'Costa Rica' },
-  PA: { flag: '🇵🇦', name: 'Panamá' },
-  GB: { flag: '🇬🇧', name: 'Reino Unido' },
-  AU: { flag: '🇦🇺', name: 'Austrália' },
-  CA: { flag: '🇨🇦', name: 'Canadá' },
-  AD: { flag: '🇦🇩', name: 'Andorra' },
-};
-
-const translateError = (msg) => {
-  if (!msg) return "";
-  let text = String(msg);
-  
-  const translations = [
-    { regex: /No mapping found for event:/gi, replacement: "Nenhum mapeamento encontrado para o evento:" },
-    { regex: /Parameter value is not valid/gi, replacement: "O valor do parâmetro é inválido (ex: número de telefone incompleto/incorreto)" },
-    { regex: /Template name does not exist/gi, replacement: "O nome do template não existe" },
-    { regex: /Invalid parameter/gi, replacement: "Parâmetro inválido" },
-    { regex: /Phone field not found in payload/gi, replacement: "Campo de telefone não encontrado no payload" },
-    { regex: /Configuração do WhatsApp ausente/gi, replacement: "Configuração do WhatsApp ausente" },
-    { regex: /Duplicidade evitada/gi, replacement: "Duplicidade evitada" }
-  ];
-
-  for (const item of translations) {
-    text = text.replace(item.regex, item.replacement);
-  }
-  return text;
-};
-
-const getFlatKeys = (obj, prefix = '') => {
-  if (!obj || typeof obj !== 'object') return [];
-  return Object.entries(obj).reduce((acc, [key, value]) => {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      return [...acc, fullKey, ...getFlatKeys(value, fullKey)];
-    }
-    return [...acc, fullKey];
-  }, []);
-};
+// Subcomponentes Modulares
+import HistoryItemHeader from './components/HistoryItemHeader';
+import HistoryPayloadViewer from './components/HistoryPayloadViewer';
+import HistoryMappingEditor from './components/HistoryMappingEditor';
+import HistoryExtractedData from './components/HistoryExtractedData';
 
 const HistoryItemCard = ({
   item,
@@ -74,8 +22,8 @@ const HistoryItemCard = ({
   integration,
   handleUpdateCustomFieldsMapping
 }) => {
-  const [showMappingEditor, setShowMappingEditor] = React.useState(false);
-  const [mappingFields, setMappingFields] = React.useState(() => {
+  const [showMappingEditor, setShowMappingEditor] = useState(false);
+  const [mappingFields, setMappingFields] = useState(() => {
     const custom = integration?.custom_fields_mapping || {};
     return {
       name: custom.name || '',
@@ -87,7 +35,7 @@ const HistoryItemCard = ({
     };
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (integration?.custom_fields_mapping) {
       setMappingFields({
         name: integration.custom_fields_mapping.name || '',
@@ -100,119 +48,50 @@ const HistoryItemCard = ({
     }
   }, [integration]);
 
-  const payloadKeys = React.useMemo(() => getFlatKeys(item?.payload), [item?.payload]);
+  const payloadKeys = useMemo(() => getFlatKeys(item?.payload), [item?.payload]);
 
-  const handleAddKeyToField = (field, keyToAdd) => {
-    const current = mappingFields[field] || '';
-    const parts = current.split(',').map(p => p.trim()).filter(Boolean);
-    if (!parts.includes(keyToAdd)) {
-      parts.push(keyToAdd);
-    }
-    setMappingFields(prev => ({ ...prev, [field]: parts.join(', ') }));
+  const handleOpenMapping = () => {
+    const custom = integration?.custom_fields_mapping || {};
+    setMappingFields({
+      name: custom.name || '',
+      phone: custom.phone || '',
+      email: custom.email || '',
+      product_name: custom.product_name || '',
+      price: custom.price || '',
+      payment_method: custom.payment_method || '',
+    });
+    setShowMappingEditor(prev => !prev);
   };
 
-  const getAvailableKeysForField = (fieldValue) => {
-    const parts = (fieldValue || '').split(',').map(p => p.trim()).filter(Boolean);
-    return payloadKeys.filter(k => !parts.includes(k));
-  };
   return (
     <div className="group relative border border-gray-200 dark:border-white/5 rounded-2xl overflow-hidden bg-white dark:bg-[#1e293b]/40 hover:scale-[1.015] transition-all duration-300 hover:border-blue-500/50 dark:hover:border-blue-600/50 hover:shadow-2xl dark:hover:shadow-blue-900/10">
-      <div className="p-5 flex justify-between items-center bg-gray-50/50 dark:bg-[#0f172a]/40 border-b border-gray-200 dark:border-white/5">
-        <div className="flex items-center gap-5">
-          <input
-            type="checkbox"
-            className="w-5 h-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition-all active:scale-90"
-            checked={selectedHistoryIds.includes(item?.id)}
-            onChange={() => handleToggleSelect(item?.id)}
-          />
-          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${item.status === 'processed' ? 'bg-green-100 text-green-700 dark:bg-green-400/10 dark:text-green-400' :
-              item.status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-400/10 dark:text-red-400' :
-                item.status === 'skipped' ? 'bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400' :
-                  'bg-gray-100 text-gray-700 dark:bg-gray-400/10 dark:text-gray-400'
-            }`}>
-            {item.status === 'processed' ? 'Processado' :
-             item.status === 'error' ? 'Erro' :
-             item.status === 'skipped' ? 'Sem Mapeamento' :
-             item.status === 'pending' ? 'Pendente' :
-             item.status === 'ignored' ? 'Ignorado' :
-             item.status === 'received' ? 'Recebido' :
-             item.status}
-          </span>
-          {item.processed_data?.is_stress_test && (
-            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1">
-              <FiZap size={10} fill="currentColor" /> Teste de Escala
-            </span>
-          )}
-          <span className="text-xs text-gray-500 font-mono font-medium">
-            {new Date(item.created_at).toLocaleString()}
-          </span>
-          <span className="px-3 py-1 bg-blue-50 dark:bg-blue-400/5 rounded-full text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-400/10">
-            {EVENT_TYPES.find(e => e.value === item.event_type)?.label || item.event_type || 'Evento não detectado'}
-          </span>
-          {item.duplicate_count > 0 && (
-            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">
-              +{item.duplicate_count} Duplicidades Evitadas
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => handleResendWebhook(item.id)}
-            disabled={isResending}
-            className="text-[11px] font-black bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20 uppercase tracking-wider"
-          >
-            <FiPlay size={11} fill="currentColor" /> Reenviar
-          </button>
-          <button
-            onClick={() => setConfirmDeleteHistory({ isOpen: true, type: 'single', id: item.id })}
-            className="p-2.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all active:scale-90"
-            title="Excluir Registro"
-          >
-            <FiTrash2 size={16} />
-          </button>
-        </div>
-      </div>
+      {/* Header Superior */}
+      <HistoryItemHeader
+        item={item}
+        selectedHistoryIds={selectedHistoryIds}
+        handleToggleSelect={handleToggleSelect}
+        handleResendWebhook={handleResendWebhook}
+        isResending={isResending}
+        setConfirmDeleteHistory={setConfirmDeleteHistory}
+      />
 
+      {/* Conteúdo Principal */}
       <div className="p-6 overflow-hidden">
-        <div className="flex justify-between items-center mb-3">
-          <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></div>
-            Payload Recebido
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(JSON.stringify(item.payload, null, 2));
-                toast.success("JSON copiado!");
-              }}
-              className="text-[10px] font-bold bg-white dark:bg-[#1e293b] hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg transition-all border border-gray-200 dark:border-white/5 flex items-center gap-1.5 active:scale-95"
-            >
-              <FiCopy size={11} /> Copiar
-            </button>
-            <button
-              onClick={() => setEditJsonModal({ isOpen: true, data: JSON.stringify(item.payload, null, 2), id: item.id })}
-              className="text-[10px] font-bold bg-white dark:bg-[#1e293b] hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg transition-all border border-blue-200 dark:border-blue-800/50 flex items-center gap-1.5 active:scale-95 shadow-sm shadow-blue-500/5"
-            >
-              <FiEdit2 size={11} /> Editar JSON
-            </button>
-            <button
-              onClick={() => setMaximizedJson(item.payload)}
-              className="text-[10px] font-bold bg-white dark:bg-[#1e293b] hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg transition-all border border-gray-200 dark:border-white/5 flex items-center gap-1.5 active:scale-95"
-            >
-              <FiMaximize2 size={11} /> Maximizar
-            </button>
-          </div>
-        </div>
+        {/* Visualizador de Payload */}
+        <HistoryPayloadViewer
+          item={item}
+          setEditJsonModal={setEditJsonModal}
+          setMaximizedJson={setMaximizedJson}
+        />
 
-        <pre className="text-[11px] font-mono p-4 bg-[#0b1120] text-white rounded-xl overflow-auto max-h-60 border border-white/5 scrollbar-thin scrollbar-thumb-white/10 dark:text-white shadow-inner">
-          {JSON.stringify(item.payload, null, 2)}
-        </pre>
-
+        {/* Painel de Dados Extraídos */}
         {item.processed_data && (
           <div className="mt-5 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-2xl border border-blue-100/50 dark:border-blue-800/20 shadow-sm relative overflow-hidden group/data">
             <div className="absolute top-0 right-0 p-8 opacity-[0.03] dark:opacity-[0.05] pointer-events-none group-hover/data:scale-110 transition-transform duration-700">
               <FiZap size={120} className="text-blue-600" />
             </div>
+
+            {/* Toolbar do Mapeamento / Sincronização */}
             <div className="text-[10px] text-blue-600 dark:text-blue-400 font-black uppercase mb-4 flex items-center justify-between tracking-widest relative z-10">
               <div className="flex items-center gap-2">
                 <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
@@ -220,18 +99,8 @@ const HistoryItemCard = ({
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    const custom = integration?.custom_fields_mapping || {};
-                    setMappingFields({
-                      name: custom.name || '',
-                      phone: custom.phone || '',
-                      email: custom.email || '',
-                      product_name: custom.product_name || '',
-                      price: custom.price || '',
-                      payment_method: custom.payment_method || '',
-                    });
-                    setShowMappingEditor(!showMappingEditor);
-                  }}
+                  type="button"
+                  onClick={handleOpenMapping}
                   className="text-[10px] bg-white dark:bg-[#1e293b] border border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center gap-1.5 active:scale-95"
                   title="Configurar mapeamento de campos personalizado"
                 >
@@ -239,6 +108,7 @@ const HistoryItemCard = ({
                   Mapear Campos
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleSyncHistory(item.id)}
                   disabled={isSyncing[item.id]}
                   className="text-[10px] bg-white dark:bg-[#1e293b] border border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
@@ -250,570 +120,27 @@ const HistoryItemCard = ({
               </div>
             </div>
 
+            {/* Painel Expansível de Mapeamento Manual */}
             {showMappingEditor && (
-              <div className="mb-5 p-5 bg-slate-900/90 border border-white/10 rounded-2xl relative z-10 space-y-4 shadow-xl">
-                <div className="text-[10px] font-black uppercase text-blue-400 tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
-                  <FiEdit2 size={12} /> Mapeamento Manual de Campos (Multi-fallbacks: separe chaves por vírgula)
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
-                  {/* Nome */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1">Campo de Nome</label>
-                    <input
-                      type="text"
-                      value={mappingFields.name}
-                      onChange={(e) => setMappingFields(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Ex: contact_name, name"
-                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
-                    />
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleAddKeyToField('name', e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
-                    >
-                      <option value="">+ Selecionar do JSON...</option>
-                      {getAvailableKeysForField(mappingFields.name).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                  {/* Telefone */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1">Campo de Telefone</label>
-                    <input
-                      type="text"
-                      value={mappingFields.phone}
-                      onChange={(e) => setMappingFields(prev => ({ ...prev, phone: e.target.value }))}
-                      placeholder="Ex: contact_phone, phone"
-                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
-                    />
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleAddKeyToField('phone', e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
-                    >
-                      <option value="">+ Selecionar do JSON...</option>
-                      {getAvailableKeysForField(mappingFields.phone).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                  {/* E-mail */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1">Campo de E-mail</label>
-                    <input
-                      type="text"
-                      value={mappingFields.email}
-                      onChange={(e) => setMappingFields(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="Ex: contact_email, email"
-                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
-                    />
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleAddKeyToField('email', e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
-                    >
-                      <option value="">+ Selecionar do JSON...</option>
-                      {getAvailableKeysForField(mappingFields.email).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                  {/* Produto */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1">Campo de Produto</label>
-                    <input
-                      type="text"
-                      value={mappingFields.product_name}
-                      onChange={(e) => setMappingFields(prev => ({ ...prev, product_name: e.target.value }))}
-                      placeholder="Ex: product_name, offer_name"
-                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
-                    />
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleAddKeyToField('product_name', e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
-                    >
-                      <option value="">+ Selecionar do JSON...</option>
-                      {getAvailableKeysForField(mappingFields.product_name).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                  {/* Valor */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1">Campo de Valor</label>
-                    <input
-                      type="text"
-                      value={mappingFields.price}
-                      onChange={(e) => setMappingFields(prev => ({ ...prev, price: e.target.value }))}
-                      placeholder="Ex: price, charge_price"
-                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
-                    />
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleAddKeyToField('price', e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
-                    >
-                      <option value="">+ Selecionar do JSON...</option>
-                      {getAvailableKeysForField(mappingFields.price).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                  {/* Método de Pagamento */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1">Método de Pagamento</label>
-                    <input
-                      type="text"
-                      value={mappingFields.payment_method}
-                      onChange={(e) => setMappingFields(prev => ({ ...prev, payment_method: e.target.value }))}
-                      placeholder="Ex: payment_type, method"
-                      className="w-full bg-[#0b1120] border border-white/10 rounded-xl px-3 py-1.5 font-bold text-gray-200 outline-none focus:border-blue-500 text-xs"
-                    />
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handleAddKeyToField('payment_method', e.target.value);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="mt-1 w-full bg-slate-800 text-[10px] text-gray-400 rounded border border-white/5 py-1 outline-none cursor-pointer"
-                    >
-                      <option value="">+ Selecionar do JSON...</option>
-                      {getAvailableKeysForField(mappingFields.payment_method).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
-                  <button
-                    onClick={() => setShowMappingEditor(false)}
-                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const success = await handleUpdateCustomFieldsMapping(integration.id, mappingFields);
-                      if (success) {
-                        setShowMappingEditor(false);
-                      }
-                    }}
-                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all shadow-md shadow-blue-500/20"
-                  >
-                    Salvar Regra
-                  </button>
-                </div>
-              </div>
-            )}
-            {/* Banner Order Bump */}
-            {(item.event_type === 'compra_aprovada_ob' || item.processed_data?.order_bump) && (
-              <div className="mb-4 relative z-10 rounded-xl overflow-hidden border border-orange-500/30 bg-orange-500/5">
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-500/10">
-                  <FiZap size={13} className="text-orange-400 shrink-0" fill="currentColor" />
-                  <span className="text-orange-400 font-black uppercase tracking-widest text-[10px]">Este produto é um Order Bump</span>
-                </div>
-                <div className="px-4 py-2.5 text-[11px] text-orange-300/80">
-                  O produto listado abaixo foi vendido como Order Bump — produto adicional comprado junto à oferta principal.
-                </div>
-              </div>
-            )}
-            {(item.event_type === 'compra_aprovada_com_ob' || (!item.processed_data?.order_bump && item.processed_data?.order_bump_products?.length > 0)) && (
-              <div className="mb-4 relative z-10 rounded-xl overflow-hidden border border-orange-500/30 bg-orange-500/5">
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-500/10 border-b border-orange-500/20">
-                  <FiZap size={13} className="text-orange-400 shrink-0" fill="currentColor" />
-                  <span className="text-orange-400 font-black uppercase tracking-widest text-[10px]">Order Bump incluído — produto adicional adquirido</span>
-                </div>
-                {item.processed_data?.order_bump_products?.length > 0 ? (
-                  <div className="px-4 py-3 space-y-1.5">
-                    {item.processed_data.order_bump_products.map((ob, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-[11px]">
-                        <span className="text-orange-200 font-bold">{ob.name || ob.product_name || `Produto OB ${idx + 1}`}</span>
-                        {ob.price && <span className="text-orange-400 font-black">R$ {ob.price}</span>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="px-4 py-2.5 text-[11px] text-orange-300/70 italic">
-                    Produtos do Order Bump não detalhados neste registro.
-                  </div>
-                )}
-              </div>
+              <HistoryMappingEditor
+                mappingFields={mappingFields}
+                setMappingFields={setMappingFields}
+                setShowMappingEditor={setShowMappingEditor}
+                integration={integration}
+                handleUpdateCustomFieldsMapping={handleUpdateCustomFieldsMapping}
+                payloadKeys={payloadKeys}
+              />
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-[12px] relative z-10">
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-400 dark:text-gray-400 font-medium">Plataforma:</span>
-                <span className="font-bold text-blue-400 dark:text-blue-400 capitalize">{item.processed_data.platform || '-'}</span>
-              </div>
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-400 dark:text-gray-400 font-medium flex items-center gap-1.5">
-                  Nome:
-                  {integration?.custom_fields_mapping?.name && (
-                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
-                      {integration.custom_fields_mapping.name}
-                    </span>
-                  )}
-                </span>
-                <span className="font-bold text-white dark:text-white">{item.processed_data.name || '-'}</span>
-              </div>
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-500 dark:text-gray-500 font-medium flex items-center gap-1.5">
-                  Telefone:
-                  {integration?.custom_fields_mapping?.phone && (
-                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
-                      {integration.custom_fields_mapping.phone}
-                    </span>
-                  )}
-                </span>
-                <span className="font-bold text-gray-800 dark:text-gray-200 tracking-tight">{item.processed_data.phone || '-'}</span>
-              </div>
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-500 dark:text-gray-500 font-medium flex items-center gap-1.5">
-                  E-mail:
-                  {integration?.custom_fields_mapping?.email && (
-                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
-                      {integration.custom_fields_mapping.email}
-                    </span>
-                  )}
-                </span>
-                <span className="font-bold text-gray-800 dark:text-gray-200 lowercase">{item.processed_data.email || '-'}</span>
-              </div>
-              {item.processed_data?.custom_fields?.CPF && (
-                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                  <span className="text-gray-400 dark:text-gray-400 font-medium">CPF:</span>
-                  <span className="font-bold text-gray-800 dark:text-gray-200">{item.processed_data.custom_fields.CPF}</span>
-                </div>
-              )}
-              {item.processed_data?.custom_fields?.CNPJ && (
-                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                  <span className="text-gray-400 dark:text-gray-400 font-medium">CNPJ:</span>
-                  <span className="font-bold text-gray-800 dark:text-gray-200">{item.processed_data.custom_fields.CNPJ}</span>
-                </div>
-              )}
-              {item.processed_data?.custom_fields?.Documento && (
-                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                  <span className="text-gray-400 dark:text-gray-400 font-medium">Documento:</span>
-                  <span className="font-bold text-gray-800 dark:text-gray-200">{item.processed_data.custom_fields.Documento}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
-                <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap flex items-center gap-1.5">
-                  Produtos:
-                  {integration?.custom_fields_mapping?.product_name && (
-                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case animate-fade-in" title="Chave JSON mapeada">
-                      {integration.custom_fields_mapping.product_name}
-                    </span>
-                  )}
-                </span>
-                <div className="flex flex-col items-end gap-1.5 w-full pl-8">
-                  {item.processed_data.items && item.processed_data.items.length > 0 ? (
-                    item.processed_data.items.map((prod, idx) => (
-                      <div key={idx} className="flex justify-between w-full text-[11px] bg-blue-500/5 px-2 py-1 rounded border border-blue-500/10">
-                        <span className="text-gray-300 truncate mr-2">{prod.name}</span>
-                        <span className="text-blue-400 font-bold whitespace-nowrap">R$ {prod.price || '0'}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="font-bold text-blue-400 text-right">{item.processed_data.product_name || '-'}</span>
-                  )}
-                </div>
-              </div>
-              {item.processed_data.e_order_bump && (
-                <div className="flex justify-between border-b border-orange-200/30 dark:border-orange-700/20 pb-1.5 md:col-span-2 bg-orange-500/5 px-2 rounded-sm">
-                  <span className="text-orange-600 dark:text-orange-400 font-bold flex items-center gap-1.5">
-                    <FiZap size={12} /> Order Bump Detectado!
-                  </span>
-                  <span className="font-medium text-orange-500 text-[10px] uppercase tracking-tighter self-center">Venda Casada</span>
-                </div>
-              )}
-              {item.processed_data?.items_detailed && (
-                <div className="flex flex-col gap-1.5 md:col-span-2 bg-gray-50 dark:bg-[#0b1120]/50 p-3 rounded-lg border border-gray-100 dark:border-white/5 mt-1">
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-black tracking-widest mb-1">Itens do Pedido</span>
-                  {item.processed_data.items_detailed.map((prod, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-[11px] pb-1 border-b border-gray-100 dark:border-gray-800 last:border-0 last:pb-0">
-                      <span className="text-gray-700 dark:text-gray-300 font-medium">
-                        {typeof prod === 'object' ? (prod.name || 'Produto') : (String(prod).split(' - ')[0] || 'Produto')}
-                      </span>
-                      <span className="text-blue-500 dark:text-blue-400 font-bold ml-4">
-                        {typeof prod === 'object' ? (prod.price || '0') : (String(prod).split(' - ')[1] || '0')}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-400 dark:text-gray-400 font-medium flex items-center gap-1.5">
-                  Método:
-                  {integration?.custom_fields_mapping?.payment_method && (
-                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
-                      {integration.custom_fields_mapping.payment_method}
-                    </span>
-                  )}
-                </span>
-                <span className="font-bold text-white dark:text-white capitalize">
-                  {(() => {
-                    const METHOD_TRANSLATIONS = {
-                      'credit_card': 'Cartão de Crédito',
-                      'credit_cards': 'Cartão de Crédito',
-                      'billet': 'Boleto',
-                      'boleto': 'Boleto',
-                      'pix': 'Pix',
-                      'bank_slip': 'Boleto',
-                      'bank_transfer': 'Transferência',
-                      'debit_card': 'Cartão de Débito',
-                      'paypal': 'PayPal',
-                      'free': 'Gratuito',
-                      'bankslip': 'Boleto',
-                      'hybrid': 'Híbrido'
-                    };
-                    const m = String(item.processed_data.payment_method || '').toLowerCase();
-                    return METHOD_TRANSLATIONS[m] || item.processed_data.payment_method || '-';
-                  })()}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5">
-                <span className="text-gray-400 dark:text-gray-400 font-medium flex items-center gap-1.5">
-                  Valor:
-                  {integration?.custom_fields_mapping?.price && (
-                    <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 px-1 py-0.5 rounded border border-blue-500/10 normal-case" title="Chave JSON mapeada">
-                      {integration.custom_fields_mapping.price}
-                    </span>
-                  )}
-                </span>
-                <span className="font-bold text-green-400 dark:text-green-400">
-                  {item.processed_data.price ? `R$ ${item.processed_data.price}` : 'R$ -'}
-                </span>
-              </div>
-              {item.processed_data.country && (
-                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
-                  <span className="text-gray-400 dark:text-gray-400 font-medium">País de Origem:</span>
-                  <span className="font-bold text-white dark:text-white flex items-center gap-2">
-                    {(() => {
-                      const iso = String(item.processed_data.country).toUpperCase();
-                      const info = COUNTRY_INFO[iso];
-                      return info
-                        ? <><span className="text-lg leading-none">{info.flag}</span><span>{info.name}</span><span className="text-gray-500 text-[10px] font-mono">({iso})</span></>
-                        : <span>{iso}</span>;
-                    })()}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
-                <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Status Principal:</span>
-                {(() => {
-                  const eventLabel = EVENT_TYPES.find(e => e.value === item.event_type)?.label || item.event_type || '-';
-                  const isApproved = item.event_type?.includes('compra_aprovada');
-                  const isChargeback = item.event_type === 'chargeback';
-                  const isNegative = item.event_type?.includes('expirado') || item.event_type?.includes('cancelad') || item.event_type?.includes('recusado') || item.event_type?.includes('reembolso');
-                  const colorClass = isChargeback ? 'text-red-500 bg-red-500/10' : isApproved ? 'text-green-500 bg-green-500/10' : isNegative ? 'text-orange-500 bg-orange-500/10' : 'text-blue-500 bg-blue-500/10';
-                  return (
-                    <span className={`font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${colorClass}`}>
-                      {eventLabel}
-                    </span>
-                  );
-                })()}
-              </div>
-              <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
-                <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Etiquetas Internas (ZapVoice):</span>
-                {item.processed_data.internal_tags ? (
-                  <div className="flex flex-wrap gap-1 justify-end">
-                    {item.processed_data.internal_tags.split(',').map(tag => tag.trim()).filter(Boolean).map(tag => (
-                      <span key={tag} className="bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-md text-[10px] font-black border border-blue-500/20">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="font-bold text-gray-400 dark:text-gray-400">-</span>
-                )}
-              </div>
-
-              {/* --- Status ManyChat Integration --- */}
-              {item.processed_data?.manychat_enabled && (
-                <div className="mt-4 p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl relative overflow-hidden group/mc">
-                  <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none group-hover/mc:scale-110 transition-transform duration-700">
-                    <FiZap size={60} className="text-indigo-400" />
-                  </div>
-                  <div className="text-[10px] text-indigo-400 font-black uppercase mb-3 flex items-center justify-between tracking-widest relative z-10">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`flex h-2 w-2 rounded-full ${
-                        item.processed_data.manychat_sync?.status === 'success' ? 'bg-green-500' : 
-                        item.processed_data.manychat_sync?.status === 'failed' ? 'bg-red-500' : 'bg-orange-500'
-                      } animate-pulse`}></span>
-                      Integração ManyChat
-                      {item.processed_data.manychat_sync?.account_name && (
-                        <span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 normal-case flex items-center gap-1.5">
-                          • Conta: {item.processed_data.manychat_sync.account_name}
-                          {(() => {
-                            const sync = item.processed_data.manychat_sync;
-                            const keyPrev = sync.key_preview || (sync.account_name?.toLowerCase().includes('conta 2') ? '...be1c' : sync.account_name?.toLowerCase().includes('conta principal') || sync.account_name?.toLowerCase().includes('conta 1') ? '...074e' : '');
-                            return keyPrev ? <span className="text-[9px] text-indigo-400 font-mono opacity-90 font-normal">({keyPrev})</span> : null;
-                          })()}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[9px] opacity-60">Status: {item.processed_data.manychat_sync?.status || 'Pendente'}</span>
-                  </div>
-
-                  {item.processed_data.manychat_sync ? (
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[11px] relative z-10">
-                      {item.processed_data.manychat_sync.account_name && (
-                        <div className="flex justify-between border-b border-indigo-500/10 pb-1 md:col-span-2">
-                          <span className="text-gray-400 font-medium">Conta Destino:</span>
-                          <span className="font-bold text-indigo-300 flex items-center gap-1.5 flex-wrap justify-end">
-                            ⚡ {item.processed_data.manychat_sync.account_name}
-                            {(() => {
-                              const sync = item.processed_data.manychat_sync;
-                              const keyPrev = sync.key_preview || (sync.account_name?.toLowerCase().includes('conta 2') ? '...be1c' : sync.account_name?.toLowerCase().includes('conta principal') || sync.account_name?.toLowerCase().includes('conta 1') ? '...074e' : '');
-                              return keyPrev ? (
-                                <span className="text-[9px] text-indigo-300/90 font-mono bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20" title="Últimos dígitos do token ManyChat">
-                                  ({keyPrev})
-                                </span>
-                              ) : null;
-                            })()}
-                            {item.processed_data.manychat_sync.rotation_info && (
-                              <span className="text-[9px] text-indigo-400/90 font-mono bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                                ({item.processed_data.manychat_sync.rotation_info})
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between border-b border-indigo-500/10 pb-1">
-                        <span className="text-gray-400">Contato:</span>
-                        <span className={`font-bold ${item.processed_data.manychat_sync.contact?.status === 'created' ? 'text-green-400' : 'text-indigo-300'}`}>
-                          {item.processed_data.manychat_sync.contact?.status === 'created' ? '✅ Criado' : 
-                           item.processed_data.manychat_sync.contact?.status === 'existed' ? '🔍 Localizado' : '❌ Falhou'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-b border-indigo-500/10 pb-1">
-                        <span className="text-gray-400">Etiqueta:</span>
-                        <span className={`font-bold ${item.processed_data.manychat_sync.tag?.status === 'applied' ? 'text-green-400' : 'text-orange-400'}`}>
-                          {item.processed_data.manychat_sync.tag?.status === 'applied' ? '🏷️ Vinculada' : '⚠️ Pendente'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between md:col-span-2 pt-1">
-                        <span className="text-gray-500">Etiqueta aplicada:</span>
-                        <span className="font-mono text-indigo-400 bg-indigo-500/5 px-1.5 py-0.5 rounded text-[10px]">
-                          {item.processed_data.manychat_sync.tag?.name || '-'}
-                        </span>
-                      </div>
-                      {item.processed_data.manychat_sync.error && (
-                        <div className="md:col-span-2 mt-1 p-2 bg-red-500/5 border border-red-500/10 rounded-lg text-red-400 text-[10px]">
-                          <strong>Erro:</strong> {item.processed_data.manychat_sync.error}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-gray-500 italic py-2">
-                      Aguardando sincronização com o ManyChat...
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* --- Chatwoot Integrations --- */}
-              {(item.processed_data?.private_note_enabled || (item.processed_data?.chatwoot_label && (Array.isArray(item.processed_data.chatwoot_label) ? item.processed_data.chatwoot_label.length > 0 : String(item.processed_data.chatwoot_label).length > 0)) || (item.processed_data?.free_message_enabled && (item.template_name || item.funnel_id))) && (
-                <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl relative overflow-hidden group/cw">
-                  <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none group-hover/cw:scale-110 transition-transform duration-700">
-                    <FiSettings size={60} className="text-blue-400" />
-                  </div>
-                  <div className="text-[10px] text-blue-400 font-black uppercase mb-3 flex items-center justify-between tracking-widest relative z-10">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
-                      Integração na Aba de Contatos (ZapVoice)
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-[11px] relative z-10">
-                    {item.processed_data.private_note_enabled && (
-                      <div className="flex justify-between items-center border-b border-blue-500/10 pb-1">
-                        <span className="text-gray-400">Nota Privada:</span>
-                        <span className="font-bold text-green-400 flex items-center gap-1">
-                          <FiCheckCircle size={10} /> Ativa
-                        </span>
-                      </div>
-                    )}
-                    {item.processed_data.free_message_enabled && (
-                      <div className="flex justify-between items-center border-b border-blue-500/10 pb-1">
-                        <span className="text-gray-400">Mensagem Livre:</span>
-                        <span className="font-bold text-indigo-400">Sessão Ativa</span>
-                      </div>
-                    )}
-                    {(item.processed_data.chatwoot_label && (Array.isArray(item.processed_data.chatwoot_label) ? item.processed_data.chatwoot_label.length > 0 : String(item.processed_data.chatwoot_label).length > 0)) && (
-                      <div className="md:col-span-2 pt-1">
-                        <span className="text-gray-500 block mb-1.5 uppercase text-[9px] font-black tracking-widest opacity-60">Etiquetas Aplicadas:</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(() => {
-                            let labels = [];
-                            const raw = item.processed_data.chatwoot_label;
-                            if (Array.isArray(raw)) {
-                              labels = raw;
-                            } else if (typeof raw === 'string') {
-                              let clean = raw.trim();
-                              if (clean.startsWith('[') && clean.endsWith(']')) {
-                                clean = clean.substring(1, clean.length - 1);
-                              }
-                              labels = clean.split(',').map(l => l.replace(/["']/g, '').trim()).filter(Boolean);
-                            }
-                            return labels.map((label, i) => (
-                              <span key={i} className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-lg text-[10px] font-black">
-                                {label}
-                              </span>
-                            ));
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* --- Campos Extras Extraídos --- */}
-              {(() => {
-                const validEntries = Object.entries(item.processed_data?.custom_fields || {})
-                  .filter(([k]) => !k.toLowerCase().startsWith('id ') && k !== 'Status Assinatura');
-                if (validEntries.length === 0) return null;
-                return (
-                  <div className="mt-2 md:col-span-2 bg-purple-500/5 border border-purple-500/10 p-3 rounded-xl relative overflow-hidden">
-                    <div className="text-[10px] text-purple-600 dark:text-purple-400 font-black uppercase mb-3 flex items-center gap-1.5 tracking-widest relative z-10">
-                      <FiSettings size={12} />
-                      Campos Personalizados (Extras)
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 relative z-10 text-[11px]">
-                      {validEntries.map(([k, v]) => (
-                        <div key={k} className="flex justify-between border-b border-purple-200/20 dark:border-purple-700/20 pb-1 break-all">
-                          <span className="text-gray-500 dark:text-gray-400 font-medium pr-2 max-w-[50%] truncate shrink-0" title={k}>{k}:</span>
-                          <span className="font-bold text-gray-800 dark:text-gray-200 text-right shrink min-w-0" title={v}>{String(v) || '-'}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {item.processed_data.utm_source && (
-                <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
-                  <span className="text-gray-500 dark:text-gray-500 font-medium">Origem (UTM):</span>
-                  <span className="font-bold text-indigo-500 dark:text-indigo-400">
-                    {item.processed_data.utm_source} {item.processed_data.utm_medium ? `(${item.processed_data.utm_medium})` : ''}
-                  </span>
-                </div>
-              )}
-            </div>
+            {/* Dados Estruturados */}
+            <HistoryExtractedData
+              item={item}
+              integration={integration}
+            />
           </div>
         )}
+
+        {/* Mensagem de Erro / Alerta */}
         {item.error_message && (
           item.status === 'skipped' ? (
             <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-400/5 rounded-xl border border-amber-100 dark:border-amber-400/20 text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-2">

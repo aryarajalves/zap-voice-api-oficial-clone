@@ -34,6 +34,7 @@ from .checkout_presell import CheckoutConfig, CheckoutLead
 from .capture_page import CapturePageConfig, CapturePageLead
 from .email import EmailConfig, EmailTemplate, EmailDispatch, EmailInbound
 from .payment_monitor import WabaPaymentCheck
+from .quick_message import QuickMessage
 
 # This allows importing all models from the models package
 __all__ = [
@@ -69,14 +70,9 @@ __all__ = [
     "RouletteLog",
     "RoundRobinState",
     "HotLead",
-    "BackupConfig",
-    "BackupMetadata",
-    "ContactImportHistory",
-    "ImportRowResult",
     "UploadedMedia",
-    "ChatConversation",
-    "ChatMessage",
     "ApiKey",
+    "ChatLabel",
     "CheckoutConfig",
     "CheckoutLead",
     "CapturePageConfig",
@@ -85,6 +81,13 @@ __all__ = [
     "EmailTemplate",
     "EmailDispatch",
     "EmailInbound",
-    "WabaPaymentCheck"
+    "WabaPaymentCheck",
+    "BackupConfig",
+    "BackupMetadata",
+    "ContactImportHistory",
+    "ImportRowResult",
+    "ChatConversation",
+    "ChatMessage",
+    "QuickMessage",
 ]
 

@@ -496,5 +496,3 @@ describe('BackupDatabase', () => {
     });
   });
 });
-
-

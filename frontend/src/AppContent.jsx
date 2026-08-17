@@ -402,7 +402,7 @@ export default function AppContent() {
 
       {/* Atendimento em Popup de Tela Cheia */}
       {logic.currentView === 'chat_conversations' && (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-[#0f172a] animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] w-full h-full flex flex-col bg-[#0f172a] animate-in fade-in duration-300">
           <ChatConversations
             onClose={() => {
               // vendedor vai para tela de boas-vindas; outros voltam ao bulk_sender

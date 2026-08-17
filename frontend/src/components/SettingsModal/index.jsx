@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { FiX, FiSettings, FiBook, FiLayout, FiSmartphone, FiCpu, FiInstagram, FiKey, FiTag } from 'react-icons/fi';
+import { FiX, FiSettings, FiBook, FiLayout, FiSmartphone, FiCpu, FiInstagram, FiKey, FiTag, FiZap } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 
 // Hooks
@@ -16,6 +16,7 @@ import InstagramTab from './tabs/InstagramTab';
 import AdvancedTab from './tabs/AdvancedTab';
 import ApiKeysTab from './tabs/ApiKeysTab';
 import LabelsTab from './tabs/LabelsTab';
+import QuickMessagesTab from './tabs/QuickMessagesTab';
 
 const SettingsModal = ({ isOpen, onClose, onSaved }) => {
     const logic = useSettingsLogic(isOpen, onClose, onSaved);
@@ -101,6 +102,13 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                                     label="Marcadores" 
                                     icon={FiTag} 
                                 />
+                                <TabButton 
+                                    id="mensagens_rapidas" 
+                                    activeTab={logic.activeTab} 
+                                    onClick={logic.setActiveTab} 
+                                    label="Mensagens Rápidas" 
+                                    icon={FiZap} 
+                                />
                             </>
                         )}
                     </div>
@@ -123,7 +131,7 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                     {/* Header da Área de Conteúdo */}
                     <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100 dark:border-white/5 bg-white dark:bg-[#1e293b]">
                         <span className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                            Aba Ativa: {logic.activeTab === 'geral' ? 'Básico' : logic.activeTab === 'whatsapp' ? 'WhatsApp' : logic.activeTab === 'instagram' ? 'Instagram' : logic.activeTab === 'advanced' ? 'Avançado' : logic.activeTab === 'api_tokens' ? 'Tokens de API' : 'Marcadores'}
+                            Aba Ativa: {logic.activeTab === 'geral' ? 'Básico' : logic.activeTab === 'whatsapp' ? 'WhatsApp' : logic.activeTab === 'instagram' ? 'Instagram' : logic.activeTab === 'advanced' ? 'Avançado' : logic.activeTab === 'api_tokens' ? 'Tokens de API' : logic.activeTab === 'marcadores' ? 'Marcadores' : 'Mensagens Rápidas'}
                         </span>
                         <button
                             type="button"
@@ -243,6 +251,13 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                                 activeClient={logic.activeClient}
                             />
                         )}
+
+                        {logic.activeTab === 'mensagens_rapidas' && (
+                            <QuickMessagesTab 
+                                user={logic.user}
+                                activeClient={logic.activeClient}
+                            />
+                        )}
                     </div>
 
                     {/* Footer Actions */}
@@ -252,25 +267,27 @@ const SettingsModal = ({ isOpen, onClose, onSaved }) => {
                             onClick={onClose}
                             className="px-5 py-2.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors"
                         >
-                            Cancelar
+                            {['api_tokens', 'marcadores', 'mensagens_rapidas'].includes(logic.activeTab) ? 'Fechar' : 'Cancelar'}
                         </button>
-                        <button
-                            type="submit"
-                            disabled={logic.loading}
-                            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            {logic.loading ? (
-                                <>
-                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Salvando...
-                                </>
-                            ) : (
-                                "Salvar Configurações"
-                            )}
-                        </button>
+                        {!['api_tokens', 'marcadores', 'mensagens_rapidas'].includes(logic.activeTab) && (
+                            <button
+                                type="submit"
+                                disabled={logic.loading}
+                                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {logic.loading ? (
+                                    <>
+                                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Salvando...
+                                    </>
+                                ) : (
+                                    "Salvar Configurações"
+                                )}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>

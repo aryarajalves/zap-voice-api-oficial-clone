@@ -287,6 +287,8 @@ from routers import email_marketing
 app.include_router(email_marketing.router, prefix="/api/email", tags=["Email Marketing"])
 from routers import waba_payment
 app.include_router(waba_payment.router, prefix="/api", tags=["WABA Payment"])
+from routers import quick_messages
+app.include_router(quick_messages.router, prefix="/api", tags=["QuickMessages"])
 
 
 # Router público para atualização de campos de contatos via API Key

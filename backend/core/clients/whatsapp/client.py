@@ -486,6 +486,41 @@ class WhatsAppClient:
         }
         return await self._meta_request("POST", "messages", json=payload)
 
+    async def send_contact_official(self, to_phone: str, contact_name: str, contact_phone: str):
+        """Envia um cartão de contato (vCard nativo) pelo WhatsApp Cloud API."""
+        clean_to_phone = ''.join(filter(str.isdigit, to_phone))
+        clean_contact_phone = ''.join(filter(str.isdigit, contact_phone))
+        
+        name_parts = (contact_name or clean_contact_phone).strip().split(' ', 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        
+        formatted_phone = f"+{clean_contact_phone}" if not str(contact_phone).startswith("+") else str(contact_phone)
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": clean_to_phone,
+            "type": "contacts",
+            "contacts": [
+                {
+                    "name": {
+                        "formatted_name": contact_name or clean_contact_phone,
+                        "first_name": first_name,
+                        "last_name": last_name
+                    },
+                    "phones": [
+                        {
+                            "phone": formatted_phone,
+                            "type": "CELL",
+                            "wa_id": clean_contact_phone
+                        }
+                    ]
+                }
+            ]
+        }
+        return await self._meta_request("POST", "messages", json=payload)
+
     async def send_official_audio(self, phone_number: str, media_id: str):
         payload = {
             "messaging_product": "whatsapp",
@@ -497,12 +532,14 @@ class WhatsAppClient:
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_audio_official(self, phone_number: str, url: str):
-        # Legacy method that downloads and then sends
+        # Legacy method that downloads and then sends as WhatsApp Push-To-Talk voice note
         import tempfile
+        import subprocess
         from urllib.parse import unquote
         
         file_path = None
         temp_download_path = None
+        transcoded_audio_path = None
         
         # Resolve Local Path (Simplified logic from original)
         if "static/uploads" in url:
@@ -519,18 +556,42 @@ class WhatsAppClient:
         if not file_path or not os.path.exists(file_path):
             return {"error": "Arquivo não encontrado"}
 
-        # Detectar a extensão e mime_type corretos
+        # Garantir conversão para OGG Opus (compatível 100% com WhatsApp Voice Note / PTT)
+        upload_path = file_path
         mime_type = "audio/ogg"
-        if ".webm" in url.lower():
-            mime_type = "audio/webm"
+
+        if not file_path.lower().endswith(".ogg"):
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".ogg") as f_ogg:
+                    transcoded_audio_path = f_ogg.name
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", file_path,
+                    "-c:a", "libopus",
+                    "-b:a", "32k",
+                    "-vbr", "on",
+                    "-compression_level", "10",
+                    "-ar", "48000",
+                    "-ac", "1",
+                    transcoded_audio_path
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if res.returncode == 0 and os.path.exists(transcoded_audio_path):
+                    upload_path = transcoded_audio_path
+            except Exception as e_conv:
+                logger.warning(f"⚠️ [WA_AUDIO] Falha ao transcodificar áudio com FFmpeg: {e_conv}")
 
         try:
-            media_id = await self.upload_media_to_meta(file_path, mime_type)
+            media_id = await self.upload_media_to_meta(upload_path, mime_type)
             if not media_id: return {"error": "Falha no upload para Meta"}
             return await self.send_official_audio(phone_number, media_id)
         finally:
             if temp_download_path and os.path.exists(temp_download_path):
                 try: os.remove(temp_download_path)
+                except: pass
+            if transcoded_audio_path and os.path.exists(transcoded_audio_path):
+                try: os.remove(transcoded_audio_path)
                 except: pass
 
     async def send_image_official(self, phone_number: str, image_url: str, caption: str = ""):

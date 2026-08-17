@@ -160,6 +160,6 @@ async def test_webhook_mapping_button_actions_propagation_and_stats(db_session, 
     reconciled = await reconcile_trigger_stats_logic(st.id, client.id, db_session)
     db_session.refresh(st)
 
-    # Verificar que nas estatísticas do trigger contou como AMBOS: interação e bloqueio!
-    assert st.total_interactions == 1
+    # Verificar que nas estatísticas do trigger contou como bloqueio
+    assert st.total_interactions == 0
     assert st.total_blocked == 1

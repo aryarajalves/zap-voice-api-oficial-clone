@@ -49,6 +49,8 @@ async def test_whatsapp_inbound_client_inactive_ignored():
     }
     
     metadata = {"phone_number_id": "123456"}
+    import core.worker.handlers.whatsapp as wah
+    wah.GLOBAL_PROCESSING_LOCKS.clear()
 
     with patch("core.worker.handlers.whatsapp_inbound.logger") as mock_logger:
         await handle_whatsapp_inbound_messages(db_mock, messages, value, metadata)
