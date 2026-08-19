@@ -82,3 +82,64 @@
   - `trg_realtime_scheduled_triggers` em `scheduled_triggers` (AFTER UPDATE OF status)
 - Migração Alembic: `0005_add_pg_listen_notify_triggers.py` sob a pasta `backend/alembic_migrations/versions/`.
 - Script de Migração: `setup_postgres_listen_notify.py` sob a pasta `backend/scripts/`.
+
+## [2026-08-19] Indexação de 18 Chaves Estrangeiras (Foreign Keys) - Melhoria 1
+- Criados 18 índices B-Tree para eliminar Sequential Scans em JOINs e evitar table locks em cascata:
+  - `idx_fk_users_client_id` em `users(client_id)`
+  - `idx_fk_scheduled_triggers_funnel_id` em `scheduled_triggers(funnel_id)`
+  - `idx_fk_recurring_triggers_funnel_id` em `recurring_triggers(funnel_id)`
+  - `idx_fk_chat_messages_user_id` em `chat_messages(user_id)`
+  - `idx_fk_api_keys_user_id` em `api_keys(user_id)`
+  - `idx_fk_user_clients_client_id` em `user_clients(client_id)`
+  - `idx_fk_invitation_clients_client_id` em `invitation_clients(client_id)`
+  - `idx_fk_user_invitations_created_by_id` em `user_invitations(created_by_id)`
+  - `idx_fk_webhook_configs_funnel_id` em `webhook_configs(funnel_id)`
+  - `idx_fk_webhook_event_mappings_funnel_id` em `webhook_event_mappings(funnel_id)`
+  - `idx_fk_webhook_leads_imported_by` em `webhook_leads(imported_by_client_id)`
+  - `idx_fk_instagram_automations_funnel_id` em `instagram_automations(funnel_id)`
+  - `idx_fk_contact_import_history_project_id` em `contact_import_history(project_id)`
+  - `idx_fk_clients_project_id` em `clients(project_id)`
+  - `idx_fk_email_dispatches_template_id` em `email_dispatches(template_id)`
+  - `idx_fk_email_inbounds_dispatch_id` em `email_inbounds(dispatch_id)`
+  - `idx_fk_email_inbounds_lead_id` em `email_inbounds(lead_id)`
+  - `idx_fk_contact_template_history_trigger_id` em `contact_template_history(trigger_id)`
+- Migração Alembic: `0006_add_missing_fk_indexes.py` sob a pasta `backend/alembic_migrations/versions/`.
+- Script de Migração: `add_missing_fk_indexes.py` sob a pasta `backend/scripts/`.
+
+## [2026-08-19] Índices Compostos de Alto Tráfego - Melhoria 2
+- Criados 8 índices compostos B-Tree de alta performance para acelerar consultas frequentes, métricas e listagens:
+  - `idx_message_status_phone_time` em `message_status (phone_number, timestamp DESC)`
+  - `idx_message_status_trigger_status` em `message_status (trigger_id, status)`
+  - `idx_contact_windows_client_phone` em `contact_windows (client_id, phone)`
+  - `idx_contact_windows_client_last_interaction` em `contact_windows (client_id, last_interaction_at DESC)`
+  - `idx_template_cache_client_name_lang` em `whatsapp_template_cache (client_id, name, language)`
+  - `idx_template_cache_client_pinned_name` em `whatsapp_template_cache (client_id, is_pinned DESC, name ASC)`
+  - `idx_chat_convo_client_unread_last` em `chat_conversations (client_id, unread_count DESC, last_message_at DESC NULLS LAST)`
+  - `idx_contatos_monitorados_inbox_time` em `contatos_monitorados (inbox_id, last_interaction_at DESC NULLS LAST)`
+- Migração Alembic: `0007_add_high_traffic_composite_indexes.py` sob a pasta `backend/alembic_migrations/versions/`.
+- Script de Migração: `add_high_traffic_composite_indexes.py` sob a pasta `backend/scripts/`.
+
+## [2026-08-19] Migração Completa de JSON para JSONB - Melhoria 3
+- Convertidas 24 colunas de 12 tabelas do formato `json` legado (texto) para `jsonb` binário otimizado.
+- Criados índices GIN:
+  - `idx_chat_conversations_labels_gin` em `chat_conversations USING gin (labels)`
+  - `idx_chat_messages_metadata_gin` em `chat_messages USING gin (meta_data)`
+- Migração Alembic: `0008_migrate_json_to_jsonb.py` sob a pasta `backend/alembic_migrations/versions/`.
+- Script de Migração: `migrate_json_to_jsonb.py` sob a pasta `backend/scripts/`.
+
+## [2026-08-19] Políticas de Retenção e Expurgos Automáticos (Data Purge) - Melhoria 4
+- Implementadas rotinas de expurgo em lotes (`LIMIT 1000`) para manter o banco leve sem travamento de tabelas:
+  - `run_waba_payment_checks_purge`: Expurga `waba_payment_checks` com mais de `WABA_CHECK_RETENTION_DAYS` (padrão 30 dias).
+  - `run_webhook_events_purge`: Expurga eventos processados de `webhook_events` com mais de `WEBHOOK_EVENT_RETENTION_DAYS` (padrão 15 dias).
+  - `run_old_message_status_purge`: Expurga `message_status` antigas com mais de `MESSAGE_STATUS_RETENTION_DAYS` (padrão 90 dias).
+- Script de Execução: `purge_old_database_records.py` sob a pasta `backend/scripts/`.
+- Módulo Scheduler: Atualizado em `services/scheduler/cleanup_tasks.py` e `services/scheduler/__init__.py`.
+
+## [2026-08-19] Ajuste Fino de Autovacuum - Melhoria 5
+- Configurados parâmetros agressivos de limpeza automática em 6 tabelas de alta escrita (`message_status`, `webhook_events`, `chat_messages`, `scheduled_triggers`, `contact_windows`, `waba_payment_checks`):
+  - `autovacuum_vacuum_scale_factor = 0.05` (5% de linhas mortas)
+  - `autovacuum_vacuum_threshold = 50`
+  - `autovacuum_analyze_scale_factor = 0.02` (2% de alterações)
+  - `autovacuum_analyze_threshold = 25`
+- Migração Alembic: `0009_tune_autovacuum_settings.py` sob a pasta `backend/alembic_migrations/versions/`.
+- Script de Migração: `tune_autovacuum_settings.py` sob a pasta `backend/scripts/`.

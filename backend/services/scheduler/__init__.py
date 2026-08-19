@@ -12,6 +12,10 @@ from services.scheduler.cleanup_tasks import (
     run_bulk_crash_detection,
     run_stale_triggers_cleanup,
     run_closed_window_label_cleanup,
+    run_waba_payment_checks_purge,
+    run_webhook_events_purge,
+    run_old_message_status_purge,
+    run_all_database_purges,
 )
 from services.scheduler.recurring_processor import (
     resolve_lead_variables,
@@ -31,6 +35,9 @@ _last_cleanup_history: str | None = None
 _last_cleanup_stale: str | None = None
 _last_bulk_crash_check: str | None = None
 _last_closed_window_cleanup: str | None = None
+_last_purge_waba_checks: str | None = None
+_last_purge_webhook_events: str | None = None
+_last_purge_message_status: str | None = None
 
 # Exportações públicas para manter retrocompatibilidade total com routers e testes
 __all__ = [
@@ -39,6 +46,10 @@ __all__ = [
     "run_bulk_crash_detection",
     "run_stale_triggers_cleanup",
     "run_closed_window_label_cleanup",
+    "run_waba_payment_checks_purge",
+    "run_webhook_events_purge",
+    "run_old_message_status_purge",
+    "run_all_database_purges",
     "resolve_lead_variables",
     "process_calendar_reminders",
     "process_recurring_triggers",
@@ -143,6 +154,9 @@ async def scheduler_task():
                 await run_history_cleanup()
                 await run_stale_triggers_cleanup()
                 await run_log_file_cleanup()
+                await run_waba_payment_checks_purge()      # expurgo diário de verificações de pagamento WABA antigas
+                await run_webhook_events_purge()          # expurgo diário de eventos brutos de webhook processados
+                await run_old_message_status_purge()       # expurgo de status de mensagens antigas
                 await process_scheduled_email_dispatches() # processa e-mails agendados vencidos
             except Exception as clean_err:
                 logger.error(f"⚠️ Erro durante ciclo de limpeza: {clean_err}")

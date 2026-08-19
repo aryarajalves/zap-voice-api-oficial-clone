@@ -466,3 +466,152 @@ async def run_closed_window_label_cleanup(db_session=None):
         if db_session is None:
             db.close()
         _set_pkg_var("_last_closed_window_cleanup", minute_key)
+
+
+async def run_waba_payment_checks_purge(db_session=None):
+    """
+    Remove registros de WabaPaymentCheck mais antigos que WABA_CHECK_RETENTION_DAYS dias (padrão: 30 dias).
+    Executa em lotes seguros para manter o banco leve sem travar tabelas.
+    """
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if _get_pkg_var("_last_purge_waba_checks") == today and db_session is None:
+        return
+
+    retention_days = int(os.getenv("WABA_CHECK_RETENTION_DAYS", "30"))
+    if retention_days <= 0:
+        _set_pkg_var("_last_purge_waba_checks", today)
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    db = db_session if db_session is not None else SessionLocal()
+    try:
+        total_deleted = 0
+        while True:
+            # Busca IDs em lote para deleção rápida
+            ids = [
+                row[0] for row in db.query(models.WabaPaymentCheck.id)
+                .filter(models.WabaPaymentCheck.checked_at < cutoff)
+                .limit(1000)
+                .all()
+            ]
+            if not ids:
+                break
+            deleted = db.query(models.WabaPaymentCheck).filter(
+                models.WabaPaymentCheck.id.in_(ids)
+            ).delete(synchronize_session=False)
+            db.commit()
+            total_deleted += deleted
+            if deleted < 1000:
+                break
+
+        if total_deleted > 0:
+            logger.info(f"🧹 [PURGE] {total_deleted} verificação(ões) antigas de pagamento (WABA) expurgadas (>{retention_days} dias).")
+    except Exception as e:
+        logger.error(f"❌ [PURGE] Erro ao expurgar verificações de pagamento WABA: {e}")
+        db.rollback()
+    finally:
+        if db_session is None:
+            db.close()
+        _set_pkg_var("_last_purge_waba_checks", today)
+
+
+async def run_webhook_events_purge(db_session=None):
+    """
+    Remove eventos brutos de webhook já processados ou com erro com mais de WEBHOOK_EVENT_RETENTION_DAYS dias (padrão: 15 dias).
+    """
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if _get_pkg_var("_last_purge_webhook_events") == today and db_session is None:
+        return
+
+    retention_days = int(os.getenv("WEBHOOK_EVENT_RETENTION_DAYS", "15"))
+    if retention_days <= 0:
+        _set_pkg_var("_last_purge_webhook_events", today)
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    db = db_session if db_session is not None else SessionLocal()
+    try:
+        total_deleted = 0
+        while True:
+            ids = [
+                row[0] for row in db.query(models.WebhookEvent.id)
+                .filter(
+                    models.WebhookEvent.created_at < cutoff,
+                    models.WebhookEvent.status.in_(["processed", "failed", "completed"])
+                )
+                .limit(1000)
+                .all()
+            ]
+            if not ids:
+                break
+            deleted = db.query(models.WebhookEvent).filter(
+                models.WebhookEvent.id.in_(ids)
+            ).delete(synchronize_session=False)
+            db.commit()
+            total_deleted += deleted
+            if deleted < 1000:
+                break
+
+        if total_deleted > 0:
+            logger.info(f"🧹 [PURGE] {total_deleted} evento(s) bruto(s) de webhook expurgado(s) (>{retention_days} dias).")
+    except Exception as e:
+        logger.error(f"❌ [PURGE] Erro ao expurgar eventos de webhook: {e}")
+        db.rollback()
+    finally:
+        if db_session is None:
+            db.close()
+        _set_pkg_var("_last_purge_webhook_events", today)
+
+
+async def run_old_message_status_purge(db_session=None):
+    """
+    Remove registros de MessageStatus de disparos finalizados/cancelados/falhos há mais de MESSAGE_STATUS_RETENTION_DAYS dias (padrão: 90 dias).
+    """
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if _get_pkg_var("_last_purge_message_status") == today and db_session is None:
+        return
+
+    retention_days = int(os.getenv("MESSAGE_STATUS_RETENTION_DAYS", "90"))
+    if retention_days <= 0:
+        _set_pkg_var("_last_purge_message_status", today)
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    db = db_session if db_session is not None else SessionLocal()
+    try:
+        total_deleted = 0
+        while True:
+            ids = [
+                row[0] for row in db.query(models.MessageStatus.id)
+                .filter(models.MessageStatus.timestamp < cutoff)
+                .limit(1000)
+                .all()
+            ]
+            if not ids:
+                break
+            deleted = db.query(models.MessageStatus).filter(
+                models.MessageStatus.id.in_(ids)
+            ).delete(synchronize_session=False)
+            db.commit()
+            total_deleted += deleted
+            if deleted < 1000:
+                break
+
+        if total_deleted > 0:
+            logger.info(f"🧹 [PURGE] {total_deleted} status de mensagens antigas expurgado(s) (>{retention_days} dias).")
+    except Exception as e:
+        logger.error(f"❌ [PURGE] Erro ao expurgar status de mensagens antigas: {e}")
+        db.rollback()
+    finally:
+        if db_session is None:
+            db.close()
+        _set_pkg_var("_last_purge_message_status", today)
+
+
+async def run_all_database_purges(db_session=None):
+    """Executa todas as políticas de expurgo de dados do banco."""
+    await run_history_cleanup()
+    await run_waba_payment_checks_purge(db_session)
+    await run_webhook_events_purge(db_session)
+    await run_old_message_status_purge(db_session)
+

@@ -8,11 +8,11 @@ Este documento registra o plano detalhado de melhorias técnicas, arquiteturais 
 
 | Prioridade | Área | Impacto Técnico | Status |
 | :--- | :--- | :--- | :--- |
-| 🔴 **Alta** | **Indexação de Foreign Keys (FKs)** | Elimina *Sequential Scans* em `JOINs` e previne *Table Locks* em cascata. | ⏳ Pendente |
-| 🔴 **Alta** | **Índices Compostos de Alto Tráfego** | Acelera em até 10x consultas de verificação de bulk e janelas de 24h. | ⏳ Pendente |
-| 🟡 **Média** | **Migração de `json` para `jsonb`** | Reduz uso de disco, acelera leitura e permite filtros por chaves com índices GIN. | ⏳ Pendente |
-| 🟡 **Média** | **Políticas de Retenção e Expurgos (Purge)** | Limpeza em lotes de logs antigos sem travamento de tabelas ativas. | ⏳ Pendente |
-| 🟢 **Baixa** | **Ajuste Fino de Autovacuum** | Previne inchaço de disco (*bloat*) em tabelas com alto volume de inserts/updates. | ⏳ Pendente |
+| 🔴 **Alta** | **Indexação de Foreign Keys (FKs)** | Elimina *Sequential Scans* em `JOINs` e previne *Table Locks* em cascata. | ✅ Concluído |
+| 🔴 **Alta** | **Índices Compostos de Alto Tráfego** | Acelera em até 10x consultas de verificação de bulk e janelas de 24h. | ✅ Concluído |
+| 🟡 **Média** | **Migração de `json` para `jsonb`** | Reduz uso de disco, acelera leitura e permite filtros por chaves com índices GIN. | ✅ Concluído |
+| 🟡 **Média** | **Políticas de Retenção e Expurgos (Purge)** | Limpeza em lotes de logs antigos sem travamento de tabelas ativas. | ✅ Concluído |
+| 🟢 **Baixa** | **Ajuste Fino de Autovacuum** | Previne inchaço de disco (*bloat*) em tabelas com alto volume de inserts/updates. | ✅ Concluído |
 
 ---
 
