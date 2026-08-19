@@ -27,7 +27,7 @@ async def process_scheduled_email_dispatches(db_session=None):
                 ),
                 models.EmailDispatch.status == "processing"
             )
-        ).all()
+        ).with_for_update(skip_locked=True).all()
 
         if not due_dispatches:
             return

@@ -4,26 +4,26 @@ aiormq==6.8.1            # Protocolo AMQP por baixo do aio-pika (dependência in
 pamqp==3.3.0             # Protocolo de comunicação AMQP do RabbitMQ (dependência interna)
 
 # === FRAMEWORK PRINCIPAL (FastAPI) ===
-fastapi==0.128.0         # Framework da API — cria rotas, middlewares, WebSocket, etc.
-starlette==0.49.3        # Base do FastAPI — gerencia requests, responses e middlewares
+fastapi==0.141.1         # Framework da API — cria rotas, middlewares, WebSocket, etc.
+starlette==1.6.0         # Base do FastAPI — gerencia requests, responses e middlewares
 uvicorn[standard]==0.39.0 # Servidor ASGI que roda o FastAPI
 pydantic==2.12.5         # Validação de dados — garante que os dados recebidos estão no formato certo
 pydantic_core==2.41.5    # Motor de validação do Pydantic (dependência interna)
-python-multipart==0.0.20 # Permite receber arquivos e formulários via upload
+python-multipart==0.0.31 # Permite receber arquivos e formulários via upload
 
 # === BANCO DE DADOS ===
 SQLAlchemy==2.0.45       # ORM do banco de dados — permite trabalhar com tabelas como classes Python
 psycopg2-binary==2.9.11  # Driver de conexão com o PostgreSQL
 greenlet==3.2.4          # Necessário para o SQLAlchemy assíncrono funcionar
+alembic==1.18.1          # Versionamento e migrações automatizadas de banco de dados (Fase 3 do Roadmap)
 
 # === AUTENTICAÇÃO E SEGURANÇA ===
-python-jose==3.5.0       # Geração e validação de tokens JWT
+python-jose[cryptography]==3.5.0 # Geração e validação de tokens JWT usando cryptography backend
 bcrypt==4.0.1            # Criptografia de senhas (hash seguro)
 passlib==1.7.4           # Utilitário de hashing de senhas — usa o bcrypt por baixo
-cryptography==46.0.3     # Biblioteca de criptografia geral (dependência do jose e outros)
-ecdsa==0.19.1            # Algoritmo de assinatura digital (dependência do jose)
+cryptography==50.0.0     # Biblioteca de criptografia geral (dependência do jose e outros)
 rsa==4.9.1               # Algoritmo RSA de criptografia (dependência do jose)
-pyasn1==0.6.1            # Formato de dados criptográficos (dependência interna)
+pyasn1==0.6.4            # Formato de dados criptográficos (dependência interna)
 cffi==2.0.0              # Interface com bibliotecas C (dependência da cryptography)
 pycparser==2.23          # Parser C usado pelo cffi (dependência interna)
 
@@ -42,7 +42,7 @@ h11==0.16.0              # Protocolo HTTP/1.1 (dependência interna)
 dnspython==2.7.0         # Resolução de registros MX DNS para envio direto de e-mail marketing
 
 # === VARIÁVEIS DE AMBIENTE ===
-python-dotenv==1.2.1     # Carrega variáveis do arquivo .env para o ambiente
+python-dotenv==1.2.2     # Carrega variáveis do arquivo .env para o ambiente
 
 # === RATE LIMITING ===
 slowapi==0.1.9           # Limita número de requisições por IP (proteção contra abuso)
@@ -70,20 +70,21 @@ annotated-doc==0.0.4     # Suporte a tipos anotados
 annotated-types==0.7.0   # Tipos extras para anotações Python
 anyio==4.12.1            # Compatibilidade entre asyncio e trio (base do FastAPI assíncrono)
 certifi==2026.1.4        # Certificados SSL atualizados para conexões HTTPS
-click==8.1.8             # Criação de comandos CLI (dependência do uvicorn)
+click==8.4.2             # Criação de comandos CLI (dependência do uvicorn)
 Deprecated==1.3.1        # Marca funções como depreciadas (dependência interna)
 exceptiongroup==1.3.1    # Agrupa múltiplas exceções (dependência do anyio)
-idna==3.11               # Suporte a domínios internacionais em URLs
+idna==3.19               # Suporte a domínios internacionais em URLs
 multidict==6.7.0         # Dicionários com múltiplos valores (dependência do yarl/aiohttp)
 packaging==24.2          # Utilitário de versões de pacotes (dependência interna)
 propcache==0.4.1         # Cache de propriedades (dependência interna)
 six==1.17.0              # Compatibilidade Python 2/3 (dependência de libs antigas)
 typing-inspection==0.4.2 # Inspeção de tipos em tempo de execução
 typing_extensions==4.15.0 # Tipos extras do Python para versões antigas
-urllib3==1.26.20         # Cliente HTTP de baixo nível (dependência do boto3)
+urllib3==2.7.0           # Cliente HTTP de baixo nível (dependência do boto3)
 wrapt==2.0.1             # Decoradores avançados (dependência interna)
 yarl==1.22.0             # Manipulação de URLs (dependência do aio-pika)
 
-# === FERRAMENTAS DE TESTE ===
-pytest==8.3.3            # Framework de testes automatizados
-pytest-asyncio==0.24.0   # Suporte a testes assíncronos com pytest
+# === FERRAMENTAS DE TESTE E SEGURANÇA ===
+pytest==9.1.1            # Framework de testes automatizados
+pytest-asyncio==1.3.0    # Suporte a testes assíncronos com pytest
+pip-audit==2.10.1        # Auditoria de vulnerabilidades conhecidas em dependências Python (OSV/PyPA)

@@ -130,7 +130,7 @@ async def run_bulk_crash_detection(db_session=None):
             models.ScheduledTrigger.is_bulk == True,
             models.ScheduledTrigger.status == 'cancelling',
             models.ScheduledTrigger.updated_at < cutoff_cancelling,
-        ).all()
+        ).with_for_update(skip_locked=True).all()
         for tr in stuck_cancelling:
             logger.warning(f"🛑 [CRASH-REAPER] Trigger #{tr.id} preso em 'cancelling' por mais de 2min. Forçando 'cancelled'.")
             tr.status = 'cancelled'
@@ -153,7 +153,7 @@ async def run_bulk_crash_detection(db_session=None):
             models.ScheduledTrigger.is_bulk == True,
             models.ScheduledTrigger.status == 'processing',
             models.ScheduledTrigger.updated_at < cutoff_processing,
-        ).all()
+        ).with_for_update(skip_locked=True).all()
 
         HEARTBEAT_TIMEOUT = 10 * 60
         FAILURE_REASON = (
@@ -266,7 +266,7 @@ async def run_stale_triggers_cleanup(db_session=None):
         stale_waiting = db.query(models.ScheduledTrigger).filter(
             models.ScheduledTrigger.status == 'paused_waiting_delivery',
             models.ScheduledTrigger.updated_at < cutoff_24h
-        ).all()
+        ).with_for_update(skip_locked=True).all()
         
         for tr in stale_waiting:
             logger.warning(f"🧟 [REAPER] Cancelando Trigger {tr.id}: tempo de espera (24h) excedido.")
@@ -293,7 +293,7 @@ async def run_stale_triggers_cleanup(db_session=None):
                     models.ScheduledTrigger.updated_at < cutoff_2h
                 )
             )
-        ).all()
+        ).with_for_update(skip_locked=True).all()
 
         for tr in stale_processing:
             logger.warning(f"🧟 [REAPER] Falhando Trigger {tr.id}: travado em {tr.status} por mais de 2h.")

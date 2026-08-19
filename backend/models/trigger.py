@@ -7,6 +7,11 @@ import uuid
 
 class ScheduledTrigger(Base):
     __tablename__ = "scheduled_triggers"
+    __table_args__ = (
+        Index("ix_scheduled_triggers_client_status_time", "client_id", "status", "scheduled_time"),
+        Index("ix_scheduled_triggers_client_created", "client_id", "created_at"),
+        Index("ix_scheduled_triggers_client_is_bulk", "client_id", "is_bulk"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
@@ -177,6 +182,9 @@ class MessageStatus(Base):
 
 class WebhookIntegration(Base):
     __tablename__ = "webhook_integrations"
+    __table_args__ = (
+        Index("ix_webhook_integrations_client_status", "client_id", "status"),
+    )
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
@@ -258,6 +266,10 @@ class WebhookEventMapping(Base):
 
 class WebhookHistory(Base):
     __tablename__ = "webhook_history"
+    __table_args__ = (
+        Index("ix_webhook_history_integration_created", "integration_id", "created_at"),
+        Index("ix_webhook_history_integration_status", "integration_id", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     integration_id = Column(PG_UUID(as_uuid=True), ForeignKey("webhook_integrations.id"), nullable=False, index=True)
@@ -301,6 +313,11 @@ class GlobalVariable(Base):
 
 class WebhookLead(Base):
     __tablename__ = "webhook_leads"
+    __table_args__ = (
+        Index("ix_webhook_leads_client_phone", "client_id", "phone"),
+        Index("ix_webhook_leads_project_phone", "project_id", "phone"),
+        Index("ix_webhook_leads_client_last_event_at", "client_id", "last_event_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
@@ -330,6 +347,7 @@ class WebhookLead(Base):
 
     is_locked = Column(Boolean, default=False, nullable=False, server_default="false")
     variables = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=dict)
+    metadata_payload = Column("metadata", JSON().with_variant(JSONB, "postgresql"), nullable=True, default=dict)
 
     google_calendar_link = Column(String, nullable=True)
     event_datetime = Column(DateTime(timezone=True), nullable=True)

@@ -61,7 +61,7 @@ async def handle_whatsapp_event(data: dict):
                 # 2. PROCESS INBOUND MESSAGES (INTERACTION)
                 messages = value.get("messages", [])
                 if messages:
-                    await handle_whatsapp_inbound_messages(db, messages, value, metadata)
+                    await handle_whatsapp_inbound_messages(db, messages, value, metadata, client_id=data.get("client_id"))
 
     except Exception as e:
         logger.error(f"❌ Erro crítico no handler de WhatsApp: {e}")

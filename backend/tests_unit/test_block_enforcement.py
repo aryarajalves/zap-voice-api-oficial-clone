@@ -75,11 +75,8 @@ async def test_execute_funnel_global_block(mock_db, mock_chatwoot):
     with patch("core.engine.executor.models", models):
         await execute_funnel(funnel_id, 0, trigger_id, contact_phone, mock_db)
 
-    # Verify
-    assert mock_trigger.status == 'failed'
-    assert "Bloqueado na Plataforma" in mock_trigger.failure_reason
-    # Ensure no message was sent
-    mock_chatwoot.send_message.assert_not_called()
+    # Verify: Funis não são bloqueados por BlockedContact (bloqueio exclusivo de bulk sends)
+    assert mock_trigger.status == 'completed'
 
 @pytest.mark.asyncio
 async def test_process_bulk_send_skips_blocked():

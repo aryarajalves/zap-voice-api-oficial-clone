@@ -8,11 +8,16 @@ import core.worker.handlers.whatsapp as wah
 logger = setup_logger("Worker.WhatsAppInbound.ClientResolver")
 
 
-def resolve_target_client(db, metadata: dict, from_phone: str) -> Tuple[Optional[models.Client], int, List[int]]:
+def resolve_target_client(db, metadata: dict, from_phone: str, explicit_client_id: Optional[int] = None) -> Tuple[Optional[models.Client], int, List[int]]:
     """
     Identifica o client_id associado ao phone_number_id e resolve eventuais colisões de multi-inquilinos.
     Retorna (target_client, target_cid, candidate_cids).
     """
+    if explicit_client_id:
+        target_client = db.query(models.Client).filter(models.Client.id == explicit_client_id).first()
+        if target_client and target_client.is_active:
+            return target_client, explicit_client_id, [explicit_client_id]
+
     candidate_cids = [1]
     pnid = metadata.get("phone_number_id")
     if pnid:

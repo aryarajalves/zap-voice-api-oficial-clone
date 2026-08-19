@@ -127,3 +127,60 @@ class InstagramAccount(Base):
     instagram_username = Column(String, nullable=True)
     status = Column(String, default="active") # active, disconnected
 ```
+
+---
+
+## 🛡️ [PLANEJADO] Criptografia de Senhas Avançada: Argon2id + Pimenta (Pepper HMAC)
+
+### 🎯 Objetivo
+Elevar o nível de segurança e conformidade da autenticação do sistema para o padrão ouro da indústria (recomendação OWASP/NIST), migrando o algoritmo de hash de senhas de **`bcrypt`** para **`Argon2id`** integrado a uma **Pimenta (*Pepper HMAC-SHA256*)** global, com suporte a atualização transparente e progressiva de credenciais sem forçar reset de senhas.
+
+### 🌶️ Como funciona o Pepper (Pimenta) nesta Arquitetura?
+*   **Salt (Sal):** Armazenado no banco de dados junto com o hash, gerado aleatoriamente e exclusivo por usuário.
+*   **Pepper (Pimenta):** Chave criptográfica secreta de 64 caracteres armazenada **exclusivamente nas variáveis de ambiente (`PASSWORD_PEPPER` no `.env`)**, NUNCA gravada no banco de dados.
+*   **Defesa em Profundidade (*Defense in Depth*):** Caso ocorra um vazamento ou dump completo do banco PostgreSQL, os hashes são **matematicamente impossíveis de quebrar por força bruta**, pois o atacante não possui a chave secreta da pimenta do servidor.
+
+### 🛠️ Arquitetura e Estratégia de Migração (Zero-Downtime)
+
+```mermaid
+graph TD
+    A[Usuário digita Senha no Login] --> B[FastAPI: verify_password]
+    B --> C{Tipo de Hash no Banco?}
+    C -->|Argon2id + Pepper| D[Aplica HMAC com PASSWORD_PEPPER]
+    D --> E[Valida via Argon2id]
+    C -->|Bcrypt Legado sem Pepper| F[Valida diretamente com Bcrypt]
+    F -->|Senha Correta| G[Gera HMAC com PASSWORD_PEPPER]
+    G --> H[Re-hasheia em background com Argon2id]
+    H --> I[(Atualiza hashed_password no PostgreSQL)]
+    E --> J[Gera Token JWT de Sessão]
+    I --> J
+```
+
+### 📋 Checklist de Tarefas de Execução
+
+- [ ] **1. Variável de Ambiente (`.env` e `.env.example`):**
+  - Adicionar a variável obrigatória `PASSWORD_PEPPER` com chave segura de 64 caracteres.
+  - Validar na inicialização da aplicação (`core/security.py`) se `PASSWORD_PEPPER` está configurada com tamanho mínimo de 32/64 caracteres.
+- [ ] **2. Dependências do Backend:**
+  - Adicionar `argon2-cffi>=23.1.0` no `backend/requirements.txt` com versão fixa e comentário explicativo.
+  - Testar instalação e compilação das extensões C no container Docker.
+- [ ] **3. Função HMAC Pepper no `core/security.py`:**
+  - Implementar função utilitária `_apply_pepper(password: str) -> str` usando `hmac.new(PASSWORD_PEPPER, password, sha256).hexdigest()`.
+  - Configurar `CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")`.
+  - Calibrar os parâmetros de custo de memória e tempo para equilíbrio ideal:
+    - `memory_cost`: 65536 (64 MB) ou 32768 (32 MB)
+    - `time_cost`: 2 ou 3 iterações
+    - `parallelism`: 1 a 2 threads
+- [ ] **4. Hook de Migração Automática no Login (`routers/auth.py`):**
+  - No fluxo de login, tentar validar primeiro com Argon2id + Pepper.
+  - Se falhar e o hash for bcrypt legado, validar via bcrypt simples (sem pepper).
+  - Em caso de sucesso do hash legado, aplicar HMAC Pepper + Argon2id e atualizar `user.hashed_password` na mesma transação.
+- [ ] **5. Testes Unitários de Segurança:**
+  - Criar `tests_unit/test_argon2_pepper_migration.py`:
+    - Testar geração de hashes com Argon2id + HMAC Pepper.
+    - Testar que a verificação falha caso a senha esteja correta mas a pimenta esteja ausente/incorreta.
+    - Testar login e re-hasheamento automático de hashes legados em bcrypt.
+    - Testar compatibilidade de tokens JWT.
+- [ ] **6. Validação de Desempenho e Carga:**
+  - Monitorar consumo de CPU/RAM em pico de logins concorrentes.
+

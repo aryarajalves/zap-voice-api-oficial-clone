@@ -20,6 +20,11 @@ if not SQLALCHEMY_DATABASE_URL:
 # if not SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
 #    raise ValueError(...)
 
+# Variáveis de configuração do pool de conexões do PostgreSQL
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     from sqlalchemy.pool import StaticPool
     engine = create_engine(
@@ -31,11 +36,11 @@ else:
     # Configura o engine com pool otimizado para evitar timeout de conexões
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
-        pool_pre_ping=True,      # Testa conexão antes de usar (detecta conexões mortas)
-        pool_recycle=3600,       # Recicla conexões a cada 1 hora (evita timeout PostgreSQL)
-        pool_size=100,           # Pool expandido para suportar disparos e eventos em massa
-        max_overflow=100,        # Permite até 200 conexões no total (100 + 100)
-        pool_timeout=60          # Tempo limite de espera por conexão ajustado para 60s
+        pool_pre_ping=True,           # Testa conexão antes de usar (detecta conexões mortas)
+        pool_recycle=3600,            # Recicla conexões a cada 1 hora (evita timeout PostgreSQL)
+        pool_size=DB_POOL_SIZE,       # Pool de conexões persistentes (padrão: 20)
+        max_overflow=DB_MAX_OVERFLOW, # Conexões extras permitidas em picos (padrão: 10)
+        pool_timeout=DB_POOL_TIMEOUT  # Tempo limite de espera por conexão em segundos (padrão: 30)
     )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

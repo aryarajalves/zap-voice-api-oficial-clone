@@ -19,11 +19,29 @@ from models import Base
 def handler(signum, frame):
     raise TimeoutError("Tempo limite excedido para sincronização do esquema.")
 
+def run_alembic_migrations():
+    """Aplica migrações automatizadas via Alembic."""
+    try:
+        from alembic.config import Config
+        from alembic import command
+        ini_path = os.path.join(root_dir, "alembic.ini")
+        if os.path.exists(ini_path):
+            alembic_cfg = Config(ini_path)
+            alembic_cfg.set_main_option("script_location", os.path.join(root_dir, "alembic_migrations"))
+            logger.info("📦 Executando migrações Alembic (alembic upgrade head)...")
+            command.upgrade(alembic_cfg, "head")
+            logger.info("✅ Migrações Alembic aplicadas com sucesso.")
+    except Exception as e_alembic:
+        logger.warning(f"⚠️ Aviso na execução do Alembic: {e_alembic}")
+
 def update_schema():
     """
     Sincronização Dinâmica: Compara os Modelos (Python) com o Banco de Dados (PostgreSQL)
     e adiciona automaticamente qualquer coluna faltante durante o boot do container.
     """
+    # 0. Executa migrações estruturadas do Alembic
+    run_alembic_migrations()
+
     logger.info("🏗️  Iniciando sincronização dinâmica de esquema...")
     
     # Configurar timeout de 30 segundos para o processo

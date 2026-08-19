@@ -67,9 +67,38 @@ def sync_schema():
                         except Exception as e:
                             logger.error(f"❌ Erro ao adicionar coluna {table_name}.{column.name}: {e}")
                             conn.rollback()
-                    else:
-                        # Opcional: verificar se o tipo bate (complexo demais para agora)
-                        pass
+            # 3. Criar índices GIN para colunas JSONB e Trigram no PostgreSQL
+            if engine.dialect.name == "postgresql":
+                logger.info("🔍 Verificando extensão pg_trgm e índices GIN/Trigram no PostgreSQL...")
+                try:
+                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
+                    conn.commit()
+                except Exception as e_ext:
+                    logger.warning(f"⚠️ Aviso ao habilitar pg_trgm: {e_ext}")
+                    conn.rollback()
+
+                special_indexes = [
+                    # GIN JSONB
+                    "CREATE INDEX IF NOT EXISTS idx_leads_metadata_gin ON webhook_leads USING gin (metadata);",
+                    "CREATE INDEX IF NOT EXISTS idx_leads_variables_gin ON webhook_leads USING gin (variables);",
+                    "CREATE INDEX IF NOT EXISTS idx_webhook_history_payload_gin ON webhook_history USING gin (payload);",
+                    "CREATE INDEX IF NOT EXISTS idx_webhook_history_processed_data_gin ON webhook_history USING gin (processed_data);",
+                    "CREATE INDEX IF NOT EXISTS idx_scheduled_triggers_processed_data_gin ON scheduled_triggers USING gin (processed_data);",
+                    # Trigram GIN (FTS / Substring / Fuzzy Search)
+                    "CREATE INDEX IF NOT EXISTS trgm_idx_leads_name ON webhook_leads USING gin (name gin_trgm_ops);",
+                    "CREATE INDEX IF NOT EXISTS trgm_idx_leads_phone ON webhook_leads USING gin (phone gin_trgm_ops);",
+                    "CREATE INDEX IF NOT EXISTS trgm_idx_leads_email ON webhook_leads USING gin (email gin_trgm_ops);",
+                    "CREATE INDEX IF NOT EXISTS trgm_idx_chat_messages_content ON chat_messages USING gin (content gin_trgm_ops);",
+                    "CREATE INDEX IF NOT EXISTS trgm_idx_chat_conversations_name ON chat_conversations USING gin (contact_name gin_trgm_ops);",
+                    "CREATE INDEX IF NOT EXISTS trgm_idx_chat_conversations_phone ON chat_conversations USING gin (phone gin_trgm_ops);"
+                ]
+                for idx_sql in special_indexes:
+                    try:
+                        conn.execute(text(idx_sql))
+                        conn.commit()
+                    except Exception as e_idx:
+                        logger.warning(f"⚠️ Aviso ao criar índice especial: {e_idx}")
+                        conn.rollback()
 
         logger.info("🚀 Sincronização de esquema finalizada com sucesso!")
         

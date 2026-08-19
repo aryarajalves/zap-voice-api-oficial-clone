@@ -35,6 +35,7 @@ from .capture_page import CapturePageConfig, CapturePageLead
 from .email import EmailConfig, EmailTemplate, EmailDispatch, EmailInbound
 from .payment_monitor import WabaPaymentCheck
 from .quick_message import QuickMessage
+from .dispatch_log import DispatchLog
 
 # This allows importing all models from the models package
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "User",
     "Project",
     "Client",
+    "DispatchLog",
     "AppConfig",
     "BlockedContact",
     "ContactWindow",

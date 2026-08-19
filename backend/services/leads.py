@@ -192,6 +192,15 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
             if extra_custom:
                 current_vars.update({k: v for k, v in extra_custom.items() if v is not None})
             lead.variables = current_vars
+
+            current_meta = dict(lead.metadata_payload or {})
+            if parsed_data.get("metadata"):
+                current_meta.update(parsed_data.get("metadata"))
+            elif parsed_data.get("raw_payload"):
+                current_meta["raw_payload"] = parsed_data.get("raw_payload")
+            if extra_custom:
+                current_meta.update({k: v for k, v in extra_custom.items() if v is not None})
+            lead.metadata_payload = current_meta
             
             lead.tags = ", ".join(current_tags)
 
@@ -229,6 +238,12 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
             if extra_custom:
                 lead_vars.update({k: v for k, v in extra_custom.items() if v is not None})
 
+            lead_meta = dict(parsed_data.get("metadata") or {})
+            if parsed_data.get("raw_payload") and "raw_payload" not in lead_meta:
+                lead_meta["raw_payload"] = parsed_data.get("raw_payload")
+            if extra_custom:
+                lead_meta.update({k: v for k, v in extra_custom.items() if v is not None})
+
             lead = models.WebhookLead(
                 client_id=client_id,
                 project_id=proj_id,
@@ -244,7 +259,8 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
                 price=price,
                 tags=", ".join(tags_to_add) if tags_to_add else None,
                 total_events=1,
-                variables=lead_vars
+                variables=lead_vars,
+                metadata_payload=lead_meta
             )
             db.add(lead)
         

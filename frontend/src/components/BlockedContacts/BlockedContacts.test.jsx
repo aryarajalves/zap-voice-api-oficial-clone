@@ -102,7 +102,7 @@ describe('BlockedContacts Component', () => {
         
         await waitFor(() => screen.getByText('5511999999999'));
         
-        const deleteButtons = screen.getAllByTitle('Desbloquear');
+        const deleteButtons = screen.getAllByTitle(/Desbloquear/i);
         fireEvent.click(deleteButtons[0]);
         
         expect(screen.getByText(/Tem certeza que deseja remover o bloqueio/i)).toBeInTheDocument();

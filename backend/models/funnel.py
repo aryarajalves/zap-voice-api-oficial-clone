@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -64,6 +64,10 @@ class WebhookConfig(Base):
 
 class WebhookEvent(Base):
     __tablename__ = "webhook_events"
+    __table_args__ = (
+        Index("ix_webhook_events_webhook_status", "webhook_id", "status"),
+        Index("ix_webhook_events_webhook_external", "webhook_id", "external_id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     webhook_id = Column(Integer, ForeignKey("webhook_configs.id"), nullable=False, index=True)

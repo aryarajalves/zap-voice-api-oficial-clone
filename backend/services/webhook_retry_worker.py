@@ -1,4 +1,4 @@
-﻿"""
+"""
 webhook_retry_worker.py
 Worker de background que reenvia webhooks que falharam (status=failed) para o AgentFlow.
 
@@ -117,7 +117,7 @@ def _process_retry_batch():
                 (models.ChatMessage.agentflow_retry_at == None) |
                 (models.ChatMessage.agentflow_retry_at <= now)
             )
-        ).all()
+        ).with_for_update(skip_locked=True).all()
 
         if not candidates:
             return

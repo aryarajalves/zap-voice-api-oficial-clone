@@ -115,6 +115,7 @@
 - **Repositório Oficial:** `https://github.com/aryarajalves/zap-voice-api-oficial-clone.git`.
 - **Protocolo de Commits:** Sempre utilize o padrão Conventional Commits em português do Brasil.
 - **Atualização Obrigatória:** Sempre que realizar alterações, criar ou atualizar funcionalidades no repositório, você deve atualizar o `README.md` refletindo as novas funcionalidades, guias ou modificações efetuadas.
+- **Auditoria de Segurança Obrigatória (pip-audit):** Antes de qualquer commit ou push no repositório do GitHub, é OBRIGATÓRIO rodar o `pip-audit` (`python scripts/audit_security.py`) para validar que as dependências do `backend/requirements.txt` estão sem vulnerabilidades de segurança conhecidas.
 
 ---
 

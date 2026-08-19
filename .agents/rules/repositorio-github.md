@@ -15,6 +15,17 @@ O repositório oficial do projeto é:
 4. O branch principal é o `main` — nunca fazer force push no `main`.
 5. Toda mensagem de commit (título e corpo) deve obrigatoriamente estar em **português do Brasil**.
 6. É OBRIGATÓRIO manter o arquivo `README.md` atualizado com a versão corrente antes de realizar qualquer commit ou push.
+7. É OBRIGATÓRIO executar a auditoria de segurança de dependências (`pip-audit`) antes de qualquer commit ou push no repositório, garantindo que o código enviado esteja livre de vulnerabilidades conhecidas.
+
+## 🛡️ Auditoria de Segurança de Dependências (pip-audit) Antes do Push
+
+**Antes de qualquer `git push` ou atualização no repositório, é obrigatório executar a verificação de segurança das bibliotecas:**
+1. Executar o script de auditoria:
+   ```bash
+   python scripts/audit_security.py
+   ```
+   *(ou `$env:PYTHONUTF8="1"; python -m pip_audit -r backend/requirements.txt`)*
+2. Certificar-se de que as dependências do `backend/requirements.txt` foram auditadas e estão sem vulnerabilidades críticas conhecidas.
 
 ## 🧹 Limpeza Obrigatória da Raiz Antes do Push
 

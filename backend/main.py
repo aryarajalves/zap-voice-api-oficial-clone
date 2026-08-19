@@ -127,7 +127,7 @@ ENABLE_DOCS = os.getenv("ENABLE_DOCS", "true").lower() == "true"
 
 app = FastAPI(
     title="ZapVoice - API Oficial de Automação & Mensageria",
-    version="1.8.0",
+    version="1.8.1",
     docs_url="/docs" if ENABLE_DOCS else None,
     redoc_url="/redoc" if ENABLE_DOCS else None,
     openapi_url="/openapi.json" if ENABLE_DOCS else None,
@@ -399,6 +399,12 @@ async def startup_event():
         # Inicia a task de backup agendado
         asyncio.create_task(backup_scheduler_task())
         await asyncio.sleep(3)
+        try:
+            from services.pg_realtime_listener import start_pg_listener
+            await start_pg_listener()
+        except Exception as e_pg:
+            logger.error(f"❌ Erro ao iniciar pg_realtime_listener: {e_pg}")
+
         try:
             await event_listener()
         except Exception as e:
@@ -858,7 +864,7 @@ async def root():
         "message": "ZapVoice API",
         "docs": "/docs",
         "status": "online",
-        "version": "1.4.8",
+        "version": "1.8.1",
         "mode": "production"
     }
 

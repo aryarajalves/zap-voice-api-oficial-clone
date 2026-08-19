@@ -1,4 +1,5 @@
 import asyncio
+from typing import Optional
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import text
 import models
@@ -39,7 +40,7 @@ def _get_logger():
     return getattr(inb, "logger", logger)
 
 
-async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, metadata: dict):
+async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, metadata: dict, client_id: Optional[int] = None):
     """
     Processa mensagens de entrada brutas da Meta (Inbound / Interações).
     """
@@ -82,7 +83,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
             wah.GLOBAL_PROCESSING_LOCKS[mem_lock_key] = now
 
             # 3. Resolução de cliente alvo e multi-tenant
-            target_client, target_cid, candidate_cids = resolve_target_client(db, metadata, from_phone)
+            target_client, target_cid, candidate_cids = resolve_target_client(db, metadata, from_phone, explicit_client_id=client_id)
             if not target_client or not target_client.is_active:
                 log.warning(f"🚫 [INBOUND] Mensagem ignorada. O cliente ID {target_cid} está inativo ou não existe.")
                 continue
