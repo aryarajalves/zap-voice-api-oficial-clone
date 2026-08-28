@@ -69,7 +69,7 @@ Este documento consolida o diagnóstico de segurança da aplicação **ZapVoice*
   ports:
     - 8000:8000
   ```
-  enquanto o serviço já está integrado à rede interna do Traefik (`docker_zapvoice_net`).
+  enquanto o serviço já está integrado à rede interna do Traefik (`network_swarm_public`).
 * **Risco e Impacto:**
   Se a porta 8000 não estiver bloqueada no firewall do host (UFW/Security Group), invasores podem acessar a API diretamente via `http://IP-DO-SERVIDOR:8000`, contornando certificados SSL, autenticação do Traefik, WAF ou bloqueios de IP.
 * **Como corrigir:**

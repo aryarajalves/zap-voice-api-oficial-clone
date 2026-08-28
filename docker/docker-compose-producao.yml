@@ -6,10 +6,9 @@ services:
   # ==========================================
   zapvoice_app:
     image: aryalvesfernandes/zapvoice:backend-1.8.2
-    container_name: zap-voice-api-oficial
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
-      - docker_zapvoice_net
+      - network_swarm_public
 
     volumes:
       - zapvoice_uploads:/app/static/uploads
@@ -81,7 +80,7 @@ services:
           - node.role == manager
       labels:
         - traefik.enable=true
-        - traefik.docker.network=docker_zapvoice_net
+        - traefik.docker.network=network_swarm_public
         - traefik.http.routers.zapvoice.rule=Host(`${DOMAIN:-seu-dominio.com}`)
         - traefik.http.routers.zapvoice.entrypoints=websecure
         - traefik.http.routers.zapvoice.tls.certresolver=letsencryptresolver
@@ -95,7 +94,7 @@ services:
     command: python worker.py
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
-      - docker_zapvoice_net
+      - network_swarm_public
     volumes:
       - zapvoice_uploads:/app/static/uploads
       - zapvoice_logs:/app/logs
@@ -166,6 +165,6 @@ volumes:
     name: zapvoice_logs
 
 networks:
-  docker_zapvoice_net:
-    name: docker_zapvoice_net
+  network_swarm_public:
+    name: network_swarm_public
     external: true

@@ -26,7 +26,7 @@ def test_production_docker_compose_security_ports():
     labels_text = " ".join(deploy_labels)
     assert "traefik.enable=true" in labels_text
     assert "websecure" in labels_text
-    assert "traefik.docker.network=docker_zapvoice_net" in labels_text
+    assert "traefik.docker.network=network_swarm_public" in labels_text
 
 def test_production_docker_compose_no_hardcoded_env_file():
     """
@@ -41,4 +41,8 @@ def test_production_docker_compose_no_hardcoded_env_file():
     for s_name, service in services.items():
         assert "env_file" not in service, f"Serviço {s_name} não deve usar 'env_file:' no compose de produção para evitar falha ao clonar via Portainer/Git."
         assert "environment" in service, f"Serviço {s_name} deve utilizar o bloco 'environment:' para receber variáveis de ambiente."
+
+    networks = compose_data.get("networks", {})
+    assert "network_swarm_public" in networks, "A rede network_swarm_public deve estar declarada no compose de produção."
+    assert networks["network_swarm_public"].get("external") is True, "A rede network_swarm_public deve ser externa."
 
