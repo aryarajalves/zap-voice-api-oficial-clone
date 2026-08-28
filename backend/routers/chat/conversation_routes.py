@@ -76,6 +76,7 @@ async def list_conversations(
     urgent_only: Optional[bool] = None,
     has_replied: Optional[bool] = None,
     has_active_funnel: Optional[bool] = None,
+    order_by: str = "recent",
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1),
     client_id: int = Depends(get_client_id),
@@ -219,10 +220,59 @@ async def list_conversations(
             models.ChatConversation.private_note != ''
         )
 
-    conversations = query.order_by(
-        models.ChatConversation.pinned.desc(),
-        models.ChatConversation.last_message_at.desc()
-    ).all()
+    # Ordenação flexível: conversas fixadas SEMPRE aparecem no topo
+    effective_last_at = func.coalesce(models.ChatConversation.last_message_at, models.ChatConversation.created_at)
+
+    if order_by == "oldest":
+        query = query.order_by(
+            models.ChatConversation.pinned.desc(),
+            effective_last_at.asc()
+        )
+    elif order_by == "name_asc":
+        query = query.order_by(
+            models.ChatConversation.pinned.desc(),
+            func.lower(func.coalesce(models.ChatConversation.contact_name, models.ChatConversation.phone)).asc()
+        )
+    elif order_by == "name_desc":
+        query = query.order_by(
+            models.ChatConversation.pinned.desc(),
+            func.lower(func.coalesce(models.ChatConversation.contact_name, models.ChatConversation.phone)).desc()
+        )
+    elif order_by == "messages_desc":
+        msg_count_subq = (
+            db.query(models.ChatMessage.conversation_id, func.count(models.ChatMessage.id).label("cnt"))
+            .group_by(models.ChatMessage.conversation_id)
+            .subquery()
+        )
+        query = query.outerjoin(msg_count_subq, models.ChatConversation.id == msg_count_subq.c.conversation_id).order_by(
+            models.ChatConversation.pinned.desc(),
+            func.coalesce(msg_count_subq.c.cnt, 0).desc(),
+            effective_last_at.desc()
+        )
+    elif order_by == "messages_asc":
+        msg_count_subq = (
+            db.query(models.ChatMessage.conversation_id, func.count(models.ChatMessage.id).label("cnt"))
+            .group_by(models.ChatMessage.conversation_id)
+            .subquery()
+        )
+        query = query.outerjoin(msg_count_subq, models.ChatConversation.id == msg_count_subq.c.conversation_id).order_by(
+            models.ChatConversation.pinned.desc(),
+            func.coalesce(msg_count_subq.c.cnt, 0).asc(),
+            effective_last_at.asc()
+        )
+    elif order_by == "unread_desc":
+        query = query.order_by(
+            models.ChatConversation.pinned.desc(),
+            models.ChatConversation.unread_count.desc(),
+            effective_last_at.desc()
+        )
+    else:  # default "recent"
+        query = query.order_by(
+            models.ChatConversation.pinned.desc(),
+            effective_last_at.desc()
+        )
+
+    conversations = query.all()
     
     if label:
         clean_label = label.strip().lower()
@@ -298,6 +348,7 @@ async def list_conversations(
             "last_contact_message_at": c.last_contact_message_at.isoformat() if c.last_contact_message_at else None,
             "pinned": c.pinned,
             "urgent": c.urgent,
+            "pinned_message_id": c.pinned_message_id,
             "private_note": c.private_note,
             "block_status": block_type,
             "resting_until": resting_until.isoformat() if resting_until else None,
@@ -333,12 +384,153 @@ async def update_conversation_status(
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")
 
     status = payload.get("status")
-    if status not in ["open", "resolved"]:
-        raise HTTPException(status_code=400, detail="Status inválido. Use 'open' ou 'resolved'.")
+    if status not in ["open", "resolved", "archived"]:
+        raise HTTPException(status_code=400, detail="Status inválido. Use 'open', 'resolved' ou 'archived'.")
 
     convo.status = status
     db.commit()
     return {"status": "ok", "conversation_status": convo.status}
+
+
+@router.post("/chat/conversations/{conversation_id}/archive")
+async def toggle_archive_conversation(
+    conversation_id: int,
+    payload: Optional[dict] = None,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    convo = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id == conversation_id,
+        models.ChatConversation.client_id == client_id
+    ).first()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    if payload and isinstance(payload, dict) and "archived" in payload:
+        target_archived = bool(payload.get("archived"))
+    else:
+        target_archived = convo.status != "archived"
+
+    convo.status = "archived" if target_archived else "open"
+    db.commit()
+    return {
+        "status": "ok",
+        "conversation_id": convo.id,
+        "conversation_status": convo.status,
+        "is_archived": convo.status == "archived"
+    }
+
+
+@router.post("/chat/conversations/bulk-archive")
+async def bulk_archive_conversations(
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
+
+    target_status = "archived" if payload.get("archived", True) else "open"
+    select_all_pages = payload.get("select_all_pages", False)
+
+    if select_all_pages:
+        query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
+
+        tab = payload.get("tab", "todos")
+        status = payload.get("status", "open")
+        search = payload.get("search")
+        label = payload.get("label")
+        block_status = payload.get("block_status")
+        has_note = payload.get("has_note")
+        start_date = payload.get("start_date")
+        end_date = payload.get("end_date")
+        unread_only = payload.get("unread_only")
+        window_open_only = payload.get("window_open_only")
+        has_replied = payload.get("has_replied")
+
+        if status != "all":
+            query = query.filter(models.ChatConversation.status == status)
+
+        if unread_only:
+            query = query.filter(models.ChatConversation.unread_count > 0)
+
+        if window_open_only:
+            limit_time = datetime.utcnow() - timedelta(hours=24)
+            query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
+
+        if has_replied:
+            query = query.filter(models.ChatConversation.last_contact_message_at.isnot(None))
+
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                query = query.filter(models.ChatConversation.last_message_at >= start_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear start_date em bulk_archive: {e_dt}")
+
+        if end_date:
+            try:
+                end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time(23, 59, 59, 999999))
+                query = query.filter(models.ChatConversation.last_message_at <= end_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear end_date em bulk_archive: {e_dt}")
+
+        if tab == "minha":
+            query = query.filter(models.ChatConversation.assigned_user_id == current_user.id)
+        elif tab == "nao_atribuida":
+            query = query.filter(models.ChatConversation.assigned_user_id == None)
+
+        if search:
+            search_term = f"%{search}%"
+            message_match = (
+                db.query(models.ChatMessage.id)
+                .filter(
+                    models.ChatMessage.conversation_id == models.ChatConversation.id,
+                    models.ChatMessage.content.ilike(search_term)
+                )
+                .exists()
+            )
+            query = query.filter(
+                models.ChatConversation.contact_name.ilike(search_term) |
+                models.ChatConversation.phone.ilike(search_term) |
+                message_match
+            )
+
+        if has_note:
+            query = query.filter(
+                models.ChatConversation.private_note.isnot(None),
+                models.ChatConversation.private_note != ''
+            )
+
+        convos = query.all()
+
+        if label:
+            clean_label = label.strip().lower()
+            convos = [
+                c for c in convos
+                if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
+            ]
+    else:
+        ids = payload.get("ids", [])
+        if not ids:
+            raise HTTPException(status_code=400, detail="Nenhum ID fornecido.")
+        convos = db.query(models.ChatConversation).filter(
+            models.ChatConversation.id.in_(ids),
+            models.ChatConversation.client_id == client_id
+        ).all()
+
+    updated_count = len(convos)
+    for c in convos:
+        c.status = target_status
+    db.commit()
+
+    return {
+        "status": "ok",
+        "updated_count": updated_count,
+        "target_status": target_status
+    }
 
 
 @router.post("/chat/conversations/{conversation_id}/assign")

@@ -11,7 +11,7 @@ from sqlalchemy import desc, or_, func as sa_func
 from pydantic import BaseModel
 
 import models
-from core.deps import get_db
+from core.deps import get_db, get_validated_client_id
 from core.permissions import require_premium
 from services.leads import upsert_webhook_lead
 from core.logger import setup_logger
@@ -63,19 +63,19 @@ router = APIRouter()
 @router.post("/leads/bulk", summary="Salvar múltiplos leads em massa")
 def bulk_create_leads(
     request: BulkCreateLeadsRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     """
     Cria ou atualiza uma lista de leads em massa com alta performance.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     if not request.leads:
         return {"status": "success", "imported": 0}
 
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
     proj_id = active_client.project_id if active_client else None
+
 
     # Pré-carregar TODOS os contatos existentes em memória (1 consulta SQL ao invés de N)
     if proj_id:
@@ -309,7 +309,7 @@ async def execute_import(
     mapping: str = Form(...),
     fixed_tags: Optional[str] = Form(None),
     fixed_remove_tags: Optional[str] = Form(None),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
@@ -317,7 +317,6 @@ async def execute_import(
     Inicia o processamento do arquivo aplicando o mapeamento de colunas em segundo plano.
     """
     try:
-        client_id = x_client_id if x_client_id else current_user.client_id
         mapping_dict = json.loads(mapping)
 
         # Buscar projeto associado ao cliente
@@ -421,15 +420,13 @@ async def execute_import(
 def get_import_history(
     skip: int = 0,
     limit: int = 20,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     """
     Retorna o histórico de importações paginado para o cliente ativo (ou do projeto associado).
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-    
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
     proj_id = active_client.project_id if active_client else None
     
@@ -457,14 +454,13 @@ def get_import_results(
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     """
     Lista o resultado linha a linha de uma importação: contatos importados, atualizados e rejeitados.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     history = db.query(models.ContactImportHistory).filter(
         models.ContactImportHistory.id == import_id,
         models.ContactImportHistory.client_id == client_id
@@ -506,14 +502,13 @@ def get_import_results(
 def rename_import(
     import_id: int,
     request: RenameImportRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     """
     Renomeia o arquivo ou lista importada.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     history = db.query(models.ContactImportHistory).filter(
         models.ContactImportHistory.id == import_id,
         models.ContactImportHistory.client_id == client_id
@@ -531,11 +526,10 @@ def rename_import(
 @router.delete("/leads/import/{import_id}", summary="Deletar uma importação do histórico")
 def delete_import(
     import_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     history = db.query(models.ContactImportHistory).filter(
         models.ContactImportHistory.id == import_id,
         models.ContactImportHistory.client_id == client_id
@@ -552,11 +546,10 @@ def delete_import(
 @router.post("/leads/import/bulk-delete", summary="Deletar múltiplas importações do histórico")
 def bulk_delete_imports(
     request: DeleteImportsRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     deleted_count = db.query(models.ContactImportHistory).filter(
         models.ContactImportHistory.id.in_(request.import_ids),
         models.ContactImportHistory.client_id == client_id
@@ -564,6 +557,7 @@ def bulk_delete_imports(
     
     db.commit()
     return {"status": "success", "message": f"{deleted_count} importações deletadas com sucesso."}
+
 
 
 __all__ = [

@@ -27,7 +27,9 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 ## 🕒 Histórico de Migrações (Últimas Alterações)
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
-| :--- | :--- | :--- | :--- | :--- |
+| 26/08/2026 | Índice de Performance em Mensagens Favoritas | `chat_messages` | Índice composto `idx_chat_messages_starred` em `(conversation_id, is_starred, timestamp DESC)` | `backend/add_starred_messages_index.py` |
+| 26/08/2026 | Fixar e Favoritar Mensagens de Chat | `chat_conversations`, `chat_messages` | `pinned_message_id` em `chat_conversations`, `is_starred` em `chat_messages` | `backend/add_chat_message_pin_and_star.py` |
+| 24/08/2026 | Validação de E-mail via Brevo no Cadastro | `email_verification_codes` | Tabela nova completa (`id`, `email`, `code`, `token`, `created_at`, `expires_at`, `is_used`, `attempts`) | `backend/scripts/database/create_email_verification_codes_table.py` |
 | 14/08/2026 | Monitoramento de Falha de Pagamento WABA | `waba_payment_checks` | Tabela nova completa (`client_id`, `checked_at`, `status`, `check_type`, `account_review_status`, `currency`, `payment_method_status`, `credit_line_status`, `has_error`, `details`, `raw_data`) | `backend/scripts/add_waba_payment_checks_table.py` |
 | 14/08/2026 | Gatilho por Palavra-Chave & Limite de Frequência | `funnels` | `trigger_match_type`, `trigger_limit_type`, `is_trigger_active` | `backend/scripts/add_funnel_keyword_trigger_columns.py` |
 | 12/08/2026 | Índice Composto de Resultados de Importação | `import_row_results` | Índice composto `idx_import_row_results_import_status` em `(import_id, status)` | `backend/scripts/add_import_row_results_composite_index.py` |
@@ -191,5 +193,12 @@ docker exec zapvoice_app python /app/add_webhook_retry_columns.py
 docker exec zapvoice_app python /app/scripts/add_email_marketing_tables.py
 ```
 
+## 📋 Registro de Domínio: Suporte a Status "archived" no Chat (2026-08-27)
 
+**Tabela afetada:** `chat_conversations`
 
+**Coluna:** `status` (`VARCHAR`)
+
+**Valores suportados:** `'open'`, `'resolved'`, `'archived'`
+
+**Contexto:** Funcionalidade de arquivamento de conversas no Painel de Atendimento (individual e em lote). Não exige alteração de DDL pois a coluna `status` já é indexada e do tipo `VARCHAR`, agora aceitando o valor `'archived'`.

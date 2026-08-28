@@ -6,7 +6,7 @@ import models
 import httpx
 import random
 import os
-from core.deps import get_current_user, get_db
+from core.deps import get_db, get_current_user, get_validated_client_id
 from core.permissions import require_premium, require_feature
 from core.logger import setup_logger
 
@@ -73,11 +73,10 @@ def list_logs(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("settings"))
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     query = db.query(models.InstagramLog).filter(
         models.InstagramLog.client_id == client_id
     )
@@ -115,11 +114,10 @@ def list_logs(
 
 @router.get("/automations", response_model=List[InstagramAutomationResponse])
 def list_automations(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("settings"))
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     automations = db.query(models.InstagramAutomation).filter(
         models.InstagramAutomation.client_id == client_id
     ).all()
@@ -127,12 +125,10 @@ def list_automations(
 
 @router.get("/posts")
 def get_instagram_posts(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("settings"))
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
-    
     # Obter credenciais
     account_id_cfg = db.query(models.AppConfig).filter(
         models.AppConfig.client_id == client_id,
@@ -176,12 +172,10 @@ def get_instagram_posts(
 @router.post("/automations", response_model=InstagramAutomationResponse)
 def create_automation(
     automation_in: InstagramAutomationCreate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
-    
     # Validações básicas
     if automation_in.trigger_type == "keyword" and not automation_in.keywords:
         raise HTTPException(status_code=400, detail="Palavras-chave são obrigatórias quando o tipo de gatilho for 'keyword'.")
@@ -210,11 +204,10 @@ def create_automation(
 def update_automation(
     automation_id: int,
     automation_in: InstagramAutomationCreate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     db_automation = db.query(models.InstagramAutomation).filter(
         models.InstagramAutomation.id == automation_id,
         models.InstagramAutomation.client_id == client_id
@@ -233,11 +226,10 @@ def update_automation(
 @router.delete("/automations/{automation_id}")
 def delete_automation(
     automation_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     db_automation = db.query(models.InstagramAutomation).filter(
         models.InstagramAutomation.id == automation_id,
         models.InstagramAutomation.client_id == client_id
@@ -249,6 +241,7 @@ def delete_automation(
     db.delete(db_automation)
     db.commit()
     return {"status": "success", "message": "Automação deletada com sucesso."}
+
 
 
 # --- Webhook do Meta para Instagram ---

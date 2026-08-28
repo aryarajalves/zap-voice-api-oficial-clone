@@ -19,8 +19,9 @@ alembic==1.18.1          # Versionamento e migrações automatizadas de banco de
 
 # === AUTENTICAÇÃO E SEGURANÇA ===
 python-jose[cryptography]==3.5.0 # Geração e validação de tokens JWT usando cryptography backend
-bcrypt==4.0.1            # Criptografia de senhas (hash seguro)
-passlib==1.7.4           # Utilitário de hashing de senhas — usa o bcrypt por baixo
+argon2-cffi==23.1.0          # Algoritmo de hash de alta segurança Memory-Hard contra ataques por GPU
+bcrypt==4.0.1            # Criptografia de senhas (hash seguro legado para compatibilidade)
+passlib==1.7.4           # Utilitário de hashing de senhas — suporta Argon2 e Bcrypt
 cryptography==50.0.0     # Biblioteca de criptografia geral (dependência do jose e outros)
 rsa==4.9.1               # Algoritmo RSA de criptografia (dependência do jose)
 pyasn1==0.6.4            # Formato de dados criptográficos (dependência interna)

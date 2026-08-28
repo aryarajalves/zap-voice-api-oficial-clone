@@ -17,8 +17,13 @@
             return;
           }
 
+          if (pathname.startsWith('/invite') || hash.startsWith('#/invite')) {
+            document.write('<title>Criando Conta</title>');
+            return;
+          }
+
           // Se for rota de captura pública (ex: /captulra ou /p/slug ou #/p/), não escrever título fixo ZapVoice
-          const isReserved = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads'].includes(pathname);
+          const isReserved = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads', '/invite'].includes(pathname);
           const isPublicCapture = pathname.startsWith('/p/') || hash.startsWith('#/p/') || (!isReserved && pathname.length > 1);
           if (isPublicCapture) {
             document.write('<title>Carregando...</title>');
@@ -39,6 +44,8 @@
         document.write('<title>ZapVoice</title>');
       })();
     </script>
+    <!-- Preload da imagem hero de alta prioridade -->
+    <link rel="preload" as="image" href="/login_hero.webp" type="image/webp" fetchpriority="high" />
     <!-- Script de configuração dinâmica (Gerado no runtime pelo Docker) -->
     <script src="/env-config.js"></script>
   </head>

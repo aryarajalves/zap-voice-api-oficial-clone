@@ -36,12 +36,16 @@ from .email import EmailConfig, EmailTemplate, EmailDispatch, EmailInbound
 from .payment_monitor import WabaPaymentCheck
 from .quick_message import QuickMessage
 from .dispatch_log import DispatchLog
+from .verification_code import EmailVerificationCode
+from .password_reset_token import PasswordResetToken
 
 # This allows importing all models from the models package
 __all__ = [
     "Base",
     "user_clients",
     "User",
+    "EmailVerificationCode",
+    "PasswordResetToken",
     "Project",
     "Client",
     "DispatchLog",

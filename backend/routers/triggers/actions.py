@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Body
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from pydantic import BaseModel, Field
 import uuid
 import models, schemas
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
 from rabbitmq_client import rabbitmq
 from services.triggers_service import (
     reconcile_trigger_stats_logic, 
@@ -18,11 +18,10 @@ router = APIRouter()
 @router.post("/{trigger_id}/reconcile", summary="Reconciliar contadores do disparo")
 async def reconcile_trigger_stats(
     trigger_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     result = await reconcile_trigger_stats_logic(trigger_id, client_id, db)
     if not result:
         raise HTTPException(status_code=404, detail="Disparo não encontrado.")
@@ -36,11 +35,10 @@ async def reconcile_trigger_stats(
 @router.post("/{trigger_id}/sync-dynamic-label", summary="Sincronizar contatos da etiqueta dinâmica agora")
 async def sync_dynamic_label(
     trigger_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id, client_id=client_id).first()
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo não encontrado.")
@@ -48,11 +46,9 @@ async def sync_dynamic_label(
     if not getattr(trigger, "is_dynamic_label", False):
         return {"status": "ignored", "message": "Este disparo não é por etiqueta dinâmica", "total_contacts": trigger.total_contacts or 0}
 
-    from chatwoot_client import ChatwootClient
     from services.bulk import refresh_dynamic_label_contacts
 
-    chatwoot = ChatwootClient(client_id=client_id)
-    new_contacts = await refresh_dynamic_label_contacts(trigger, chatwoot)
+    new_contacts = await refresh_dynamic_label_contacts(trigger, db=db)
     if new_contacts is not None:
         trigger.contacts_list = new_contacts
         trigger.total_contacts = len(new_contacts)
@@ -69,15 +65,15 @@ async def sync_dynamic_label(
 
 @router.post("/backfill-sent-as", summary="Preencher sent_as histórico")
 def backfill_sent_as(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     triggers = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.client_id == client_id,
         models.ScheduledTrigger.sent_as == None
     ).all()
+
 
     updated = 0
     for trigger in triggers:
@@ -197,14 +193,13 @@ class ChatwootLabelPayload(BaseModel):
 async def apply_chatwoot_label(
     trigger_id: int,
     payload: ChatwootLabelPayload,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     from core.logger import setup_logger
     logger = setup_logger("local-chat-label")
 
-    client_id = x_client_id if x_client_id else current_user.client_id
     trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id, client_id=client_id).first()
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo nao encontrado.")
@@ -300,14 +295,14 @@ class ManualInteractionPayload(BaseModel):
 async def trigger_manual_interaction(
     trigger_id: int,
     payload: ManualInteractionPayload,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     trigger = db.query(models.ScheduledTrigger).filter_by(id=trigger_id, client_id=client_id).first()
     if not trigger:
         raise HTTPException(status_code=404, detail="Disparo não encontrado.")
+
     
     if not trigger.interaction_funnel_id:
         raise HTTPException(status_code=400, detail="Este disparo não possui um funil de interação configurado.")

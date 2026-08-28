@@ -1,0 +1,26 @@
+# Backend .dockerignore
+*.backup.*
+**/*.backup.*
+*.bak
+**/*.bak
+*.old
+**/*.old
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+tests/
+tests_unit/
+**/tests_unit/
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+*.log
+logs/
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3

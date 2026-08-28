@@ -101,6 +101,7 @@ export function useStressTest(onStartSuccess) {
     return saved ? JSON.parse(saved) : [];
   });
   const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const monitoringInterval = useRef(null);
 
@@ -331,6 +332,7 @@ export function useStressTest(onStartSuccess) {
       return;
     }
 
+    setIsSubmitting(true);
     const loadingToast = toast.loading("Iniciando teste de escala...");
     try {
       const payload = {
@@ -353,7 +355,7 @@ export function useStressTest(onStartSuccess) {
 
       if (res.ok) {
         const data = await res.json();
-        toast.success("Teste iniciado!", { id: loadingToast, duration: 3000 });
+        toast.success(`Teste de escala #${data.trigger_id} iniciado!`, { id: loadingToast, duration: 3000 });
 
         setTriggerDetails(null);
         setMessageStats(null);
@@ -369,6 +371,8 @@ export function useStressTest(onStartSuccess) {
       }
     } catch (err) {
       toast.error("Erro ao conectar no servidor.", { id: loadingToast });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -435,7 +439,7 @@ export function useStressTest(onStartSuccess) {
     concurrencyLimit, setConcurrencyLimit, simulateRateLimit, setSimulateRateLimit,
     pricingCategory, setPricingCategory, interactionFunnelId, setInteractionFunnelId,
     blockFunnelId, setBlockFunnelId, funnels, loadingFunnels,
-    activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning,
+    activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning, isSubmitting,
     handleStartTest, handleCancelTest, selectedErrors, setSelectedErrors, ALL_ERRORS,
     contactsCount, setContactsCount,
     contactsTagCount, setContactsTagCount,

@@ -22,7 +22,7 @@ export default function StressTest({
     concurrencyLimit, setConcurrencyLimit, pricingCategory, setPricingCategory,
     interactionFunnelId, setInteractionFunnelId, blockFunnelId, setBlockFunnelId,
     funnels, loadingFunnels,
-    activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning,
+    activeTriggerId, triggerDetails, messageStats, recentMessages, isRunning, isSubmitting,
     handleStartTest, handleCancelTest, selectedErrors, setSelectedErrors, ALL_ERRORS,
     // Contacts import test
     contactsCount, setContactsCount,
@@ -135,6 +135,7 @@ export default function StressTest({
           funnels={funnels}
           loadingFunnels={loadingFunnels}
           isRunning={isRunning}
+          isSubmitting={isSubmitting}
           handleStartTest={handleStartTest}
           selectedErrors={selectedErrors}
           setSelectedErrors={setSelectedErrors}

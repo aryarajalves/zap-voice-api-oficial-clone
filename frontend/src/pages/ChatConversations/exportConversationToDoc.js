@@ -1,14 +1,47 @@
 /**
  * Utilitário para exportar o histórico de conversa entre o Usuário (Cliente) e o Agente (Atendente)
- * nos formatos de Arquivo HTML / PDF (.html) e Documento Word (.doc).
+ * nos formatos de Arquivo HTML / PDF (.html) e Documento, com:
+ * - Agrupamento de respostas consecutivas em blocos unificados por remetente
+ * - Separação de conversas por datas em abas (Tabs) e separadores de dia
+ * - Filtro para ocultar/exibir anotações privadas do sistema
+ * - Visualizador interativo de Pipeline e Raciocínio (Pensamento) da IA
+ * - Pré-configurado para Salvar em PDF e Impressão de alta fidelidade
  */
 
-import { API_URL } from '../../config';
+import { buildDocHtml } from './exportHtmlTemplate.js';
+import {
+    resolveMediaUrl,
+    isImageMedia,
+    parseAgentPipeline,
+    enrichMessagesWithPipeline
+} from './exportPipelineHelper.js';
+import {
+    fetchQaAnalysis,
+    extractLocalHeuristicQa
+} from './exportQuestionsHelper.js';
 
-function formatTimestamp(ts) {
-    if (!ts) return '';
+export { parseAgentPipeline, enrichMessagesWithPipeline, fetchQaAnalysis, extractLocalHeuristicQa };
+
+const MONTH_NAMES = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+/**
+ * Converte qualquer timestamp em objeto de data e strings formatadas.
+ */
+export function parseMessageDate(ts) {
+    if (!ts) {
+        return {
+            dateObj: null,
+            dateKey: 'Sem Data',
+            dateLabel: 'Sem Data',
+            timeStr: '',
+            fullFormatted: ''
+        };
+    }
+
     let d = null;
-
     if (typeof ts === 'number') {
         d = new Date(ts > 1e11 ? ts : ts * 1000);
     } else if (typeof ts === 'string') {
@@ -21,189 +54,366 @@ function formatTimestamp(ts) {
         }
     }
 
-    if (!d || isNaN(d.getTime())) return '';
-    return d.toLocaleString('pt-BR');
+    if (!d || isNaN(d.getTime())) {
+        return {
+            dateObj: null,
+            dateKey: 'Sem Data',
+            dateLabel: 'Sem Data',
+            timeStr: '',
+            fullFormatted: String(ts || '')
+        };
+    }
+
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const dateKey = `${day}/${month}/${year}`;
+    const dateLabel = `${day} de ${MONTH_NAMES[d.getMonth()]} de ${year}`;
+    const timeStr = d.toLocaleTimeString('pt-BR');
+    const fullFormatted = d.toLocaleString('pt-BR');
+
+    return { dateObj: d, dateKey, dateLabel, timeStr, fullFormatted };
 }
 
-function resolveMediaUrl(msg, clientId) {
-    if (!msg || !msg.media_url) return '';
-    const url = msg.media_url;
-    if (url.startsWith('http') || url.startsWith('/static')) {
-        return url;
-    }
-    if (url.includes(':')) {
-        const parts = url.split(':');
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-        const cid = clientId || '';
-        return `${API_URL}/chat/media/${parts[1]}?token=${token}&client_id=${cid}`;
-    }
-    return url;
+export function formatTimestamp(ts) {
+    return parseMessageDate(ts).fullFormatted;
 }
 
-function isImageMedia(msg) {
-    if (!msg) return false;
-    if (msg.message_type === 'image') return true;
+export function getSenderCategory(msg) {
+    if (!msg) return 'contact';
+    if (msg.sender_type === 'contact') return 'contact';
+    if (msg.sender_type === 'user' || msg.sender_type === 'agent') return 'user';
+    if (msg.sender_type === 'system') return 'system';
+    return 'other';
+}
+
+function renderMessageItem(msg, index, isMultiple, clientId) {
+    const isSystem = msg.sender_type === 'system';
+    const isUserAgent = msg.sender_type === 'user' || msg.sender_type === 'agent';
+    const dateInfo = parseMessageDate(msg.timestamp);
+
+    let contentText = msg.content || '';
+    if (isSystem && contentText.startsWith('🔒 Anotação Privada: ')) {
+        contentText = contentText.replace('🔒 Anotação Privada: ', '');
+    }
+
+    let mediaHtml = '';
     if (msg.media_url) {
-        const url = msg.media_url.toLowerCase();
-        return url.endsWith('.png') || url.endsWith('.jpg') || url.endsWith('.jpeg') ||
-               url.endsWith('.gif') || url.endsWith('.webp') || url.includes('image');
+        const mediaUrl = resolveMediaUrl(msg, clientId);
+        const mType = msg.message_type || 'mídia';
+
+        if (isImageMedia(msg)) {
+            mediaHtml = `
+                <div class="media-container">
+                    <img src="${mediaUrl}" alt="Imagem da conversa" />
+                    <a href="${mediaUrl}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: underline;">🔗 Abrir imagem em alta resolução</a>
+                </div>
+            `;
+        } else if (mType === 'video') {
+            mediaHtml = `
+                <div class="media-container">
+                    <video src="${mediaUrl}" controls></video>
+                    <a href="${mediaUrl}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: underline;">🎬 Abrir vídeo original</a>
+                </div>
+            `;
+        } else if (mType === 'audio') {
+            mediaHtml = `
+                <div class="media-container">
+                    <audio src="${mediaUrl}" controls></audio>
+                    <a href="${mediaUrl}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: underline;">🎵 Ouvir áudio original</a>
+                </div>
+            `;
+        } else {
+            mediaHtml = `
+                <div class="media-container">
+                    📎 <b>Documento/Arquivo (${escapeHtml(mType)}):</b> 
+                    <a href="${mediaUrl}" target="_blank" style="font-size: 12px; color: #2563eb; text-decoration: underline; font-weight: bold;">Baixar ${escapeHtml(mType)}</a>
+                </div>
+            `;
+        }
     }
-    return false;
+
+    // Pipeline da IA & Pensamento do Agente
+    let thoughtHtml = '';
+    if (isUserAgent) {
+        const pipelineData = parseAgentPipeline(msg);
+        if (pipelineData.hasPipeline) {
+            const thoughtId = `thought-msg-${index}`;
+            const stepsCount = pipelineData.steps.length;
+
+            const stepsHtml = pipelineData.steps.map((s, sIdx) => {
+                const stepName = s.step || `Etapa ${sIdx + 1}`;
+                const stepDetail = s.detail || '';
+                const stepTime = s.timestamp ? formatTimestamp(s.timestamp) : '';
+
+                return `
+                    <div class="pipeline-step">
+                        <div class="step-head">
+                            <span class="step-title">${escapeHtml(stepName)}</span>
+                            ${stepTime ? `<span class="step-time">${escapeHtml(stepTime)}</span>` : ''}
+                        </div>
+                        ${stepDetail ? `<div class="step-detail">${escapeHtml(stepDetail)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            thoughtHtml = `
+                <div class="agent-thought-wrapper">
+                    <button type="button" class="btn-toggle-thought" onclick="toggleThought('${thoughtId}')">
+                        <span class="btn-icon">🧠</span>
+                        <span class="thought-btn-label">Ver Pensamento do Agente (${stepsCount > 0 ? `${stepsCount} etapas de pipeline` : 'Raciocínio IA'})</span>
+                        <span class="thought-chevron">▼</span>
+                    </button>
+                    <div id="${thoughtId}" class="thought-container" style="display: none;">
+                        ${pipelineData.thought ? `
+                            <div class="thought-box">
+                                <div class="thought-header">💡 Raciocínio & Intenção da IA:</div>
+                                <div class="thought-body">${escapeHtml(pipelineData.thought)}</div>
+                            </div>
+                        ` : ''}
+                        ${stepsCount > 0 ? `
+                            <div class="pipeline-box">
+                                <div class="pipeline-header">🧭 Linha do Tempo do Pipeline (${stepsCount} etapas executadas):</div>
+                                <div class="pipeline-list">
+                                    ${stepsHtml}
+                                </div>
+                            </div>
+                        ` : ''}
+                        ${pipelineData.eventId ? `
+                            <div class="pipeline-footer-id">⚡ Evento ID: #${escapeHtml(String(pipelineData.eventId))}</div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    return `
+        <div class="msg-item">
+            ${contentText ? `<div class="content">${escapeHtml(contentText)}</div>` : ''}
+            ${mediaHtml}
+            ${thoughtHtml}
+        </div>
+    `;
 }
 
-export function generateConversationDocHtml(convo, messages = [], clientId = '') {
+/**
+ * Renderiza um bloco unificado de mensagens consecutivas de um mesmo remetente.
+ */
+function renderConsecutiveBlock(block, blockIndex, dateKey, clientId) {
+    const isContact = block.category === 'contact';
+    const isUserAgent = block.category === 'user';
+    const isSystem = block.category === 'system';
+
+    let senderLabel = '👤 Usuário (Cliente)';
+    let senderClass = 'sender-contact';
+    let cardClass = 'contact-msg';
+
+    if (isUserAgent) {
+        senderLabel = '🤖 Agente / Atendente';
+        senderClass = 'sender-user';
+        cardClass = 'user-msg';
+    } else if (isSystem) {
+        senderLabel = '🔒 Sistema / Anotação';
+        senderClass = 'sender-system';
+        cardClass = 'system-msg';
+    }
+
+    const isMultiple = block.messages.length > 1;
+    let formattedFooterTime = '';
+
+    if (!isMultiple) {
+        const dateInfo = parseMessageDate(block.messages[0].timestamp);
+        formattedFooterTime = dateInfo.fullFormatted || dateInfo.timeStr || '';
+    } else {
+        const firstInfo = parseMessageDate(block.messages[0].timestamp);
+        const lastInfo = parseMessageDate(block.messages[block.messages.length - 1].timestamp);
+        if (firstInfo.dateKey && lastInfo.dateKey && firstInfo.dateKey === lastInfo.dateKey) {
+            formattedFooterTime = `${firstInfo.dateKey}, ${firstInfo.timeStr} - ${lastInfo.timeStr}`;
+        } else {
+            formattedFooterTime = `${firstInfo.fullFormatted} - ${lastInfo.fullFormatted}`;
+        }
+    }
+
+    const itemsHtml = block.messages.map((m, mIdx) => {
+        const globalIdx = `${blockIndex}-${mIdx}`;
+        return renderMessageItem(m, globalIdx, isMultiple, clientId);
+    }).join('\n');
+
+    return `
+        <div class="message-card ${cardClass}" data-is-private="${isSystem ? 'true' : 'false'}" data-date="${escapeHtml(dateKey)}">
+            <div class="sender-title ${senderClass}">
+                <span>${senderLabel}</span>
+            </div>
+            <div class="message-items-list">
+                ${itemsHtml}
+            </div>
+            ${formattedFooterTime ? `
+                <div class="message-card-footer">
+                    <span class="timestamp">${escapeHtml(formattedFooterTime)}</span>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+/**
+ * Agrupa mensagens por data e une mensagens consecutivas em blocos unificados por remetente.
+ */
+export function groupMessagesByDate(messages = [], clientId = '') {
+    const groupsMap = new Map();
+    let totalPrivateNotes = 0;
+
+    messages.forEach((msg) => {
+        if (msg.sender_type === 'system') {
+            totalPrivateNotes++;
+        }
+
+        const dateInfo = parseMessageDate(msg.timestamp);
+        const key = dateInfo.dateKey;
+
+        if (!groupsMap.has(key)) {
+            groupsMap.set(key, {
+                dateKey: key,
+                dateLabel: dateInfo.dateLabel,
+                dateObj: dateInfo.dateObj,
+                messages: []
+            });
+        }
+
+        groupsMap.get(key).messages.push(msg);
+    });
+
+    const dateGroups = Array.from(groupsMap.values()).map((group, groupIdx) => {
+        // Agrupa mensagens consecutivas do mesmo remetente dentro da data
+        const consecutiveBlocks = [];
+        let currentBlock = null;
+
+        group.messages.forEach(msg => {
+            const category = getSenderCategory(msg);
+            if (!currentBlock || currentBlock.category !== category) {
+                currentBlock = {
+                    category,
+                    messages: [msg]
+                };
+                consecutiveBlocks.push(currentBlock);
+            } else {
+                currentBlock.messages.push(msg);
+            }
+        });
+
+        const messagesHtml = consecutiveBlocks.map((block, bIdx) => {
+            const blockIndex = `${groupIdx}-${bIdx}`;
+            return renderConsecutiveBlock(block, blockIndex, group.dateKey, clientId);
+        });
+
+        return {
+            dateKey: group.dateKey,
+            dateLabel: group.dateLabel,
+            dateObj: group.dateObj,
+            messages: group.messages,
+            consecutiveBlocks,
+            messagesHtml
+        };
+    });
+
+    const uniqueDates = dateGroups.map(g => ({
+        key: g.dateKey,
+        label: g.dateLabel,
+        count: g.messages.length
+    }));
+
+    return {
+        dateGroups,
+        uniqueDates,
+        totalMessages: messages.length,
+        totalPrivateNotes
+    };
+}
+
+/**
+ * Gera o documento HTML estruturado com blocos unificados, abas por data, filtros e painel de Q&A (GPT-5.2).
+ */
+export function generateConversationDocHtml(convo, messages = [], clientId = '', qaData = null) {
     const contactName = convo?.contact_name || convo?.phone || 'Contato';
     const phone = convo?.phone || 'N/A';
     const convoId = convo?.id || 'N/A';
     const exportDate = new Date().toLocaleString('pt-BR');
 
-    const formattedMessages = messages.map(msg => {
-        const isContact = msg.sender_type === 'contact';
-        const isUserAgent = msg.sender_type === 'user';
-        const isSystem = msg.sender_type === 'system';
+    const groupedData = groupMessagesByDate(messages, clientId);
+    const resolvedQaData = qaData || extractLocalHeuristicQa(messages);
 
-        let senderLabel = '👤 Usuário (Cliente)';
-        let senderClass = 'sender-contact';
-        let cardClass = 'contact-msg';
-
-        if (isUserAgent) {
-            senderLabel = '🤖 Agente / Atendente';
-            senderClass = 'sender-user';
-            cardClass = 'user-msg';
-        } else if (isSystem) {
-            senderLabel = '🔒 Sistema / Anotação';
-            senderClass = 'sender-system';
-            cardClass = 'system-msg';
-        }
-
-        const timestampStr = formatTimestamp(msg.timestamp);
-        const formattedTime = timestampStr ? ` (${timestampStr})` : '';
-
-        let contentText = msg.content || '';
-        if (isSystem && contentText.startsWith('🔒 Anotação Privada: ')) {
-            contentText = contentText.replace('🔒 Anotação Privada: ', '');
-        }
-
-        let mediaHtml = '';
-        if (msg.media_url) {
-            const mediaUrl = resolveMediaUrl(msg, clientId);
-            const mType = msg.message_type || 'mídia';
-
-            if (isImageMedia(msg)) {
-                mediaHtml = `
-                    <div class="media-container" style="margin-top: 10px; margin-bottom: 6px;">
-                        <img src="${mediaUrl}" alt="Imagem da conversa" style="max-width: 450px; max-height: 350px; border-radius: 8px; border: 1px solid #cbd5e1; display: block; margin-bottom: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
-                        <a href="${mediaUrl}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: underline;">🔗 Abrir imagem em alta resolução</a>
-                    </div>
-                `;
-            } else if (mType === 'video') {
-                mediaHtml = `
-                    <div class="media-container" style="margin-top: 10px; margin-bottom: 6px;">
-                        <video src="${mediaUrl}" controls style="max-width: 400px; max-height: 250px; border-radius: 8px; border: 1px solid #cbd5e1; display: block; margin-bottom: 6px;"></video>
-                        <a href="${mediaUrl}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: underline;">🎬 Abrir vídeo original</a>
-                    </div>
-                `;
-            } else if (mType === 'audio') {
-                mediaHtml = `
-                    <div class="media-container" style="margin-top: 10px; margin-bottom: 6px;">
-                        <audio src="${mediaUrl}" controls style="margin-bottom: 6px; display: block; width: 300px;"></audio>
-                        <a href="${mediaUrl}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: underline;">🎵 Ouvir áudio original</a>
-                    </div>
-                `;
-            } else {
-                mediaHtml = `
-                    <div class="media-container" style="margin-top: 8px;">
-                        📎 <b>Documento/Arquivo (${escapeHtml(mType)}):</b> 
-                        <a href="${mediaUrl}" target="_blank" style="font-size: 12px; color: #2563eb; text-decoration: underline; font-weight: bold;">Baixar ${escapeHtml(mType)}</a>
-                    </div>
-                `;
-            }
-        }
-
-        return `
-            <div class="message-card ${cardClass}">
-                <div class="sender-title ${senderClass}">
-                    ${senderLabel}
-                    <span class="timestamp">${formattedTime}</span>
-                </div>
-                ${contentText ? `<div class="content">${escapeHtml(contentText)}</div>` : ''}
-                ${mediaHtml}
-            </div>
-        `;
-    }).join('\n');
-
-    return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Histórico de Conversa - ${escapeHtml(contactName)}</title>
-<style>
-    body { font-family: 'Calibri', 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; padding: 25px; color: #0f172a; background-color: #f8fafc; }
-    .page-container { max-width: 860px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .action-bar { display: flex; justify-content: space-between; align-items: center; background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 20px; border-radius: 10px; margin-bottom: 25px; }
-    .action-title { font-weight: bold; color: #1e40af; font-size: 14px; }
-    .btn-print { background: #2563eb; color: #ffffff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.2s; }
-    .btn-print:hover { background: #1d4ed8; }
-    .header { border-bottom: 2px solid #2563eb; padding-bottom: 15px; margin-bottom: 25px; }
-    .header h1 { color: #1e3a8a; font-size: 22px; margin: 0 0 8px 0; }
-    .meta-info { font-size: 13px; color: #475569; line-height: 1.6; }
-    .message-card { margin-bottom: 14px; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #cbd5e1; background-color: #f8fafc; page-break-inside: avoid; }
-    .user-msg { border-left-color: #2563eb; background-color: #eff6ff; }
-    .contact-msg { border-left-color: #10b981; background-color: #f0fdf4; }
-    .system-msg { border-left-color: #f59e0b; background-color: #fffbeb; }
-    .sender-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; }
-    .sender-user { color: #1d4ed8; }
-    .sender-contact { color: #047857; }
-    .sender-system { color: #b45309; }
-    .timestamp { font-size: 11px; color: #64748b; font-weight: normal; margin-left: 6px; }
-    .content { font-size: 13px; line-height: 1.5; white-space: pre-wrap; color: #0f172a; }
-    .media-container { font-size: 12px; }
-    .footer { margin-top: 35px; border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #94a3b8; text-align: center; }
-
-    @media print {
-        body { background-color: #ffffff; padding: 0; }
-        .page-container { box-shadow: none; padding: 0; max-width: 100%; }
-        .action-bar { display: none !important; }
-        .message-card { page-break-inside: avoid; }
-    }
-</style>
-</head>
-<body>
-    <div class="page-container">
-        <div class="action-bar">
-            <span class="action-title">📄 Histórico de Conversa em HTML</span>
-            <button onclick="window.print()" class="btn-print">🖨️ Salvar como PDF / Imprimir</button>
-        </div>
-
-        <div class="header">
-            <h1>📋 Histórico de Atendimento - ZapVoice</h1>
-            <div class="meta-info">
-                <strong>Contato / Usuário:</strong> ${escapeHtml(contactName)}<br>
-                <strong>Telefone:</strong> ${escapeHtml(phone)} | <strong>ID da Conversa:</strong> #${escapeHtml(String(convoId))}<br>
-                <strong>Data da Exportação:</strong> ${escapeHtml(exportDate)} | <strong>Total de Mensagens:</strong> ${messages.length}
-            </div>
-        </div>
-
-        <div class="conversation-body">
-            ${formattedMessages || '<p style="color: #64748b; font-style: italic;">Nenhuma mensagem registrada nesta conversa.</p>'}
-        </div>
-
-        <div class="footer">
-            Documento gerado automaticamente pelo sistema ZapVoice - API Oficial do WhatsApp
-        </div>
-    </div>
-</body>
-</html>
-    `.trim();
+    return buildDocHtml({
+        contactName,
+        phone,
+        convoId,
+        exportDate,
+        totalMessages: groupedData.totalMessages,
+        totalPrivateNotes: groupedData.totalPrivateNotes,
+        dateGroups: groupedData.dateGroups,
+        uniqueDates: groupedData.uniqueDates,
+        qaData: resolvedQaData
+    });
 }
 
 /**
- * Exporta o histórico como arquivo HTML navegável (que abre direto no navegador com botão de PDF / Imprimir).
+ * Busca todas as mensagens de uma conversa no backend (sem paginação/limite reduzido)
+ * para garantir que o documento exportado contenha 100% do histórico completo de atendimento.
  */
-export function exportConversationToHtml(convo, messages = [], clientId = '') {
-    const htmlContent = generateConversationDocHtml(convo, messages, clientId);
+export async function fetchAllConversationMessages(convoId, clientId = '') {
+    if (!convoId) return [];
+    try {
+        const { fetchWithAuth } = await import('../../AuthContext');
+        const { API_URL } = await import('../../config');
+        const headers = clientId ? { 'X-Client-ID': String(clientId) } : {};
+        // limit=0 busca todas as mensagens da conversa sem limite no backend
+        const res = await fetchWithAuth(`${API_URL}/chat/conversations/${convoId}/messages?limit=0`, {
+            headers
+        });
+        if (res && res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+                return data;
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ [EXPORT] Não foi possível carregar mensagens completas da API, usando mensagens em memória:', e);
+    }
+    return [];
+}
+
+/**
+ * Exporta o histórico como arquivo HTML navegável com suporte a abas por data, filtros, auditoria semântica Q&A (GPT-5.2) e impressão para PDF.
+ */
+export async function exportConversationToHtml(convo, messages = [], clientId = '') {
+    let finalMessages = messages;
+
+    // Se a conversa possuir ID, busca todo o histórico completo no backend para não limitar às 50 em tela
+    if (convo?.id) {
+        try {
+            const allMessages = await fetchAllConversationMessages(convo.id, clientId);
+            if (allMessages && allMessages.length > 0) {
+                finalMessages = allMessages;
+            }
+        } catch (e) {
+            console.warn('Erro ao carregar mensagens completas para exportação:', e);
+        }
+    }
+
+    try {
+        finalMessages = await enrichMessagesWithPipeline(convo?.phone, finalMessages);
+    } catch (e) {
+        finalMessages = finalMessages || messages;
+    }
+
+    let qaData = null;
+    try {
+        qaData = await fetchQaAnalysis(convo, clientId, finalMessages);
+    } catch (e) {
+        qaData = extractLocalHeuristicQa(finalMessages);
+    }
+
+    const htmlContent = generateConversationDocHtml(convo, finalMessages, clientId, qaData);
     const blob = new Blob([htmlContent], {
         type: 'text/html;charset=utf-8'
     });
@@ -221,14 +431,22 @@ export function exportConversationToHtml(convo, messages = [], clientId = '') {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
+
+    return {
+        success: true,
+        fileName,
+        totalMessages: finalMessages.length,
+        contactName: convo?.contact_name || convo?.phone
+    };
 }
 
 /**
  * Manter exportConversationToDoc por compatibilidade
  */
-export function exportConversationToDoc(convo, messages = [], clientId = '') {
-    exportConversationToHtml(convo, messages, clientId);
+export async function exportConversationToDoc(convo, messages = [], clientId = '') {
+    return await exportConversationToHtml(convo, messages, clientId);
 }
+
 
 function escapeHtml(str) {
     if (!str) return '';

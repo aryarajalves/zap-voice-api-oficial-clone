@@ -3,6 +3,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import httpx
 from core.logger import setup_logger
+from core.encryption import decrypt_token
 
 logger = setup_logger("email_service")
 
@@ -56,14 +57,15 @@ async def send_single_email(config, to_email: str, subject: str, body_html: str,
 
     # 1. RESEND (API HTTP)
     if provider == "resend":
-        if not config.resend_api_key:
+        resend_key = decrypt_token(config.resend_api_key)
+        if not resend_key:
             return {"success": False, "error": "Chave API do Resend não configurada"}
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.post(
                     "https://api.resend.com/emails",
                     headers={
-                        "Authorization": f"Bearer {config.resend_api_key.strip()}",
+                        "Authorization": f"Bearer {resend_key.strip()}",
                         "Content-Type": "application/json"
                     },
                     json={
@@ -87,7 +89,7 @@ async def send_single_email(config, to_email: str, subject: str, body_html: str,
     # 2. AMAZON SES (via Boto3 / API / SMTP)
     elif provider == "ses":
         aws_key = config.aws_access_key_id
-        aws_secret = config.aws_secret_access_key
+        aws_secret = decrypt_token(config.aws_secret_access_key)
         region = config.aws_region or "us-east-1"
 
         if not aws_key or not aws_secret:
@@ -149,7 +151,8 @@ async def send_single_email(config, to_email: str, subject: str, body_html: str,
         smtp_host = config.smtp_host
         smtp_port = config.smtp_port or 587
         smtp_user = config.smtp_user
-        smtp_pass = config.smtp_password
+        smtp_pass = decrypt_token(config.smtp_password)
+
         encryption = (config.smtp_encryption or "tls").lower()
 
         if not smtp_host:

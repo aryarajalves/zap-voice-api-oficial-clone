@@ -195,7 +195,7 @@ def test_list_users_unauthorized(client_app, db):
 def test_register_user(mock_ws, client_app, auth_headers, db):
     resp = client_app.post(
         "/api/auth/register",
-        json={"email": "new@test.com", "password": "newpass123", "full_name": "New User"},
+        json={"email": "new@test.com", "password": "NewStrongPass123!", "full_name": "New User"},
         headers=auth_headers,
     )
     assert resp.status_code == 200
@@ -207,15 +207,16 @@ def test_register_duplicate_email(mock_ws, client_app, auth_headers):
     """Registrar com email já existente e senha diferente retorna 400."""
     client_app.post(
         "/api/auth/register",
-        json={"email": "dup@test.com", "password": "pass1"},
+        json={"email": "dup@test.com", "password": "NewStrongPass123!"},
         headers=auth_headers,
     )
     resp = client_app.post(
         "/api/auth/register",
-        json={"email": "dup@test.com", "password": "differentpass"},
+        json={"email": "dup@test.com", "password": "DifferentStrongPass123!"},
         headers=auth_headers,
     )
     assert resp.status_code == 400
+
 
 
 # ── /api/auth/users/{id} DELETE ───────────────────────────────────────────────
@@ -253,7 +254,7 @@ def test_delete_nonexistent_user(client_app, auth_headers):
 def test_reset_password_user_not_found(client_app, auth_headers):
     resp = client_app.post(
         "/api/auth/reset-password",
-        json={"email": "ghost@test.com", "new_password": "newpass"},
+        json={"email": "ghost@test.com", "new_password": "NewStrongPass123!"},
         headers=auth_headers,
     )
     assert resp.status_code == 404
@@ -274,7 +275,7 @@ def test_reset_password_success(client_app, auth_headers, db):
     db.commit()
     resp = client_app.post(
         "/api/auth/reset-password",
-        json={"email": "resetme@test.com", "new_password": "newpass123"},
+        json={"email": "resetme@test.com", "new_password": "NewStrongPass123!"},
         headers=auth_headers,
     )
     assert resp.status_code == 200

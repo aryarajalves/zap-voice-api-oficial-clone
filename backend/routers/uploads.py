@@ -6,12 +6,15 @@ import uuid
 from datetime import datetime
 from database import SessionLocal
 import models
-from core.deps import get_db, get_current_user
+import models
+from core.deps import get_db, get_current_user, get_validated_client_id
+from core.file_validator import validate_file_magic_bytes
 import tempfile
 import subprocess
 import io
 from core.logger import logger
 from sqlalchemy.orm import Session
+
 
 router = APIRouter()
 
@@ -27,7 +30,7 @@ def probe():
 @router.post("/upload", summary="Upload de arquivo (Imagem, Vídeo, PDF, Áudio)")
 async def upload_file(
     file: UploadFile = File(...),
-    x_client_id: Optional[str] = Header(None),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -36,16 +39,8 @@ async def upload_file(
     Suporta imagens, vídeos, PDFs e áudios.
     """
     logger.info(f"📥 [UPLOAD_START] Recebido arquivo: {file.filename} | Client ID: {x_client_id} | Type: {file.content_type}")
-    
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        logger.error("❌ [UPLOAD_ERROR] Client ID não fornecido ou inválido no header X-Client-ID")
-        raise HTTPException(status_code=400, detail="Client ID não fornecido ou inválido")
-    
-    try:
-        x_client_id_int = int(x_client_id)
-    except ValueError:
-        logger.error(f"❌ [UPLOAD_ERROR] Client ID inválido: {x_client_id}")
-        raise HTTPException(status_code=400, detail=f"Client ID inválido: {x_client_id}")
+    x_client_id_int = x_client_id
+
 
     # Validar extensão
     allowed_extensions = {
@@ -66,6 +61,20 @@ async def upload_file(
             status_code=400, 
             detail=f"Extensão '{ext}' não permitida. Aceitamos formatos de imagem, vídeo, áudio e documentos."
         )
+
+    # Validar Magic Bytes (MIME sniffing real contra executáveis e arquivos disfarçados)
+    file.file.seek(0)
+    header_bytes = file.file.read(512)
+    file.file.seek(0)
+
+    is_valid_magic, error_msg = validate_file_magic_bytes(header_bytes, file.filename)
+    if not is_valid_magic:
+        logger.warning(f"⚠️ [UPLOAD_MAGIC_REJECTED] {file.filename}: {error_msg}")
+        raise HTTPException(
+            status_code=400,
+            detail=error_msg
+        )
+
 
     # Validar Tamanho por Tipo de Arquivo — limites expandidos para E-mail Marketing e Sistema
     LIMITS_BY_TYPE = {
@@ -293,18 +302,12 @@ def list_uploaded_media(
     media_type: Optional[str] = None,
     page: int = 1,
     limit: Optional[int] = None,
-    x_client_id: Optional[str] = Header(None),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """Retorna todas as mídias salvas pertencentes ao cliente, com suporte a paginação."""
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        raise HTTPException(status_code=400, detail="Client ID não fornecido")
-    
-    try:
-        client_id_int = int(x_client_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Client ID inválido")
+    client_id_int = x_client_id
     
     query = db.query(models.UploadedMedia).filter(models.UploadedMedia.client_id == client_id_int)
     
@@ -351,18 +354,12 @@ def list_uploaded_media(
 def rename_uploaded_media(
     media_id: int,
     payload: dict,
-    x_client_id: Optional[str] = Header(None),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """Permite renomear o filename de uma mídia pertencente ao cliente."""
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        raise HTTPException(status_code=400, detail="Client ID não fornecido")
-    
-    try:
-        client_id_int = int(x_client_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Client ID inválido")
+    client_id_int = x_client_id
         
     new_filename = payload.get("filename")
     if not new_filename or not isinstance(new_filename, str) or not new_filename.strip():
@@ -390,18 +387,12 @@ def rename_uploaded_media(
 @router.delete("/uploads/{media_id}", summary="Excluir uma mídia física e logicamente")
 def delete_uploaded_media(
     media_id: int,
-    x_client_id: Optional[str] = Header(None),
+    x_client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """Exclui fisicamente o arquivo do MinIO/S3 e remove os metadados do banco de dados."""
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        raise HTTPException(status_code=400, detail="Client ID não fornecido")
-    
-    try:
-        client_id_int = int(x_client_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Client ID inválido")
+    client_id_int = x_client_id
         
     media = db.query(models.UploadedMedia).filter(
         models.UploadedMedia.id == media_id,
@@ -424,6 +415,7 @@ def delete_uploaded_media(
     logger.info(f"🗑️ [UPLOAD_DELETE] Mídia {media_id} removida do banco de dados pelo cliente {client_id_int}")
     
     return {"status": "success", "message": "Mídia removida com sucesso"}
+
 
 
 @router.get("/media/proxy/{filename}", summary="Proxy de arquivo do storage/MinIO")

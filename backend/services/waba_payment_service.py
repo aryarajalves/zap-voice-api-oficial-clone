@@ -143,15 +143,16 @@ class WabaPaymentService:
                 .filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.MessageStatus.status == "failed",
-                    models.MessageStatus.timestamp >= since_time,
+                    models.ScheduledTrigger.created_at >= since_time,
                     or_(
-                        models.MessageStatus.error_message.ilike("%131042%"),
-                        models.MessageStatus.error_message.ilike("%payment%"),
-                        models.MessageStatus.error_message.ilike("%pagamento%"),
-                        models.MessageStatus.error_message.ilike("%billing%"),
-                        models.MessageStatus.error_message.ilike("%outstanding balance%")
+                        models.MessageStatus.failure_reason.ilike("%131042%"),
+                        models.MessageStatus.failure_reason.ilike("%payment%"),
+                        models.MessageStatus.failure_reason.ilike("%pagamento%"),
+                        models.MessageStatus.failure_reason.ilike("%billing%"),
+                        models.MessageStatus.failure_reason.ilike("%outstanding balance%")
                     )
                 ).scalar() or 0
+
 
             raw_info["failed_payment_msgs_last_48h"] = failed_payment_msgs
             if failed_payment_msgs > 0:

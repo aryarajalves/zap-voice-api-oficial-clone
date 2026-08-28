@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from typing import Any, List, Optional
 from chatwoot_client import ChatwootClient
 import models
-from core.deps import get_current_user
+from core.deps import get_current_user, get_validated_client_id
 from database import SessionLocal
 from datetime import datetime, timedelta
 from config_loader import get_setting
@@ -16,16 +16,11 @@ from core.logger import setup_logger
 logger = setup_logger("AtendimentoRouter")
 router = APIRouter()
 
-def get_client_id(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
+async def get_client_id(
+    client_id: int = Depends(get_validated_client_id)
 ) -> int:
-    # ... (same as before)
-    if x_client_id:
-        return x_client_id
-    if current_user.client_id:
-        return current_user.client_id
-    return None
+    return client_id
+
 
 @router.get("/chatwoot/account")
 async def get_chatwoot_account(

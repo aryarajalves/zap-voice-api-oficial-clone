@@ -85,28 +85,62 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 
 
 from fastapi import Header
-from typing import Optional
+from typing import Optional, Union
 
-async def get_validated_client_id(
-    x_client_id: Optional[int] = Header(None),
+def get_validated_client_id(
+    x_client_id: Optional[Union[int, str]] = Header(None, alias="X-Client-ID"),
     current_user: User = Depends(get_current_user),
 ) -> int:
+
     """
-    Validates that the X-Client-ID header is accessible to the current user.
-    super_admin can access any client. Other roles can only access their assigned clients.
-    Raises 400 if header is missing, 403 if user is not authorized for that client.
+    Valida se o X-Client-ID fornecido é acessível ao usuário autenticado atual.
+    - Super Admin pode acessar qualquer client_id.
+    - Demais usuários só podem acessar clientes vinculados à sua conta (accessible_clients).
+    - Retorna 400 se o client_id estiver ausente e o usuário não tiver empresa padrão única.
+    - Retorna 403 se o usuário tentar acessar uma empresa não autorizada (prevenção contra IDOR).
     """
-    if x_client_id is None:
+    resolved_client_id: Optional[int] = None
+
+    if x_client_id is not None:
+        if isinstance(x_client_id, int):
+            resolved_client_id = x_client_id
+        else:
+            raw_str = str(x_client_id).strip()
+            if raw_str and raw_str.lower() not in ("none", "null", "undefined"):
+                try:
+                    resolved_client_id = int(raw_str)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Client ID inválido: '{raw_str}'")
+
+    # Fallback seguro caso nenhum header válido tenha sido enviado
+    if resolved_client_id is None:
+        if current_user.role == "super_admin":
+            if getattr(current_user, "client_id", None):
+                resolved_client_id = current_user.client_id
+            elif current_user.accessible_clients:
+                resolved_client_id = current_user.accessible_clients[0].id
+        else:
+            allowed_ids = {c.id for c in (current_user.accessible_clients or [])}
+            if getattr(current_user, "client_id", None) and current_user.client_id in allowed_ids:
+                resolved_client_id = current_user.client_id
+            elif len(allowed_ids) == 1:
+                resolved_client_id = next(iter(allowed_ids))
+
+    if resolved_client_id is None:
         raise HTTPException(status_code=400, detail="Client ID não fornecido (header X-Client-ID)")
 
     if current_user.role == "super_admin":
-        return x_client_id
+        return resolved_client_id
 
-    allowed_ids = {c.id for c in current_user.accessible_clients}
-    if x_client_id not in allowed_ids:
+    allowed_ids = {c.id for c in (current_user.accessible_clients or [])}
+    if getattr(current_user, "client_id", None):
+        allowed_ids.add(current_user.client_id)
+
+    if resolved_client_id not in allowed_ids:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso negado ao cliente solicitado."
         )
 
-    return x_client_id
+    return resolved_client_id
+

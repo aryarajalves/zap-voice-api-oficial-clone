@@ -41,7 +41,7 @@ def _get_chatwoot_client(*args, **kwargs):
 async def list_messages(
     conversation_id: int,
     account_id: Optional[int] = None,
-    limit: int = Query(50, ge=1),
+    limit: Optional[int] = Query(50, ge=0),
     before_id: Optional[int] = None,
     client_id: int = Depends(get_client_id),
     current_user: models.User = Depends(get_current_user),
@@ -64,8 +64,12 @@ async def list_messages(
     if before_id is not None:
         query = query.filter(models.ChatMessage.id < before_id)
 
-    messages = query.order_by(models.ChatMessage.timestamp.desc(), models.ChatMessage.id.desc()).limit(limit).all()
+    if limit and limit > 0:
+        messages = query.order_by(models.ChatMessage.timestamp.desc(), models.ChatMessage.id.desc()).limit(limit).all()
+    else:
+        messages = query.order_by(models.ChatMessage.timestamp.desc(), models.ChatMessage.id.desc()).all()
     messages.reverse()
+
 
     result = []
     for m in messages:
@@ -80,7 +84,8 @@ async def list_messages(
             "timestamp": m.timestamp.isoformat() if m.timestamp else None,
             "wa_message_id": m.wa_message_id,
             "meta_data": m.meta_data,
-            "quoted_message_id": m.quoted_message_id
+            "quoted_message_id": m.quoted_message_id,
+            "is_starred": bool(m.is_starred or (m.meta_data and m.meta_data.get("is_starred")))
         })
     return result
 
@@ -172,11 +177,19 @@ async def list_conversation_media(
                     "sender_type": m.sender_type
                 })
 
+    user_msgs_count = sum(1 for m in messages if m.sender_type == "contact")
+    agent_msgs_count = sum(1 for m in messages if m.sender_type in ["user", "agent"])
+    system_msgs_count = sum(1 for m in messages if m.sender_type == "system")
+
     return {
         "total_media": len(media_items),
         "total_docs": len(doc_items),
         "total_links": len(link_items),
         "total_all": len(media_items) + len(doc_items) + len(link_items),
+        "user_messages_count": user_msgs_count,
+        "agent_messages_count": agent_msgs_count,
+        "system_messages_count": system_msgs_count,
+        "total_messages": len(messages),
         "media": media_items,
         "docs": doc_items,
         "links": link_items
@@ -243,6 +256,12 @@ async def send_chat_message(
         if isinstance(response, dict) and "messages" in response:
             wa_msg_id = response["messages"][0].get("id")
 
+    meta_data = payload.get("meta_data") or payload.get("metadata")
+    if not meta_data and any(k in payload for k in ["cost", "total_cost", "ai_cost", "router_cost", "agent_cost", "usage", "processing_steps"]):
+        meta_data = {
+            k: payload[k] for k in ["cost", "total_cost", "ai_cost", "router_cost", "agent_cost", "usage", "processing_steps"] if k in payload
+        }
+
     new_message = models.ChatMessage(
         conversation_id=convo.id,
         sender_type=sender_type,
@@ -250,9 +269,14 @@ async def send_chat_message(
         message_type="text",
         content=content,
         wa_message_id=wa_msg_id,
+        meta_data=meta_data,
         quoted_message_id=quoted_wa_message_id if not is_private else None
     )
     db.add(new_message)
+
+    if not is_private:
+        convo.last_message_content = content
+        convo.last_message_at = datetime.now(timezone.utc)
     db.commit()
 
     if not is_private:
@@ -283,6 +307,7 @@ async def send_chat_message(
             "content": new_message.content,
             "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
             "wa_message_id": new_message.wa_message_id,
+            "meta_data": new_message.meta_data,
             "client_id": client_id
         }
         await rabbitmq.publish_event("new_message", payload_ws)
@@ -298,6 +323,7 @@ async def send_chat_message(
         "content": new_message.content,
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
         "wa_message_id": new_message.wa_message_id,
+        "meta_data": new_message.meta_data,
         "quoted_message_id": new_message.quoted_message_id
     }
 
@@ -422,6 +448,7 @@ async def send_chat_template(
     db.add(new_message)
 
     convo.last_message_content = content
+    convo.last_message_at = datetime.now(timezone.utc)
     convo.unread_count = 0
     db.commit()
     db.refresh(new_message)

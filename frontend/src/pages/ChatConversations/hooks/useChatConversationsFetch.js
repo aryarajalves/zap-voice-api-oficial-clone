@@ -19,6 +19,7 @@ export function useChatConversationsFetch({
   filterUrgent,
   filterHasReplied,
   filterHasActiveFunnel,
+  orderBy = 'recent',
   selectedConvo,
   setSelectedConvo
 }) {
@@ -52,7 +53,8 @@ export function useChatConversationsFetch({
     filterTemplate24h,
     filterUrgent,
     filterHasReplied,
-    filterHasActiveFunnel
+    filterHasActiveFunnel,
+    orderBy
   ]);
 
   // Fetch Conversations
@@ -77,6 +79,7 @@ export function useChatConversationsFetch({
       if (filterUrgent) url.searchParams.append('urgent_only', 'true');
       if (filterHasReplied) url.searchParams.append('has_replied', 'true');
       if (filterHasActiveFunnel) url.searchParams.append('has_active_funnel', 'true');
+      if (orderBy) url.searchParams.append('order_by', orderBy);
 
       const res = await fetchWithAuth(url.toString(), {}, activeClient.id);
       if (res.ok) {

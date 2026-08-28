@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.8.3 / v4.6.1 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.8.4 — Versão Estável)
 
-Versão estável com suporte ao **Pacote Completo de Otimização e Performance de Banco de Dados PostgreSQL (Indexação de 100% das Foreign Keys, Índices Compostos de Alto Tráfego, Migração de 24 Colunas para JSONB com Índices GIN, Políticas de Retenção e Expurgos Automáticos / Data Purge e Ajuste Fino de Autovacuum)**, **Auditoria de Segurança Integrada (Backend pip-audit + Frontend npm audit)**, **PostgreSQL Avançado (Alembic, pg_trgm, LISTEN/NOTIFY em Tempo Real e Particionamento de Logs)**, **Mensagens Rápidas e Automáticas no Atendimento com Barra / e Modo Maximizado**, **Paginação e Rolagem Estilizada em Respostas Rápidas**, **Modais de Configuração e Exclusão com Backdrop em Tela Cheia via Portal**, **Deduplicação de Disparo de Funil por Botões de Ação**, **Modal de Confirmação de Disparo Imediato no Calendário**, **Reatividade dos Filtros Avançados de Funil Ativo no Chat**, **Filtragem de Vendas por Etiquetas de Contatos no Financeiro**, **Criação de Etiquetas Dinâmicas no Mapeamento de Webhooks**, **Desbloqueio em Lote de Contatos**, **Análise de Dúvidas de Atendimento com IA**, **Popup Modal de Escolha de Cor para Etiquetas**, **Anotações Privadas com Edição e Exclusão Segura**, **Otimização do Histórico de Disparos**, **Resiliência e Tratamento de Timeout no Worker**, **Exibição da Conta Destino e Rotação do ManyChat no Histórico de Integrações**, **Múltiplos Tokens do ManyChat com Rotação Sequencial (Round-Robin)**, **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Fila de Retentativa de Webhook (Retry Queue)** e **Sincronização com Worker em Container Separado**.
+Versão estável com suporte ao **Pipeline Completo de CI/CD no GitHub Actions (Build Automatizado, Publicação no Docker Hub e Redeploy Multi-Webhooks no Portainer)**, **Link Seguro de Criação e Redefinição de Senha para Usuários Existentes**, **Pacote Completo de Otimização e Performance de Banco de Dados PostgreSQL (Indexação de 100% das Foreign Keys, Índices Compostos de Alto Tráfego, Migração de 24 Colunas para JSONB com Índices GIN, Políticas de Retenção e Expurgos Automáticos / Data Purge e Ajuste Fino de Autovacuum)**, **Auditoria de Segurança Integrada (Backend pip-audit + Frontend npm audit)**, **PostgreSQL Avançado (Alembic, pg_trgm, LISTEN/NOTIFY em Tempo Real e Particionamento de Logs)**, **Mensagens Rápidas e Automáticas no Atendimento com Barra / e Modo Maximizado**, **Paginação e Rolagem Estilizada em Respostas Rápidas**, **Modais de Configuração e Exclusão com Backdrop em Tela Cheia via Portal**, **Deduplicação de Disparo de Funil por Botões de Ação**, **Modal de Confirmação de Disparo Imediato no Calendário**, **Reatividade dos Filtros Avançados de Funil Ativo no Chat**, **Filtragem de Vendas por Etiquetas de Contatos no Financeiro**, **Criação de Etiquetas Dinâmicas no Mapeamento de Webhooks**, **Desbloqueio em Lote de Contatos**, **Análise de Dúvidas de Atendimento com IA**, **Popup Modal de Escolha de Cor para Etiquetas**, **Anotações Privadas com Edição e Exclusão Segura**, **Otimização do Histórico de Disparos**, **Resiliência e Tratamento de Timeout no Worker**, **Exibição da Conta Destino e Rotação do ManyChat no Histórico de Integrações**, **Múltiplos Tokens do ManyChat com Rotação Sequencial (Round-Robin)**, **Botão de Fechar Conversa na Área de Atendimento**, **Módulo de E-mail Marketing Completo**, **Fila de Retentativa de Webhook (Retry Queue)** e **Sincronização com Worker em Container Separado**.
 
 
 
@@ -67,6 +67,7 @@ Visualização e controle de conversas diretamente no painel do ZapVoice:
 
 ### 5. API Keys e Segurança
 *   Geração e revogação de tokens de autenticação (`API Keys`) para garantir que apenas sistemas autorizados possam acionar webhooks públicos e rotas sensíveis do backend.
+*   **Auditoria e Guia de Segurança**: Consulte o arquivo [`SECURITY.md`](file:///c:/Users/aryar/.gemini/antigravity/scratch/Projetos%20Serios/Projeto%20-%20ZapVoice%20no%20Chatwoot/SECURITY.md) para o roadmap completo de blindagem, boas práticas ativas e diagnóstico de segurança da aplicação.
 
 ### 6. Integrações de Webhooks & Mapeamento de Contatos
 Integração nativa com as principais plataformas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark, Elementor e ZapGroup**.
@@ -169,14 +170,8 @@ Content-Type: application/json
 
 ## 🗒️ Changelog
 
-### v1.7.4 — Versão Estável (2026-08-11)
-- ✅ **Correção na Aplicação da Lista de Exclusão (`exclusion_list`)**: Corrigida a persistência e o consumo do Filtro de Exclusão no disparo em massa. O backend agora salva a `exclusion_list` no modelo `ScheduledTrigger` e o worker carrega todos esses telefones no `blocked_set` no início do envio, bloqueando rigorosamente qualquer disparo para contatos/etiquetas presentes na Base de Exclusão.
-
-### v1.7.3 — Versão Estável (2026-08-11)
-- ✅ **Busca de Contatos em Massa (`Filters.jsx` e `leads.py`)**: O campo "Buscar Contato" na aba de Contatos agora aceita colar múltiplos contatos ou telefones (separados por quebra de linha ou vírgula). O backend realiza a busca flexível por sufixos numéricos (ignorando formatações ou DDI/DDD), filtrando instantaneamente todos os contatos colados.
-
-### v1.7.2 — Versão Estável (2026-08-11)
-- ✅ **Notificação Toast de Confirmação no Botão Copiar Lista (`ContactsModal`)**: Garantido o disparo imediato do toast verde de sucesso (`X contatos copiados para a área de transferência!`) ao clicar no botão de cópia de lista, fechando o toast de carregamento prévio.
+### v1.8.2 — Versão Estável (2026-08-25)
+- ✅ **Identificação Inteligente de PIX no Webhook da Hotmart**: Corrigida a extração e resolução de status para pagamentos via PIX na Hotmart v2.0 enviados sob o evento `PURCHASE_BILLET_PRINTED`, garantindo a correta exibição do Método como "Pix" e Status Principal como "Pix Gerado", com preservação dos dados de `pix_code` e `pix_qrcode`.
 
 ### v1.8.1 — Versão Estável (2026-08-17)
 - ✅ **Mensagens Rápidas e Automáticas no Atendimento**: Suporte completo a atalhos por barra `/` no chat e no modal maximizado, com substituição inteligente de variáveis dinâmicas (`{{nome}}`, `{{primeiro_nome}}`, `{{telefone}}`).

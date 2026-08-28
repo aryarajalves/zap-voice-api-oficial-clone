@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Histórico de Conversa - Aryaraj</title>
+<style>
+
+    :root {
+        --primary: #2563eb;
+        --primary-dark: #1d4ed8;
+        --primary-light: #eff6ff;
+        --primary-border: #bfdbfe;
+        --contact-bg: #f0fdf4;
+        --contact-border: #10b981;
+        --user-bg: #eff6ff;
+        --user-border: #2563eb;
+        --system-bg: #fffbeb;
+        --system-border: #f59e0b;
+        --text-dark: #0f172a;
+        --text-muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: 'Segoe UI', Calibri, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        margin: 0;
+        padding: 25px;
+        color: var(--text-dark);
+        background-color: #f1f5f9;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .page-container {
+        max-width: 880px;
+        margin: 0 auto;
+        background: #ffffff;
+        padding: 32px;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* Barra de Ações Superior */
+    .action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        background: var(--primary-light);
+        border: 1px solid var(--primary-border);
+        padding: 14px 20px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+    }
+    .action-left {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    .action-title {
+        font-weight: 700;
+        color: #1e40af;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .filter-private-container {
+        display: inline-flex;
+        align-items: center;
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        padding: 6px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s;
+    }
+    .filter-private-container:hover {
+        border-color: #94a3b8;
+        background: #f8fafc;
+    }
+    .filter-private-container input {
+        margin: 0 8px 0 0;
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+        accent-color: #2563eb;
+    }
+    .filter-private-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #334155;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .btn-print {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: #ffffff;
+        border: none;
+        padding: 9px 18px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        transition: all 0.2s;
+    }
+    .btn-print:hover {
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+        box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+        transform: translateY(-1px);
+    }
+
+    /* Cabeçalho do Histórico */
+    .header {
+        border-bottom: 2px solid var(--primary);
+        padding-bottom: 18px;
+        margin-bottom: 22px;
+    }
+    .header h1 {
+        color: #1e3a8a;
+        font-size: 24px;
+        margin: 0 0 10px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .meta-info {
+        font-size: 13px;
+        color: #475569;
+        line-height: 1.7;
+    }
+    .meta-tag {
+        display: inline-block;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .private-notes-count-badge {
+        display: inline-block;
+        margin-left: 6px;
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    /* Abas de Navegação por Data */
+    .tabs-container {
+        margin-bottom: 24px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        padding: 14px 16px;
+        border-radius: 12px;
+    }
+    .tabs-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #475569;
+        margin-bottom: 10px;
+        letter-spacing: 0.5px;
+    }
+    .tabs-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .tab-btn {
+        background: #ffffff;
+        color: #334155;
+        border: 1px solid #cbd5e1;
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    .tab-btn:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+        color: #0f172a;
+    }
+    .tab-btn.active {
+        background: #2563eb;
+        color: #ffffff;
+        border-color: #1d4ed8;
+        box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
+    }
+    .tab-badge {
+        background: rgba(0, 0, 0, 0.08);
+        color: inherit;
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 12px;
+        font-weight: 700;
+    }
+    .tab-btn.active .tab-badge {
+        background: rgba(255, 255, 255, 0.25);
+        color: #ffffff;
+    }
+
+    /* Agrupamento por Data e Separadores */
+    .date-group {
+        margin-bottom: 26px;
+    }
+    .date-separator {
+        display: flex;
+        align-items: center;
+        text-align: center;
+        margin: 20px 0 16px 0;
+    }
+    .date-separator::before,
+    .date-separator::after {
+        content: '';
+        flex: 1;
+        border-bottom: 1px dashed #cbd5e1;
+    }
+    .date-badge {
+        background: #e2e8f0;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 14px;
+        border-radius: 20px;
+        margin: 0 12px;
+        border: 1px solid #cbd5e1;
+    }
+
+    /* Cartões de Mensagem (Blocos Agrupados) */
+    .message-card {
+        margin-bottom: 16px;
+        padding: 14px 18px;
+        border-radius: 10px;
+        border-left: 4px solid #cbd5e1;
+        background-color: #f8fafc;
+        page-break-inside: avoid;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+    .user-msg {
+        border-left-color: var(--user-border);
+        background-color: var(--user-bg);
+    }
+    .contact-msg {
+        border-left-color: var(--contact-border);
+        background-color: var(--contact-bg);
+    }
+    .system-msg {
+        border-left-color: var(--system-border);
+        background-color: var(--system-bg);
+    }
+    .sender-title {
+        font-weight: 700;
+        font-size: 13px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        padding-bottom: 4px;
+    }
+    .sender-user { color: #1d4ed8; }
+    .sender-contact { color: #047857; }
+    .sender-system { color: #b45309; }
+    .message-card-footer {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 8px;
+        padding-top: 4px;
+        border-top: 1px dashed rgba(0, 0, 0, 0.05);
+    }
+    .timestamp {
+        font-size: 10.5px;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+    .message-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .msg-item {
+        position: relative;
+    }
+    .msg-item:not(:last-child) {
+        border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
+        padding-bottom: 10px;
+    }
+    .msg-subtime {
+        font-size: 10.5px;
+        color: var(--text-muted);
+        margin-top: 4px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .content {
+        font-size: 13.5px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        color: #1e293b;
+        word-break: break-word;
+    }
+    
+    /* Mídias */
+    .media-container {
+        font-size: 12px;
+        margin-top: 8px;
+    }
+    .media-container img {
+        max-width: 450px;
+        max-height: 350px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        display: block;
+        margin-bottom: 6px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .media-container video {
+        max-width: 400px;
+        max-height: 250px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        display: block;
+        margin-bottom: 6px;
+    }
+    .media-container audio {
+        margin-bottom: 6px;
+        display: block;
+        width: 300px;
+    }
+    
+    /* Pensamento e Pipeline da IA */
+    .agent-thought-wrapper {
+        margin-top: 10px;
+        border-top: 1px dashed #bfdbfe;
+        padding-top: 8px;
+    }
+    .btn-toggle-thought {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%);
+        color: #4338ca;
+        border: 1px solid #c7d2fe;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .btn-toggle-thought:hover {
+        background: linear-gradient(135deg, #c7d2fe 0%, #ddd6fe 100%);
+        color: #3730a3;
+        transform: translateY(-1px);
+    }
+    .btn-toggle-thought.active {
+        background: #4338ca;
+        color: #ffffff;
+        border-color: #3730a3;
+    }
+    .thought-container {
+        margin-top: 8px;
+        background: #ffffff;
+        border: 1px solid #c7d2fe;
+        border-radius: 8px;
+        padding: 12px;
+        box-shadow: 0 2px 6px rgba(67, 56, 202, 0.08);
+        font-size: 12px;
+    }
+    .thought-box {
+        background: #fdf4ff;
+        border-left: 3px solid #c026d3;
+        padding: 8px 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+    }
+    .thought-header {
+        font-weight: bold;
+        color: #86198f;
+        font-size: 11px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+    }
+    .thought-body {
+        color: #4a044e;
+        font-style: italic;
+        white-space: pre-wrap;
+        line-height: 1.4;
+    }
+    .pipeline-box { margin-top: 6px; }
+    .pipeline-header {
+        font-weight: bold;
+        color: #3730a3;
+        font-size: 11px;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+    }
+    .pipeline-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-left: 2px solid #e0e7ff;
+        padding-left: 10px;
+        margin-left: 4px;
+    }
+    .pipeline-step {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 6px 10px;
+    }
+    .step-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+    }
+    .step-title {
+        font-weight: bold;
+        color: #1e293b;
+        font-size: 11px;
+    }
+    .step-time {
+        font-size: 10px;
+        color: #64748b;
+        font-family: monospace;
+    }
+    .step-detail {
+        color: #475569;
+        font-size: 11px;
+        line-height: 1.35;
+    }
+    .pipeline-footer-id {
+        font-size: 10px;
+        color: #6366f1;
+        font-weight: bold;
+        margin-top: 6px;
+        text-align: right;
+    }
+
+    .footer {
+        margin-top: 35px;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 14px;
+        font-size: 11px;
+        color: #94a3b8;
+        text-align: center;
+    }
+
+    /* Estado quando anotações privadas estão ocultas */
+    body.hide-private-notes .system-msg {
+        display: none !important;
+    }
+
+    /* Regras de Impressão e PDF */
+    @media print {
+        body {
+            background-color: #ffffff;
+            padding: 0;
+        }
+        .page-container {
+            box-shadow: none;
+            padding: 0;
+            max-width: 100%;
+            border-radius: 0;
+        }
+        .action-bar,
+        .tabs-container {
+            display: none !important;
+        }
+        .message-card {
+            page-break-inside: avoid;
+            box-shadow: none;
+        }
+        .btn-toggle-thought {
+            display: none !important;
+        }
+        .thought-container {
+            display: block !important;
+            border: 1px solid #cbd5e1;
+        }
+    }
+
+</style>
+</head>
+<body>
+    <div class="page-container">
+        <!-- Barra de Ações Superior com Filtro e Botão de Impressão -->
+        <div class="action-bar">
+            <div class="action-left">
+                <span class="action-title">📄 Histórico de Conversa em HTML</span>
+                <label class="filter-private-container" title="Ocultar ou exibir anotações e mensagens privadas do sistema">
+                    <input type="checkbox" id="toggle-private-notes" onchange="togglePrivateNotes(this.checked)">
+                    <span class="filter-private-label">🔒 Ocultar anotações privadas</span>
+                </label>
+            </div>
+            <button onclick="window.print()" class="btn-print" title="Salvar conversa como PDF ou imprimir">
+                🖨️ Salvar como PDF / Imprimir
+            </button>
+        </div>
+
+        <!-- Cabeçalho -->
+        <div class="header">
+            <h1>📋 Histórico de Atendimento - ZapVoice</h1>
+            <div class="meta-info">
+                <strong>Contato / Usuário:</strong> Aryaraj<br>
+                <strong>Telefone:</strong> <span class="meta-tag">5585996123586</span> | <strong>ID da Conversa:</strong> <span class="meta-tag">#12800</span><br>
+                <strong>Data da Exportação:</strong> 19/08/2026, 19:48:01 | <strong>Total de Mensagens:</strong> <span class="meta-tag" id="meta-total-msgs">10</span>
+                <span class="private-notes-count-badge" id="meta-private-notes-badge">🔒 2 anotações privadas</span>
+            </div>
+        </div>
+
+        <!-- Abas de Navegação por Data -->
+        
+        <div class="tabs-container">
+            <div class="tabs-label">📅 Filtrar por Data:</div>
+            <div class="tabs-bar">
+                <button type="button" class="tab-btn active" data-date="all" onclick="selectDateTab('all')">
+                    📅 Todas as Datas <span class="tab-badge" id="badge-all">10</span>
+                </button>
+                
+                    <button type="button" class="tab-btn" data-date="17/08/2026" onclick="selectDateTab('17/08/2026')">
+                        17/08/2026 <span class="tab-badge" data-date-badge="17/08/2026">5</span>
+                    </button>
+                
+                    <button type="button" class="tab-btn" data-date="18/08/2026" onclick="selectDateTab('18/08/2026')">
+                        18/08/2026 <span class="tab-badge" data-date-badge="18/08/2026">3</span>
+                    </button>
+                
+                    <button type="button" class="tab-btn" data-date="19/08/2026" onclick="selectDateTab('19/08/2026')">
+                        19/08/2026 <span class="tab-badge" data-date-badge="19/08/2026">2</span>
+                    </button>
+                
+            </div>
+        </div>
+        
+
+        <!-- Corpo com Mensagens Agrupadas por Data -->
+        <div class="conversation-body" id="conversation-body">
+            
+            <div class="date-group" data-date="17/08/2026">
+                <div class="date-separator">
+                    <span class="date-badge">📅 17 de Agosto de 2026 (5 mensagens)</span>
+                </div>
+                <div class="date-group-messages">
+                    
+        <div class="message-card user-msg" data-is-private="false" data-date="17/08/2026">
+            <div class="sender-title sender-user">
+                <span>🤖 Agente / Atendente</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">😂</div>
+            
+            
+        </div>
+    
+
+        <div class="msg-item">
+            <div class="content">😊 😁 😍 💔 💟</div>
+            
+            
+        </div>
+    
+
+        <div class="msg-item">
+            <div class="content">www.google.com.br</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">17/08/2026, 04:33:32 - 05:35:34</span>
+                </div>
+            
+        </div>
+    
+
+        <div class="message-card contact-msg" data-is-private="false" data-date="17/08/2026">
+            <div class="sender-title sender-contact">
+                <span>👤 Usuário (Cliente)</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">Imagem recebida</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">17/08/2026, 05:35:59</span>
+                </div>
+            
+        </div>
+    
+
+        <div class="message-card system-msg" data-is-private="true" data-date="17/08/2026">
+            <div class="sender-title sender-system">
+                <span>🔒 Sistema / Anotação</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">Lead demonstrou interesse em fechar o plano anual.</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">17/08/2026, 06:00:00</span>
+                </div>
+            
+        </div>
+    
+                </div>
+            </div>
+        
+
+            <div class="date-group" data-date="18/08/2026">
+                <div class="date-separator">
+                    <span class="date-badge">📅 18 de Agosto de 2026 (3 mensagens)</span>
+                </div>
+                <div class="date-group-messages">
+                    
+        <div class="message-card contact-msg" data-is-private="false" data-date="18/08/2026">
+            <div class="sender-title sender-contact">
+                <span>👤 Usuário (Cliente)</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">Bom dia! Gostaria de saber os métodos de pagamento.</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">18/08/2026, 07:15:00</span>
+                </div>
+            
+        </div>
+    
+
+        <div class="message-card user-msg" data-is-private="false" data-date="18/08/2026">
+            <div class="sender-title sender-user">
+                <span>🤖 Agente / Atendente</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">Aceitamos PIX e Cartão de Crédito em até 12x sem juros!</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">18/08/2026, 07:16:00</span>
+                </div>
+            
+        </div>
+    
+
+        <div class="message-card system-msg" data-is-private="true" data-date="18/08/2026">
+            <div class="sender-title sender-system">
+                <span>🔒 Sistema / Anotação</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">Cliente solicitou cupom de desconto para pagamento à vista.</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">18/08/2026, 07:30:00</span>
+                </div>
+            
+        </div>
+    
+                </div>
+            </div>
+        
+
+            <div class="date-group" data-date="19/08/2026">
+                <div class="date-separator">
+                    <span class="date-badge">📅 19 de Agosto de 2026 (2 mensagens)</span>
+                </div>
+                <div class="date-group-messages">
+                    
+        <div class="message-card contact-msg" data-is-private="false" data-date="19/08/2026">
+            <div class="sender-title sender-contact">
+                <span>👤 Usuário (Cliente)</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">Perfeito, pagamento realizado com sucesso!</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">19/08/2026, 11:20:00</span>
+                </div>
+            
+        </div>
+    
+
+        <div class="message-card user-msg" data-is-private="false" data-date="19/08/2026">
+            <div class="sender-title sender-user">
+                <span>🤖 Agente / Atendente</span>
+            </div>
+            <div class="message-items-list">
+                
+        <div class="msg-item">
+            <div class="content">Parabéns e seja muito bem-vindo ao ZapVoice! 🎉</div>
+            
+            
+        </div>
+    
+            </div>
+            
+                <div class="message-card-footer">
+                    <span class="timestamp">19/08/2026, 11:21:00</span>
+                </div>
+            
+        </div>
+    
+                </div>
+            </div>
+        
+        </div>
+
+        <div class="footer">
+            Documento gerado automaticamente pelo sistema ZapVoice - API Oficial do WhatsApp
+        </div>
+    </div>
+
+    <script>
+
+    var currentDateTab = 'all';
+    var isHidingPrivateNotes = false;
+
+    function selectDateTab(dateKey) {
+        currentDateTab = dateKey;
+        
+        // Atualiza classes ativas nos botões das abas
+        var tabBtns = document.querySelectorAll('.tab-btn');
+        tabBtns.forEach(function(btn) {
+            if (btn.getAttribute('data-date') === dateKey) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Atualiza visibilidade dos grupos de data
+        var groups = document.querySelectorAll('.date-group');
+        groups.forEach(function(group) {
+            var gDate = group.getAttribute('data-date');
+            if (dateKey === 'all' || gDate === dateKey) {
+                group.style.display = 'block';
+            } else {
+                group.style.display = 'none';
+            }
+        });
+    }
+
+    function togglePrivateNotes(shouldHide) {
+        isHidingPrivateNotes = shouldHide;
+        if (shouldHide) {
+            document.body.classList.add('hide-private-notes');
+        } else {
+            document.body.classList.remove('hide-private-notes');
+        }
+    }
+
+    function toggleThought(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var btn = el.previousElementSibling;
+        if (el.style.display === 'none' || !el.style.display) {
+            el.style.display = 'block';
+            if (btn) {
+                btn.classList.add('active');
+                var chevron = btn.querySelector('.thought-chevron');
+                if (chevron) chevron.textContent = '▲';
+                var txt = btn.querySelector('.thought-btn-label');
+                if (txt) {
+                    txt.textContent = txt.textContent.replace('Ver Pensamento', 'Ocultar Pensamento');
+                }
+            }
+        } else {
+            el.style.display = 'none';
+            if (btn) {
+                btn.classList.remove('active');
+                var chevron = btn.querySelector('.thought-chevron');
+                if (chevron) chevron.textContent = '▼';
+                var txt = btn.querySelector('.thought-btn-label');
+                if (txt) {
+                    txt.textContent = txt.textContent.replace('Ocultar Pensamento', 'Ver Pensamento');
+                }
+            }
+        }
+    }
+
+    </script>
+</body>
+</html>

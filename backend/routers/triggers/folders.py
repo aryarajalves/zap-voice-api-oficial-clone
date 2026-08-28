@@ -1,25 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sqlfunc
 from typing import Optional, List
 import models, schemas
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
 
 router = APIRouter()
 
 
-def _get_client_id(x_client_id: Optional[int], current_user: models.User) -> int:
-    return x_client_id if x_client_id else current_user.client_id
-
-
 @router.get("/folders", response_model=List[schemas.TriggerFolder], summary="Listar Pastas de Disparos")
 async def list_trigger_folders(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = _get_client_id(x_client_id, current_user)
-
     folders = db.query(models.TriggerFolder).filter(
         models.TriggerFolder.client_id == client_id
     ).order_by(models.TriggerFolder.name.asc()).all()
@@ -41,12 +35,10 @@ async def list_trigger_folders(
 @router.post("/folders", response_model=schemas.TriggerFolder, summary="Criar Pasta de Disparos")
 async def create_trigger_folder(
     payload: schemas.TriggerFolderCreate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = _get_client_id(x_client_id, current_user)
-
     name = (payload.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nome da pasta é obrigatório")
@@ -67,11 +59,10 @@ async def create_trigger_folder(
 async def update_trigger_folder(
     folder_id: int,
     payload: schemas.TriggerFolderUpdate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = _get_client_id(x_client_id, current_user)
     folder = db.query(models.TriggerFolder).filter(
         models.TriggerFolder.id == folder_id,
         models.TriggerFolder.client_id == client_id
@@ -99,11 +90,10 @@ async def update_trigger_folder(
 @router.delete("/folders/{folder_id}", summary="Excluir Pasta de Disparos")
 async def delete_trigger_folder(
     folder_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = _get_client_id(x_client_id, current_user)
     folder = db.query(models.TriggerFolder).filter(
         models.TriggerFolder.id == folder_id,
         models.TriggerFolder.client_id == client_id
@@ -125,11 +115,10 @@ async def delete_trigger_folder(
 async def move_trigger_to_folder(
     trigger_id: int,
     payload: schemas.TriggerFolderMove,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = _get_client_id(x_client_id, current_user)
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == trigger_id,
         models.ScheduledTrigger.client_id == client_id
@@ -153,12 +142,10 @@ async def move_trigger_to_folder(
 @router.post("/bulk-move-folder", summary="Mover múltiplos disparos para uma pasta")
 async def bulk_move_triggers_to_folder(
     payload: schemas.TriggerFolderBulkMove,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = _get_client_id(x_client_id, current_user)
-
     if payload.folder_id is not None:
         folder = db.query(models.TriggerFolder).filter(
             models.TriggerFolder.id == payload.folder_id,
@@ -174,3 +161,4 @@ async def bulk_move_triggers_to_folder(
 
     db.commit()
     return {"updated_count": updated, "folder_id": payload.folder_id}
+

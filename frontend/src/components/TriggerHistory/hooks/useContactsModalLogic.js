@@ -39,7 +39,20 @@ export const useContactsModalLogic = ({
     const [sendingAll, setSendingAll] = React.useState(false);
     const [chatwootLabeling, setChatwootLabeling] = React.useState(false);
 
-    const getContactPhone = (contact) => contact.phone_number || contact.phone || '';
+    const getContactPhone = (contact) => {
+        if (!contact) return '';
+        if (typeof contact === 'string') return contact;
+        return (
+            contact.phone_number ||
+            contact.phone ||
+            contact.whatsapp ||
+            contact.telefone ||
+            contact.contact_phone ||
+            contact.number ||
+            contact.meta?.sender?.phone_number ||
+            ''
+        );
+    };
 
     // Marca contatos como "resolvidos" (bloqueado/repousado/reenviado) em vez de removê-los
     // do relatório de falhas. O contato continua aparecendo na lista, só que travado — o
@@ -470,6 +483,8 @@ export const useContactsModalLogic = ({
         toggleSelectAll,
         handleSelectAllTarget,
         getAllTargetContacts,
-        getContactPhone
+        getContactPhone,
+        safeModalContacts,
+        isClientSidePaging
     };
 };

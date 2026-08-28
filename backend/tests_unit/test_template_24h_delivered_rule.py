@@ -18,12 +18,12 @@ CUTOFF_OK = datetime.now(timezone.utc) - timedelta(hours=2)   # dentro das 24h
 CUTOFF_OLD = datetime.now(timezone.utc) - timedelta(hours=25)  # fora das 24h
 
 
-# ─── CENÁRIO 1: Não deve bloquear — status 'sent' apenas ────────────────────
+# ─── CENÁRIO 1: Deve bloquear — status 'sent' (enviado sem erro para a Meta) ───
 
-def test_nao_bloqueia_se_apenas_sent(db_session: Session):
+def test_bloqueia_se_sent(db_session: Session):
     """
-    Status 'sent' = ACK da Meta API. Usuário pode não ter recebido.
-    NÃO deve bloquear re-disparo.
+    Status 'sent' = Enviado sem erro para a Meta API.
+    DEVE considerar como enviado nas últimas 24h e bloquear re-disparo.
     """
     ms = models.MessageStatus(
         phone_number=PHONE,
@@ -36,7 +36,7 @@ def test_nao_bloqueia_se_apenas_sent(db_session: Session):
     db_session.commit()
 
     result = is_template_sent_in_last_24h(db_session, CLIENT_ID, PHONE, TEMPLATE)
-    assert result is False, "Status 'sent' NÃO deve bloquear — mensagem pode não ter chegado"
+    assert result is True, "Status 'sent' DEVE bloquear re-disparo por 24h"
 
 
 # ─── CENÁRIO 2: Deve bloquear — status 'delivered' ──────────────────────────
@@ -100,13 +100,12 @@ def test_nao_bloqueia_se_delivered_fora_24h(db_session: Session):
     assert result is False, "Entregue há mais de 24h NÃO deve bloquear"
 
 
-# ─── CENÁRIO 5: ContactTemplateHistory SOZINHO não deve bloquear ─────────────
+# ─── CENÁRIO 5: ContactTemplateHistory deve bloquear ──────────────────────────
 
-def test_contact_template_history_sozinho_nao_bloqueia(db_session: Session):
+def test_contact_template_history_bloqueia(db_session: Session):
     """
-    Mesmo que ContactTemplateHistory exista (badge no lead foi criado),
-    se não houver MessageStatus com delivered/read, NÃO deve bloquear.
-    Isso garante que disparos que falharam silenciosamente podem ser repetidos.
+    ContactTemplateHistory gravado após envio sem erro à Meta
+    DEVE considerar como enviado nas últimas 24h e bloquear re-disparo.
     """
     history = models.ContactTemplateHistory(
         client_id=CLIENT_ID,
@@ -118,7 +117,7 @@ def test_contact_template_history_sozinho_nao_bloqueia(db_session: Session):
     db_session.commit()
 
     result = is_template_sent_in_last_24h(db_session, CLIENT_ID, PHONE, TEMPLATE)
-    assert result is False, "ContactTemplateHistory sozinho NÃO deve bloquear re-disparo"
+    assert result is True, "ContactTemplateHistory recente DEVE bloquear re-disparo"
 
 
 # ─── CENÁRIO 6: failed + ContactTemplateHistory não bloqueia ─────────────────

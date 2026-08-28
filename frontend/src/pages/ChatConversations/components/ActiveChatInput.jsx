@@ -58,13 +58,13 @@ export default function ActiveChatInput({
         <>
             {/* Barra de Preview de Resposta (quando replyingTo está ativo) */}
             {replyingTo && (
-                <div className="px-4 py-2 bg-blue-500/10 border-t border-blue-500/20 flex items-center justify-between gap-2 text-xs animate-in slide-in-from-bottom-2 duration-200">
-                    <div className="flex items-center gap-2 overflow-hidden">
+                <div className="w-full min-w-0 px-4 py-2 bg-blue-500/10 border-t border-blue-500/20 flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-2 duration-200">
+                    <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
                         <div className="w-1 h-8 bg-blue-500 rounded-full shrink-0" />
-                        <div className="overflow-hidden">
+                        <div className="overflow-hidden min-w-0 flex-1">
                             <div className="flex items-center gap-1 text-[11px] font-semibold text-blue-500 dark:text-blue-400">
-                                <FiCornerUpLeft size={12} />
-                                <span>Respondendo a {replyingTo.sender_type === 'user' || replyingTo.sender_type === 'agent' ? 'Você' : (selectedConvo?.contact_name || getFirstName(selectedConvo?.phone) || 'Contato')}</span>
+                                <FiCornerUpLeft size={12} className="shrink-0" />
+                                <span className="truncate">Respondendo a {replyingTo.sender_type === 'user' || replyingTo.sender_type === 'agent' ? 'Você' : (selectedConvo?.contact_name || getFirstName(selectedConvo?.phone) || 'Contato')}</span>
                             </div>
                             <p className="text-gray-600 dark:text-gray-300 truncate text-[11px]">
                                 {replyingTo.content || '[Mídia]'}
@@ -74,7 +74,7 @@ export default function ActiveChatInput({
                     <button
                         type="button"
                         onClick={() => setReplyingTo(null)}
-                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition shrink-0"
+                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition shrink-0 cursor-pointer"
                         title="Cancelar resposta"
                     >
                         <FiX size={15} />
@@ -213,7 +213,13 @@ export default function ActiveChatInput({
                         <textarea
                             ref={chatInputRef}
                             rows={1}
-                            placeholder={isWindowClosed ? "Janela de 24h fechada. O cliente precisa enviar uma nova mensagem." : "Digite sua mensagem de resposta... (digite / para respostas rápidas)"}
+                            placeholder={
+                                engine.isLoadingMessages 
+                                    ? "Carregando histórico da conversa..." 
+                                    : isWindowClosed 
+                                        ? "Janela de 24h fechada. O cliente precisa enviar uma nova mensagem." 
+                                        : "Digite sua mensagem de resposta... (digite / para respostas rápidas)"
+                            }
                             value={engine.newMessage}
                             onChange={(e) => {
                                 engine.setNewMessage(e.target.value);
@@ -255,7 +261,7 @@ export default function ActiveChatInput({
                     <button
                         type="button"
                         onClick={engine.isRecording ? stopRecordingToPreview : startRecording}
-                        disabled={engine.isSending || isWindowClosed}
+                        disabled={engine.isSending || isWindowClosed || engine.isLoadingMessages}
                         className={`p-2.5 rounded-xl transition-all flex items-center justify-center shrink-0 disabled:opacity-50 disabled:pointer-events-none cursor-pointer ${
                             engine.isRecording
                             ? 'bg-red-500 hover:bg-red-600 text-white'
@@ -271,7 +277,7 @@ export default function ActiveChatInput({
                 {engine.newMessage.trim() && !engine.isRecording && !recordedAudio && (
                     <button
                         type="submit"
-                        disabled={engine.isSending || !engine.newMessage.trim() || isWindowClosed}
+                        disabled={engine.isSending || !engine.newMessage.trim() || isWindowClosed || engine.isLoadingMessages}
                         className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer"
                     >
                         {engine.isSending ? (

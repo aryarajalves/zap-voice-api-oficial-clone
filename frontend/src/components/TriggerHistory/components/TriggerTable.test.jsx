@@ -396,8 +396,8 @@ describe('TriggerTable Component', () => {
 
     const queueButton = screen.getByTitle('Ver Fila de Envio (Meta)');
     expect(queueButton).toBeInTheDocument();
-    // Sem queue_count definido, deve usar fallback: 15 - 5 - 3 = 7
-    expect(screen.getByText('7')).toBeInTheDocument();
+    // Sem queue_count definido, deve usar fallback: 15 - 5 = 10
+    expect(screen.getByText('10')).toBeInTheDocument();
 
     queueButton.click();
     expect(handleViewContactsMock).toHaveBeenCalledWith(expect.objectContaining({ id: 12 }), 'queue');

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiUser, FiSlash, FiClock } from 'react-icons/fi';
+import { FiUser, FiSlash, FiClock, FiArchive } from 'react-icons/fi';
 import { BsPinAngleFill, BsExclamationCircleFill } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
 
@@ -10,6 +10,7 @@ export default function ChatListItem({
     onSelect,
     onToggleCheck,
     onDelete,
+    onArchive,
     getLabelColor,
     formatTime
 }) {
@@ -55,9 +56,14 @@ export default function ChatListItem({
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">{convo.last_message_content || 'Nenhuma mensagem'}</p>
                     
-                    {/* Badges de bloqueio/repouso e atendente atribuído */}
-                    {(convo.block_status || convo.assigned_user_name) && (
+                    {/* Badges de status, bloqueio/repouso e atendente atribuído */}
+                    {(convo.status === 'archived' || convo.block_status || convo.assigned_user_name) && (
                         <div className="mb-1 flex flex-wrap gap-1">
+                            {convo.status === 'archived' && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-amber-400 border-amber-500/30 bg-amber-500/10">
+                                    <FiArchive size={9} /> Arquivada
+                                </span>
+                            )}
                             {convo.block_status === 'blocked' && (
                                 <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border text-red-400 border-red-500/30 bg-red-500/10">
                                     <FiSlash size={9} /> Bloqueado
@@ -101,17 +107,31 @@ export default function ChatListItem({
                 {convo.unread_count > 0 && <span className="bg-emerald-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">{convo.unread_count}</span>}
             </div>
 
-            {/* Botão delete individual (aparece no hover) */}
-            <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(convo.id);
-                }}
-                className="absolute right-2 inset-y-0 my-auto h-fit opacity-0 group-hover/convo:opacity-100 p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-600 dark:bg-red-500/20 dark:hover:bg-red-500/30 dark:text-red-400 dark:hover:text-red-300 rounded-lg transition"
-                title="Deletar conversa"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
+            {/* Ações individuais no hover */}
+            <div className="absolute right-2 inset-y-0 my-auto h-fit opacity-0 group-hover/convo:opacity-100 flex items-center gap-1 z-10 transition">
+                {onArchive && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onArchive(convo.id, convo.status !== 'archived');
+                        }}
+                        className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 hover:text-amber-600 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 dark:text-amber-400 dark:hover:text-amber-300 rounded-lg transition"
+                        title={convo.status === 'archived' ? "Desarquivar conversa" : "Arquivar conversa"}
+                    >
+                        <FiArchive size={14} />
+                    </button>
+                )}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(convo.id);
+                    }}
+                    className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-600 dark:bg-red-500/20 dark:hover:bg-red-500/30 dark:text-red-400 dark:hover:text-red-300 rounded-lg transition"
+                    title="Deletar conversa"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+            </div>
         </div>
     );
 }

@@ -1,4 +1,9 @@
 # Registrar a alteração no esquema
+## [2026-08-26] Novas Colunas para Fixar e Favoritar Mensagens
+- Adicionada a coluna `pinned_message_id` (INTEGER, FK para chat_messages.id ON DELETE SET NULL) em `chat_conversations`.
+- Adicionada a coluna `is_starred` (BOOLEAN DEFAULT FALSE) em `chat_messages`.
+- Script de Migração: `add_chat_message_pin_and_star.py` sob a pasta `backend/`.
+
 ## [2026-06-29] Novas Colunas em chat_conversations
 - Adicionadas as colunas `pinned` (BOOLEAN DEFAULT FALSE) e `private_note` (TEXT) à tabela `chat_conversations`.
 
@@ -143,3 +148,11 @@
   - `autovacuum_analyze_threshold = 25`
 - Migração Alembic: `0009_tune_autovacuum_settings.py` sob a pasta `backend/alembic_migrations/versions/`.
 - Script de Migração: `tune_autovacuum_settings.py` sob a pasta `backend/scripts/`.
+
+## [2026-08-28] Criação da Tabela password_reset_tokens (Links de Redefinição de Senha)
+- Criação da tabela `password_reset_tokens` com suporte a expiração, token único, vínculo com `users(id)` e tracking de `created_by_id`.
+- Criados índices B-Tree:
+  - `idx_password_reset_tokens_token` em `password_reset_tokens(token)`
+  - `idx_password_reset_tokens_user_id` em `password_reset_tokens(user_id)`
+- Script de Migração: `create_password_reset_tokens_table.py` sob a pasta `backend/scripts/database/`.
+

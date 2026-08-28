@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Body, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 import models, schemas
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
+from core.encryption import encrypt_token, decrypt_token
 from services.email_service import send_single_email
 from core.logger import setup_logger
 from rabbitmq_client import rabbitmq
@@ -45,11 +46,10 @@ class EmailBulkSendPayload(BaseModel):
 
 @router.get("/config", summary="Obter Configuração de E-mail do Cliente")
 def get_email_config(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     config = db.query(models.EmailConfig).filter_by(client_id=client_id).first()
     if not config:
         return {"configured": False, "config": None}
@@ -60,13 +60,13 @@ def get_email_config(
             "id": config.id,
             "provider": config.provider,
             "aws_access_key_id": config.aws_access_key_id,
-            "aws_secret_access_key": config.aws_secret_access_key or "",
+            "aws_secret_access_key": decrypt_token(config.aws_secret_access_key) or "",
             "aws_region": config.aws_region,
-            "resend_api_key": config.resend_api_key or "",
+            "resend_api_key": decrypt_token(config.resend_api_key) or "",
             "smtp_host": config.smtp_host,
             "smtp_port": config.smtp_port,
             "smtp_user": config.smtp_user,
-            "smtp_password": config.smtp_password or "",
+            "smtp_password": decrypt_token(config.smtp_password) or "",
             "smtp_encryption": config.smtp_encryption,
             "from_email": config.from_email,
             "from_name": config.from_name,
@@ -79,11 +79,10 @@ def get_email_config(
 @router.post("/config", summary="Salvar Configuração de E-mail")
 def save_email_config(
     payload: EmailConfigSchema,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     config = db.query(models.EmailConfig).filter_by(client_id=client_id).first()
     
     if not config:
@@ -96,17 +95,17 @@ def save_email_config(
     
     if payload.aws_access_key_id is not None: config.aws_access_key_id = payload.aws_access_key_id
     if payload.aws_secret_access_key is not None and payload.aws_secret_access_key != "":
-        config.aws_secret_access_key = payload.aws_secret_access_key
+        config.aws_secret_access_key = encrypt_token(payload.aws_secret_access_key)
     if payload.aws_region is not None: config.aws_region = payload.aws_region
     
     if payload.resend_api_key is not None and payload.resend_api_key != "":
-        config.resend_api_key = payload.resend_api_key
+        config.resend_api_key = encrypt_token(payload.resend_api_key)
     
     if payload.smtp_host is not None: config.smtp_host = payload.smtp_host
     if payload.smtp_port is not None: config.smtp_port = payload.smtp_port
     if payload.smtp_user is not None: config.smtp_user = payload.smtp_user
     if payload.smtp_password is not None and payload.smtp_password != "":
-        config.smtp_password = payload.smtp_password
+        config.smtp_password = encrypt_token(payload.smtp_password)
     if payload.smtp_encryption is not None: config.smtp_encryption = payload.smtp_encryption
 
     db.commit()
@@ -114,14 +113,14 @@ def save_email_config(
     return {"status": "success", "message": "Configuração de e-mail salva com sucesso!"}
 
 
+
 @router.post("/test", summary="Enviar E-mail de Teste")
 async def send_test_email(
     payload: TestEmailPayload,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     config = db.query(models.EmailConfig).filter_by(client_id=client_id).first()
     if not config:
         raise HTTPException(status_code=400, detail="Configure o provedor de e-mail antes de enviar um teste.")
@@ -149,11 +148,10 @@ async def send_test_email(
 
 @router.get("/templates", summary="Listar Templates de E-mail")
 def list_email_templates(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     templates = db.query(models.EmailTemplate).filter_by(client_id=client_id, is_active=True).order_by(models.EmailTemplate.updated_at.desc()).all()
     return templates
 
@@ -161,11 +159,10 @@ def list_email_templates(
 @router.post("/templates", summary="Criar Template de E-mail")
 def create_email_template(
     payload: EmailTemplateSchema,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     tmpl = models.EmailTemplate(
         client_id=client_id,
         name=payload.name,
@@ -183,11 +180,10 @@ def create_email_template(
 def update_email_template(
     template_id: int,
     payload: EmailTemplateSchema,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     tmpl = db.query(models.EmailTemplate).filter_by(id=template_id, client_id=client_id).first()
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template de e-mail não encontrado.")
@@ -203,11 +199,10 @@ def update_email_template(
 @router.delete("/templates/{template_id}", summary="Excluir Template de E-mail")
 def delete_email_template(
     template_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     tmpl = db.query(models.EmailTemplate).filter_by(id=template_id, client_id=client_id).first()
     if not tmpl:
         raise HTTPException(status_code=404, detail="Template de e-mail não encontrado.")
@@ -222,12 +217,10 @@ def delete_email_template(
 @router.post("/send-bulk", summary="Criar Disparo em Massa de E-mail")
 async def create_bulk_email_dispatch(
     payload: EmailBulkSendPayload,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
-    
     config = db.query(models.EmailConfig).filter_by(client_id=client_id).first()
     if not config:
         raise HTTPException(status_code=400, detail="Configure o provedor de e-mail antes de realizar disparos.")
@@ -235,6 +228,7 @@ async def create_bulk_email_dispatch(
     template = db.query(models.EmailTemplate).filter_by(id=payload.template_id, client_id=client_id).first()
     if not template:
         raise HTTPException(status_code=404, detail="Template de e-mail não encontrado.")
+
 
     # 1. Obter contatos filtrados da Aba de Contatos (WebhookLead) pela etiqueta
     from sqlalchemy import func
@@ -344,11 +338,10 @@ async def create_bulk_email_dispatch(
 @router.get("/history", summary="Histórico de Disparos de E-mail")
 def list_email_history(
     limit: int = Query(500, ge=1, le=1000),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     history = db.query(models.EmailDispatch).filter_by(client_id=client_id).order_by(models.EmailDispatch.created_at.desc()).limit(limit).all()
     return history
 
@@ -356,11 +349,10 @@ def list_email_history(
 @router.delete("/history/{dispatch_id}", summary="Excluir item do Histórico de Disparos")
 def delete_email_dispatch(
     dispatch_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     dispatch = db.query(models.EmailDispatch).filter_by(id=dispatch_id, client_id=client_id).first()
     if not dispatch:
         raise HTTPException(status_code=404, detail="Registro de disparo não encontrado.")
@@ -373,12 +365,11 @@ def delete_email_dispatch(
 @router.get("/preview-recipients", summary="Pré-visualizar Destinatários de E-mail por Etiqueta")
 def preview_email_recipients(
     tag_name: Optional[str] = Query(None),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     from sqlalchemy import func
-    client_id = x_client_id if x_client_id else current_user.client_id
     query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
     if tag_name and tag_name.strip():
         tag_clean = tag_name.strip()
@@ -527,11 +518,10 @@ async def receive_inbound_email(
 def list_email_inbounds(
     limit: int = Query(100, ge=1, le=500),
     search: Optional[str] = Query(None),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     query = db.query(models.EmailInbound).filter_by(client_id=client_id)
 
     if search and search.strip():
@@ -554,11 +544,10 @@ def list_email_inbounds(
 @router.put("/inbounds/{inbound_id}/read", summary="Marcar resposta de e-mail como lida")
 def mark_inbound_read(
     inbound_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     inbound = db.query(models.EmailInbound).filter_by(id=inbound_id, client_id=client_id).first()
     if not inbound:
         raise HTTPException(status_code=404, detail="Resposta de e-mail não encontrada")
@@ -572,11 +561,10 @@ def mark_inbound_read(
 async def reply_inbound_email(
     inbound_id: int,
     payload: ReplyEmailPayload,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     inbound = db.query(models.EmailInbound).filter_by(id=inbound_id, client_id=client_id).first()
     if not inbound:
         raise HTTPException(status_code=404, detail="Resposta de e-mail não encontrada")
@@ -600,4 +588,5 @@ async def reply_inbound_email(
     db.commit()
 
     return {"status": "success", "message": f"Réplica enviada com sucesso para {inbound.from_email}!"}
+
 

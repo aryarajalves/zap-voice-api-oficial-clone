@@ -136,6 +136,8 @@ class ScheduledTrigger(ScheduledTriggerBase):
     total_read: int = 0
     total_interactions: int = 0
     total_blocked: int = 0
+    total_skipped: int = 0
+    queue_count: Optional[int] = 0
     total_memory_sent: int = 0
     
     # New Field

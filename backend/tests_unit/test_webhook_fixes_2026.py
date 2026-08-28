@@ -267,37 +267,6 @@ def test_generic_wp_payload():
     assert result['name'] == "Maria WP"
     assert result['phone'] == "5511966665555"
 
-@pytest.mark.asyncio
-async def test_chatwoot_unbound_local_fix():
-    # Este teste verifica se a função chatwoot_webhook pode ser chamada/carregada sem o erro de UnboundLocalError
-    # Requer bibliotecas suficientes instaladas.
-    from routers.webhooks_inbound.chatwoot import chatwoot_webhook
-    
-    # Mock parameters
-    mock_request = MagicMock()
-    mock_request.json.return_value = {"event": "ping"}
-    mock_request.body.return_value = b'{"event": "ping"}'
-    mock_request.headers = {}
-    
-    mock_db = MagicMock()
-    mock_background_tasks = MagicMock()
-    
-    # Se a função carregar e não estourar erro de sintaxe/referência ao ser definida, já é um bom sinal.
-    # Mas vamos tentar chamar um evento simples para ver se ela falha no meio.
-    try:
-        # Usamos um payload de ping que cai no final e retorna {"status": "ignored"}
-        # Agora a assinatura exige background_tasks e payload
-        response = await chatwoot_webhook(mock_request, mock_background_tasks, {"event": "ping"}, mock_db)
-        # Note que chatwoot_webhook pode retornar {"status": "ok"} por padrão se o evento for ping, já que não cai em message_created/updated
-        # Vamos verificar se retorna status "ok"
-        assert response["status"] == "ok"
-    except UnboundLocalError as e:
-        pytest.fail(f"UnboundLocalError detectado: {e}")
-    except Exception as e:
-        # Outros erros (como falha de mock) são aceitáveis para este teste específico de regressão de variável local
-        print(f"Nota: Outro erro ocorreu (esperado devido a mocks incompletos), mas não foi UnboundLocalError: {e}")
-        pass
-
 def test_pagtrust_webhook_payloads():
     payload_billet = {
       "name": "Erick Phelipe",

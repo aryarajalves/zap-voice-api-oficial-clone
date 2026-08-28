@@ -13,13 +13,14 @@ class ChatConversation(Base):
     contact_name = Column(String, nullable=True)
     last_message_content = Column(String, nullable=True)
     last_message_at = Column(DateTime(timezone=True), server_default=func.now())
-    status = Column(String, default="open", index=True)  # open, resolved
+    status = Column(String, default="open", index=True)  # open, resolved, archived
     unread_count = Column(Integer, default=0)
     assigned_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     labels = Column(JSON, default=list)  # Lista de strings: ["importante", "suporte", etc]
     last_contact_message_at = Column(DateTime(timezone=True), nullable=True)
     pinned = Column(Boolean, default=False, nullable=False)
     urgent = Column(Boolean, default=False, nullable=False)
+    pinned_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
     private_note = Column(String, nullable=True)
     human_handover_at = Column(DateTime(timezone=True), nullable=True)
     
@@ -48,13 +49,14 @@ class ChatConversation(Base):
     # Relationships
     client = relationship("Client", backref="chat_conversations")
     assigned_user = relationship("User", backref="assigned_conversations")
-    messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan")
+    messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan", foreign_keys="[ChatMessage.conversation_id]")
 
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
     __table_args__ = (
         Index('idx_chat_messages_convo_time', 'conversation_id', 'timestamp'),
+        Index('idx_chat_messages_starred', 'conversation_id', 'is_starred', 'timestamp'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -69,6 +71,7 @@ class ChatMessage(Base):
     wa_message_id = Column(String, nullable=True, index=True)
     meta_data = Column(JSON, nullable=True)
     quoted_message_id = Column(String, nullable=True)  # wamid da mensagem citada (quote reply)
+    is_starred = Column(Boolean, default=False, nullable=True)
     
     # Logs do Webhook de mensagens do AgentFlow
     agentflow_webhook_status = Column(String, nullable=True)
@@ -77,5 +80,5 @@ class ChatMessage(Base):
     agentflow_retry_at = Column(DateTime(timezone=True), nullable=True)  # Próximo retry agendado
 
     # Relationships
-    conversation = relationship("ChatConversation", back_populates="messages")
+    conversation = relationship("ChatConversation", back_populates="messages", foreign_keys=[conversation_id])
     user = relationship("User", backref="sent_chat_messages")

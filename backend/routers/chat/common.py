@@ -2,21 +2,20 @@ from typing import Optional
 from fastapi import Header, Depends
 from pydantic import BaseModel
 import models
-from core.deps import get_current_user
+from core.deps import get_current_user, get_validated_client_id
 from core.logger import setup_logger
 
 logger = setup_logger("ChatRouter")
 
 
-def get_client_id(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
-    current_user: models.User = Depends(get_current_user)
-) -> Optional[int]:
-    if x_client_id:
-        return x_client_id
-    if current_user and current_user.client_id:
-        return current_user.client_id
-    return None
+async def get_client_id(
+    client_id: int = Depends(get_validated_client_id)
+) -> int:
+    """
+    Retorna o client_id autenticado e validado contra o usuário atual (multi-tenant IDOR protection).
+    """
+    return client_id
+
 
 
 class LabelCreateRequest(BaseModel):

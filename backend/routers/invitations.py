@@ -1,14 +1,18 @@
 import os
 import uuid
 import json
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 
-from models import User, Client, UserInvitation
-from core.security import get_password_hash
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session, selectinload
+
+from models import User, Client, UserInvitation, EmailVerificationCode
+from core.security import get_password_hash, limiter, validate_password_strength
+from services.brevo_service import send_verification_email
+
 from core.deps import get_db
 from core.permissions import require_super_admin
 from core.logger import logger
@@ -38,10 +42,18 @@ class InvitationOut(BaseModel):
     class Config:
         from_attributes = True
 
+class InviteSendCodeRequest(BaseModel):
+    full_name: str
+    email: str
+    password: str = Field(..., min_length=12, max_length=128, description="Senha do usuário com no mínimo 12 caracteres")
+    confirm_password: str
+
 class UserRegisterInvite(BaseModel):
     full_name: str
     email: str
-    password: str
+    password: str = Field(..., min_length=12, max_length=128, description="Senha do usuário com no mínimo 12 caracteres")
+    code: str = Field(..., min_length=6, max_length=10, description="Código de 6 dígitos recebido por e-mail")
+
 
 # --- Rotas de Convite ---
 
@@ -54,7 +66,7 @@ async def list_invitations(
     Retorna todos os convites criados.
     Requer Super Admin.
     """
-    invitations = db.query(UserInvitation).order_by(UserInvitation.created_at.desc()).all()
+    invitations = db.query(UserInvitation).options(selectinload(UserInvitation.accessible_clients)).order_by(UserInvitation.created_at.desc()).all()
     out = []
     for invite in invitations:
         try:
@@ -160,13 +172,15 @@ async def create_invitation(
 
 
 @router.get("/{token}", summary="Verificar Convite de Usuário (Público)")
+@limiter.limit("20/minute")
 async def get_invitation_by_token(
+    request: Request,
     token: str,
     db: Session = Depends(get_db)
 ):
     """
     Verifica se o token de convite é válido, não expirou e não foi utilizado.
-    Endpoint público.
+    Endpoint público com rate limiting.
     """
     invite = db.query(UserInvitation).filter(UserInvitation.token == token).first()
     if not invite:
@@ -198,14 +212,104 @@ async def get_invitation_by_token(
     }
 
 
+@router.post("/{token}/send-code", summary="Enviar Código de Verificação por E-mail (Brevo)")
+@limiter.limit("5/minute")
+async def send_verification_code(
+    request: Request,
+    token: str,
+    payload: InviteSendCodeRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Valida os dados de cadastro, regras de senha e dispara um e-mail transacional via Brevo
+    com o código de segurança de 6 dígitos.
+    """
+    invite = db.query(UserInvitation).filter(UserInvitation.token == token).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Convite inválido ou não encontrado.")
+    
+    if invite.is_used:
+        raise HTTPException(status_code=400, detail="Este convite já foi utilizado.")
+    
+    if invite.expires_at:
+        now = datetime.now(timezone.utc)
+        expires_at_utc = invite.expires_at.astimezone(timezone.utc) if invite.expires_at.tzinfo else invite.expires_at.replace(tzinfo=timezone.utc)
+        if expires_at_utc < now:
+            raise HTTPException(status_code=400, detail="Este convite expirou.")
+
+    # 1. Validar igualdade de senhas
+    if payload.password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="As senhas informadas não coincidem.")
+
+    # 2. Validar força da senha
+    is_valid_pw, pw_error = validate_password_strength(payload.password)
+    if not is_valid_pw:
+        raise HTTPException(status_code=400, detail=pw_error)
+
+    # 3. Validar se o e-mail já existe
+    existing_user = db.query(User).filter(User.email == payload.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Este email já está cadastrado no sistema.")
+
+    try:
+        # Invalida códigos anteriores não utilizados deste e-mail para este token
+        db.query(EmailVerificationCode).filter(
+            EmailVerificationCode.email == payload.email,
+            EmailVerificationCode.token == token,
+            EmailVerificationCode.is_used == False
+        ).update({"is_used": True})
+
+        # Gera código numérico seguro de 6 dígitos
+        code = f"{secrets.randbelow(900000) + 100000}"
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+        new_verification = EmailVerificationCode(
+            email=payload.email,
+            code=code,
+            token=token,
+            expires_at=expires_at,
+            is_used=False,
+            attempts=0
+        )
+        db.add(new_verification)
+        db.commit()
+
+        # Envia e-mail transacional via Brevo
+        email_result = await send_verification_email(
+            to_email=payload.email,
+            code=code,
+            recipient_name=payload.full_name
+        )
+
+        if not email_result.get("success"):
+            logger.error(f"❌ Falha ao enviar código Brevo para {payload.email}: {email_result.get('error')}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Não foi possível enviar o e-mail de verificação: {email_result.get('error')}"
+            )
+
+        return {"message": "Código de verificação enviado com sucesso para o seu e-mail!"}
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Erro ao processar envio de código de verificação: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao enviar código de verificação: {str(e)}")
+
+
 @router.post("/{token}/register", summary="Registrar Usuário via Convite (Público)")
+@limiter.limit("10/minute")
 async def register_by_invitation(
+    request: Request,
     token: str,
     user_in: UserRegisterInvite,
     db: Session = Depends(get_db)
 ):
     """
-    Cadastra um novo usuário no sistema associado a um convite válido.
+    Cadastra um novo usuário no sistema associado a um convite válido,
+    validando o código de segurança de 6 dígitos enviado por e-mail via Brevo.
     Endpoint público.
     """
     invite = db.query(UserInvitation).filter(UserInvitation.token == token).first()
@@ -221,12 +325,63 @@ async def register_by_invitation(
         if expires_at_utc < now:
             raise HTTPException(status_code=400, detail="Este convite expirou.")
 
+    # Validar força da senha
+    is_valid_pw, pw_error = validate_password_strength(user_in.password)
+    if not is_valid_pw:
+        raise HTTPException(status_code=400, detail=pw_error)
+
     # Verificar se email já existe
     existing_user = db.query(User).filter(User.email == user_in.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Este email já está cadastrado no sistema.")
 
+    # Validar código de ativação do e-mail
+    clean_code = user_in.code.replace(" ", "").strip()
+    code_record = db.query(EmailVerificationCode).filter(
+        EmailVerificationCode.email == user_in.email,
+        EmailVerificationCode.token == token,
+        EmailVerificationCode.is_used == False
+    ).order_by(EmailVerificationCode.created_at.desc()).first()
+
+    if not code_record:
+        raise HTTPException(
+            status_code=400,
+            detail="Nenhum código de verificação pendente encontrado para este e-mail. Solicite um novo código."
+        )
+
+    if code_record.attempts >= 5:
+        code_record.is_used = True
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="Número máximo de tentativas excedido. Solicite um novo código de verificação."
+        )
+
+    now = datetime.now(timezone.utc)
+    expires_utc = code_record.expires_at.astimezone(timezone.utc) if code_record.expires_at.tzinfo else code_record.expires_at.replace(tzinfo=timezone.utc)
+    if expires_utc < now:
+        code_record.is_used = True
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="O código de verificação expirou. Solicite um novo código."
+        )
+
+    if code_record.code != clean_code:
+        code_record.attempts += 1
+        db.commit()
+        remaining = 5 - code_record.attempts
+        if remaining > 0:
+            raise HTTPException(status_code=400, detail=f"Código de verificação incorreto. Restam {remaining} tentativa(s).")
+        else:
+            code_record.is_used = True
+            db.commit()
+            raise HTTPException(status_code=400, detail="Código incorreto. Limite de tentativas atingido. Solicite um novo código.")
+
     try:
+        # Marcar código como validado e consumido
+        code_record.is_used = True
+
         # Criar o usuário
         try:
             blocked_features_val = invite.blocked_features or "[]"
@@ -288,7 +443,11 @@ async def register_by_invitation(
 
         return {"message": "Conta registrada e ativada com sucesso!", "user_id": new_user.id}
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Erro ao registrar usuário via convite: {e}")
         raise HTTPException(status_code=500, detail=f"Erro no processamento do cadastro: {str(e)}")
+

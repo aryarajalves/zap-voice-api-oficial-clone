@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from core.deps import get_db, get_current_user
+from core.deps import get_db, get_current_user, get_validated_client_id
 from core.permissions import require_premium, require_user
 from models import BlockedContact, User
 from pydantic import BaseModel
@@ -43,13 +43,11 @@ class BulkBlockRequest(BaseModel):
 def list_blocked_contacts(
     current_user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     List all blocked contacts for the active client (inherited if in a project).
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-    
     # Check if client belongs to a project
     from models import Client
     client = db.query(Client).filter(Client.id == client_id).first()
@@ -71,12 +69,12 @@ def block_contact(
     data: BlockedContactCreate,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Block a phone number.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
+
 
     # Normalize phone (remove non-digits)
     clean_phone = "".join(filter(str.isdigit, data.phone))
@@ -120,14 +118,12 @@ def check_bulk_blocked(
     data: BulkCheckRequest,
     current_user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Receives a list of phone numbers and returns which ones are blocked (inherited if in a project).
     Uses 'last 8 digits' comparison logic.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-
     from models import Client
     client = db.query(Client).filter(Client.id == client_id).first()
     client_ids = [client_id]
@@ -174,13 +170,11 @@ def unblock_contact(
     contact_id: int,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Unblock a contact.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-
     contact = db.query(BlockedContact).filter(
         BlockedContact.id == contact_id,
         BlockedContact.client_id == client_id # Security/Context check
@@ -198,12 +192,11 @@ def unblock_contact_by_phone(
     phone: str,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Unblock a contact by phone number.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     clean_phone = "".join(filter(str.isdigit, phone))
     if not clean_phone:
         raise HTTPException(status_code=400, detail="Número de telefone inválido.")
@@ -227,13 +220,11 @@ def unblock_bulk(
     data: BulkUnblockRequest,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Unblock multiple contacts at once.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-    
     deleted_count = db.query(BlockedContact).filter(
         BlockedContact.id.in_(data.ids),
         BlockedContact.client_id == client_id
@@ -247,12 +238,12 @@ def block_bulk(
     data: BulkBlockRequest,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Block multiple contacts at once. Includes cleaning and suffix deduplication.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
+
     
     # Get current suffixes to prevent duplicates
     existing = db.query(BlockedContact.phone).filter(BlockedContact.client_id == client_id).all()

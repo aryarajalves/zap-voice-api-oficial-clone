@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List, Optional
 import models, schemas
 import csv, io
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
 from config_loader import get_setting
 
 router = APIRouter()
@@ -21,12 +21,12 @@ async def get_trigger_messages(
     filter_ddd: Optional[str] = None,
     limit: int = 20,
     skip: int = 0,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     trigger = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id, models.ScheduledTrigger.client_id == client_id).first()
+
     
     if not trigger: raise HTTPException(status_code=404, detail="Disparo não encontrado")
     
@@ -362,7 +362,7 @@ async def get_trigger_messages(
             "blocked": trigger.total_blocked or 0,
             "interaction": trigger.total_interactions or 0,
             "private_note": trigger.total_private_notes or 0,
-            "queue": max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0) - (trigger.total_failed or 0))
+            "queue": max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0))
         }
     else:
         # Se for bulk, calcular contadores baseado na query agrupada por telefone para garantir contagens únicas

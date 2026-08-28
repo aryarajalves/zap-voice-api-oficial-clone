@@ -13,7 +13,7 @@ async def get_sent_phones_set(db, trigger_id: int) -> set:
     ).all()
     return {normalize_phone(p[0]) for p in sent_phones_raw if p[0]}
 
-def update_trigger_stats(db, trigger_id: int, sent: int = 0, failed: int = 0, blocked: int = 0, skipped: int = 0, total: int = None):
+def update_trigger_stats(db, trigger_id: int, sent: int = 0, failed: int = 0, blocked: int = 0, skipped: int = 0, total: int = None, commit: bool = True):
     """Atualiza os contadores do trigger de forma atômica."""
     updates = {}
     if sent: updates["total_sent"] = models.ScheduledTrigger.total_sent + sent
@@ -24,7 +24,8 @@ def update_trigger_stats(db, trigger_id: int, sent: int = 0, failed: int = 0, bl
     
     if updates:
         db.query(models.ScheduledTrigger).filter_by(id=trigger_id).update(updates)
-        db.commit()
+        if commit:
+            db.commit()
 
 def record_blocked_status(trigger_id: int, phone: str):
     """Registra um status de falha por bloqueio."""

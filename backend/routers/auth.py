@@ -1,16 +1,17 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from models import User, Client, UserInvitation
-from core.security import verify_password, get_password_hash, create_access_token, limiter
+from models import User, Client, UserInvitation, PasswordResetToken
+from core.security import verify_password, get_password_hash, needs_rehash, create_access_token, limiter, validate_password_strength
 from core.deps import get_current_user, get_db
 from core.permissions import require_super_admin
 from core.logger import logger
 from websocket_manager import manager
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
+
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -22,7 +23,7 @@ class Token(BaseModel):
 
 class UserCreate(BaseModel):
     email: str
-    password: str
+    password: str = Field(..., min_length=12, max_length=128, description="Senha do usuário com no mínimo 12 caracteres")
     full_name: Optional[str] = None
     role: Optional[str] = "user"
     client_ids: Optional[List[int]] = []
@@ -30,12 +31,12 @@ class UserCreate(BaseModel):
     blocked_features: Optional[List[str]] = []
     blocked_nodes: Optional[List[str]] = []
 
-
-
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=12, max_length=128, description="Nova senha com no mínimo 12 caracteres")
+
+
 
 @router.post("/token", response_model=Token, summary="Login e Obtenção de Token")
 @limiter.limit("5/minute")
@@ -66,6 +67,15 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
             detail="Email ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Migração automática transparente para Argon2id + Pepper se o hash for legado
+    try:
+        if needs_rehash(user.hashed_password):
+            user.hashed_password = get_password_hash(form_data.password)
+            db.commit()
+            logger.info(f"🔒 [SECURITY] Senha de '{user.email}' migrada automaticamente para Argon2id + Pepper.")
+    except Exception as e:
+        logger.warning(f"⚠️ [SECURITY] Erro não-bloqueante ao atualizar hash de '{user.email}': {e}")
 
     access_token = create_access_token(data={"sub": user.email, "role": user.role})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -124,6 +134,9 @@ async def update_my_profile(
         user.email = profile_in.email
 
     if profile_in.password:
+        is_valid_pw, pw_err = validate_password_strength(profile_in.password)
+        if not is_valid_pw:
+            raise HTTPException(status_code=400, detail=pw_err)
         user.hashed_password = get_password_hash(profile_in.password)
 
     try:
@@ -162,6 +175,10 @@ async def register(
         db_user = db.query(User).filter(User.email == user.email).first()
         if db_user:
             raise HTTPException(status_code=400, detail="Este email já está cadastrado")
+
+        is_valid_pw, pw_err = validate_password_strength(user.password)
+        if not is_valid_pw:
+            raise HTTPException(status_code=400, detail=pw_err)
 
         import json
         hashed_password = get_password_hash(user.password)
@@ -212,7 +229,8 @@ async def register(
 
 class PasswordReset(BaseModel):
     email: str
-    new_password: str
+    new_password: str = Field(..., min_length=12, max_length=128, description="Nova senha com no mínimo 12 caracteres")
+
 
 
 @router.post("/reset-password", summary="Resetar Senha Administrativa")
@@ -232,6 +250,10 @@ async def reset_password(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Usuário não encontrado"
             )
+
+        is_valid_pw, pw_err = validate_password_strength(reset_data.new_password)
+        if not is_valid_pw:
+            raise HTTPException(status_code=400, detail=pw_err)
 
         user.hashed_password = get_password_hash(reset_data.new_password)
         db.commit()
@@ -300,7 +322,7 @@ async def list_users(
     Requer Super Admin. Não retorna senhas.
     """
     import json
-    users = db.query(User).all()
+    users = db.query(User).options(selectinload(User.accessible_clients)).all()
     out = []
     for u in users:
         try:
@@ -373,8 +395,9 @@ async def delete_user(
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=6, max_length=128, description="Nova senha com no mínimo 6 caracteres")
     role: Optional[str] = None
+
     seller_weight: Optional[int] = None
     is_active: Optional[bool] = None
     client_ids: Optional[List[int]] = None
@@ -493,6 +516,160 @@ async def update_user(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar: {str(e)}")
+
+
+# ── Schemas e Rotas de Link de Redefinição de Senha para Usuários ──────────────
+
+class ResetPasswordLinkCreate(BaseModel):
+    validity_hours: Optional[int] = 24
+
+class UserSetNewPasswordRequest(BaseModel):
+    password: str = Field(..., min_length=12, max_length=128, description="Nova senha com no mínimo 12 caracteres")
+    confirm_password: str
+
+
+@router.post("/users/{user_id}/reset-password-link", summary="Gerar Link de Redefinição de Senha para Usuário")
+async def create_user_reset_password_link(
+    user_id: int,
+    payload: Optional[ResetPasswordLinkCreate] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_super_admin)
+):
+    """
+    Gera um link seguro e único para que o usuário existente defina uma nova senha para a conta dele.
+    Requer Super Admin.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    try:
+        validity_hours = payload.validity_hours if payload and payload.validity_hours is not None else 24
+        expires_at = None
+        if validity_hours > 0:
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=validity_hours)
+
+        # Invalida tokens anteriores não utilizados deste usuário
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user_id,
+            PasswordResetToken.is_used == False
+        ).update({"is_used": True})
+
+        token = str(uuid.uuid4())
+        reset_token = PasswordResetToken(
+            token=token,
+            user_id=user.id,
+            created_by_id=current_user.id,
+            expires_at=expires_at,
+            is_used=False
+        )
+        db.add(reset_token)
+        db.commit()
+        db.refresh(reset_token)
+
+        logger.info(f"🔗 [AUTH] Link de redefinição gerado para o usuário '{user.email}' (ID {user.id}) por Super Admin {current_user.id}")
+
+        return {
+            "token": reset_token.token,
+            "expires_at": reset_token.expires_at,
+            "user_id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Erro ao gerar link de redefinição de senha: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar link de redefinição: {str(e)}")
+
+
+@router.get("/reset-password-token/{token}", summary="Verificar Link de Redefinição de Senha (Público)")
+@limiter.limit("30/minute")
+async def verify_reset_password_token(
+    request: Request,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Verifica se o link de redefinição de senha é válido, não expirou e não foi utilizado.
+    Endpoint público com rate limiting.
+    """
+    reset_tok = db.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
+    if not reset_tok:
+        raise HTTPException(status_code=404, detail="Link de redefinição inválido ou não encontrado.")
+
+    if reset_tok.is_used:
+        raise HTTPException(status_code=400, detail="Este link de redefinição de senha já foi utilizado.")
+
+    if reset_tok.expires_at:
+        now = datetime.now(timezone.utc)
+        expires_at_utc = reset_tok.expires_at.astimezone(timezone.utc) if reset_tok.expires_at.tzinfo else reset_tok.expires_at.replace(tzinfo=timezone.utc)
+        if expires_at_utc < now:
+            raise HTTPException(status_code=400, detail="Este link de redefinição de senha expirou.")
+
+    user = db.query(User).filter(User.id == reset_tok.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário associado não encontrado.")
+
+    return {
+        "valid": True,
+        "token": reset_tok.token,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role
+    }
+
+
+@router.post("/reset-password-token/{token}", summary="Definir Nova Senha via Link (Público)")
+@limiter.limit("10/minute")
+async def execute_reset_password_by_token(
+    request: Request,
+    token: str,
+    payload: UserSetNewPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza a senha do usuário com a nova senha escolhida por ele via link seguro.
+    Endpoint público com rate limiting.
+    """
+    reset_tok = db.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
+    if not reset_tok:
+        raise HTTPException(status_code=404, detail="Link de redefinição inválido ou não encontrado.")
+
+    if reset_tok.is_used:
+        raise HTTPException(status_code=400, detail="Este link de redefinição de senha já foi utilizado.")
+
+    if reset_tok.expires_at:
+        now = datetime.now(timezone.utc)
+        expires_at_utc = reset_tok.expires_at.astimezone(timezone.utc) if reset_tok.expires_at.tzinfo else reset_tok.expires_at.replace(tzinfo=timezone.utc)
+        if expires_at_utc < now:
+            raise HTTPException(status_code=400, detail="Este link de redefinição de senha expirou.")
+
+    user = db.query(User).filter(User.id == reset_tok.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário associado não encontrado.")
+
+    if payload.password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="As senhas informadas não coincidem.")
+
+    is_valid_pw, pw_err = validate_password_strength(payload.password)
+    if not is_valid_pw:
+        raise HTTPException(status_code=400, detail=pw_err)
+
+    try:
+        user.hashed_password = get_password_hash(payload.password)
+        user.is_active = True
+        reset_tok.is_used = True
+        db.commit()
+
+        logger.info(f"✅ [AUTH] Senha do usuário '{user.email}' (ID {user.id}) redefinida com sucesso via token.")
+        return {"message": "Sua senha foi redefinida com sucesso! Você já pode fazer login."}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Erro ao redefinir senha do usuário: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar nova senha: {str(e)}")
+
 
 
 

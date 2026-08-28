@@ -11,7 +11,7 @@ from sqlalchemy import or_, and_, desc
 
 import models
 import schemas
-from core.deps import get_db
+from core.deps import get_db, get_validated_client_id
 from core.permissions import require_feature, require_user
 from core.logger import setup_logger
 from .common_filters import (
@@ -49,7 +49,7 @@ def list_leads(
     block_status: Optional[str] = None,  # 'blocked' (bloqueio real) | 'resting' (repouso temporário) | None (todos)
     has_appointment: Optional[str] = None,  # 'true' | 'false' | None (todos)
     appointment_status: Optional[str] = None,  # 'pending' | 'occurred' | None (todos)
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("leads"))
 ):
@@ -59,7 +59,7 @@ def list_leads(
     'exclude_tag' remove da lista qualquer contato que possua ao menos uma das
     etiquetas informadas (mesmo que também possua etiquetas de 'tag').
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
+
 
     # Verificar se o cliente tem um projeto associado
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
@@ -193,7 +193,7 @@ def get_lead_ddi_ddd_filters(
     origin: Optional[str] = None,
     is_locked: Optional[str] = None,
     has_bsud: Optional[str] = None,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_feature("leads"))
 ):
@@ -203,8 +203,6 @@ def get_lead_ddi_ddd_filters(
     existem entre os contatos resultantes — para popular os dropdowns do
     Frontend de forma dinâmica, nunca com uma lista fixa de códigos.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
     proj_id = active_client.project_id if active_client else None
 
@@ -253,15 +251,13 @@ def get_lead_ddi_ddd_filters(
 @router.get("/leads/filters", summary="Obter valores únicos para filtros")
 def get_lead_filters(
     only_leads: bool = False,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
 ):
     """
     Retorna os tipos de eventos e nomes de produtos únicos para preencher os filtros do Frontend.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-    
     # Verificar se o cliente tem um projeto associado
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
     proj_id = active_client.project_id if active_client else None
@@ -340,7 +336,7 @@ def get_lead_filters(
 
 @router.get("/leads/custom-variables", summary="Obter chaves de variáveis customizadas dos contatos")
 def get_lead_custom_variables(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
 ):
@@ -348,7 +344,6 @@ def get_lead_custom_variables(
     Retorna a lista de chaves únicas de variáveis customizadas armazenadas na coluna
     'variables' de 'webhook_leads' para o client_id do usuário.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     logger.info(f"🔍 Buscando chaves de variáveis customizadas para o cliente {client_id}")
     
     try:
@@ -390,7 +385,7 @@ def export_leads_csv(
     filter_ddi: Optional[str] = None,
     filter_ddd: Optional[str] = None,
     block_status: Optional[str] = None,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_user)
 ):
@@ -399,8 +394,8 @@ def export_leads_csv(
     Se 'ids' for informado, exporta apenas esses IDs. Caso contrário, exporta todos
     os contatos que batem com os filtros ativos.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+
     proj_id = active_client.project_id if active_client else None
 
     if proj_id:

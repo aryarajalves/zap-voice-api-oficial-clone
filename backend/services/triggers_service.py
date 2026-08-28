@@ -90,10 +90,10 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
                     total_cost += float(trigger.cost_per_unit)
                     paid_templates += 1
 
-    # 4. Atualizar o Trigger (Garantindo que contadores cumulativos nunca regridam)
-    trigger.total_sent = max(trigger.total_sent or 0, sent)
-    trigger.total_delivered = max(trigger.total_delivered or 0, delivered)
-    trigger.total_read = max(trigger.total_read or 0, read)
+    # 4. Atualizar o Trigger com os contadores consolidados de contatos únicos
+    trigger.total_sent = sent
+    trigger.total_delivered = delivered
+    trigger.total_read = read
 
     # Calcular total_failed estritamente para o disparo principal
     failed_msgs = [ms for ms in all_statuses if ms.trigger_id == trigger_id and ms.status == 'failed' and ms.failure_reason != 'BLOCKED_VIA_BUTTON']
@@ -101,9 +101,9 @@ async def reconcile_trigger_stats_logic(trigger_id: int, client_id: int, db: Ses
     trigger.total_failed = len(failed_phones)
     trigger.total_blocked = blocked
     trigger.total_skipped = skipped
-    trigger.total_interactions = max(trigger.total_interactions or 0, interactions)
-    trigger.total_cost = max(float(trigger.total_cost or 0.0), total_cost)
-    trigger.total_paid_templates = max(trigger.total_paid_templates or 0, paid_templates)
+    trigger.total_interactions = interactions
+    trigger.total_cost = total_cost
+    trigger.total_paid_templates = paid_templates
 
     # Se houver mensagens falhas, sincronizar a razão do erro
     failed_msgs = [ms for ms in all_statuses if ms.status == 'failed' and ms.failure_reason]

@@ -246,13 +246,6 @@ const TriggerTableRow = ({
               </div>
             )}
 
-            {/* Relatório de Falhas */}
-            {triggerWithActions.total_failed > 0 && (
-              <button onClick={() => fetchErrors(triggerWithActions.id)} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 mt-1 font-semibold cursor-pointer">
-                📋 Ver Relatório de Falhas ({triggerWithActions.total_failed})
-              </button>
-            )}
-
             {/* Resumo de Custos */}
             <TriggerCostSummary
               triggerWithActions={triggerWithActions}

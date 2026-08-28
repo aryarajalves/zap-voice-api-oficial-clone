@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiUser, FiMaximize2, FiRefreshCw, FiTrash2, FiSearch } from 'react-icons/fi';
-import { BsJournalText } from 'react-icons/bs';
+import { BsJournalText, BsStarFill } from 'react-icons/bs';
 import ContactProfileCard from './components/ChatContactSidebar/ContactProfileCard';
 import ContactTagsSection from './components/ChatContactSidebar/ContactTagsSection';
 import ContactMediaSection from './components/ChatContactSidebar/ContactMediaSection';
@@ -8,6 +8,7 @@ import ConversationMediaModal from './components/ChatContactSidebar/Conversation
 import MaximizedNoteModal from './components/ChatContactSidebar/MaximizedNoteModal';
 import NewTagModal from './components/ChatContactSidebar/NewTagModal';
 import MessageSearchSidebar from './components/ChatContactSidebar/MessageSearchSidebar';
+import StarredMessagesModal from './components/ChatContactSidebar/StarredMessagesModal';
 import ShareContactModal from './components/ShareContactModal';
 import MentionTextarea from './components/MentionTextarea';
 import { renderConvoMentions } from './utils/convoMentionUtils';
@@ -43,11 +44,36 @@ export default function ChatContactSidebar({
     openConversationById,
     isSearchMode = false,
     setIsSearchMode,
-    onSelectMessage
+    onSelectMessage,
+    messages = [],
+    handleToggleStarMessage,
+    formatMessageTimestamp
 }) {
     const [isMaximizedOpen, setIsMaximizedOpen] = React.useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
+    const [isStarredModalOpen, setIsStarredModalOpen] = React.useState(false);
     const [newTagModalData, setNewTagModalData] = React.useState(null);
+
+    const userMessagesCount = React.useMemo(() => {
+        if (mediaData?.user_messages_count !== undefined) {
+            return mediaData.user_messages_count;
+        }
+        return (messages || []).filter(m => m.sender_type === 'contact').length;
+    }, [mediaData?.user_messages_count, messages]);
+
+    const agentMessagesCount = React.useMemo(() => {
+        if (mediaData?.agent_messages_count !== undefined) {
+            return mediaData.agent_messages_count;
+        }
+        return (messages || []).filter(m => m.sender_type === 'user' || m.sender_type === 'agent').length;
+    }, [mediaData?.agent_messages_count, messages]);
+
+    const totalMessagesCount = React.useMemo(() => {
+        if (mediaData?.total_messages !== undefined) {
+            return mediaData.total_messages;
+        }
+        return (messages || []).length;
+    }, [mediaData?.total_messages, messages]);
 
     React.useEffect(() => {
         if (isMaximizedOpen || newTagModalData?.isOpen || isMediaModalOpen || isShareModalOpen) {
@@ -94,6 +120,9 @@ export default function ChatContactSidebar({
                 handleClose24hWindow={handleClose24hWindow}
                 getFirstName={getFirstName}
                 onShareContact={() => setIsShareModalOpen(true)}
+                userMessagesCount={userMessagesCount}
+                agentMessagesCount={agentMessagesCount}
+                totalMessagesCount={totalMessagesCount}
             />
 
             {/* Botão de Atalho para Pesquisar Mensagens (Estilo WhatsApp) */}
@@ -109,6 +138,22 @@ export default function ChatContactSidebar({
                     <span>Pesquisar mensagens</span>
                 </div>
                 <span className="text-[10px] text-gray-400 font-mono">Buscar</span>
+            </button>
+
+            {/* Botão de Atalho para Mensagens Favoritas */}
+            <button
+                type="button"
+                onClick={() => setIsStarredModalOpen(true)}
+                data-testid="starred-messages-button"
+                className="w-full flex items-center justify-between p-3 rounded-xl bg-white dark:bg-[#1e293b] hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/5 transition-all text-xs font-semibold text-gray-700 dark:text-gray-200 shadow-sm cursor-pointer group"
+            >
+                <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 group-hover:scale-110 transition-transform">
+                        <BsStarFill size={15} />
+                    </div>
+                    <span>Mensagens Favoritas</span>
+                </div>
+                <span className="text-[10px] text-gray-400 font-mono">Ver</span>
             </button>
 
             {/* Atribuído A */}
@@ -235,6 +280,18 @@ export default function ChatContactSidebar({
                 contactToShare={selectedConvo}
                 conversations={conversations}
                 activeClientId={activeClientId}
+            />
+
+            {/* Modal de Mensagens Favoritas */}
+            <StarredMessagesModal
+                isOpen={isStarredModalOpen}
+                onClose={() => setIsStarredModalOpen(false)}
+                convoId={selectedConvo.id}
+                activeClientId={activeClientId}
+                contactName={selectedConvo.contact_name}
+                onSelectMessage={onSelectMessage}
+                onToggleStarMessage={handleToggleStarMessage}
+                formatMessageTimestamp={formatMessageTimestamp}
             />
 
             {/* Modal de Nova Tag */}

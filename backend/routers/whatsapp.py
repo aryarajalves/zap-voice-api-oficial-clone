@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 from typing import Optional
 from chatwoot_client import ChatwootClient
 import models
 import schemas
 from fastapi import Depends
-from core.deps import get_current_user, get_db
-from core.permissions import require_premium, require_user, require_feature
+from core.deps import get_current_user, get_db, get_validated_client_id
+from core.permissions import require_premium, require_user, require_feature, require_super_admin
 from core.logger import setup_logger
 from config_loader import get_setting
 import httpx
@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 
 @router.get("/debug/env")
-async def debug_env():
+async def debug_env(current_user: models.User = Depends(require_super_admin)):
     import os
     return {
         "whatsapp": {
@@ -53,7 +53,7 @@ class TestTokenRequest(BaseModel):
 async def test_whatsapp_token(
     request: TestTokenRequest,
     current_user: models.User = Depends(get_current_user),
-    x_client_id: Optional[int] = Header(None)
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Testa a validade do Token de Acesso permanente da Meta contra a Graph API.
@@ -63,13 +63,8 @@ async def test_whatsapp_token(
     
     # Se o token vier mascarado (contendo asteriscos), recupera o token real salvo no banco
     if "*" in token:
-        if not x_client_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Header X-Client-ID necessário para validar o token salvo."
-            )
         from config_loader import get_setting
-        token = get_setting("WA_ACCESS_TOKEN", client_id=x_client_id)
+        token = get_setting("WA_ACCESS_TOKEN", client_id=client_id)
         if not token:
             raise HTTPException(
                 status_code=400,
@@ -89,28 +84,26 @@ async def test_whatsapp_token(
     
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(url, headers=headers, timeout=10.0)
+            response = await client.get(url, headers=headers)
             if response.status_code == 200:
                 data = response.json()
                 return {
-                    "success": True,
-                    "message": "Token e Phone Number ID válidos e conectados com sucesso à Meta!",
-                    "details": data
+                    "valid": True,
+                    "phone_number": data.get("display_phone_number"),
+                    "verified_name": data.get("verified_name"),
+                    "quality_rating": data.get("quality_rating"),
+                    "id": data.get("id")
                 }
             else:
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get("error", {}).get("message", "Erro desconhecido na API da Meta.")
-                    error_code = error_data.get("error", {}).get("code", response.status_code)
-                except Exception:
-                    error_msg = response.text or "Erro desconhecido."
-                    error_code = response.status_code
-                    
+                error_data = response.json().get("error", {})
+                error_msg = error_data.get("message", "Erro desconhecido ao validar token na Meta")
+                logger.error(f"Erro na validação do token com a Meta: {response.status_code} - {error_msg}")
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Falha na validação (Meta Code {error_code}): {error_msg}"
+                    status_code=response.status_code,
+                    detail=f"Meta API: {error_msg}"
                 )
         except httpx.RequestError as e:
+            logger.error(f"Erro de conexão ao testar token: {e}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Erro de conexão ao testar token com a Meta: {str(e)}"
@@ -120,11 +113,11 @@ async def test_whatsapp_token(
 async def list_templates(
     include_archived: bool = Query(False),
     include_paused: bool = Query(True),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_feature("whatsapp")),
     db: Session = Depends(get_db)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     templates = []
     meta_success = False
 
@@ -241,31 +234,33 @@ async def list_templates(
     # is_pinned (True=1, False=0), created_at (string iso, ex: '2026-06-02T...'), name (inverter string ou ordenar de forma que nome alfabético funcione).
     # Uma forma limpa é usar uma função de chave sem reverse=True:
     # key=lambda t: (0 if t.get("is_pinned", False) else 1, -(datetime.fromisoformat(t.get("created_at")).timestamp()) if t.get("created_at") else 0, t.get("name", "").lower())
-    # Vamos fazer exatamente isso de forma segura:
     def get_sort_key(t):
         is_pinned_val = 0 if t.get("is_pinned", False) else 1
         created_val = 0
         if t.get("created_at"):
             try:
                 # Remove o offset Z se houver, ou trata como timezone-aware
-                clean_dt = t.get("created_at").replace("Z", "+00:00")
+                clean_dt = str(t.get("created_at")).replace("Z", "+00:00")
                 created_val = -datetime.fromisoformat(clean_dt).timestamp()
             except Exception:
                 created_val = 0
-        return (is_pinned_val, created_val, t.get("name", "").lower())
+        name_val = str(t.get("name") or "").lower()
+        return (is_pinned_val, created_val, name_val)
 
     templates.sort(key=get_sort_key)
     return templates
 
+
 @router.post("/templates/{template_name}/archive")
+
 async def archive_template(
     template_name: str,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium),
     db: Session = Depends(get_db)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
-    logger.info(f"📥 [ARCHIVE_TEMPLATE] Request to archive '{template_name}'. Header Client ID: {x_client_id}, User Client ID: {current_user.client_id}, Target Client ID: {target_client_id}")
+    target_client_id = client_id
+    logger.info(f"📥 [ARCHIVE_TEMPLATE] Request to archive '{template_name}'. Client ID: {client_id}")
     
     db_tpls = db.query(models.WhatsAppTemplateCache).filter(
         models.WhatsAppTemplateCache.name == template_name,
@@ -329,11 +324,11 @@ async def archive_template(
 @router.post("/templates/{template_name}/unarchive")
 async def unarchive_template(
     template_name: str,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium),
     db: Session = Depends(get_db)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     db_tpls = db.query(models.WhatsAppTemplateCache).filter(
         models.WhatsAppTemplateCache.name == template_name,
         models.WhatsAppTemplateCache.client_id == target_client_id
@@ -350,11 +345,11 @@ async def unarchive_template(
 async def update_template_tags(
     template_id: str,
     payload: schemas.TemplateTagsUpdate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium),
     db: Session = Depends(get_db)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     
     try:
         int_id = int(template_id)
@@ -397,11 +392,11 @@ async def update_template_tags(
 async def pin_template(
     template_id: str,
     payload: dict,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium),
     db: Session = Depends(get_db)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     
     try:
         int_id = int(template_id)
@@ -434,19 +429,19 @@ async def pin_template(
     db.commit()
     db.refresh(db_tpl)
     return {
-        "success": True,
-        "template_id": template_id,
+        "success": True, 
+        "template_id": template_id, 
         "is_pinned": is_pinned
     }
 
 @router.delete("/templates/tags/{tag}")
 async def delete_template_tag_global(
     tag: str,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium),
     db: Session = Depends(get_db)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     clean_tag = tag.strip().lower()
     if not clean_tag:
         raise HTTPException(status_code=400, detail="Nome da etiqueta inválido.")
@@ -479,19 +474,19 @@ async def delete_template_tag_global(
         raise HTTPException(status_code=500, detail="Erro interno do servidor ao deletar etiqueta global.")
 
     return {
-        "success": True,
+        "success": True, 
         "tag": clean_tag,
         "removed_from_count": updated_count
     }
 
 @router.get("/labels")
 async def list_labels(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
 ):
     try:
-        target_client_id = x_client_id if x_client_id else current_user.client_id
+        target_client_id = client_id
         labels = (
             db.query(models.ChatLabel)
             .filter(models.ChatLabel.client_id == target_client_id)
@@ -506,7 +501,7 @@ async def list_labels(
 @router.post("/upload-template-media", summary="Upload de mídia para cabeçalho de template")
 async def upload_template_media(
     file: UploadFile = File(...),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
     """
@@ -520,12 +515,12 @@ async def upload_template_media(
     import tempfile
     import subprocess
 
-    client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     if not wa_token:
         raise HTTPException(status_code=400, detail="WA_ACCESS_TOKEN não configurado.")
 
     file_bytes = await file.read()
+
     mime_type = file.content_type or "application/octet-stream"
     is_video = mime_type.startswith("video/") or (file.filename or "").lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm"))
 
@@ -633,10 +628,10 @@ async def upload_template_media(
 @router.post("/templates")
 async def create_template(
     payload: schemas.WhatsAppTemplateCreate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     client = ChatwootClient(client_id=target_client_id)
     
     result = await client.create_whatsapp_template(payload.dict())
@@ -651,10 +646,10 @@ async def create_template(
 async def update_template(
     template_id: str,
     payload: schemas.WhatsAppTemplateCreate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     client = ChatwootClient(client_id=target_client_id)
     
     result = await client.edit_whatsapp_template(template_id, payload.dict())
@@ -667,11 +662,11 @@ async def update_template(
 @router.delete("/templates/{template_name}")
 async def delete_template(
     template_name: str,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium),
     db: Session = Depends(get_db)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     
     # Verificar se o template está fixado no topo
     db_tpl = db.query(models.WhatsAppTemplateCache).filter(
@@ -692,7 +687,7 @@ async def delete_template(
 @router.delete("/templates/{template_name}/24h-history")
 async def reset_template_24h_history(
     template_name: str,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
 ):
@@ -700,7 +695,7 @@ async def reset_template_24h_history(
     Limpa todo o histórico de disparo de 24h para um template específico (ContactTemplateHistory e MessageStatus sem trigger_id).
     Útil para liberar o re-disparo do template sem precisar aguardar 24h.
     """
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     
     # 1. Deletar registros de ContactTemplateHistory para esse template e cliente
     deleted_history = db.query(models.ContactTemplateHistory).filter(
@@ -732,10 +727,10 @@ async def reset_template_24h_history(
 async def update_template_status(
     template_id: str,
     status: str,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     client = ChatwootClient(client_id=target_client_id)
     result = await client.update_template_status(template_id, status)
     if "error" in result:
@@ -745,7 +740,7 @@ async def update_template_status(
 @router.post("/send-template", summary="Enviar Template WhatsApp")
 async def send_template(
     payload: schemas.WhatsAppTemplateRequest, 
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
     try:
@@ -757,7 +752,8 @@ async def send_template(
         if not phone or not template:
             raise HTTPException(status_code=400, detail="Phone number and template name are required")
 
-        target_client_id = x_client_id if x_client_id else current_user.client_id
+        target_client_id = client_id
+
         client = ChatwootClient(client_id=target_client_id)
         logger.info(f"Sending template '{template}' to {phone}")
         result = await client.send_template(phone, template, lang, components)

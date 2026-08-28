@@ -203,10 +203,11 @@ describe('Integrations Page Interactions', () => {
     await waitFor(() => expect(screen.getByText('Test Integration')).toBeInTheDocument(), { timeout: 20000 });
 
     const integrationRow = screen.getByText('Test Integration').closest('tr');
-    const historicoBtn = within(integrationRow).getByText(/Histórico/i);
+    const historicoBtn = within(integrationRow).getByRole('button', { name: /Histórico/i });
     fireEvent.click(historicoBtn);
 
     await waitFor(() => expect(screen.getByText(/Mapeamento:/i)).toBeInTheDocument(), { timeout: 20000 });
+
 
     const selects = screen.getAllByRole('combobox');
     const mappingDropdown = selects.find(select => {
@@ -215,22 +216,23 @@ describe('Integrations Page Interactions', () => {
     expect(mappingDropdown).toBeDefined();
 
     await waitFor(() => {
-      expect(screen.getByText(/compra_aprovada/)).toBeInTheDocument();
-      expect(screen.getAllByText(/evento_desconhecido/)[0]).toBeInTheDocument();
+      expect(screen.getByText(/compra_aprovada|compra aprovada/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/evento_desconhecido|evento não detectado/i)[0]).toBeInTheDocument();
     }, { timeout: 20000 });
 
     fireEvent.change(mappingDropdown, { target: { value: 'mapped' } });
 
     await waitFor(() => {
-      expect(screen.getByText(/compra_aprovada/)).toBeInTheDocument();
-      expect(screen.queryByText(/evento_desconhecido/)).not.toBeInTheDocument();
+      expect(screen.getByText(/compra_aprovada|compra aprovada/i)).toBeInTheDocument();
+      expect(screen.queryByText(/evento_desconhecido|evento não detectado/i)).not.toBeInTheDocument();
     });
 
     fireEvent.change(mappingDropdown, { target: { value: 'unmapped' } });
 
     await waitFor(() => {
-      expect(screen.queryByText(/compra_aprovada/)).not.toBeInTheDocument();
-      expect(screen.getAllByText(/evento_desconhecido/)[0]).toBeInTheDocument();
+      expect(screen.queryByText(/compra_aprovada|compra aprovada/i)).not.toBeInTheDocument();
+      expect(screen.getAllByText(/evento_desconhecido|evento não detectado/i)[0]).toBeInTheDocument();
     });
+
   });
 });

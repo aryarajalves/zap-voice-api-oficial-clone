@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import AppContent from './AppContent';
 import { AuthProvider } from './AuthContext';
 import { ClientProvider } from './contexts/ClientContext';
 import ProtectedRoute from './ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import InviteRegister from './pages/InviteRegister';
+import ResetPassword from './pages/ResetPassword';
 import PublicTutorial from './pages/PublicTutorial';
 import PublicCheckoutPage from './pages/PublicCheckoutPage';
 import PublicCapturePage from './pages/PublicCapturePage';
@@ -18,10 +19,10 @@ import { Toaster } from 'react-hot-toast';
  * Também intercepta a rota de convites públicos e checkout presell.
  */
 function App() {
-  const [currentPath, setCurrentPath] = React.useState(window.location.pathname);
-  const [currentHash, setCurrentHash] = React.useState(window.location.hash);
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [currentHash, setCurrentHash] = useState(window.location.hash);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleLocationChange = () => {
       setCurrentPath(window.location.pathname);
       setCurrentHash(window.location.hash);
@@ -36,14 +37,15 @@ function App() {
   }, []);
 
   const isInvite = currentPath.startsWith('/invite/');
+  const isResetPassword = currentPath.startsWith('/reset-password/');
   const isHelp = currentPath.startsWith('/help/');
   const isCheckout = currentPath.startsWith('/c/');
   const isCapturePath = currentPath.startsWith('/p/');
   const isCaptureHash = currentHash.startsWith('#/p/') || (currentHash.startsWith('#/') && !currentHash.startsWith('#/login') && !currentHash.startsWith('#/dashboard') && !currentHash.startsWith('#/funnels') && !currentHash.startsWith('#/bulk') && !currentHash.startsWith('#/schedules') && !currentHash.startsWith('#/integrations') && !currentHash.startsWith('#/settings') && !currentHash.startsWith('#/users') && !currentHash.startsWith('#/logs') && !currentHash.startsWith('#/financial') && !currentHash.startsWith('#/checkout-presell') && !currentHash.startsWith('#/capture-page') && !currentHash.startsWith('#/blocked') && !currentHash.startsWith('#/hot-leads') && !currentHash.startsWith('#/chat-conversations') && !currentHash.startsWith('#/atendimento') && !currentHash.startsWith('#/human-agents'));
 
   // Rota limpa via Pathname (ex: /masterclass ou /masterclass/obrigado)
-  const isReservedPath = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads', '/chat-conversations', '/atendimento', '/human-agents'].includes(currentPath);
-  const isCleanPathCapture = !isReservedPath && !isInvite && !isHelp && !isCheckout && !isCapturePath && currentPath.length > 1;
+  const isReservedPath = ['/', '/login', '/dashboard', '/funnels', '/bulk', '/schedules', '/integrations', '/settings', '/users', '/logs', '/financial', '/checkout-presell', '/capture-page', '/blocked', '/hot-leads', '/chat-conversations', '/atendimento', '/human-agents', '/reset-password'].includes(currentPath);
+  const isCleanPathCapture = !isReservedPath && !isInvite && !isResetPassword && !isHelp && !isCheckout && !isCapturePath && currentPath.length > 1;
 
   if (isInvite) {
     const token = currentPath.replace('/invite/', '').split('/')[0];
@@ -51,6 +53,16 @@ function App() {
       <ThemeProvider>
         <Toaster position="top-right" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
         <InviteRegister token={token} />
+      </ThemeProvider>
+    );
+  }
+
+  if (isResetPassword) {
+    const token = currentPath.replace('/reset-password/', '').split('/')[0].split('?')[0];
+    return (
+      <ThemeProvider>
+        <Toaster position="top-right" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
+        <ResetPassword token={token} />
       </ThemeProvider>
     );
   }

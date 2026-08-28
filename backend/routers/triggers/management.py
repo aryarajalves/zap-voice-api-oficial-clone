@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional
 import models, schemas
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
 from core.logger import logger
 from rabbitmq_client import rabbitmq
 
@@ -12,14 +12,13 @@ router = APIRouter()
 @router.get("/{trigger_id}", response_model=schemas.ScheduledTrigger, summary="Obter detalhes de um disparo específico")
 async def get_trigger(
     trigger_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Retorna os detalhes de um disparo específico.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     from sqlalchemy.orm import joinedload
     trigger = db.query(models.ScheduledTrigger).options(
         joinedload(models.ScheduledTrigger.funnel),
@@ -197,7 +196,7 @@ async def list_triggers(
     pinned_only: bool = False,
     folder_id: Optional[int] = None,
     sort_by: Optional[str] = None,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -211,12 +210,12 @@ async def list_triggers(
         joinedload(models.ScheduledTrigger.block_funnel),
         joinedload(models.ScheduledTrigger.folder)
     )
-    client_id = x_client_id if x_client_id else current_user.client_id
     try:
         from services.bulk import sync_queued_dynamic_triggers
         await sync_queued_dynamic_triggers(db, client_id)
     except Exception as e_sync:
         pass
+
 
     query = query.filter(models.ScheduledTrigger.client_id == client_id)
 

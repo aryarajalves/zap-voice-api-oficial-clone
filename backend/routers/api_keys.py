@@ -5,7 +5,7 @@ import hashlib
 import secrets
 from datetime import datetime
 
-from core.deps import get_db, get_current_user
+from core.deps import get_db, get_current_user, get_validated_client_id
 from core.logger import setup_logger
 import models
 from pydantic import BaseModel, Field
@@ -38,7 +38,7 @@ class ApiKeyCreatedResponse(BaseModel):
 @router.post("", response_model=ApiKeyCreatedResponse, summary="Gerar uma nova chave de API")
 def create_api_key(
     payload: ApiKeyCreate,
-    x_client_id: Optional[str] = Header(None),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -46,14 +46,6 @@ def create_api_key(
     Gera uma nova chave de API segura para o cliente ativo.
     A chave gerada será exibida apenas esta vez.
     """
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        raise HTTPException(status_code=400, detail="Client ID não fornecido ou inválido")
-    
-    try:
-        client_id_int = int(x_client_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Client ID inválido")
-
     # Gerar token randômico seguro
     raw_token = f"zv_live_{secrets.token_hex(32)}"
     token_prefix = raw_token[:13] # zv_live_ + 5 caracteres
@@ -61,7 +53,7 @@ def create_api_key(
 
     try:
         db_key = models.ApiKey(
-            client_id=client_id_int,
+            client_id=client_id,
             user_id=current_user.id,
             name=payload.name.strip(),
             token_prefix=token_prefix,
@@ -72,7 +64,7 @@ def create_api_key(
         db.commit()
         db.refresh(db_key)
         
-        logger.info(f"🔑 [API_KEY_CREATED] Nova chave '{payload.name}' gerada pelo usuário {current_user.id} para o cliente {client_id_int}")
+        logger.info(f"🔑 [API_KEY_CREATED] Nova chave '{payload.name}' gerada pelo usuário {current_user.id} para o cliente {client_id}")
         
         return ApiKeyCreatedResponse(
             id=db_key.id,
@@ -89,7 +81,7 @@ def create_api_key(
 
 @router.get("", response_model=List[ApiKeyOut], summary="Listar chaves de API do cliente")
 def list_api_keys(
-    x_client_id: Optional[str] = Header(None),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -97,16 +89,8 @@ def list_api_keys(
     Retorna a lista de chaves de API configuradas para o cliente ativo.
     As chaves cruas nunca são expostas por razões de segurança.
     """
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        raise HTTPException(status_code=400, detail="Client ID não fornecido")
-    
-    try:
-        client_id_int = int(x_client_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Client ID inválido")
-
     keys = db.query(models.ApiKey).filter(
-        models.ApiKey.client_id == client_id_int,
+        models.ApiKey.client_id == client_id,
         models.ApiKey.is_active == True
     ).order_by(models.ApiKey.created_at.desc()).all()
 
@@ -116,7 +100,7 @@ def list_api_keys(
 @router.delete("/{key_id}", summary="Revogar uma chave de API")
 def delete_api_key(
     key_id: int,
-    x_client_id: Optional[str] = Header(None),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -124,17 +108,9 @@ def delete_api_key(
     Revoga (exclui fisicamente) uma chave de API ativa.
     Qualquer requisição usando esta chave passará a retornar 401 Unauthorized.
     """
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        raise HTTPException(status_code=400, detail="Client ID não fornecido")
-    
-    try:
-        client_id_int = int(x_client_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Client ID inválido")
-
     key = db.query(models.ApiKey).filter(
         models.ApiKey.id == key_id,
-        models.ApiKey.client_id == client_id_int
+        models.ApiKey.client_id == client_id
     ).first()
 
     if not key:
@@ -154,24 +130,16 @@ def delete_api_key(
 @router.post("/{key_id}/revoke", summary="Revogar uma chave de API via POST")
 def revoke_api_key(
     key_id: int,
-    x_client_id: Optional[str] = Header(None),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Revoga (exclui fisicamente) uma chave de API ativa usando método POST para contornar proxies restritivos.
     """
-    if not x_client_id or x_client_id == "undefined" or x_client_id == "null":
-        raise HTTPException(status_code=400, detail="Client ID não fornecido")
-    
-    try:
-        client_id_int = int(x_client_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Client ID inválido")
-
     key = db.query(models.ApiKey).filter(
         models.ApiKey.id == key_id,
-        models.ApiKey.client_id == client_id_int
+        models.ApiKey.client_id == client_id
     ).first()
 
     if not key:
@@ -186,3 +154,4 @@ def revoke_api_key(
         db.rollback()
         logger.error(f"❌ [API_KEY_REVOKE_POST_ERROR] Falha ao revogar chave de API via POST: {e}")
         raise HTTPException(status_code=500, detail="Erro interno ao revogar a chave de API")
+

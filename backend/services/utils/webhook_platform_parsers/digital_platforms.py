@@ -93,12 +93,16 @@ def parse_hotmart(payload: dict, result: dict) -> None:
             result['product_name'] = plans[0].get("name")
             
     # 4. Dados de Pagamento
-    result['payment_method'] = purchase.get("payment", {}).get("type")
-    if event == "PURCHASE_BILLET_PRINTED":
-        result['payment_method'] = "BILLET"
+    payment_info = purchase.get("payment", {})
+    payment_type = payment_info.get("type")
+    if not payment_type:
+        if payment_info.get("pix_code") or payment_info.get("pix_qrcode"):
+            payment_type = "PIX"
+        elif event == "PURCHASE_BILLET_PRINTED":
+            payment_type = "BILLET"
+    result['payment_method'] = payment_type
     result['order_bump'] = purchase.get("is_order_bump", False)
     
-    payment_info = purchase.get("payment", {})
     if payment_info:
         result['pix_code'] = payment_info.get("pix_code")
         result['pix_qrcode'] = payment_info.get("pix_qrcode")
@@ -129,15 +133,18 @@ def parse_hotmart(payload: dict, result: dict) -> None:
         
     # Trata PURCHASE_BILLET_PRINTED condicionalmente se for PIX
     if event == "PURCHASE_BILLET_PRINTED":
-        if result['payment_method'] == "PIX":
+        if str(result.get('payment_method', '')).upper() == "PIX" or result.get('pix_code') or result.get('pix_qrcode'):
             result['event_type'] = "pix_gerado"
             result['raw_status'] = "PENDING"
+            result['payment_method'] = "PIX"
         else:
             result['event_type'] = "boleto_impresso"
             result['raw_status'] = "BOLETO_IMPRESSO"
+            if not result.get('payment_method'):
+                result['payment_method'] = "BILLET"
             
     # Fallback de PIX com status WAITING_PAYMENT
-    if result['payment_method'] == "PIX" and result['raw_status'] == "WAITING_PAYMENT":
+    if str(result.get('payment_method', '')).upper() == "PIX" and result.get('raw_status') in ["WAITING_PAYMENT", "BILLET_PRINTED"]:
         result['event_type'] = "pix_gerado"
         result['raw_status'] = "PENDING"
         

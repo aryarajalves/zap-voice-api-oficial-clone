@@ -1,8 +1,17 @@
 // Tenta pegar do ambiente dinâmico (window._env_) primeiro, depois do build (import.meta.env), depois localhost
-let raw_api_url = window._env_?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-let raw_ws_url = window._env_?.WS_URL || import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
-let raw_webhook_url = window._env_?.WEBHOOK_BASE_URL || import.meta.env.VITE_WEBHOOK_BASE_URL || raw_api_url.replace(/\/api\/*$/, '') || window.location.origin;
+const getEnvVar = (name, viteName, fallback = '') => {
+    if (typeof window !== 'undefined' && window._env_ && window._env_[name]) {
+        return window._env_[name];
+    }
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[viteName]) {
+        return import.meta.env[viteName];
+    }
+    return fallback;
+};
 
+let raw_api_url = getEnvVar('API_URL', 'VITE_API_URL', 'http://localhost:8000/api');
+let raw_ws_url = getEnvVar('WS_URL', 'VITE_WS_URL', 'ws://localhost:8000/ws');
+let raw_webhook_url = getEnvVar('WEBHOOK_BASE_URL', 'VITE_WEBHOOK_BASE_URL', raw_api_url.replace(/\/api\/*$/, '') || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000'));
 
 // Normaliza API_URL: Garante que termine com /api e remove barras extras
 raw_api_url = raw_api_url.replace(/\/+$/, ''); // Remove barras no fim
@@ -17,8 +26,8 @@ raw_ws_url = raw_ws_url.replace(/\/+$/, '');
 export const API_URL = raw_api_url;
 export const WS_URL = raw_ws_url;
 export const WEBHOOK_BASE_URL = raw_webhook_url.replace(/\/+$/, ''); // Remove trailing slashes
-export const META_APP_ID = window._env_?.META_APP_ID || import.meta.env.VITE_META_APP_ID || '';
-export const META_CONFIG_ID = window._env_?.META_CONFIG_ID || import.meta.env.VITE_META_CONFIG_ID || '';
+export const META_APP_ID = getEnvVar('META_APP_ID', 'VITE_META_APP_ID', '');
+export const META_CONFIG_ID = getEnvVar('META_CONFIG_ID', 'VITE_META_CONFIG_ID', '');
 
 
 /**

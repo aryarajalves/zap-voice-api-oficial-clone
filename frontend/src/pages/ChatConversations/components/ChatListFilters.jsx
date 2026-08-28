@@ -1,5 +1,5 @@
-import React from 'react';
-import { FiSearch, FiTag, FiRefreshCw, FiSlash, FiCalendar, FiClock } from 'react-icons/fi';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { FiSearch, FiTag, FiRefreshCw, FiSlash, FiCalendar, FiClock, FiSliders, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 export default function ChatListFilters({
     activeTab,
@@ -33,8 +33,54 @@ export default function ChatListFilters({
     setFilterStartDate,
     filterEndDate,
     setFilterEndDate,
+    orderBy = 'recent',
+    setOrderBy,
     visibleCount = 0
 }) {
+    const filtersContainerRef = useRef(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
+    const checkScroll = useCallback(() => {
+        const el = filtersContainerRef.current;
+        if (!el) return;
+        setCanScrollLeft(el.scrollLeft > 4);
+        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    }, []);
+
+    useEffect(() => {
+        const timer = setTimeout(checkScroll, 100);
+        window.addEventListener('resize', checkScroll);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', checkScroll);
+        };
+    }, [checkScroll]);
+
+    const scrollFilters = (direction) => {
+        const el = filtersContainerRef.current;
+        if (!el) return;
+        const amount = direction === 'left' ? -180 : 180;
+        el.scrollBy({ left: amount, behavior: 'smooth' });
+        setTimeout(checkScroll, 250);
+    };
+
+    const handleFilterTabClick = (fKey, e) => {
+        setActiveFilterTab(prev => prev === fKey ? null : fKey);
+        if (e && typeof e.currentTarget?.scrollIntoView === 'function') {
+            e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            setTimeout(checkScroll, 300);
+        }
+    };
+
+    const handleWheel = (e) => {
+        if (filtersContainerRef.current && e.deltaY !== 0 && !e.shiftKey) {
+            e.preventDefault();
+            filtersContainerRef.current.scrollLeft += e.deltaY;
+            checkScroll();
+        }
+    };
+
     return (
         <>
             <div className="p-4 border-b border-gray-200 dark:border-white/5 space-y-3">
@@ -61,6 +107,7 @@ export default function ChatListFilters({
                     >
                         <option value="open">Abertas</option>
                         <option value="resolved">Resolvidas</option>
+                        <option value="archived">Arquivadas</option>
                         <option value="all">Todas</option>
                     </select>
                     <div className="relative flex-1">
@@ -76,29 +123,60 @@ export default function ChatListFilters({
                 </div>
             </div>
 
-            {/* Filtros extra */}
+            {/* Filtros extra com scroll horizontal suave */}
             <div className="border-b border-gray-200 dark:border-white/5 bg-gray-50/10 dark:bg-black/10">
-                <div className="flex items-center px-4 py-2 gap-1.5">
-                    {[
-                        { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!selectedLabelFilter },
-                        { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterTemplate24h || filterUnread || filterHasNote || filterUrgent || filterHasReplied || filterHasActiveFunnel },
-                        { key: 'bloqueio', label: 'Bloqueio', icon: FiSlash, active: !!filterBlockStatus },
-                        { key: 'data', label: 'Data', icon: FiCalendar, active: !!filterStartDate || !!filterEndDate }
-                    ].map(f => (
+                <div className="flex items-center px-2 py-2 gap-1 relative">
+                    {canScrollLeft && (
                         <button
-                            key={f.key}
-                            onClick={() => setActiveFilterTab(prev => prev === f.key ? null : f.key)}
-                            className={`relative flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold border ${
-                                activeFilterTab === f.key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-[#1e293b] text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/5'
-                            }`}
+                            onClick={() => scrollFilters('left')}
+                            className="shrink-0 p-1.5 rounded-lg bg-white dark:bg-[#1e293b] text-gray-600 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+                            title="Rolar filtros para esquerda"
+                            type="button"
                         >
-                            <f.icon size={12} /> {f.label}
-                            {f.active && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-400 ring-2 ring-white" />}
+                            <FiChevronLeft size={13} />
                         </button>
-                    ))}
-                    <span className="ml-1 shrink-0 bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-1 rounded-full">
-                        {visibleCount}
-                    </span>
+                    )}
+
+                    <div
+                        ref={filtersContainerRef}
+                        onScroll={checkScroll}
+                        onWheel={handleWheel}
+                        className="flex items-center px-1 gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-1"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
+                        {[
+                            { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!selectedLabelFilter },
+                            { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterTemplate24h || filterUnread || filterHasNote || filterUrgent || filterHasReplied || filterHasActiveFunnel },
+                            { key: 'bloqueio', label: 'Bloqueio', icon: FiSlash, active: !!filterBlockStatus },
+                            { key: 'data', label: 'Data', icon: FiCalendar, active: !!filterStartDate || !!filterEndDate },
+                            { key: 'ordem', label: 'Ordem', icon: FiSliders, active: !!orderBy && orderBy !== 'recent' }
+                        ].map(f => (
+                            <button
+                                key={f.key}
+                                onClick={e => handleFilterTabClick(f.key, e)}
+                                className={`relative shrink-0 min-w-max flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap transition-all ${
+                                    activeFilterTab === f.key ? 'bg-blue-600 text-white border-blue-500 shadow-sm' : 'bg-white dark:bg-[#1e293b] text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10'
+                                }`}
+                            >
+                                <f.icon size={12} className="shrink-0" /> <span>{f.label}</span>
+                                {f.active && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-400 ring-2 ring-white" />}
+                            </button>
+                        ))}
+                        <span className="shrink-0 ml-1 bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap">
+                            {visibleCount}
+                        </span>
+                    </div>
+
+                    {canScrollRight && (
+                        <button
+                            onClick={() => scrollFilters('right')}
+                            className="shrink-0 p-1.5 rounded-lg bg-white dark:bg-[#1e293b] text-gray-600 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+                            title="Rolar filtros para direita"
+                            type="button"
+                        >
+                            <FiChevronRight size={13} />
+                        </button>
+                    )}
                 </div>
 
                 {activeFilterTab === 'marcador' && (
@@ -225,6 +303,33 @@ export default function ChatListFilters({
                                 Limpar Filtro de Data
                             </button>
                         )}
+                    </div>
+                )}
+
+                {activeFilterTab === 'ordem' && (
+                    <div className="px-4 pb-3 grid grid-cols-2 gap-1.5 animate-in fade-in duration-200">
+                        {[
+                            { key: 'recent', label: 'Mais recentes', desc: 'Última msg' },
+                            { key: 'oldest', label: 'Mais antigas', desc: 'Primeira msg' },
+                            { key: 'name_asc', label: 'Nome (A → Z)', desc: 'Alfabética' },
+                            { key: 'name_desc', label: 'Nome (Z → A)', desc: 'Inversa' },
+                            { key: 'messages_desc', label: 'Mais mensagens', desc: 'Maior volume' },
+                            { key: 'messages_asc', label: 'Menos mensagens', desc: 'Menor volume' },
+                            { key: 'unread_desc', label: 'Mais não lidas', desc: 'Não lidas no topo' }
+                        ].map(opt => (
+                            <button
+                                key={opt.key}
+                                onClick={() => setOrderBy(opt.key)}
+                                className={`py-1.5 px-2 rounded-lg border text-left flex flex-col justify-center transition-all ${
+                                    (orderBy || 'recent') === opt.key
+                                        ? 'bg-blue-600/15 border-blue-500 text-blue-500 dark:text-blue-400 font-bold shadow-sm'
+                                        : 'bg-white dark:bg-[#1e293b] text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10'
+                                }`}
+                            >
+                                <span className="text-[11px] font-semibold tracking-tight">{opt.label}</span>
+                                <span className="text-[9px] opacity-70 font-normal">{opt.desc}</span>
+                            </button>
+                        ))}
                     </div>
                 )}
             </div>

@@ -196,24 +196,61 @@ export const useTriggerHistory = (refreshKey, initialTriggerType = 'bulk') => {
         fetchHistory();
     }, [fetchHistory, refreshKey]);
 
-    // WebSocket handling
+    // WebSocket handling e auto-reconexão
     useEffect(() => {
         let ws;
-        const wsBase = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
-        const wsToken = localStorage.getItem('token');
-        const wsFinalUrl = wsToken ? `${wsBase}?token=${wsToken}` : wsBase;
+        let reconnectTimeout;
+        let isMounted = true;
 
-        try {
-            ws = new WebSocket(wsFinalUrl);
-            ws.onmessage = (event) => {
-                try {
-                    const payload = JSON.parse(event.data);
-                    handleWebSocketMessage(payload, activeClient, setTriggers, setChildrenModal);
-                } catch (e) {}
-            };
-        } catch (e) {}
-        const interval = setInterval(fetchHistory, 60000);
+        const connectWS = () => {
+            if (!isMounted) return;
+            const wsBase = WS_URL.endsWith('/ws') ? WS_URL : `${WS_URL}/ws`;
+            const wsToken = localStorage.getItem('token');
+            const wsFinalUrl = wsToken ? `${wsBase}?token=${wsToken}` : wsBase;
+
+            try {
+                ws = new WebSocket(wsFinalUrl);
+
+                ws.onopen = () => {
+                    if (activeClient?.id && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            event: "subscribe_client",
+                            client_id: activeClient.id
+                        }));
+                    }
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const payload = JSON.parse(event.data);
+                        handleWebSocketMessage(payload, activeClient, setTriggers, setChildrenModal);
+                    } catch (e) {}
+                };
+
+                ws.onclose = () => {
+                    if (isMounted) {
+                        reconnectTimeout = setTimeout(connectWS, 3000);
+                    }
+                };
+
+                ws.onerror = () => {
+                    if (ws) ws.close();
+                };
+            } catch (e) {
+                if (isMounted) {
+                    reconnectTimeout = setTimeout(connectWS, 5000);
+                }
+            }
+        };
+
+        connectWS();
+
+        // Polling de segurança a cada 10s para disparos em andamento
+        const interval = setInterval(fetchHistory, 10000);
+
         return () => {
+            isMounted = false;
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
             if (ws) ws.close();
             clearInterval(interval);
         };

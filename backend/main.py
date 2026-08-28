@@ -1,7 +1,9 @@
 # Gatilho de recarga 4 (Corrigindo travamento)
 
 # Framework principal da API — cria rotas, middlewares, WebSocket, etc.
-from fastapi import FastAPI, WebSocket, Request, Depends, Response
+from fastapi import FastAPI, WebSocket, Request, Depends, Response, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 
 # Sessão do banco de dados (SQLAlchemy) — usada nas rotas que precisam acessar o banco
 from sqlalchemy.orm import Session
@@ -15,23 +17,13 @@ from fastapi.staticfiles import StaticFiles
 # Carrega as variáveis do arquivo .env para o ambiente
 from dotenv import load_dotenv
 
-# Biblioteca nativa do Python para rodar tarefas assíncronas em paralelo
+# Bibliotecas nativas do Python
 import asyncio
-
-# Biblioteca nativa — acessa variáveis de ambiente e o sistema de arquivos
 import os
-
-# Biblioteca nativa — acessa informações do sistema (versão do Python, etc.)
 import sys
-
-# Biblioteca nativa — usada para medir tempo (ex: cache busting do index.html)
 import time
-
-# Log de depuração precoce para confirmar leitura do arquivo no servidor
-print("DEBUG: Lendo main.py - Iniciando carregamento de dependências...", flush=True)
-
-# Biblioteca nativa — converte dados para/de JSON
 import json
+import mimetypes
 
 # Monitoramento de erros em produção — captura exceções e envia pro painel do Sentry
 import sentry_sdk
@@ -50,38 +42,48 @@ import services.chat_webhook_service
 
 # Roteadores internos — cada um representa um módulo da API
 from routers import (
-    auth,           # Autenticação e geração de tokens JWT
-    funnels,        # Funis de vendas e automações de mensagens
-    schedules,      # Agendamentos de disparos
-    settings,       # Configurações gerais do sistema
-    whatsapp,       # Conexão e envio via WhatsApp
+    auth,             # Autenticação e geração de tokens JWT
+    funnels,          # Funis de vendas e automações de mensagens
+    schedules,        # Agendamentos de disparos
+    settings,         # Configurações gerais do sistema
+    whatsapp,         # Conexão e envio via WhatsApp
     whatsapp_profile, # Configurações e Perfil do WhatsApp
-    blocked,        # Lista de contatos bloqueados
-    clients,        # Gerenciamento de clientes/tenants
-    uploads,        # Upload de arquivos (áudios, imagens, docs)
-    global_vars,    # Variáveis globais das automações
-    health,         # Healthcheck da API
-    webhooks_public, # Webhooks públicos (WordPress, Hotmart, etc.)
-    leads,          # Gestão de leads captados externamente
-    leads_import,   # Importação e integração de leads
-    financial,      # Controle financeiro e planos
-    backup,         # Backup do banco de dados (Super Admin)
-    hot_leads,      # Leads quentes e roteamento interno
-    instagram,      # Automação do Instagram
-    resting,        # Contatos em repouso
-    invitations,    # Convites de cadastro de usuário (Super Admin)
-    projects,       # Projetos compartilhados
-    logs,           # Visualizador de logs (Super Admin)
-    chat,            # Atendimento e Chat local
-    api_keys,        # Gerenciamento de chaves de API (Tokens de API)
-    reminders       # Lembretes de agendamento (Re-disparos de calendário)
+    blocked,          # Lista de contatos bloqueados
+    clients,          # Gerenciamento de clientes/tenants
+    uploads,          # Upload de arquivos (áudios, imagens, docs)
+    global_vars,      # Variáveis globais das automações
+    health,           # Healthcheck da API
+    webhooks_public,  # Webhooks públicos (WordPress, Hotmart, etc.)
+    leads,            # Gestão de leads captados externamente
+    leads_import,     # Importação e integração de leads
+    financial,        # Controle financeiro e planos
+    backup,           # Backup do banco de dados (Super Admin)
+    hot_leads,        # Leads quentes e roteamento interno
+    instagram,        # Automação do Instagram
+    resting,          # Contatos em repouso
+    invitations,      # Convites de cadastro de usuário (Super Admin)
+    projects,         # Projetos compartilhados
+    logs,             # Visualizador de logs (Super Admin)
+    chat,             # Atendimento e Chat local
+    chat_labels,      # Etiquetas e marcadores do chat
+    api_keys,         # Gerenciamento de chaves de API (Tokens de API)
+    reminders,        # Lembretes de agendamento (Re-disparos de calendário)
+    email_marketing,  # Disparo de e-mails em massa
+    waba_payment,     # Métodos de pagamento e faturas da Meta WABA
+    quick_messages,   # Respostas e mensagens rápidas
+    checkout_presell, # Páginas de pré-venda e checkout
+    capture_page      # Páginas de captura de leads
 )
 
-# Webhooks de entrada (sistemas externos, gestão de eventos — Chatwoot removido)
+# Webhooks de entrada (sistemas externos, gestão de eventos)
 from routers.webhooks_inbound import router as webhooks_inbound_router
 
-# Handler direto do Meta (Facebook/Instagram) — registrado com prioridade máxima
-from routers.webhooks_inbound.meta import meta_webhook_handler
+# Handler e roteador do Meta (Facebook/Instagram)
+from routers.webhooks_inbound.meta import meta_webhook_handler, router as meta_router
+
+# Rotas públicas de contatos e leads via API Key
+from routers.contacts_public import router as contacts_public_router
+from routers.leads_public import router as leads_public_router
 
 # Gerenciamento de integrações externas (configuração pelo dashboard)
 from routers.webhooks import router as webhooks_integrations_router
@@ -127,7 +129,7 @@ ENABLE_DOCS = os.getenv("ENABLE_DOCS", "true").lower() == "true"
 
 app = FastAPI(
     title="ZapVoice - API Oficial de Automação & Mensageria",
-    version="1.8.1",
+    version="1.8.2",
     docs_url="/docs" if ENABLE_DOCS else None,
     redoc_url="/redoc" if ENABLE_DOCS else None,
     openapi_url="/openapi.json" if ENABLE_DOCS else None,
@@ -160,16 +162,46 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(RequestContextMiddleware)
 
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+def _sanitize_validation_errors(errors: list) -> list:
+    """
+    Sanitiza os erros de validação do Pydantic para evitar vazamento de dados sensíveis
+    (ex: senhas em texto puro digitadas no campo 'input' do erro).
+    """
+    sensitive_keys = {
+        "password", "senha", "current_password", "new_password", 
+        "token", "secret", "api_key", "access_token", "hashed_password", 
+        "app_secret", "refresh_token"
+    }
+    sanitized = []
+    for err in errors:
+        err_copy = dict(err)
+        loc = err_copy.get("loc", ())
+        # Se qualquer parte do location contiver um nome de campo sensível
+        if any(str(part).lower() in sensitive_keys for part in loc):
+            if "input" in err_copy:
+                err_copy["input"] = "******"
+            if "ctx" in err_copy and isinstance(err_copy["ctx"], dict):
+                err_copy["ctx"] = {k: ("******" if k.lower() in sensitive_keys else v) for k, v in err_copy["ctx"].items()}
+        sanitized.append(err_copy)
+    return sanitized
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    logger.error(f"Erro de validação em {request.method} {request.url.path}: {exc.errors()} | Body: {await request.body()}")
+    sanitized_errors = _sanitize_validation_errors(exc.errors())
+    logger.warning(f"⚠️ [VALIDATION_ERROR] {request.method} {request.url.path} - Erros: {sanitized_errors}")
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()}
+        content={"detail": sanitized_errors}
     )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Erro inesperado em {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Erro interno do servidor. Tente novamente mais tarde."}
+    )
+
 
 # Servindo arquivos estáticos
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -246,7 +278,6 @@ async def meta_webhook_events_slug(slug: str, request: Request, db: Session = De
 app.include_router(webhooks_inbound_router, prefix="/api", tags=["Webhooks Inbound"])
 
 # Registrar também o roteador do Meta para endpoints adicionais como status
-from routers.webhooks_inbound.meta import router as meta_router
 app.include_router(meta_router, prefix="/api", tags=["Meta Webhooks"])
 
 # 2. Endpoints Públicos de Recebimento (WordPress, Elementor, Hotmart, etc.)
@@ -279,22 +310,14 @@ app.include_router(logs.router, prefix="/api", tags=["Logs"])
 app.include_router(hot_leads.router, prefix="/api", tags=["HotLeads"])
 app.include_router(instagram.router, prefix="/api")
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
-from routers import chat_labels
 app.include_router(chat_labels.router, prefix="/api", tags=["Chat Labels"])
 app.include_router(api_keys.router, prefix="/api")
 app.include_router(reminders.router, prefix="/api")
-from routers import email_marketing
 app.include_router(email_marketing.router, prefix="/api/email", tags=["Email Marketing"])
-from routers import waba_payment
 app.include_router(waba_payment.router, prefix="/api", tags=["WABA Payment"])
-from routers import quick_messages
 app.include_router(quick_messages.router, prefix="/api", tags=["QuickMessages"])
 
-
 # Router público para atualização de campos de contatos via API Key
-from routers.contacts_public import router as contacts_public_router
-from routers.leads_public import router as leads_public_router
-from routers import checkout_presell, capture_page
 app.include_router(contacts_public_router, prefix="/api", tags=["Contacts Public API"])
 app.include_router(leads_public_router, prefix="/api", tags=["Leads Public API"])
 app.include_router(checkout_presell.router)
@@ -634,42 +657,91 @@ async def event_listener():
 async def websocket_endpoint(websocket: WebSocket, token: str = None):
     from jose import jwt, JWTError
     from core.security import SECRET_KEY, ALGORITHM
+    from database import SessionLocal
+    import models
 
     if not token:
         await websocket.close(code=4001)
         return
 
     try:
-        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            await websocket.close(code=4001)
+            return
     except JWTError:
         await websocket.close(code=4001)
         return
 
+    db = SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.email == email, models.User.is_active == True).first()
+        if not user:
+            await websocket.close(code=4001)
+            return
+
+        is_super_admin = user.role == "super_admin"
+        allowed_ids = {c.id for c in (user.accessible_clients or [])}
+        if getattr(user, "client_id", None):
+            allowed_ids.add(user.client_id)
+
+        meta = {
+            "user_id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "accessible_client_ids": allowed_ids if not is_super_admin else None,
+            "client_id": None
+        }
+    finally:
+        db.close()
+
     origin = websocket.headers.get("origin")
-    logger.info(f"🔌 Tentativa de conexão WS de origin: {origin}")
-    await manager.connect(websocket)
+    logger.info(f"🔌 [WS] Conexão WS autenticada ({user.email}) de origin: {origin}")
+    await manager.connect(websocket, metadata=meta)
+
     try:
         while True:
             data = await websocket.receive_text()
             try:
                 message = json.loads(data)
                 if message.get("event") == "subscribe_client":
-                    client_id = message.get("client_id")
-                    await manager.update_metadata(websocket, {"client_id": client_id})
-                    logger.info(f"👤 Cliente {client_id} assinado na conexão WS.")
-                    
-                    # Envia resposta imediata para não deixar a tela carregando
-                    from services.monitor import SystemMonitor
-                    stats = await SystemMonitor.collect_all(client_id=client_id)
-                    await manager.send_personal_message({
-                        "event": "system_stats",
-                        "data": stats
-                    }, websocket)
+                    raw_client_id = message.get("client_id")
+                    if raw_client_id is not None:
+                        try:
+                            req_client_id = int(raw_client_id)
+                        except (ValueError, TypeError):
+                            await manager.send_personal_message({
+                                "event": "error",
+                                "detail": "Client ID inválido"
+                            }, websocket)
+                            continue
+
+                        # Validação de isolamento multi-tenant
+                        if not is_super_admin and req_client_id not in allowed_ids:
+                            logger.warning(f"⚠️ [WS] Usuário {user.email} tentou assinar client_id={req_client_id} não autorizado.")
+                            await manager.send_personal_message({
+                                "event": "error",
+                                "detail": "Acesso negado ao cliente solicitado."
+                            }, websocket)
+                            continue
+
+                        await manager.update_metadata(websocket, {"client_id": req_client_id})
+                        logger.info(f"👤 [WS] Cliente {req_client_id} assinado na conexão WS de {user.email}.")
+                        
+                        # Envia resposta imediata para não deixar a tela carregando
+                        from services.monitor import SystemMonitor
+                        stats = await SystemMonitor.collect_all(client_id=req_client_id)
+                        await manager.send_personal_message({
+                            "event": "system_stats",
+                            "data": stats
+                        }, websocket)
             except Exception as e:
                 logger.error(f"Erro ao processar mensagem WS: {e}")
     except Exception as e:
         logger.info(f"🔌 Conexão WS encerrada: {str(e)}")
         manager.disconnect(websocket)
+
 
 
 def get_index_with_cache_busting():
@@ -703,149 +775,9 @@ async def custom_swagger_ui_html():
     if not DEBUG:
         from fastapi import HTTPException
         raise HTTPException(status_code=404)
-    
-    from fastapi.responses import HTMLResponse
-    
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <link type="text/css" rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
-    <link rel="shortcut icon" href="https://fastapi.tiangolo.com/img/favicon.png">
-    <title>ZapVoice API Oficial - Swagger UI</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #fafafa;
-        }
-        .swagger-ui .topbar {
-            background-color: #0f172a;
-        }
-        .category-select-container {
-            margin: 20px auto 10px auto;
-            max-width: 1460px;
-            padding: 0 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-family: sans-serif;
-        }
-        .category-select-label {
-            font-weight: bold;
-            font-size: 14px;
-            color: #3b82f6;
-        }
-        .category-select {
-            padding: 8px 32px 8px 16px;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            font-size: 14px;
-            outline: none;
-            cursor: pointer;
-            background-color: #ffffff;
-            color: #334155;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-            background-position: right 8px center;
-            background-repeat: no-repeat;
-            background-size: 20px;
-            transition: all 0.2s;
-        }
-        .category-select:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
-        }
-        .category-select:focus {
-            border-color: #3b82f6;
-        }
-    </style>
-    </head>
-    <body>
-    <div id="swagger-ui">
-    </div>
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
-    <script>
-    window.onload = function() {
-        const ui = SwaggerUIBundle({
-            url: '/openapi.json',
-            dom_id: '#swagger-ui',
-            presets: [
-                SwaggerUIBundle.presets.apis,
-                SwaggerUIBundle.SwaggerUIStandalonePreset
-            ],
-            layout: "BaseLayout",
-            deepLinking: true,
-            showExtensions: true,
-            showCommonExtensions: true,
-            filter: true
-        });
-        window.ui = ui;
+    from core.swagger_docs import get_swagger_ui_html
+    return get_swagger_ui_html()
 
-        const interval = setInterval(() => {
-            const tags = document.querySelectorAll('.opblock-tag-section h4 a span');
-            if (tags.length > 0) {
-                clearInterval(interval);
-                
-                const filterContainer = document.createElement('div');
-                filterContainer.className = 'category-select-container';
-                
-                const label = document.createElement('span');
-                label.className = 'category-select-label';
-                label.innerText = 'Filtrar por Categoria:';
-                
-                const select = document.createElement('select');
-                select.className = 'category-select';
-                
-                const optionAll = document.createElement('option');
-                optionAll.value = 'all';
-                optionAll.innerText = 'Todas as Categorias';
-                select.appendChild(optionAll);
-                
-                const tagNames = Array.from(tags).map(el => el.innerText.trim());
-                const uniqueTags = [...new Set(tagNames)];
-                
-                uniqueTags.forEach(tag => {
-                    const opt = document.createElement('option');
-                    opt.value = tag;
-                    opt.innerText = tag;
-                    select.appendChild(opt);
-                });
-                
-                select.addEventListener('change', (e) => {
-                    const selected = e.target.value;
-                    const sections = document.querySelectorAll('.opblock-tag-section');
-                    sections.forEach(section => {
-                        const tagEl = section.querySelector('h4 a span');
-                        if (tagEl) {
-                            const currentTagName = tagEl.innerText.trim();
-                            if (selected === 'all' || currentTagName === selected) {
-                                section.style.display = 'block';
-                            } else {
-                                section.style.display = 'none';
-                            }
-                        }
-                    });
-                });
-                
-                filterContainer.appendChild(label);
-                filterContainer.appendChild(select);
-                
-                const wrapper = document.querySelector('.swagger-ui .wrapper');
-                if (wrapper) {
-                    wrapper.parentNode.insertBefore(filterContainer, wrapper.nextSibling);
-                }
-            }
-        }, 300);
-    }
-    </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(html_content)
 
 @app.get("/")
 async def root():
@@ -864,7 +796,7 @@ async def root():
         "message": "ZapVoice API",
         "docs": "/docs",
         "status": "online",
-        "version": "1.8.1",
+        "version": "1.8.2",
         "mode": "production"
     }
 
@@ -873,12 +805,10 @@ async def root():
 async def serve_env_config():
     config_path = os.path.join(_BASE_DIR, "static", "dist", "env-config.js")
     if os.path.exists(config_path):
-        from fastapi.responses import FileResponse
         response = FileResponse(config_path, media_type="application/javascript")
         # Desabilita cache para garantir que atualizações em tempo de execução sejam aplicadas
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return response
-    from fastapi import HTTPException
     raise HTTPException(status_code=404, detail="Config file not found")
 
 # Mapeamento de extensões para media types
@@ -905,26 +835,21 @@ async def serve_react_app(full_path: str):
     # Ignorar caminhos de API, Estáticos e Webhooks para não dar conflito de método (POST vs GET)
     path_lower = full_path.lower()
     if path_lower.startswith("api") or path_lower.startswith("static") or path_lower.startswith("docs") or path_lower.startswith("openapi") or path_lower.startswith("triggers"):
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="API route not found via Frontend Catch-all")
 
     # Verificar se é um arquivo estático que existe na pasta dist/
     # (imagens, fontes, manifests, etc. que não são servidos pelo mount /assets)
-    import mimetypes
     _, ext = os.path.splitext(full_path)
     if ext.lower() in _STATIC_MEDIA_TYPES:
         static_file = os.path.join(_BASE_DIR, "static", "dist", full_path)
         if os.path.isfile(static_file):
-            from fastapi.responses import FileResponse
             media_type = _STATIC_MEDIA_TYPES[ext.lower()]
             return FileResponse(static_file, media_type=media_type)
         # Arquivo estático não encontrado - não redirecionar para SPA
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Static file not found: {full_path}")
 
     content = get_index_with_cache_busting()
     if content:
-        from fastapi.responses import HTMLResponse
         response = HTMLResponse(content)
         # Headers BRUTAIS de anti-cache
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

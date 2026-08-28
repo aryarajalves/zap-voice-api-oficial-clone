@@ -38,6 +38,7 @@ vi.mock('./ChatConversations/useChatEngine', () => ({
         isAssigning: false,
         isLoadingConvos: false,
         isLoadingMessages: false,
+        setIsLoadingMessages: vi.fn(),
         isSending: false,
         timeLeft24h: '',
         setTimeLeft24h: vi.fn(),

@@ -333,6 +333,41 @@ describe('ContactsModal', () => {
     });
   });
 
+  it('copia todos os contatos da lista diretamente pelo botão Copiar Lista (1) sem precisar selecionar checkbox', async () => {
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockImplementation(() => Promise.resolve()),
+      },
+    });
+
+    const propsUnicoContato = {
+      ...defaultProps,
+      contactsModal: {
+        ...defaultProps.contactsModal,
+        contacts: [
+          {
+            phone_number: '5585996123586',
+            contact_name: 'Aryaraj',
+            status: 'skipped',
+            message_type: 'TEMPLATE',
+            failure_reason: 'TEMPLATE_ALREADY_SENT_24H'
+          }
+        ],
+        counts: { total: 1 }
+      },
+      contactsTotal: 1
+    };
+
+    render(<ContactsModal {...propsUnicoContato} />);
+    const copyButton = screen.getByRole('button', { name: /copiar lista \(1\)/i });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('5585996123586');
+      expect(toast.success).toHaveBeenCalledWith('1 contato copiado para a área de transferência!');
+    });
+  });
+
   it('exibe o dropdown de erros nos filtros de falhas e bloqueios quando existem motivos de erro', () => {
     const propsComFalhas = {
       ...defaultProps,

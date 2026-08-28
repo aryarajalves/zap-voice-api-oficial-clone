@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from core.deps import get_db
+from core.deps import get_db, get_current_user, get_validated_client_id
 from models import AppConfig, User, Client
 from config_loader import get_settings
 from pydantic import BaseModel
 from typing import Dict, Optional, Any
-from core.deps import get_current_user, get_validated_client_id
 from core.permissions import require_admin, require_feature
+from core.encryption import encrypt_token, decrypt_token, is_sensitive_key
+
 from websocket_manager import manager
 import httpx
+
 import datetime
 
 
@@ -90,14 +92,16 @@ def read_settings(
 
         # Mascarar dados sensíveis para exibição
         masked_settings = {}
-        for key, value in current_settings.items():
+        for key, raw_val in current_settings.items():
             # Filtrar chaves de infraestrutura para não exibir no frontend
             if key.startswith("RABBITMQ_") or key.startswith("S3_"):
                 continue
 
-            if not value:
+            if not raw_val:
                 masked_settings[key] = ""
                 continue
+
+            value = decrypt_token(raw_val) if is_sensitive_key(key) else raw_val
                 
             if ("TOKEN" in key or "KEY" in key or "SECRET" in key) and key not in ("AUTO_BLOCK_KEYWORDS", "MANYCHAT_API_KEYS"):
                 if len(value) > 8:
@@ -141,10 +145,12 @@ def reveal_setting(
             AppConfig.client_id == x_client_id
         ).first()
         
-        value = config_item.value if config_item else ""
+        raw_val = config_item.value if config_item else ""
+        value = decrypt_token(raw_val) if is_sensitive_key(reveal_req.key) else raw_val
         return {"key": reveal_req.key, "value": value}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao revelar configuração: {str(e)}")
+
 
 @router.post("/", status_code=status.HTTP_200_OK)
 async def update_settings(
@@ -263,11 +269,19 @@ async def update_settings(
         # Se o valor for booleano, converte para string "true"/"false"
         val_str = str(value).lower() if isinstance(value, bool) else (str(value) if value is not None else "")
 
+        # Se for chave sensível (token, api_key, etc.)
+        if is_sensitive_key(key) and val_str:
+            if "****" in val_str:
+                # O frontend enviou o valor mascarado sem edição; mantém o valor criptografado atual
+                continue
+            val_str = encrypt_token(val_str)
+
         if config_item:
             config_item.value = val_str
         else:
             new_config = AppConfig(key=key, value=val_str, client_id=x_client_id)
             db.add(new_config)
+
         
         # Sincronizar nome do cliente na tabela Clients se a chave for CLIENT_NAME
         if key == "CLIENT_NAME" and value:

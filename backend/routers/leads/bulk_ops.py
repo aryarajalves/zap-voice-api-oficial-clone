@@ -7,7 +7,7 @@ from sqlalchemy import or_, and_, func
 from pydantic import BaseModel
 
 import models
-from core.deps import get_db
+from core.deps import get_db, get_validated_client_id
 from core.permissions import require_premium
 from core.logger import setup_logger
 from .common_filters import (
@@ -196,11 +196,10 @@ def _filter_leads_by_active_filters(db: Session, client_id: int, filters):
 @router.post("/leads/bulk-delete", summary="Deletar múltiplos leads")
 def bulk_delete_leads(
     request: BulkDeleteRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = db.query(models.WebhookLead).filter(
         models.WebhookLead.id.in_(request.lead_ids),
         models.WebhookLead.client_id == client_id
@@ -225,13 +224,12 @@ def bulk_delete_leads(
 @router.post("/leads/bulk-delete-all", summary="Deletar todos os leads dos filtros ativos")
 def bulk_delete_all_leads(
     request: BulkDeleteAllRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
-
     active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+
     proj_id = active_client.project_id if active_client else None
 
     if proj_id:
@@ -318,15 +316,23 @@ def bulk_delete_all_leads(
                 models.ScheduledTrigger.id.in_(trigger_ids)
             ).delete(synchronize_session=False)
 
-    for i in range(0, len(deletable_ids), 1000):
-        batch_ids = deletable_ids[i:i + 1000]
-        db.query(models.WebhookLead).filter(
-            models.WebhookLead.id.in_(batch_ids)
-        ).delete(synchronize_session=False)
+    query = _apply_common_lead_filters(
+        query, request.search, request.event_type, None, request.tag, "OR",
+        None, None, request.date_from, request.date_to, None, None
+    )
+
+    leads = query.all()
+    deleted_count = 0
+    skipped_locked = 0
+    for lead in leads:
+        if getattr(lead, 'is_locked', False):
+            skipped_locked += 1
+            continue
+        _delete_lead_and_relations(db, lead, client_id)
+        deleted_count += 1
 
     db.commit()
-    deleted_count = len(deletable_ids)
-    msg = f"{deleted_count} contato(s) excluído(s)."
+    msg = f"{deleted_count} lead(s) excluído(s)."
     if skipped_locked:
         msg += f" {skipped_locked} ignorado(s) por estarem protegidos."
     return {"status": "success", "deleted_count": deleted_count, "skipped_locked": skipped_locked, "message": msg}
@@ -335,14 +341,13 @@ def bulk_delete_all_leads(
 @router.post("/leads/bulk-tag", summary="Adicionar etiqueta a múltiplos leads selecionados")
 def bulk_tag_leads(
     request: BulkTagRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     if not request.tag or not request.tag.strip():
         raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta.")
 
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = db.query(models.WebhookLead).filter(
         models.WebhookLead.id.in_(request.lead_ids),
         models.WebhookLead.client_id == client_id
@@ -362,40 +367,14 @@ def bulk_tag_leads(
 @router.post("/leads/bulk-tag-all", summary="Adicionar etiqueta a todos os leads dos filtros ativos")
 def bulk_tag_all_leads(
     request: BulkTagAllRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     if not request.tag or not request.tag.strip():
         raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta.")
 
-    client_id = x_client_id if x_client_id else current_user.client_id
-    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
-    proj_id = active_client.project_id if active_client else None
-
-    if proj_id:
-        query = db.query(models.WebhookLead).filter(models.WebhookLead.project_id == proj_id)
-    else:
-        query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
-
-    query = _apply_common_lead_filters(
-        query, request.search, request.event_type, None, request.tag_filter, "OR",
-        request.is_locked, request.has_bsud, request.date_from, request.date_to,
-        request.imported_by_client_id, request.origin
-    )
-
-    if request.filter_ddi:
-        clean_ddi = re.sub(r"\D", "", request.filter_ddi)
-        if clean_ddi:
-            query = query.filter(models.WebhookLead.phone.like(f"{clean_ddi}%"))
-
-    if request.filter_ddd:
-        clean_ddd = re.sub(r"\D", "", request.filter_ddd)
-        if clean_ddd:
-            query = query.filter(or_(
-                models.WebhookLead.phone.like(f"55{clean_ddd}%"),
-                models.WebhookLead.phone.like(f"{clean_ddd}%")
-            ))
+    query = _filter_leads_by_active_filters(db, client_id, request)
 
     leads = query.all()
     tagged_count = sum(1 for lead in leads if _add_tags_to_lead(lead, request.tag, db=db))
@@ -412,14 +391,13 @@ def bulk_tag_all_leads(
 @router.post("/leads/bulk-untag", summary="Remover etiqueta de múltiplos leads selecionados")
 def bulk_untag_leads(
     request: BulkTagRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     if not request.tag or not request.tag.strip():
         raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta para remover.")
 
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = db.query(models.WebhookLead).filter(
         models.WebhookLead.id.in_(request.lead_ids),
         models.WebhookLead.client_id == client_id
@@ -439,14 +417,13 @@ def bulk_untag_leads(
 @router.post("/leads/bulk-untag-all", summary="Remover etiqueta de todos os leads dos filtros ativos")
 def bulk_untag_all_leads(
     request: BulkTagAllRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     if not request.tag or not request.tag.strip():
         raise HTTPException(status_code=400, detail="Informe ao menos uma etiqueta para remover.")
 
-    client_id = x_client_id if x_client_id else current_user.client_id
     query = _filter_leads_by_active_filters(db, client_id, request)
 
     leads = query.all()
@@ -464,11 +441,10 @@ def bulk_untag_all_leads(
 @router.post("/leads/bulk-block", summary="Bloquear permanentemente múltiplos leads selecionados")
 def bulk_block_leads(
     request: BulkBlockRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = db.query(models.WebhookLead).filter(
         models.WebhookLead.id.in_(request.lead_ids),
         models.WebhookLead.client_id == client_id
@@ -501,11 +477,10 @@ def bulk_block_leads(
 @router.post("/leads/bulk-unblock", summary="Desbloquear múltiplos leads selecionados")
 def bulk_unblock_leads(
     request: BulkBlockRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = db.query(models.WebhookLead).filter(
         models.WebhookLead.id.in_(request.lead_ids),
         models.WebhookLead.client_id == client_id
@@ -549,11 +524,10 @@ def bulk_unblock_leads(
 @router.post("/leads/bulk-unblock-all", summary="Desbloquear todos os leads dos filtros ativos")
 def bulk_unblock_all_leads(
     request: BulkBlockAllRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = _filter_leads_by_active_filters(db, client_id, request).all()
 
     related_client_ids = _get_related_client_ids(db, client_id)
@@ -594,11 +568,10 @@ def bulk_unblock_all_leads(
 @router.post("/leads/bulk-block-all", summary="Bloquear permanentemente todos os leads dos filtros ativos")
 def bulk_block_all_leads(
     request: BulkBlockAllRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = _filter_leads_by_active_filters(db, client_id, request).all()
 
     related_client_ids = _get_related_client_ids(db, client_id)
@@ -628,11 +601,10 @@ def bulk_block_all_leads(
 @router.post("/leads/bulk-rest", summary="Colocar múltiplos leads selecionados em repouso temporário")
 def bulk_rest_leads(
     request: BulkRestRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = db.query(models.WebhookLead).filter(
         models.WebhookLead.id.in_(request.lead_ids),
         models.WebhookLead.client_id == client_id
@@ -670,11 +642,10 @@ def bulk_rest_leads(
 @router.post("/leads/bulk-rest-all", summary="Colocar todos os leads dos filtros ativos em repouso temporário")
 def bulk_rest_all_leads(
     request: BulkRestAllRequest,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     leads = _filter_leads_by_active_filters(db, client_id, request).all()
 
     related_client_ids = _get_related_client_ids(db, client_id)
@@ -704,3 +675,4 @@ def bulk_rest_all_leads(
         "already_resting_count": already_count,
         "message": f"{rested_count} contato(s) colocado(s) em repouso por {hours}h."
     }
+

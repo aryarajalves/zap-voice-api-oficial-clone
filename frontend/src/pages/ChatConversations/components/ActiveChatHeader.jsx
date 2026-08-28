@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiX, FiCheckCircle, FiSidebar, FiSlash, FiLayers, FiFileText, FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { FiX, FiCheckCircle, FiSidebar, FiSlash, FiLayers, FiFileText, FiRefreshCw, FiSearch, FiArchive } from 'react-icons/fi';
 import { BsPinAngle, BsPinAngleFill, BsExclamationCircle, BsExclamationCircleFill, BsStars } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
 
@@ -145,6 +145,18 @@ export default function ActiveChatHeader({
                 >
                     <FiCheckCircle size={14} />
                     {selectedConvo.status === 'resolved' ? 'Resolvida' : 'Resolver'}
+                </button>
+
+                <button
+                    onClick={() => engine.handleToggleArchive && engine.handleToggleArchive()}
+                    title={selectedConvo.status === 'archived' ? "Desarquivar conversa" : "Arquivar conversa"}
+                    className={`p-2 rounded-xl border transition-all ${
+                        selectedConvo.status === 'archived'
+                            ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border-amber-500/40 shadow-sm'
+                            : 'bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-200 dark:hover:border-amber-800/30'
+                    }`}
+                >
+                    <FiArchive size={16} />
                 </button>
 
                 <button

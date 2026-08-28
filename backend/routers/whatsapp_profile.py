@@ -1,10 +1,10 @@
-from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 from typing import Optional
 from chatwoot_client import ChatwootClient
 import models
 import schemas
 from fastapi import Depends
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
 from core.permissions import require_premium, require_user
 from core.logger import setup_logger
 from config_loader import get_setting
@@ -20,13 +20,13 @@ router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 
 @router.get("/profile", summary="Busca o perfil do WhatsApp Business")
 async def get_whatsapp_profile(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
+
 
     if not wa_token or not wa_phone_id:
         return {"error": "Configurações do WhatsApp incompletas."}
@@ -128,10 +128,9 @@ async def get_whatsapp_profile(
 @router.post("/profile-picture", summary="Atualiza a foto de perfil do WhatsApp Business")
 async def update_profile_picture(
     file: UploadFile = File(...),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
 
@@ -197,10 +196,9 @@ async def update_profile_picture(
 @router.post("/profile", summary="Atualiza campos do perfil comercial do WhatsApp")
 async def update_whatsapp_profile(
     payload: dict,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
 
@@ -232,10 +230,9 @@ async def update_whatsapp_profile(
 @router.post("/profile-name", summary="Atualiza o nome de exibição do WhatsApp Business")
 async def update_whatsapp_name(
     payload: dict,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
     new_name = payload.get("display_name")
@@ -263,10 +260,9 @@ async def update_whatsapp_name(
 
 @router.post("/register-number", summary="Registra o número de telefone (Ativa certificado de nome)")
 async def register_whatsapp_number(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     wa_phone_id = get_setting("WA_PHONE_NUMBER_ID", "", client_id=client_id)
 
@@ -297,10 +293,9 @@ async def register_whatsapp_number(
 @router.get("/debug/meta/{waba_id}")
 async def debug_meta(
     waba_id: str,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_user)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     wa_token = get_setting("WA_ACCESS_TOKEN", "", client_id=client_id)
     
     async with httpx.AsyncClient(timeout=30.0) as http:
@@ -320,13 +315,13 @@ async def debug_meta(
 @router.post("/assistant/chat")
 async def assistant_chat(
     payload: dict,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
 ):
     import os
     import json
-    target_client_id = x_client_id if x_client_id else current_user.client_id
+    target_client_id = client_id
     messages = payload.get("messages", [])
     
     active_templates = []
@@ -334,7 +329,7 @@ async def assistant_chat(
         active_templates = await list_templates(
             include_archived=False,
             include_paused=False,
-            x_client_id=target_client_id,
+            client_id=target_client_id,
             current_user=current_user,
             db=db
         )
@@ -446,10 +441,11 @@ async def assistant_chat(
 @router.post("/assistant/optimize-text")
 async def assistant_optimize_text(
     payload: dict,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_user),
     db: Session = Depends(get_db)
 ):
+
     import os
     text_to_optimize = payload.get("text", "")
     if not text_to_optimize:

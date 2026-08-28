@@ -1,5 +1,6 @@
 import os                          # Lê variáveis de ambiente do sistema (.env)
-import hashlib                     # Gera hash SHA256 — usado como fallback para senhas antigas
+import hmac                        # Autenticação e cálculo de Pimenta (Pepper) via HMAC
+import hashlib                     # Gera hash SHA256 — usado no HMAC e como fallback legado
 from contextvars import ContextVar  # Permite isolar o contexto da requisição por thread/task
 from fastapi import Request        # Representação da requisição HTTP
 from slowapi import Limiter        # Limitador de requisições — bloqueia abuso de endpoints
@@ -119,30 +120,119 @@ elif len(SECRET_KEY) < 32:
 ALGORITHM = "HS256"               # Algoritmo de assinatura do JWT (HMAC + SHA-256)
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # Token expira em 24 horas (1440 minutos)
 
-# Configura o bcrypt como algoritmo de hash de senhas
-# deprecated="auto" → migra automaticamente hashes de algoritmos antigos para bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Pimenta (Pepper) secreta lida do ambiente para blindagem contra dumps de banco
+PASSWORD_PEPPER = os.getenv("PASSWORD_PEPPER", "")
+
+# Configura o Argon2id como algoritmo primário de hash de senhas (Memory-Hard)
+# com fallback automático para bcrypt se o backend CFFI do Argon2 não estiver disponível no ambiente.
+try:
+    pwd_context = CryptContext(
+        schemes=["argon2", "bcrypt"],
+        deprecated="auto",
+        argon2__memory_cost=65536,
+        argon2__time_cost=3,
+        argon2__parallelism=2,
+    )
+    # Testa se o backend funciona sem erro
+    pwd_context.hash("probe_argon2")
+except Exception:
+    logger.warning("⚠️ Backend Argon2 não disponível no ambiente atual. Utilizando Bcrypt como fallback seguro.")
+    pwd_context = CryptContext(
+        schemes=["bcrypt"],
+        deprecated="auto"
+    )
+
+
+
+def _apply_pepper(password: str) -> str:
+    """
+    Aplica a Pimenta (Pepper) secreta à senha via HMAC-SHA256.
+    Garante tamanho fixo de 64 chars e impede quebra por força bruta offline sem o .env.
+    """
+    if not PASSWORD_PEPPER:
+        return password
+    return hmac.new(
+        PASSWORD_PEPPER.encode("utf-8"),
+        password.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verifica se a senha digitada bate com o hash salvo no banco.
-    Tenta bcrypt primeiro. Se falhar, tenta SHA256 (compatibilidade com senhas antigas).
+    Suporta de forma transparente:
+      1. Argon2id com Pimenta (padrão atual)
+      2. Argon2id sem Pimenta (fallback)
+      3. Bcrypt legado (com ou sem pimenta)
+      4. SHA256 legado
     """
+    if not hashed_password or not plain_password:
+        return False
+
+    # 1. Se for hash Argon2 ($argon2id / $argon2i / $argon2d)
+    if hashed_password.startswith("$argon2"):
+        try:
+            # Tenta com pimenta primeiro
+            if pwd_context.verify(_apply_pepper(plain_password), hashed_password):
+                return True
+        except Exception:
+            pass
+        try:
+            # Fallback sem pimenta
+            if pwd_context.verify(plain_password, hashed_password):
+                return True
+        except Exception:
+            pass
+        return False
+
+    # 2. Se for hash Bcrypt legado ($2a$ / $2b$ / $2y$)
+    if hashed_password.startswith("$2"):
+        try:
+            if pwd_context.verify(plain_password, hashed_password):
+                return True
+        except Exception:
+            pass
+        try:
+            if pwd_context.verify(_apply_pepper(plain_password), hashed_password):
+                return True
+        except Exception:
+            pass
+        return False
+
+    # 3. Fallback para SHA256 legado
     try:
-        # Recalcula o hash da senha digitada e compara com o hash do banco
-        return pwd_context.verify(plain_password, hashed_password)
+        if hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password:
+            return True
+        if hashlib.sha256(_apply_pepper(plain_password).encode()).hexdigest() == hashed_password:
+            return True
     except Exception:
-        # Fallback para SHA256 — suporta usuários criados antes da migração para bcrypt
-        return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+        pass
+
+    return False
 
 
 def get_password_hash(password: str) -> str:
     """
-    Transforma a senha em texto puro em um hash bcrypt irreversível.
+    Transforma a senha em texto puro em um hash Argon2id irreversível protegido por Pimenta (Pepper).
     Esse hash é o que fica salvo no banco — nunca a senha original.
     """
-    return pwd_context.hash(password)
+    return pwd_context.hash(_apply_pepper(password))
+
+
+def needs_rehash(hashed_password: str) -> bool:
+    """
+    Indica se o hash precisa ser migrado/atualizado para Argon2id + Pepper.
+    Retorna True para senhas antigas em bcrypt ou sha256.
+    """
+    if not hashed_password:
+        return True
+    if not hashed_password.startswith("$argon2"):
+        return True
+    try:
+        return pwd_context.needs_update(hashed_password)
+    except Exception:
+        return True
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -164,3 +254,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     # Assina e retorna o token JWT
     # jwt.encode transforma o dicionário em uma string criptografada
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """
+    Valida os requisitos de segurança da senha:
+      - Mínimo de 12 caracteres e máximo de 128 caracteres.
+      - Deve conter pelo menos uma letra (maiúscula ou minúscula).
+      - Deve conter pelo menos um número.
+      - Deve conter pelo menos um caractere especial.
+    Retorna (True, "") se válida ou (False, mensagem_erro) se inválida.
+    """
+    import re
+    if not password or len(password) < 12:
+        return False, "A senha deve ter no mínimo 12 caracteres."
+    if len(password) > 128:
+        return False, "A senha não pode ultrapassar 128 caracteres."
+    if not re.search(r'[A-Za-z]', password):
+        return False, "A senha deve conter pelo menos uma letra."
+    if not re.search(r'\d', password):
+        return False, "A senha deve conter pelo menos um número."
+    if not re.search(r'[^A-Za-z0-9]', password):
+        return False, "A senha deve conter pelo menos um caractere especial (ex: @, #, $, %, !)."
+    return True, ""
+

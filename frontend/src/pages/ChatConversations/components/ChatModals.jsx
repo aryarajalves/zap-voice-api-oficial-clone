@@ -13,6 +13,7 @@ import AiReportModal from '../Modals/AiReportModal';
 import PrivateNoteMaximizedModal from '../Modals/PrivateNoteMaximizedModal';
 import DeletePrivateNoteConfirmModal from '../Modals/DeletePrivateNoteConfirmModal';
 import ClearChatConfirmModal from '../Modals/ClearChatConfirmModal';
+import ExportConversationModal from '../Modals/ExportConversationModal';
 
 export default function ChatModals({
     engine,
@@ -31,7 +32,9 @@ export default function ChatModals({
     setIsCancelFunnelModalOpen,
     isCancelingFunnel,
     setIsCancelingFunnel,
-    selectAllPages
+    selectAllPages,
+    exportModal,
+    setExportModal
 }) {
     return (
         <>
@@ -193,6 +196,17 @@ export default function ChatModals({
                 onClose={() => noteAndAi.setIsAiReportModalOpen(false)}
                 aiReportData={noteAndAi.aiReportData}
                 onExportHtml={noteAndAi.exportAiReportHtml}
+            />
+
+            <ExportConversationModal
+                isOpen={exportModal?.isOpen}
+                status={exportModal?.status}
+                contactName={exportModal?.contactName || selectedConvo?.contact_name || selectedConvo?.phone}
+                phone={exportModal?.phone || selectedConvo?.phone}
+                totalMessages={exportModal?.totalMessages || engine.messages?.length || 0}
+                fileName={exportModal?.fileName}
+                errorMessage={exportModal?.errorMessage}
+                onClose={() => setExportModal(prev => ({ ...prev, isOpen: false }))}
             />
         </>
     );

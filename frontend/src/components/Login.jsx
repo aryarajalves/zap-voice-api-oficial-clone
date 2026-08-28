@@ -207,13 +207,19 @@ const Login = () => {
             </div>
 
             {/* Coluna da Direita (Imagem de Fundo/Hero) */}
-            <div className="hidden lg:block lg:col-span-7 relative h-full bg-[#0f172a]">
+            <div className="hidden lg:block lg:col-span-7 relative h-full bg-[#0f172a] overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a] to-transparent z-10 w-24"></div>
-                <img 
-                    src="/login_hero.png" 
-                    alt="ZapVoice Workspace Hero" 
-                    className="w-full h-full object-cover select-none pointer-events-none"
-                />
+                <picture className="w-full h-full block">
+                    <source srcSet="/login_hero.webp" type="image/webp" />
+                    <img 
+                        src="/login_hero.webp" 
+                        alt="ZapVoice Workspace Hero" 
+                        loading="eager"
+                        fetchPriority="high"
+                        decoding="async"
+                        className="w-full h-full object-cover select-none pointer-events-none transition-opacity duration-300"
+                    />
+                </picture>
             </div>
         </div>
     );

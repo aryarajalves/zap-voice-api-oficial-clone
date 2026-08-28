@@ -1,12 +1,13 @@
 /**
- * Testes unitários — Página BackupDatabase
+ * Testes unitários — Página BackupDatabase (Organizada em Abas)
  *
  * Cobre:
- * - Renderização básica dos elementos
- * - Botão de backup manual: estado de loading
+ * - Navegação por abas: Backups no S3, Agendamento Automático, Importar Backup Externo
+ * - Renderização básica dos elementos e status cards
+ * - Botão de backup manual: estado de loading e modal de progresso
  * - Formulário de configuração: toggle, campos, submissão
- * - Tabela de backups: estado vazio e com dados
- * - Modal de confirmação de deleção
+ * - Tabela de backups: estado vazio, com dados, seleção múltipla e deleção em lote
+ * - Modal de confirmação de deleção e restauração
  */
 
 import React from 'react';
@@ -106,42 +107,52 @@ describe('BackupDatabase', () => {
     vi.clearAllMocks();
   });
 
-  // ─── Renderização ──────────────────────────────────────────────────────────
+  // ─── Navegação e Renderização por Abas ─────────────────────────────────────
 
-  it('deve renderizar o título e os cards de status', async () => {
+  it('deve renderizar o título principal, as abas de navegação e os cards de status', async () => {
     await act(async () => {
       render(<BackupDatabase />);
     });
 
     await waitFor(() => {
+      expect(screen.getByText('Backup do Banco PostgreSQL')).toBeInTheDocument();
+      expect(screen.getByText('Backups no S3')).toBeInTheDocument();
+      expect(screen.getByText('Agendamento Automático')).toBeInTheDocument();
+      expect(screen.getByText('Importar Backup Externo')).toBeInTheDocument();
+
       expect(screen.getByText('Último Backup')).toBeInTheDocument();
       expect(screen.getByText('Próximo Backup')).toBeInTheDocument();
       expect(screen.getByText('Retenção')).toBeInTheDocument();
     });
   });
 
-  it('deve renderizar o botão "Fazer Backup Agora"', async () => {
+  it('deve permitir alternar entre as abas e renderizar seus conteúdos', async () => {
     await act(async () => {
       render(<BackupDatabase />);
     });
 
+    // 1. Aba padrão: Backups no S3
     await waitFor(() => {
+      expect(screen.getByText('Execução de Backup Manual')).toBeInTheDocument();
       expect(screen.getByText('Fazer Backup Agora')).toBeInTheDocument();
     });
 
-    const btn = screen.getById
-      ? screen.queryByText('Fazer Backup Agora')
-      : screen.getByText('Fazer Backup Agora');
-    expect(btn).toBeInTheDocument();
-  });
-
-  it('deve mostrar a seção de Agendamento Automático', async () => {
-    await act(async () => {
-      render(<BackupDatabase />);
-    });
+    // 2. Alternar para a aba de Agendamento Automático
+    const scheduleTabBtn = screen.getByRole('button', { name: /Agendamento Automático/i });
+    fireEvent.click(scheduleTabBtn);
 
     await waitFor(() => {
-      expect(screen.getByText('Agendamento Automático')).toBeInTheDocument();
+      expect(screen.getByText('Rotina de Agendamento Automático')).toBeInTheDocument();
+      expect(screen.getByText('Salvar Configuração')).toBeInTheDocument();
+    });
+
+    // 3. Alternar para a aba de Importação
+    const importTabBtn = screen.getByRole('button', { name: /Importar Backup Externo/i });
+    fireEvent.click(importTabBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Importação de Backup Externo')).toBeInTheDocument();
+      expect(screen.getByText('Fazer Upload de Backup')).toBeInTheDocument();
     });
   });
 
@@ -171,7 +182,6 @@ describe('BackupDatabase', () => {
   // ─── Backup Manual ─────────────────────────────────────────────────────────
 
   it('deve mudar o estado do botão para "Executando..." ao clicar', async () => {
-    // Simula uma resposta lenta para capturar o estado de loading
     global.fetch = vi.fn((url) => {
       if (url.includes('/api/backup/config')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockConfig) });
@@ -235,12 +245,15 @@ describe('BackupDatabase', () => {
     });
   });
 
-  // ─── Formulário de Configuração ────────────────────────────────────────────
+  // ─── Formulário de Configuração (Aba Agendamento) ──────────────────────────
 
-  it('deve mostrar o valor padrão de retenção (30)', async () => {
+  it('deve mostrar o valor padrão de retenção (30) na aba de Agendamento', async () => {
     await act(async () => {
       render(<BackupDatabase />);
     });
+
+    // Clicar na aba de Agendamento
+    fireEvent.click(screen.getByRole('button', { name: /Agendamento Automático/i }));
 
     await waitFor(() => {
       const input = document.getElementById('input-retention-count');
@@ -249,10 +262,12 @@ describe('BackupDatabase', () => {
     });
   });
 
-  it('deve habilitar/desabilitar agendamento via toggle', async () => {
+  it('deve habilitar/desabilitar agendamento via toggle na aba de Agendamento', async () => {
     await act(async () => {
       render(<BackupDatabase />);
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /Agendamento Automático/i }));
 
     await waitFor(() => {
       expect(screen.getAllByText('Agendamento Desativado')[0]).toBeInTheDocument();
@@ -271,6 +286,8 @@ describe('BackupDatabase', () => {
       render(<BackupDatabase />);
     });
 
+    fireEvent.click(screen.getByRole('button', { name: /Agendamento Automático/i }));
+
     // Habilita o agendamento primeiro
     const toggle = document.getElementById('toggle-backup-enabled');
     fireEvent.click(toggle);
@@ -281,9 +298,7 @@ describe('BackupDatabase', () => {
     });
   });
 
-  // ─── Configuração de Agendamento ───────────────────────────────────────────
-
-  it('deve submeter a configuração ao clicar em Salvar', async () => {
+  it('deve submeter a configuração ao clicar em Salvar na aba de Agendamento', async () => {
     // Mock do PUT
     global.fetch = vi.fn((url, options) => {
       if (url.includes('/api/backup/config') && options?.method === 'PUT') {
@@ -303,6 +318,8 @@ describe('BackupDatabase', () => {
       render(<BackupDatabase />);
     });
 
+    fireEvent.click(screen.getByRole('button', { name: /Agendamento Automático/i }));
+
     await waitFor(() => {
       expect(screen.getByText('Salvar Configuração')).toBeInTheDocument();
     });
@@ -311,7 +328,6 @@ describe('BackupDatabase', () => {
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
-      // Deve ter chamado PUT /api/backup/config
       const calls = global.fetch.mock.calls;
       const putCall = calls.find(([url, opts]) =>
         url.includes('/api/backup/config') && opts?.method === 'PUT'
@@ -331,7 +347,6 @@ describe('BackupDatabase', () => {
       expect(screen.getByText('backup_20260530_120000.dump.gz')).toBeInTheDocument();
     });
 
-    // Hover para mostrar o botão de delete
     const deleteBtn = document.getElementById('btn-delete-backup-0');
     expect(deleteBtn).toBeTruthy();
     fireEvent.click(deleteBtn);
@@ -379,13 +394,15 @@ describe('BackupDatabase', () => {
 
   // ─── Importação e Restauração ──────────────────────────────────────────────
 
-  it('deve renderizar a seção de Importar Backup Externo', async () => {
+  it('deve renderizar a seção de Importar Backup Externo na respectiva aba', async () => {
     await act(async () => {
       render(<BackupDatabase />);
     });
 
+    fireEvent.click(screen.getByRole('button', { name: /Importar Backup Externo/i }));
+
     await waitFor(() => {
-      expect(screen.getByText('Importar Backup Externo')).toBeInTheDocument();
+      expect(screen.getByText('Importação de Backup Externo')).toBeInTheDocument();
       expect(screen.getByText('Fazer Upload de Backup')).toBeInTheDocument();
     });
   });
@@ -476,9 +493,7 @@ describe('BackupDatabase', () => {
       expect(screen.getByText('backup_20260530_120000.dump.gz')).toBeInTheDocument();
     });
 
-    // Localizar o checkbox do primeiro backup (não pinado)
     const checkboxes = screen.getAllByRole('checkbox');
-    // header checkbox + item checkboxes
     expect(checkboxes.length).toBeGreaterThan(1);
     
     // Clicar no checkbox de selecionar todos (header checkbox)

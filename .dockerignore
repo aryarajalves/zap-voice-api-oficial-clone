@@ -1,55 +1,111 @@
-# === Git & Config ===
+# ==============================================================================
+# ZapVoice - Docker Ignore (.dockerignore)
+# Impede que arquivos de backup, temporários, logs e testes entrem nas imagens
+# ==============================================================================
+
+# === Cópias Antigas e Backups (Clean Code) ===
+*.backup.*
+**/*.backup.*
+*.backup
+**/*.backup
+*.bak
+**/*.bak
+*.old
+**/*.old
+*.orig
+**/*.orig
+
+# === Controle de Versão e IDEs ===
 .git
 .gitignore
-.antigravity*
+.gitattributes
+.github
 .vscode
 .idea
-*.md
-README*
-TODO*
+.cursor
 
-# === Logs & Temps ===
-*.log
-*.txt
-!backend/requirements.txt
-*.db
-*.sqlite3
-app_logs.txt
-zapvoice_debug.log
-baserow_debug.log
-curl_output.txt
-debug_output.txt
-keys_output.txt
-keys_simple.txt
-debug_run.txt
-test.png
-
-# === Python ===
-backend/.env
-backend/venv
-backend/env
-backend/.venv
-**/__pycache__
-**/*.pyc
-**/*.pyo
-**/*.pyd
+# === Caches e Binários Python ===
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
 .Python
-backend/sql_app.db
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# === Node.js ===
-node_modules
-frontend/node_modules
-# frontend/dist
+# === Testes e Cobertura ===
+tests/
+tests_unit/
+**/tests_unit/
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-# === OS Files ===
+# === Logs e Depuração ===
+*.log
+**/*.log
+logs/
+zapvoice_debug.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Segredos e Configurações Locais (Usar env_file / Docker Secrets) ===
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+!.env.example
+
+# === Frontend / Node Dependencies e Caches ===
+frontend/node_modules/
+node_modules/
+.npm/
+.eslintcache
+.stylelintcache
+
+# === Imagens Temporárias e Artefatos de Teste ===
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.ogg
+*.opus
+*.pdf
+screenshot*.png
+fixed_layout_*.png
+modal_saved_*.png
+
+# === Bancos Temporários / SQLite Locais ===
+*.db
+*.sqlite
+*.sqlite3
+test_*.db
+
+# === Sistema Operacional ===
 .DS_Store
 Thumbs.db
-
-# === Docker ===
-docker/backups
-docker/Dockerfile
-docker/docker-compose*
-
-# === Uploads & Cache ===
-backend/static/uploads/
-static/uploads/
+desktop.ini

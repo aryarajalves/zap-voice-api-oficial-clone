@@ -124,8 +124,72 @@ export function useChatFunnelAndStatus({
     }
   };
 
+  const handleToggleArchive = async (targetConvoId = null, forcedArchived = null) => {
+    const convoId = targetConvoId || selectedConvo?.id;
+    if (!convoId || !activeClient) return;
+
+    const isCurrentSelected = selectedConvo && selectedConvo.id === convoId;
+    const isCurrentlyArchived = isCurrentSelected ? selectedConvo.status === 'archived' : false;
+    const willArchive = forcedArchived !== null ? forcedArchived : !isCurrentlyArchived;
+
+    const loadingToast = toast.loading(willArchive ? 'Arquivando conversa...' : 'Desarquivando conversa...');
+    try {
+      const res = await fetchWithAuth(`${API_URL}/chat/conversations/${convoId}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: willArchive })
+      }, activeClient.id);
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.dismiss(loadingToast);
+        toast.success(willArchive ? 'Conversa arquivada!' : 'Conversa desarquivada!');
+        if (isCurrentSelected) {
+          setSelectedConvo(prev => prev ? { ...prev, status: data.conversation_status || (willArchive ? 'archived' : 'open') } : prev);
+        }
+        await loadConversations();
+      } else {
+        throw new Error();
+      }
+    } catch (err) {
+      toast.dismiss(loadingToast);
+      toast.error('Falha ao arquivar/desarquivar conversa.');
+    }
+  };
+
+  const handleBulkArchive = async (willArchive = true, payloadExtra = {}) => {
+    if (!activeClient) return;
+    const loadingToast = toast.loading(willArchive ? 'Arquivando conversas selecionadas...' : 'Desarquivando conversas...');
+    try {
+      const res = await fetchWithAuth(`${API_URL}/chat/conversations/bulk-archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          archived: willArchive,
+          ...payloadExtra
+        })
+      }, activeClient.id);
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.dismiss(loadingToast);
+        toast.success(willArchive ? `${data.updated_count || 0} conversa(s) arquivada(s)!` : `${data.updated_count || 0} conversa(s) desarquivada(s)!`);
+        await loadConversations();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.dismiss(loadingToast);
+        toast.error(errData.detail || 'Erro ao arquivar conversas em massa.');
+      }
+    } catch (err) {
+      toast.dismiss(loadingToast);
+      toast.error('Erro de conexão ao arquivar conversas.');
+    }
+  };
+
   return {
     handleToggleStatus,
+    handleToggleArchive,
+    handleBulkArchive,
     handleTriggerFunnel,
     handleCancelFunnel,
     handleClose24hWindow

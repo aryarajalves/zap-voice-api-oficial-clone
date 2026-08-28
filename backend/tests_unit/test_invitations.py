@@ -175,6 +175,7 @@ def test_get_invitation_used(client_app, db):
 
 @patch("websocket_manager.manager.broadcast", new_callable=AsyncMock)
 def test_register_by_invitation_success(mock_ws, client_app, db):
+    from models import EmailVerificationCode
     client = Client(name="Shared Client")
     db.add(client)
     db.commit()
@@ -187,6 +188,16 @@ def test_register_by_invitation_success(mock_ws, client_app, db):
     )
     invite.accessible_clients.append(client)
     db.add(invite)
+
+    # Inserir código de verificação válido
+    code_record = EmailVerificationCode(
+        email="convidado@teste.com",
+        code="123456",
+        token="register-token-123",
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+        is_used=False
+    )
+    db.add(code_record)
     db.commit()
 
     resp = client_app.post(
@@ -194,7 +205,8 @@ def test_register_by_invitation_success(mock_ws, client_app, db):
         json={
             "full_name": "Convidado Teste",
             "email": "convidado@teste.com",
-            "password": "senhaSegura123"
+            "password": "SenhaSegura@2026!",
+            "code": "123456"
         }
     )
     assert resp.status_code == 200
@@ -226,7 +238,7 @@ def test_register_by_invitation_duplicate_email(mock_ws, client_app, db):
     # Criar um usuário já existente com o mesmo email
     existing_user = User(
         email="ja_existe@teste.com",
-        hashed_password=get_password_hash("123"),
+        hashed_password=get_password_hash("SenhaSegura@2026!"),
         role="user",
         is_active=True
     )
@@ -238,7 +250,8 @@ def test_register_by_invitation_duplicate_email(mock_ws, client_app, db):
         json={
             "full_name": "Novo Convidado",
             "email": "ja_existe@teste.com",
-            "password": "senhaSegura123"
+            "password": "SenhaSegura@2026!",
+            "code": "123456"
         }
     )
     assert resp.status_code == 400

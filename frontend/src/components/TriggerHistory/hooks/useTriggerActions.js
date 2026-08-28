@@ -185,7 +185,7 @@ export const useTriggerActions = ({ activeClient, setTriggers, fetchHistory, set
                     // nulos/undefined e sobreescreveriam os valores corretos já na linha.
                     const STAT_FIELDS = [
                         'total_sent', 'total_delivered', 'total_read', 'total_interactions',
-                        'total_failed', 'total_blocked', 'queue_count', 'total_contacts',
+                        'total_failed', 'total_blocked', 'total_skipped', 'queue_count', 'total_contacts',
                         'total_paid_templates', 'total_cost', 'cost_per_unit',
                         'status', 'updated_at'
                     ];

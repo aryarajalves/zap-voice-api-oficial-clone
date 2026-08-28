@@ -24,6 +24,7 @@ export default function StressTestConfigForm({
   funnels,
   loadingFunnels,
   isRunning,
+  isSubmitting,
   handleStartTest,
   selectedErrors,
   setSelectedErrors,
@@ -484,10 +485,14 @@ export default function StressTestConfigForm({
           ) : (
             <button
               type="submit"
-              disabled={isRunning}
-              className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-bold shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
+              className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-bold shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              <FiPlay /> Iniciar Teste de Escala
+              {isSubmitting ? (
+                <><span className="animate-spin inline-block">⏳</span>&nbsp;Enfileirando Teste de Escala...</>
+              ) : (
+                <><FiPlay /> Iniciar Teste de Escala</>
+              )}
             </button>
           )}
         </div>

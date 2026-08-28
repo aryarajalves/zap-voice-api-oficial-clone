@@ -28,8 +28,16 @@ from services.webhooks import (
 )
 
 from core.security import limiter
+from core.webhook_security import (
+    verify_hmac_sha256,
+    verify_meta_signature,
+    verify_hotmart_hottok,
+    verify_kiwify_signature,
+    verify_stripe_signature,
+)
 
 router = APIRouter()
+
 
 # Centralized logic in services/webhooks.py
 
@@ -123,9 +131,48 @@ async def handle_external_webhook(
                     except Exception:
                         pass
         
+        # 1.1. Validação Criptográfica de Assinatura / Token (Tópico 09)
+        custom_fields = integration.custom_fields_mapping or {}
+        webhook_secret = (
+            custom_fields.get("webhook_secret")
+            or custom_fields.get("secret_key")
+            or custom_fields.get("hottok")
+            or custom_fields.get("signature_key")
+            or custom_fields.get("token")
+        )
+        
+        headers_dict = dict(request.headers)
+        platform_lower = str(integration.platform or "").lower().strip()
+        
+        is_valid_sig = True
+        if platform_lower == "hotmart" and webhook_secret:
+            is_valid_sig = verify_hotmart_hottok(payload, headers_dict, webhook_secret)
+        elif platform_lower == "kiwify" and webhook_secret:
+            kiwify_sig = request.query_params.get("signature") or headers_dict.get("x-kiwify-signature") or headers_dict.get("signature")
+            is_valid_sig = verify_kiwify_signature(body, kiwify_sig, webhook_secret)
+        elif platform_lower == "stripe" and webhook_secret:
+            stripe_sig = headers_dict.get("stripe-signature")
+            is_valid_sig = verify_stripe_signature(body, stripe_sig, webhook_secret)
+        elif webhook_secret:
+            generic_sig = headers_dict.get("x-signature") or headers_dict.get("x-hub-signature-256") or headers_dict.get("signature")
+            if generic_sig:
+                is_valid_sig = verify_hmac_sha256(body, str(webhook_secret), generic_sig)
+            else:
+                is_valid_sig = (
+                    payload.get("token") == webhook_secret
+                    or payload.get("secret") == webhook_secret
+                    or headers_dict.get("x-api-key") == webhook_secret
+                    or headers_dict.get("authorization") == f"Bearer {webhook_secret}"
+                )
+            
+        if not is_valid_sig:
+            logger.warning(f"🚫 [WEBHOOK_SECURITY] Assinatura/token inválido para integração '{integration.name}' ({integration.platform}). Requisição rejeitada.")
+            return {"status": "ignored", "reason": "invalid_webhook_signature"}
+
         # Detect event type from payload
         extracted_data = parse_webhook_payload(integration.platform, payload)
         event_type = extracted_data.get("event_type", "outros")
+
 
         # Upsell detection: if product_name matches a configured upsell product, override event_type
         upsell_products = getattr(integration, 'upsell_products', None) or []

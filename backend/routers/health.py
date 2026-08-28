@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Header, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from core.deps import get_db, get_current_user
+from core.deps import get_db, get_current_user, get_validated_client_id
 from models import User, AppConfig
 from config_loader import get_settings
 import httpx
@@ -12,6 +12,7 @@ from botocore.config import Config
 
 # Definindo o roteador com prefixo claro
 router = APIRouter(prefix="/health", tags=["Health"])
+
 
 async def check_whatsapp(wa_phone_id, wa_token):
     if not wa_phone_id or not wa_token or wa_token == "123": # "123" é o valor padrão que vi no seu banco
@@ -79,18 +80,16 @@ async def check_storage(s):
 
 @router.get("/")
 async def get_health_status(
-    x_client_id: Optional[int] = Header(None),
+    client_id: int = Depends(get_validated_client_id),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Retorna o status de conexão baseado no ID do cliente selecionado no Header X-Client-ID.
+    Retorna o status de conexão baseado no ID do cliente validado no Header X-Client-ID.
     """
-    if not x_client_id:
-        return {"error": "Client ID required"}
-
     # Busca configurações do cliente (Banco + ENV Fallback)
-    s = get_settings(client_id=x_client_id)
+    s = get_settings(client_id=client_id)
+
 
     # Dispara as verificações em paralelo para performance
     wa_task = check_whatsapp(s.get("WA_PHONE_NUMBER_ID"), s.get("WA_ACCESS_TOKEN"))
@@ -121,7 +120,8 @@ async def get_health_status(
     insta_res = results[2] if not isinstance(results[2], Exception) else f"Exception: {str(results[2])}"
     st_res = results[3] if not isinstance(results[3], Exception) else f"Exception: {str(results[3])}"
 
-    print(f"DEBUG Health: WA={wa_res}, CW={cw_res}, Insta={insta_res}, S3={st_res}, Rabbit={rabbit_status} (Client={x_client_id})")
+    print(f"DEBUG Health: WA={wa_res}, CW={cw_res}, Insta={insta_res}, S3={st_res}, Rabbit={rabbit_status} (Client={client_id})")
+
     
     return {
         "database": "online",

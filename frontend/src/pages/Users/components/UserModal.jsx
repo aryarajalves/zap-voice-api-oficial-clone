@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FiEdit2, FiUserPlus, FiX, FiEyeOff, FiEye } from 'react-icons/fi';
+import { FiEdit2, FiUserPlus, FiX, FiLink, FiCopy, FiCheck } from 'react-icons/fi';
 import { fetchWithAuth } from '../../../AuthContext';
 import { API_URL } from '../../../config';
 import { toast } from 'react-hot-toast';
@@ -29,6 +29,11 @@ const UserModal = ({
   const [generatedLink, setGeneratedLink] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Estados para Redefinição de Senha via Link
+  const [resetLink, setResetLink] = useState('');
+  const [resetCopied, setResetCopied] = useState(false);
+  const [isGeneratingReset, setIsGeneratingReset] = useState(false);
 
   if (!isOpen) return null;
 
@@ -79,8 +84,52 @@ const UserModal = ({
     }
   };
 
+  const handleGenerateResetLink = async () => {
+    if (!editingUser) return;
+    setIsGeneratingReset(true);
+    const loadingToast = toast.loading("Gerando link de redefinição...");
+    try {
+      const res = await fetchWithAuth(`${API_URL}/auth/users/${editingUser.id}/reset-password-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ validity_hours: 24 })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const fullLink = `${window.location.origin}/reset-password/${data.token}`;
+        setResetLink(fullLink);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(fullLink).catch(() => {});
+        }
+        setResetCopied(true);
+        setTimeout(() => setResetCopied(false), 3000);
+        toast.success("Link de redefinição gerado e copiado!");
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Erro ao gerar link de redefinição.");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsGeneratingReset(false);
+      toast.dismiss(loadingToast);
+    }
+  };
+
+  const handleCopyResetLink = () => {
+    if (!resetLink) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(resetLink).catch(() => {});
+    }
+    setResetCopied(true);
+    toast.success("Link copiado para a área de transferência!");
+    setTimeout(() => setResetCopied(false), 3000);
+  };
+
   const handleClose = () => {
     setGeneratedLink('');
+    setResetLink('');
+    setResetCopied(false);
     setValidityHours(24);
     setIsOpen(false);
   };
@@ -144,28 +193,74 @@ const UserModal = ({
                     placeholder="exemplo@email.com"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1">
-                    Nova Senha (deixe vazio para manter)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      name="new-user-password"
-                      autoComplete="new-password"
-                      value={userData.password}
-                      onChange={(e) => setUserData({ ...userData, password: e.target.value })}
-                      className="w-full p-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white outline-none transition-all"
-                      placeholder="••••••••"
-                    />
+
+                {/* Redefinição de Senha via Link para o Usuário */}
+                <div className="p-3.5 bg-gray-50 dark:bg-[#0f172a] rounded-xl border border-gray-200 dark:border-gray-700/70 space-y-2">
+                  <div>
+                    <label className="block text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-wider">
+                      Redefinição de Senha
+                    </label>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      Gere um link para que o usuário crie uma nova senha para a conta dele.
+                    </p>
+                  </div>
+
+                  {resetLink ? (
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700/60 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={resetLink}
+                          className="w-full text-xs p-2 bg-white dark:bg-[#1e293b] border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 font-mono select-all outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyResetLink}
+                          className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                            resetCopied
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/20'
+                          }`}
+                        >
+                          {resetCopied ? <FiCheck size={14} /> : <FiCopy size={14} />}
+                          <span>{resetCopied ? 'Copiado!' : 'Copiar'}</span>
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-gray-400">
+                        <span>⏱️ Válido por 24 horas</span>
+                        <button
+                          type="button"
+                          onClick={handleGenerateResetLink}
+                          className="text-blue-500 hover:text-blue-400 font-medium cursor-pointer"
+                        >
+                          Gerar Novo Link
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                      onClick={handleGenerateResetLink}
+                      disabled={isGeneratingReset}
+                      className="w-full py-2.5 px-3 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                      {isGeneratingReset ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Gerando link...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiLink size={14} />
+                          <span>Criar Link de Nova Senha</span>
+                        </>
+                      )}
                     </button>
-                  </div>
+                  )}
                 </div>
               </>
             ) : (

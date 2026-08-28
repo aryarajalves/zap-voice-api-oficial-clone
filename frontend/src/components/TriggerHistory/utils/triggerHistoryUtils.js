@@ -17,6 +17,7 @@ export const handleWebSocketMessage = (payload, activeClient, setTriggers, setCh
                     total_read: d.read !== undefined ? d.read : (d.total_read !== undefined ? d.total_read : t.total_read),
                     total_interactions: d.interactions !== undefined ? d.interactions : (d.total_interactions !== undefined ? d.total_interactions : t.total_interactions),
                     total_blocked: d.blocked !== undefined ? d.blocked : (d.total_blocked !== undefined ? d.total_blocked : t.total_blocked),
+                    total_skipped: d.skipped !== undefined ? d.skipped : (d.total_skipped !== undefined ? d.total_skipped : t.total_skipped),
                     total_cost: d.cost !== undefined ? d.cost : (d.total_cost !== undefined ? d.total_cost : t.total_cost),
                     total_memory_sent: d.memory_sent !== undefined ? d.memory_sent : (d.total_memory_sent !== undefined ? d.total_memory_sent : t.total_memory_sent),
                     total_paid_templates: d.total_paid_templates !== undefined ? d.total_paid_templates : t.total_paid_templates,
@@ -45,6 +46,9 @@ export const handleWebSocketMessage = (payload, activeClient, setTriggers, setCh
                             total_delivered: triggerData.total_delivered !== undefined ? triggerData.total_delivered : t.total_delivered,
                             total_read: triggerData.total_read !== undefined ? triggerData.total_read : t.total_read,
                             total_failed: triggerData.total_failed !== undefined ? triggerData.total_failed : t.total_failed,
+                            total_skipped: triggerData.total_skipped !== undefined ? triggerData.total_skipped : t.total_skipped,
+                            total_blocked: triggerData.total_blocked !== undefined ? triggerData.total_blocked : t.total_blocked,
+                            total_interactions: triggerData.total_interactions !== undefined ? triggerData.total_interactions : t.total_interactions,
                             updated_at: triggerData.updated_at || t.updated_at
                         };
                     }

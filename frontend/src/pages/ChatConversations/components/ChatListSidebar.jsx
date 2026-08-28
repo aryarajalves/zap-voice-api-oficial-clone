@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiTag, FiRefreshCw } from 'react-icons/fi';
+import { FiTag, FiRefreshCw, FiArchive } from 'react-icons/fi';
 import { BsStars } from 'react-icons/bs';
 import ChatListFilters from './ChatListFilters';
 import ChatListItem from './ChatListItem';
@@ -35,6 +35,8 @@ export default function ChatListSidebar({
     setFilterStartDate,
     filterEndDate,
     setFilterEndDate,
+    orderBy,
+    setOrderBy,
     engine,
     selectedConvo,
     setSelectedConvo,
@@ -82,6 +84,8 @@ export default function ChatListSidebar({
                 setFilterStartDate={setFilterStartDate}
                 filterEndDate={filterEndDate}
                 setFilterEndDate={setFilterEndDate}
+                orderBy={orderBy}
+                setOrderBy={setOrderBy}
                 visibleCount={visibleConversations.length}
             />
 
@@ -117,6 +121,39 @@ export default function ChatListSidebar({
                             >
                                 <FiTag size={13} />
                                 Etiquetar ({selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length})
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const willArchive = statusFilter !== 'archived';
+                                    const payloadExtra = selectAllPages ? {
+                                        select_all_pages: true,
+                                        tab: activeTab,
+                                        status: statusFilter,
+                                        search: searchQuery || undefined,
+                                        label: selectedLabelFilter || undefined,
+                                        block_status: filterBlockStatus || undefined,
+                                        has_note: filterHasNote || undefined,
+                                        start_date: filterStartDate || undefined,
+                                        end_date: filterEndDate || undefined,
+                                        unread_only: filterUnread || undefined,
+                                        window_open_only: filterWindowOpen || undefined,
+                                        has_replied: filterHasReplied || undefined
+                                    } : {
+                                        ids: engine.selectedConvoIds
+                                    };
+                                    engine.handleBulkArchive(willArchive, payloadExtra);
+                                }}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition border ${
+                                    statusFilter === 'archived'
+                                        ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border-emerald-500/20'
+                                        : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 border-amber-500/20'
+                                }`}
+                                title={statusFilter === 'archived' ? "Desarquivar conversas selecionadas" : "Arquivar conversas selecionadas"}
+                            >
+                                <FiArchive size={13} />
+                                {statusFilter === 'archived'
+                                    ? `Desarquivar (${selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length})`
+                                    : `Arquivar (${selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length})`}
                             </button>
                             <button
                                 onClick={() => engine.setConfirmDeleteConvos('bulk')}
@@ -199,6 +236,7 @@ export default function ChatListSidebar({
                                 engine.setDeletingConvoId(id);
                                 engine.setConfirmDeleteConvos('single');
                             }}
+                            onArchive={(id, willArchive) => engine.handleToggleArchive(id, willArchive)}
                             getLabelColor={engine.getLabelColor}
                             formatTime={formatTime}
                         />

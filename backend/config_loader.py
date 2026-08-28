@@ -4,6 +4,8 @@ from core.logger import setup_logger
 from database import SessionLocal
 from models import AppConfig
 
+from core.encryption import decrypt_token
+
 logger = setup_logger("config_loader")
 
 def get_settings(client_id: int = None):
@@ -11,6 +13,7 @@ def get_settings(client_id: int = None):
     Recupera as configurações do sistema, priorizando o banco de dados.
     Se não houver valor no banco, usa a variável de ambiente.
     Permite filtrar por client_id para isolamento multi-tenant.
+    Valores criptografados em repouso são descriptografados de forma transparente.
     """
     settings = {}
     
@@ -59,8 +62,11 @@ def get_settings(client_id: int = None):
             
             if isinstance(value, str):
                 value = value.strip().strip('"').strip("'")
+                # Descriptografa de forma transparente se estiver criptografado
+                value = decrypt_token(value)
             
             settings[key] = value
+
             
     except Exception as e:
         logger.error(f"Erro ao carregar configurações do banco: {e}")

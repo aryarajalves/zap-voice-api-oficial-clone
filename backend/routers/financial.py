@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import pytz
 import models
-from core.deps import get_current_user, get_db
+from core.deps import get_current_user, get_db, get_validated_client_id
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ router = APIRouter()
 def get_financial_summary(
     period: str = "monthly",  # daily, weekly, monthly, yearly
     source: str = "all",      # all, bulk, webhook, other
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -23,7 +23,7 @@ def get_financial_summary(
     Mostra quantos templates foram pagos vs gratuitos, custo total e economia estimada.
     source: 'all' | 'bulk' (disparo em massa) | 'webhook' (integração webhook) | 'other' (funil/manual)
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
+
 
     from sqlalchemy import or_
 
@@ -203,14 +203,14 @@ def get_financial_sales(
     label: Optional[str] = None,       # all, ou marcadores/etiquetas da aba de contatos
     start_date: Optional[str] = None, # YYYY-MM-DD
     end_date: Optional[str] = None,   # YYYY-MM-DD
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
     Retorna estatísticas de faturamento de vendas recebidas via webhooks.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
+
 
     # Busca históricos de webhook relacionados à integrações desse cliente
     query = db.query(models.WebhookHistory).join(

@@ -223,7 +223,17 @@ def advance_manychat_rotation_pointer(client_id: int):
     logger.info(f"🔄 [MANYCHAT-ROTATION] Ponteira avançada para o próximo ManyChat (Cliente #{client_id}).")
 
 
+def get_next_rotated_manychat_token(client_id: int) -> tuple:
+    """
+    Obtém o token atual da rotação e avança a ponteira sequencialmente (útil para testes e rotação direta).
+    """
+    token_info, pos, total = get_current_manychat_token_info(client_id)
+    advance_manychat_rotation_pointer(client_id)
+    return token_info, pos, total
+
+
 async def sync_to_manychat(client_id: int, name: str, phone: str, tag: str, email: str = None, custom_field_name: str = None) -> dict:
+
     """
     Sincroniza contato com ManyChat utilizando rotação sequencial (Round-Robin).
     A ponteira de rotação só avança para a próxima conta se esta integração for 100% BEM-SUCEDIDA (status == 'success').

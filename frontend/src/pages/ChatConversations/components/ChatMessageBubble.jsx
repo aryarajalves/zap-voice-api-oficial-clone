@@ -1,10 +1,10 @@
-import React from 'react';
-import { FiSend, FiTag, FiMaximize2, FiEdit2, FiCheck, FiTrash2, FiCornerUpLeft, FiRefreshCw } from 'react-icons/fi';
-import { BsJournalText } from 'react-icons/bs';
+import React, { useRef } from 'react';
+import { FiSend, FiCornerUpLeft, FiChevronDown } from 'react-icons/fi';
+import { BsJournalText, BsPinAngleFill, BsStarFill } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
 import { renderLinkedText } from '../utils/linkifyText';
-import { renderConvoMentions } from '../utils/convoMentionUtils';
-import MentionTextarea from './MentionTextarea';
+import { extractAiCostInfo } from '../utils/aiCostExtractor';
+import SystemMessageBubble from './SystemMessageBubble';
 
 const getReactionsList = (raw) => {
     if (!raw) return [];
@@ -36,136 +36,63 @@ export default function ChatMessageBubble({
     setReplyingTo,
     chatInputRef,
     engine,
-    highlightedMsgId
+    highlightedMsgId,
+    onOpenContextMenu
 }) {
     const isSystem = msg.sender_type === 'system';
     const isMe = msg.sender_type === 'user';
     const isHighlighted = highlightedMsgId === msg.id;
+    const touchTimerRef = useRef(null);
 
     if (isSystem) {
-        const isPrivateNote = msg.content && msg.content.startsWith("🔒 Anotação Privada:");
-        if (isPrivateNote) {
-            const isEditingThisNote = editingNoteId === msg.id;
-            const noteText = msg.content.replace("🔒 Anotação Privada: ", "");
-
-            return (
-                <div id={`msg-${msg.id}`} key={msg.id} className="flex justify-center my-2">
-                    <div className={`border rounded-xl px-4 py-2.5 shadow-sm text-xs max-w-lg w-full transition-all duration-300 ${
-                        isHighlighted ? 'ring-2 ring-emerald-500 bg-amber-500/20 shadow-lg text-amber-800 dark:text-amber-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300'
-                    }`}>
-                        <div className="flex items-center justify-between font-bold mb-1.5 uppercase tracking-wider text-[10px] text-amber-600 dark:text-amber-400">
-                            <div className="flex items-center gap-1.5">
-                                <BsJournalText size={12} />
-                                <span>Anotação Interna / Nota Privada</span>
-                            </div>
-                            {!isEditingThisNote && (
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setEditingNoteId(msg.id);
-                                            setEditingNoteText(noteText);
-                                        }}
-                                        className="p-1 rounded hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition-all flex items-center gap-1 text-[10px] font-semibold"
-                                        title="Editar esta anotação privada"
-                                    >
-                                        <FiEdit2 size={11} />
-                                        <span>Editar</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setDeleteNoteConfirmMsgId(msg.id)}
-                                        className="p-1 rounded hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all flex items-center gap-1 text-[10px] font-semibold"
-                                        title="Excluir esta anotação privada"
-                                    >
-                                        <FiTrash2 size={11} />
-                                        <span>Deletar</span>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {isEditingThisNote ? (
-                            <div className="space-y-2 mt-1">
-                                <MentionTextarea
-                                    value={editingNoteText}
-                                    onChange={(e) => setEditingNoteText(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white/10 dark:bg-black/30 border border-amber-500/30 rounded-lg text-amber-900 dark:text-amber-100 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans"
-                                    conversations={engine?.conversations || []}
-                                    activeClientId={engine?.activeClient?.id || selectedConvo?.client_id}
-                                    rows={3}
-                                    autoFocus
-                                />
-                                <div className="flex justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsNoteModalMaximized(true)}
-                                        className="px-2.5 py-1 rounded-lg border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-semibold hover:bg-amber-500/20 transition flex items-center gap-1"
-                                        title="Maximizar em um popup para digitar com mais espaço"
-                                    >
-                                        <FiMaximize2 size={10} />
-                                        <span>Maximizar</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditingNoteId(null)}
-                                        className="px-2.5 py-1 rounded-lg border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[10px] font-semibold hover:bg-amber-500/10 transition"
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={isSavingNoteMsg || !editingNoteText || !editingNoteText.trim()}
-                                        onClick={() => handleSaveEditedNote(msg.id)}
-                                        className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-semibold transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isSavingNoteMsg ? <FiRefreshCw className="animate-spin" size={10} /> : <FiCheck size={11} />}
-                                        <span>Salvar</span>
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="whitespace-pre-wrap leading-relaxed font-sans">
-                                    {renderConvoMentions(noteText, engine?.openConversationById)}
-                                </div>
-                                <div className="flex justify-end mt-1 text-[9px] opacity-75 font-medium tracking-wide">
-                                    {formatMessageTimestamp(msg.timestamp)}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            );
-        } else {
-            const isLabelNotice = msg.content && (msg.content.includes("Etiqueta") || msg.content.includes("etiqueta") || msg.content.includes("Marcador") || msg.content.includes("marcador"));
-            return (
-                <div key={msg.id} className="flex justify-center my-2 animate-in fade-in duration-300">
-                    <div className={`border rounded-lg px-3.5 py-1.5 shadow-sm text-[11px] max-w-md text-center flex items-center justify-center gap-2 ${
-                        isLabelNotice 
-                        ? 'bg-blue-500/10 border-blue-500/25 text-blue-800 dark:text-blue-300' 
-                        : 'bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400'
-                    }`}>
-                        {isLabelNotice && <FiTag size={13} className="text-blue-500 shrink-0" />}
-                        <div>
-                            <p className="font-medium font-sans leading-relaxed">{msg.content}</p>
-                            <div className="text-[9px] opacity-60 mt-0.5">
-                                {formatMessageTimestamp(msg.timestamp)}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
+        return (
+            <SystemMessageBubble
+                msg={msg}
+                isHighlighted={isHighlighted}
+                editingNoteId={editingNoteId}
+                setEditingNoteId={setEditingNoteId}
+                editingNoteText={editingNoteText}
+                setEditingNoteText={setEditingNoteText}
+                isSavingNoteMsg={isSavingNoteMsg}
+                handleSaveEditedNote={handleSaveEditedNote}
+                setIsNoteModalMaximized={setIsNoteModalMaximized}
+                setDeleteNoteConfirmMsgId={setDeleteNoteConfirmMsgId}
+                formatMessageTimestamp={formatMessageTimestamp}
+                engine={engine}
+                selectedConvo={selectedConvo}
+            />
+        );
     }
 
     const isTemplate = msg.meta_data && msg.meta_data.is_template;
     const reactionList = getReactionsList(msg.meta_data?.reactions);
+    const aiCostInfo = extractAiCostInfo(msg);
+    const isPinned = String(selectedConvo?.pinned_message_id) === String(msg.id);
+    const isStarred = Boolean(msg.is_starred || (msg.meta_data && msg.meta_data.is_starred));
+
+    const handleTouchStart = (e) => {
+        if (!e.touches || e.touches.length === 0) return;
+        const touch = e.touches[0];
+        touchTimerRef.current = setTimeout(() => {
+            onOpenContextMenu?.({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} }, msg);
+        }, 500);
+    };
+
+    const handleTouchEnd = () => {
+        if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+    };
 
     return (
         <div
             id={`msg-${msg.id}`}
             data-wamid={msg.wa_message_id}
+            onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenContextMenu?.(e, msg);
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
             className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${reactionList.length > 0 ? 'mb-4' : ''}`}
         >
             <div
@@ -179,7 +106,7 @@ export default function ChatMessageBubble({
                     : 'bg-white dark:bg-[#1e293b] text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-white/5 rounded-tl-none'
                 }`}
             >
-                {/* Barra de Reação Rápida & Reply (Hover) */}
+                {/* Barra de Reação Rápida, Reply & Chevron (Hover) */}
                 <div className={`absolute -top-4 ${isMe ? 'right-2' : 'left-2'} hidden group-hover/msg:flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-1 rounded-full shadow-lg z-20 transition-all scale-90 hover:scale-100`}>
                     {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => {
                         const myReaction = reactionList.find(r => r.sender !== 'contact');
@@ -218,6 +145,18 @@ export default function ChatMessageBubble({
                         title="Responder a esta mensagem"
                     >
                         <FiCornerUpLeft size={13} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            onOpenContextMenu?.({ clientX: rect.left, clientY: rect.bottom + 4, preventDefault: () => {} }, msg);
+                        }}
+                        className="hover:scale-125 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-transform p-0.5 cursor-pointer flex items-center justify-center"
+                        title="Opções da mensagem"
+                    >
+                        <FiChevronDown size={13} />
                     </button>
                 </div>
 
@@ -333,7 +272,8 @@ export default function ChatMessageBubble({
                                 src={getMediaSrc(msg)} 
                                 alt="Imagem" 
                                 loading="lazy"
-                                className="rounded-lg max-w-full h-auto max-h-60 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                decoding="async"
+                                className="rounded-lg max-w-full h-auto max-h-60 object-contain cursor-pointer hover:opacity-90 transition-opacity bg-black/20"
                                 onClick={() => window.open(getMediaSrc(msg), '_blank')}
                             />
                         )}
@@ -342,6 +282,7 @@ export default function ChatMessageBubble({
                                 src={getMediaSrc(msg)} 
                                 alt="Sticker" 
                                 loading="lazy"
+                                decoding="async"
                                 className="w-32 h-32 object-contain"
                             />
                         )}
@@ -425,6 +366,30 @@ export default function ChatMessageBubble({
                     </div>
                 )}
 
+                {/* Badge de Custo da IA (Pré-Router + Agente Principal) */}
+                {aiCostInfo && (
+                    <div className="mt-2 pt-1.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-1.5 text-[10px] select-none">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 font-medium">
+                            <span>⚡ IA:</span>
+                            <span className="font-bold">{aiCostInfo.isFree ? 'Gratuito' : (aiCostInfo.totalBrl || aiCostInfo.brlEstimate)}</span>
+                        </div>
+                        {!aiCostInfo.isFree && aiCostInfo.routerCost !== null && aiCostInfo.agentCost !== null && (
+                            <div className="inline-flex items-center gap-1.5 text-[9px] opacity-80 text-gray-200">
+                                <span title="Custo do Pré-Router">🚦 Router: {aiCostInfo.routerBrl || aiCostInfo.routerFormatted}</span>
+                                <span>•</span>
+                                <span title="Custo do Agente Principal">🤖 Agente: {aiCostInfo.agentBrl || aiCostInfo.agentFormatted}</span>
+                            </div>
+                        )}
+                        {aiCostInfo.isFree && aiCostInfo.routerCost !== null && aiCostInfo.agentCost !== null && (aiCostInfo.routerCost > 0 || aiCostInfo.agentCost > 0) && (
+                            <div className="inline-flex items-center gap-1.5 text-[9px] opacity-80 text-gray-200">
+                                <span title="Custo do Pré-Router">🚦 Router: {aiCostInfo.routerBrl || aiCostInfo.routerFormatted}</span>
+                                <span>•</span>
+                                <span title="Custo do Agente Principal">🤖 Agente: {aiCostInfo.agentBrl || aiCostInfo.agentFormatted}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="flex justify-between items-center mt-2 gap-3">
                     <div>
                         {msg.id === engine?.lastContactMessage?.id && (
@@ -437,9 +402,25 @@ export default function ChatMessageBubble({
                             </button>
                         )}
                     </div>
-                    <span className="text-[9px] opacity-75 font-medium tracking-wide">
-                        {formatMessageTimestamp(msg.timestamp)}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {isPinned && (
+                            <BsPinAngleFill
+                                size={11}
+                                className={isMe ? 'text-blue-200' : 'text-blue-500 dark:text-blue-400'}
+                                title="Mensagem fixada nesta conversa"
+                            />
+                        )}
+                        {isStarred && (
+                            <BsStarFill
+                                size={11}
+                                className={isMe ? 'text-amber-300' : 'text-amber-500 dark:text-amber-400'}
+                                title="Mensagem favoritada"
+                            />
+                        )}
+                        <span className="text-[9px] opacity-75 font-medium tracking-wide">
+                            {formatMessageTimestamp(msg.timestamp)}
+                        </span>
+                    </div>
                 </div>
 
                 {/* Badge de reação — dentro do div relative da bolha */}

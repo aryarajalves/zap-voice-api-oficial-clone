@@ -20,18 +20,19 @@ logger = setup_logger("Worker")
 
 # Worker Configuration
 EVENTS_PREFETCH_COUNT = int(os.getenv("RABBITMQ_EVENTS_PREFETCH_COUNT", 30))
+BULK_PREFETCH_COUNT = int(os.getenv("RABBITMQ_BULK_PREFETCH_COUNT", 20))
 MESSAGE_DELAY = float(os.getenv("RABBITMQ_MESSAGE_DELAY", 1.0))
 
 async def start_worker():
     """Inicia o worker e conecta às filas"""
-    logger.info(f"👷 Iniciando ZapVoice Worker Modular | Prefetch Eventos: {EVENTS_PREFETCH_COUNT} | Delay: {MESSAGE_DELAY}s")
+    logger.info(f"👷 Iniciando ZapVoice Worker Modular | Prefetch Bulk: {BULK_PREFETCH_COUNT} | Prefetch Eventos: {EVENTS_PREFETCH_COUNT} | Delay: {MESSAGE_DELAY}s")
     
     # Conecta ao RabbitMQ
     await rabbitmq.connect()
     
     # Define os consumidores
     logger.info("📡 Configurando consumidor: zapvoice_bulk_sends")
-    await rabbitmq.consume("zapvoice_bulk_sends", handle_bulk_send, prefetch_count=1)
+    await rabbitmq.consume("zapvoice_bulk_sends", handle_bulk_send, prefetch_count=BULK_PREFETCH_COUNT)
     
     logger.info("📡 Configurando consumidor: agent_memory_webhook_queue")
     await rabbitmq.consume("agent_memory_webhook_queue", handle_agent_memory_webhook, prefetch_count=1)

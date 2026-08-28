@@ -172,6 +172,15 @@ async def send_smart_message(
             logger.info(f"🤖 [MOCK Smart Send] Disparo simulado para {phone} (ID: {sim_id})")
             return {"result": {"messages": [{"id": sim_id}]}, "type": "TEMPLATE", "success": True}
 
+        # 0. Verificação Global de 24h (Bloqueio Total do Template/Conteúdo nas últimas 24h)
+        if template_name and getattr(chatwoot, "client_id", None):
+            from database import SessionLocal
+            from services.template_history_service import is_template_sent_in_last_24h, record_template_dispatch
+            with SessionLocal() as db_chk:
+                if is_template_sent_in_last_24h(db_chk, chatwoot.client_id, phone, template_name):
+                    logger.info(f"⏭️ [24h Check] Ignorado para {phone}: Template '{template_name}' já enviado nas últimas 24h.")
+                    return {"error": True, "detail": "Pulado: Template já enviado nas últimas 24h", "skipped_24h": True, "success": False}
+
         # 1. Verificação Local da Janela 24h
         can_use_smart_send = True
         if template_btn_info and template_btn_info.get("has_special_buttons"):
@@ -237,6 +246,12 @@ async def send_smart_message(
                     if is_success:
                         now_br = datetime.now(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M:%S")
                         logger.info(f"🚀 [DISPARO] [Trigger {trigger_id}] [{now_br}] [{phone}] Tipo: LIVRE (Sessão) | Sucesso")
+                        if template_name and getattr(chatwoot, "client_id", None):
+                            from database import SessionLocal
+                            from services.template_history_service import record_template_dispatch
+                            with SessionLocal() as db_rec:
+                                record_template_dispatch(db_rec, chatwoot.client_id, phone, template_name, trigger_id)
+
                         free_wamid = None
                         if isinstance(res, dict):
                             msgs = res.get("messages") or []
@@ -253,17 +268,6 @@ async def send_smart_message(
 
         # 2. Envio Via Template Oficial
         if template_name:
-            if getattr(chatwoot, "client_id", None):
-                from database import SessionLocal
-                from services.template_history_service import is_template_sent_in_last_24h, record_template_dispatch
-                db_chk = SessionLocal()
-                try:
-                    if is_template_sent_in_last_24h(db_chk, chatwoot.client_id, phone, template_name):
-                        logger.info(f"⏭️ [24h Check] Ignorado para {phone}: Template '{template_name}' já enviado nas últimas 24h.")
-                        return {"error": True, "detail": "Pulado: Template já enviado nas últimas 24h", "skipped_24h": True, "success": False}
-                finally:
-                    db_chk.close()
-
             now_br = datetime.now(BRAZIL_TZ).strftime("%d/%m/%Y %H:%M:%S")
             logger.info(f"🚀 [DISPARO] [Trigger {trigger_id}] [{now_br}] [{phone}] Tipo: TEMPLATE ({template_name})")
 
@@ -271,11 +275,10 @@ async def send_smart_message(
             res = await chatwoot.send_template(phone, template_name, language, components=clean_components)
             if res and not res.get("error"):
                 if getattr(chatwoot, "client_id", None):
-                    db_rec = SessionLocal()
-                    try:
+                    from database import SessionLocal
+                    from services.template_history_service import record_template_dispatch
+                    with SessionLocal() as db_rec:
                         record_template_dispatch(db_rec, chatwoot.client_id, phone, template_name, trigger_id)
-                    finally:
-                        db_rec.close()
 
                 # Prioridade 1: Renderizar o body do cache com as variáveis do contato
                 if template_body_cache:

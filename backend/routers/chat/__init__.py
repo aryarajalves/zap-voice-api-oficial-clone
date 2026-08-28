@@ -64,17 +64,33 @@ from .share_contact_routes import (
     router as share_contact_router,
     share_contact_message,
 )
+from .export_qa_routes import (
+    router as export_qa_router,
+    analyze_qa_for_export,
+)
+from .message_actions_routes import (
+    router as message_actions_router,
+    toggle_pin_message,
+    toggle_star_message,
+    list_starred_messages,
+)
 
 router = APIRouter()
 router.include_router(conversation_router)
 router.include_router(message_router)
+router.include_router(message_actions_router)
 router.include_router(funnel_router)
 router.include_router(notes_labels_router)
 router.include_router(message_search_router)
 router.include_router(share_contact_router)
+router.include_router(export_qa_router)
 
 __all__ = [
     "router",
+    "analyze_qa_for_export",
+    "toggle_pin_message",
+    "toggle_star_message",
+    "list_starred_messages",
     "WhatsAppClient",
     "ChatwootClient",
     "get_client_id",

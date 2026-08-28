@@ -25,12 +25,14 @@ export function useChatEngine({
   filterUrgent,
   filterHasReplied,
   filterHasActiveFunnel,
+  orderBy = 'recent',
   selectedConvo,
   setSelectedConvo
 }) {
   const [timeLeft24h, setTimeLeft24h] = useState('');
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
   const [selectedConvoIds, setSelectedConvoIds] = useState([]);
 
   // Preview de mídia antes do envio
@@ -130,6 +132,7 @@ export function useChatEngine({
     filterUrgent,
     filterHasReplied,
     filterHasActiveFunnel,
+    orderBy,
     selectedConvo,
     setSelectedConvo
   });
@@ -141,11 +144,13 @@ export function useChatEngine({
     newMessage,
     setNewMessage,
     isLoadingMessages,
+    setIsLoadingMessages,
     isSending,
     hasMoreMessages,
     isLoadingMoreMessages,
     loadMessages,
     loadMoreMessages,
+    loadAllMessagesAndScrollToTop,
     handleSendMessage,
     sendReaction
   } = useChatMessagesFetch({
@@ -159,6 +164,8 @@ export function useChatEngine({
   // 3. Sub-hook de Funil, Status e Janela de 24h
   const {
     handleToggleStatus,
+    handleToggleArchive,
+    handleBulkArchive,
     handleTriggerFunnel,
     handleCancelFunnel,
     handleClose24hWindow
@@ -309,6 +316,7 @@ export function useChatEngine({
     isAssigning,
     isLoadingConvos,
     isLoadingMessages,
+    setIsLoadingMessages,
     isSending,
     timeLeft24h,
     setTimeLeft24h,
@@ -316,6 +324,9 @@ export function useChatEngine({
     setShouldScrollToBottom,
     showScrollBtn,
     setShowScrollBtn,
+    showScrollTopBtn,
+    setShowScrollTopBtn,
+    loadAllMessagesAndScrollToTop,
     selectedConvoIds,
     setSelectedConvoIds,
     mediaPreview,
@@ -370,6 +381,8 @@ export function useChatEngine({
     loadMessages,
     handleSendMessage,
     handleToggleStatus,
+    handleToggleArchive,
+    handleBulkArchive,
     page,
     setPage,
     limit,

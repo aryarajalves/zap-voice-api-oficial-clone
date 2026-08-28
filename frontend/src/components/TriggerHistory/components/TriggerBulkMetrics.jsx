@@ -8,14 +8,14 @@ export default function TriggerBulkMetrics({
   handleSyncStats
 }) {
   const total = triggerWithActions.total_contacts || (triggerWithActions.contacts_list?.length) || 0;
-  const processedNum = (triggerWithActions.total_sent || 0) + (triggerWithActions.total_failed || 0) + (triggerWithActions.total_skipped || 0);
+  const processedNum = (triggerWithActions.total_sent || 0) + (triggerWithActions.total_failed || 0) + (triggerWithActions.total_skipped || 0) + (triggerWithActions.total_blocked || 0);
   const processedArr = triggerWithActions.processed_contacts?.length || 0;
   const processed = Math.max(processedArr, processedNum);
   const remaining = Math.max(0, total - processed);
 
   const queueCount = triggerWithActions.queue_count !== undefined && triggerWithActions.queue_count !== null
     ? triggerWithActions.queue_count
-    : Math.max(0, (triggerWithActions.total_sent || 0) - (triggerWithActions.total_delivered || 0) - (triggerWithActions.total_failed || 0));
+    : Math.max(0, (triggerWithActions.total_sent || 0) - (triggerWithActions.total_delivered || 0));
 
   return (
     <div className="flex flex-wrap gap-4 mt-2">

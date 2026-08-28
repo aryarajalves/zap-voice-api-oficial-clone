@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
-from core.deps import get_db, get_current_user
+from core.deps import get_db, get_current_user, get_validated_client_id
 from core.permissions import require_premium, require_user
 from models import RestingContact, User, MessageStatus, ScheduledTrigger
 from pydantic import BaseModel
@@ -45,12 +45,11 @@ class BulkRestRequest(BaseModel):
 def list_resting_contacts(
     current_user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     List all active resting contacts for the active client (inherited if in a project).
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     now = datetime.utcnow()
     
     # Check if client belongs to a project
@@ -76,12 +75,12 @@ def rest_contact(
     data: RestingContactCreate,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Put a contact on resting mode (24h default).
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
+
 
     # Normalize phone
     clean_phone = "".join(filter(str.isdigit, data.phone))
@@ -143,12 +142,11 @@ def check_bulk_resting(
     data: BulkCheckRequest,
     current_user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Receives a list of phone numbers and returns which ones are currently resting (inherited if in a project).
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     now = datetime.utcnow()
 
     from models import Client
@@ -180,13 +178,11 @@ def unrest_contact(
     contact_id: int,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Remove contact manually from resting mode.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-
     contact = db.query(RestingContact).filter(
         RestingContact.id == contact_id,
         RestingContact.client_id == client_id
@@ -204,13 +200,11 @@ def unrest_bulk(
     data: BulkUnrestRequest,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Remove multiple contacts from resting mode at once.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
-
     deleted_count = db.query(RestingContact).filter(
         RestingContact.id.in_(data.ids),
         RestingContact.client_id == client_id
@@ -224,12 +218,11 @@ def rest_bulk(
     data: BulkRestRequest,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Put multiple contacts on resting mode in bulk.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     now = datetime.utcnow()
 
     # Get current active suffixes to avoid duplicates
@@ -297,12 +290,11 @@ def unrest_contact_by_phone(
     phone: str,
     current_user: User = Depends(require_premium),
     db: Session = Depends(get_db),
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID")
+    client_id: int = Depends(get_validated_client_id)
 ):
     """
     Remove contact from resting mode by phone number.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     clean_phone = "".join(filter(str.isdigit, phone))
     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
 
@@ -320,4 +312,5 @@ def unrest_contact_by_phone(
     db.delete(contact)
     db.commit()
     return None
+
 

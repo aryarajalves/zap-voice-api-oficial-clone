@@ -10,7 +10,7 @@ from collections import defaultdict
 
 import models
 import schemas
-from core.deps import get_db, get_current_user
+from core.deps import get_db, get_current_user, get_validated_client_id
 from core.permissions import require_premium
 from core.logger import setup_logger
 from services.leads import upsert_webhook_lead
@@ -101,11 +101,10 @@ def _delete_lead_and_relations(db: Session, lead: models.WebhookLead, client_id:
 @router.delete("/leads/{lead_id}/template-history", summary="Remover histórico de 24h do último template do contato")
 def reset_lead_template_history(
     lead_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     lead = db.query(models.WebhookLead).filter(
         models.WebhookLead.id == lead_id,
         models.WebhookLead.client_id == client_id
@@ -150,14 +149,13 @@ def reset_lead_template_history(
 @router.post("/leads", response_model=schemas.WebhookLead, summary="Criar ou atualizar lead manualmente")
 def create_manual_lead(
     lead_in: schemas.WebhookLeadCreate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     """
     Cria um novo lead ou atualiza um existente com base no telefone.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     clean_phone = re.sub(r"\D", "", lead_in.phone)
     
     if not clean_phone or len(clean_phone) < 8:
@@ -187,11 +185,10 @@ def create_manual_lead(
 @router.delete("/leads/{lead_id}", summary="Deletar um lead específico")
 def delete_lead(
     lead_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     lead = db.query(models.WebhookLead).filter(
         models.WebhookLead.id == lead_id,
         models.WebhookLead.client_id == client_id
@@ -212,14 +209,13 @@ def delete_lead(
 def update_lead(
     lead_id: int,
     lead_in: schemas.WebhookLeadUpdate,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
     """
     Atualiza manualmente os dados cadastrais e tags de um lead específico.
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
     lead = db.query(models.WebhookLead).filter(
         models.WebhookLead.id == lead_id,
         models.WebhookLead.client_id == client_id
@@ -246,7 +242,7 @@ def update_lead(
 
 @router.post("/leads/clean-corrupted-tags", summary="Sincronizar contatos: corrigir nomes e tags")
 def clean_corrupted_tags(
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
@@ -256,7 +252,6 @@ def clean_corrupted_tags(
     - Remove tags corrompidas (barras, aspas, JSON malformado)
     - Unifica contatos duplicados com o mesmo telefone em um único registro
     """
-    client_id = x_client_id if x_client_id else current_user.client_id
 
     leads = db.query(models.WebhookLead).filter(
         models.WebhookLead.client_id == client_id
@@ -462,11 +457,10 @@ def clean_corrupted_tags(
 @router.patch("/leads/{lead_id}/lock", summary="Proteger ou desproteger um lead contra exclusão")
 def toggle_lead_lock(
     lead_id: int,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_premium)
 ):
-    client_id = x_client_id if x_client_id else current_user.client_id
     lead = db.query(models.WebhookLead).filter(
         models.WebhookLead.id == lead_id,
         models.WebhookLead.client_id == client_id
@@ -485,7 +479,7 @@ def toggle_lead_lock(
 @router.post("/leads/validate-contacts", summary="Validar contatos antes de um disparo em massa (janela 24h / bloqueio)")
 async def validate_contacts_for_bulk(
     payload: dict,
-    x_client_id: Optional[int] = Header(None, alias="X-Client-ID"),
+    client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -495,9 +489,9 @@ async def validate_contacts_for_bulk(
     from sqlalchemy import text
     from config_loader import get_setting
 
-    client_id = x_client_id if x_client_id else current_user.client_id
     contacts = payload.get("phones", [])
     semaphore = asyncio.Semaphore(500)
+
 
     try:
         # 1. Tabela customizada (SYNC_CONTACTS_TABLE)

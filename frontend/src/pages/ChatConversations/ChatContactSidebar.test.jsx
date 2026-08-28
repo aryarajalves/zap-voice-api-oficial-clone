@@ -198,4 +198,49 @@ describe('ChatContactSidebar and Subcomponents', () => {
             expect(handleAdd).toHaveBeenCalledWith('NovaTag', '#EF4444');
         });
     });
+
+    describe('ContactProfileCard Message Accounting', () => {
+        it('renders message count sent by user and agent correctly', () => {
+            render(
+                <ContactProfileCard
+                    selectedConvo={mockSelectedConvo}
+                    setSelectedConvo={vi.fn()}
+                    timeLeft24h="22h 10m"
+                    handleClose24hWindow={vi.fn()}
+                    getFirstName={(name) => name.split(' ')[0]}
+                    onShareContact={vi.fn()}
+                    userMessagesCount={45}
+                    agentMessagesCount={32}
+                    totalMessagesCount={77}
+                />
+            );
+
+            expect(screen.getByText('45')).toBeInTheDocument();
+            expect(screen.getByText('32')).toBeInTheDocument();
+            expect(screen.getByText('77 total')).toBeInTheDocument();
+            expect(screen.getByText('Usuário')).toBeInTheDocument();
+            expect(screen.getByText('Agente')).toBeInTheDocument();
+        });
+
+        it('ChatContactSidebar calculates and passes message counts from mediaData or messages array', () => {
+            const mockMessages = [
+                { id: 1, sender_type: 'contact', content: 'Oi' },
+                { id: 2, sender_type: 'contact', content: 'Tudo bem?' },
+                { id: 3, sender_type: 'user', content: 'Olá! Como posso ajudar?' }
+            ];
+
+            render(
+                <ChatContactSidebar
+                    {...defaultProps}
+                    messages={mockMessages}
+                    mediaData={{ user_messages_count: 15, agent_messages_count: 20, total_messages: 35 }}
+                />
+            );
+
+            expect(screen.getByText('15')).toBeInTheDocument();
+            expect(screen.getByText('20')).toBeInTheDocument();
+            expect(screen.getByText('35 total')).toBeInTheDocument();
+        });
+    });
 });
+

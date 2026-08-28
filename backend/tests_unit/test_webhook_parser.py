@@ -60,10 +60,10 @@ class TestWebhookParser(unittest.TestCase):
         }
         result = parse_webhook_payload('eduzz', payload)
         self.assertEqual(result['price'], "80.00")
-        # Dependendo de como o parser trata o float
         self.assertEqual(len(result['items']), 2)
-        self.assertIn("Item A", result['product_name'])
-        self.assertIn("Item B", result['product_name'])
+        self.assertEqual(result['product_name'], "Item A")
+        self.assertEqual(len(result['order_bump_products']), 1)
+        self.assertEqual(result['order_bump_products'][0]['name'], "Item B")
         self.assertEqual(result['items'][0]['price'], 50)
 
     def test_payment_method_translation(self):
@@ -100,7 +100,7 @@ class TestWebhookParser(unittest.TestCase):
             }
         }
         res = parse_webhook_payload('hotmart', payload)
-        self.assertEqual(res['event_type'], "compra_aprovada")
+        self.assertEqual(res['event_type'], "compra_concluida")
         self.assertEqual(res['raw_status'], "Compra Aprovada")
         self.assertEqual(res['payment_method'], "Cartão de Crédito")
         self.assertEqual(res['price'], "59.90")
@@ -118,8 +118,46 @@ class TestWebhookParser(unittest.TestCase):
         res = parse_webhook_payload('hotmart', payload)
         self.assertEqual(res['event_type'], "pix_gerado")
         self.assertEqual(res['raw_status'], "Pix Gerado")
+        self.assertEqual(res['payment_method'], "Pix")
         self.assertEqual(res['pix_code'], "code123")
         self.assertEqual(res['pix_qrcode'], "url123")
+
+    def test_hotmart_billet_printed_real_pix_payload(self):
+        payload = {
+            "id": "14cecea3-8f2d-47ad-b19a-615c1b36bd1c",
+            "data": {
+                "buyer": {
+                    "name": "Aryaraj Alves Fernandes",
+                    "email": "aryarajstudio@gmail.com",
+                    "checkout_phone": "85996123586"
+                },
+                "product": {
+                    "id": 8349168,
+                    "name": "Bússola Astrológica"
+                },
+                "purchase": {
+                    "price": {"value": 67, "currency_value": "BRL"},
+                    "status": "BILLET_PRINTED",
+                    "payment": {
+                        "type": "PIX",
+                        "pix_code": "00020101021226900014br.gov.bcb.pix...",
+                        "pix_qrcode": "https://checkoutshopper-live-us.adyen.com/..."
+                    }
+                }
+            },
+            "event": "PURCHASE_BILLET_PRINTED"
+        }
+        res = parse_webhook_payload('hotmart', payload)
+        self.assertEqual(res['event_type'], "pix_gerado")
+        self.assertEqual(res['raw_status'], "Pix Gerado")
+        self.assertEqual(res['payment_method'], "Pix")
+        self.assertEqual(res['name'], "Aryaraj Alves Fernandes")
+        self.assertEqual(res['email'], "aryarajstudio@gmail.com")
+        self.assertEqual(res['phone'], "5585996123586")
+        self.assertEqual(res['product_name'], "Bússola Astrológica")
+        self.assertEqual(res['price'], "67.00")
+        self.assertEqual(res['pix_code'], "00020101021226900014br.gov.bcb.pix...")
+        self.assertEqual(res['pix_qrcode'], "https://checkoutshopper-live-us.adyen.com/...")
 
     def test_hotmart_billet_printed_billet(self):
         payload = {
@@ -133,6 +171,7 @@ class TestWebhookParser(unittest.TestCase):
         res = parse_webhook_payload('hotmart', payload)
         self.assertEqual(res['event_type'], "boleto_impresso")
         self.assertEqual(res['raw_status'], "Boleto Impresso")
+        self.assertEqual(res['payment_method'], "Boleto")
 
     def test_hotmart_chargeback(self):
         payload = {
@@ -143,7 +182,7 @@ class TestWebhookParser(unittest.TestCase):
             }
         }
         res = parse_webhook_payload('hotmart', payload)
-        self.assertEqual(res['event_type'], "reembolso")
+        self.assertEqual(res['event_type'], "chargeback")
         self.assertEqual(res['raw_status'], "Reembolso")
 
     def test_hotmart_protest(self):
@@ -223,7 +262,7 @@ class TestWebhookParser(unittest.TestCase):
             }
         }
         res = parse_webhook_payload('hotmart', payload)
-        self.assertEqual(res['event_type'], "outros")
+        self.assertEqual(res['event_type'], "troca_de_plano")
         self.assertEqual(res['raw_status'], "Troca de Plano")
         self.assertEqual(res['product_name'], "New Plan")
 

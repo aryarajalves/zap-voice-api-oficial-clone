@@ -4,10 +4,11 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 
 ## 🛠️ Regras de Negócio Centrais
 
-### 1. Gestão de Janela de 24h (Meta)
+### 1. Gestão de Janela de 24h (Meta) e Deduplicação de Templates
 - Mensagens de sessão (texto livre) só podem ser enviadas se o usuário interagiu nas últimas 24h.
 - Fora dessa janela, apenas **Templates aprovados pela Meta** podem ser iniciados.
 - O sistema deve validar automaticamente se o envio é permitido ou se deve usar um template.
+- **Trava de Deduplicação de 24h para Templates (Bloqueio Total)**: Se um template foi enviado para o número sem erro nas últimas 24 horas (seja via Template Pago da Meta ou via Mensagem Livre/Smart Send com status `sent`, `delivered` ou `read`), o sistema bloqueia qualquer reenvio duplicado do mesmo template para aquele número pelo período de 24 horas (comparando DDD + número com 10 dígitos). Apenas erros de envio (`failed`) não bloqueiam o reenvio. Para forçar o reenvio antes das 24h, o usuário pode remover a trava na aba Contatos.
 
 ### 2. Fluxo de Webhooks e Automação
 - **Slugs Customizados**: Cada integração possui uma URL única (ex: `/api/webhooks/venda-vip`).

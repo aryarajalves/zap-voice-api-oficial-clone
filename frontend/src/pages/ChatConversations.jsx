@@ -16,12 +16,13 @@ import ActiveChatInput from './ChatConversations/components/ActiveChatInput';
 import ChatContactSidebar from './ChatConversations/ChatContactSidebar';
 import ChatModals from './ChatConversations/components/ChatModals';
 
-// Hooks e Utilitários
 import { useChatEngine } from './ChatConversations/useChatEngine';
 import { exportConversationToDoc } from './ChatConversations/exportConversationToDoc';
 import { useChatMediaUploader } from './ChatConversations/hooks/useChatMediaUploader';
 import { useChatNoteAndAi } from './ChatConversations/hooks/useChatNoteAndAi';
 import { useChatOperations } from './ChatConversations/hooks/useChatOperations';
+import { resolveMediaUrl } from './ChatConversations/utils/mediaUrlResolver';
+import { formatTime, formatMessageTimestamp } from './ChatConversations/utils/chatDateUtils';
 
 export default function ChatConversations({ onClose, onNavigate }) {
     const { activeClient } = useClient();
@@ -41,6 +42,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [filterBlockStatus, setFilterBlockStatus] = React.useState(null);
     const [filterStartDate, setFilterStartDate] = React.useState('');
     const [filterEndDate, setFilterEndDate] = React.useState('');
+    const [orderBy, setOrderBy] = React.useState('recent');
     const [activeFilterTab, setActiveFilterTab] = React.useState(null);
     const [showRightSidebar, setShowRightSidebar] = React.useState(true);
     const [showTemplateModal, setShowTemplateModal] = React.useState(false);
@@ -52,62 +54,67 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const [isCancelingFunnel, setIsCancelingFunnel] = React.useState(false);
     const [isSearchMode, setIsSearchMode] = React.useState(false);
     const [highlightedMsgId, setHighlightedMsgId] = React.useState(null);
+    const [exportModal, setExportModal] = React.useState({
+        isOpen: false,
+        status: 'exporting',
+        contactName: '',
+        phone: '',
+        totalMessages: 0,
+        fileName: '',
+        errorMessage: ''
+    });
     const chatInputRef = React.useRef(null);
 
+    const handleExportConversation = async (convo, messages, clientId) => {
+        if (!convo) return;
+        setExportModal({
+            isOpen: true,
+            status: 'exporting',
+            contactName: convo.contact_name || convo.phone || 'Contato',
+            phone: convo.phone || '',
+            totalMessages: convo.messages_count || messages?.length || 0,
+            fileName: '',
+            errorMessage: ''
+        });
+
+        try {
+            const result = await exportConversationToDoc(convo, messages, clientId);
+            setExportModal({
+                isOpen: true,
+                status: 'completed',
+                contactName: convo.contact_name || convo.phone || 'Contato',
+                phone: convo.phone || '',
+                totalMessages: result?.totalMessages || convo.messages_count || messages?.length || 0,
+                fileName: result?.fileName || 'historico_conversa.html',
+                errorMessage: ''
+            });
+            toast.success('Conversa exportada com sucesso!');
+
+        } catch (err) {
+            console.error('Erro ao exportar conversa:', err);
+            setExportModal(prev => ({
+                ...prev,
+                isOpen: true,
+                status: 'error',
+                errorMessage: err?.message || 'Falha ao exportar histórico da conversa.'
+            }));
+            toast.error('Erro ao exportar conversa.');
+        }
+    };
+
     const engine = useChatEngine({
-        activeClient,
-        activeTab,
-        statusFilter,
-        searchQuery,
-        selectedLabelFilter,
-        filterBlockStatus,
-        filterHasNote,
-        filterStartDate,
-        filterEndDate,
-        filterUnread,
-        filterWindowOpen,
-        filterTemplate24h,
-        filterUrgent,
-        filterHasReplied,
-        filterHasActiveFunnel,
-        selectedConvo,
-        setSelectedConvo
+        activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter,
+        filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread,
+        filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel,
+        orderBy, selectedConvo, setSelectedConvo
     });
 
-    const mediaUploader = useChatMediaUploader({
-        engine,
-        selectedConvo,
-        activeClient,
-        replyingTo,
-        setReplyingTo
-    });
-
-    const noteAndAi = useChatNoteAndAi({
-        engine,
-        selectedConvo,
-        setSelectedConvo,
-        activeClient
-    });
-
+    const mediaUploader = useChatMediaUploader({ engine, selectedConvo, activeClient, replyingTo, setReplyingTo });
+    const noteAndAi = useChatNoteAndAi({ engine, selectedConvo, setSelectedConvo, activeClient });
     const chatOps = useChatOperations({
-        engine,
-        selectedConvo,
-        setSelectedConvo,
-        activeClient,
-        activeTab,
-        statusFilter,
-        searchQuery,
-        selectedLabelFilter,
-        filterBlockStatus,
-        filterHasNote,
-        filterStartDate,
-        filterEndDate,
-        filterUnread,
-        filterWindowOpen,
-        filterTemplate24h,
-        filterHasReplied,
-        selectAllPages,
-        setSelectAllPages
+        engine, selectedConvo, setSelectedConvo, activeClient, activeTab, statusFilter, searchQuery,
+        selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate,
+        filterUnread, filterWindowOpen, filterTemplate24h, filterHasReplied, selectAllPages, setSelectAllPages
     });
 
     React.useEffect(() => {
@@ -124,73 +131,53 @@ export default function ChatConversations({ onClose, onNavigate }) {
 
     React.useEffect(() => {
         setSelectAllPages(false);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel]);
-
-    const formatTime = (isoString) => {
-        if (!isoString) return '';
-        const date = new Date(isoString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
-
-        if (diffMins < 1) return 'Agora';
-        if (diffMins < 60) return `${diffMins}m`;
-        if (date.toDateString() === now.toDateString()) {
-            return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        }
-        return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    };
-
-    const formatMessageTimestamp = (isoString) => {
-        if (!isoString) return '';
-        const date = new Date(isoString);
-        const now = new Date();
-        const isToday = date.toDateString() === now.toDateString();
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        const isYesterday = date.toDateString() === yesterday.toDateString();
-        const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        if (isToday) return `Hoje às ${timeStr}`;
-        if (isYesterday) return `Ontem às ${timeStr}`;
-        const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        return `${dateStr} às ${timeStr}`;
-    };
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, orderBy]);
 
     const getMediaSrc = (msg) => {
-        if (!msg.media_url) return '';
-        if (msg.media_url.startsWith('http') || msg.media_url.startsWith('/static')) return msg.media_url;
-        if (msg.media_url.includes(':')) {
-            const parts = msg.media_url.split(':');
-            return `${API_URL}/chat/media/${parts[1]}?token=${localStorage.getItem('token')}&client_id=${activeClient?.id}`;
-        }
-        return `${API_URL}/chat/media/${msg.media_url}?token=${localStorage.getItem('token')}&client_id=${activeClient?.id}`;
+        if (!msg || !msg.media_url) return '';
+        return resolveMediaUrl(msg.media_url, activeClient?.id);
     };
+
+    const scrollOffsetRef = React.useRef(null);
+
+    React.useLayoutEffect(() => {
+        if (scrollOffsetRef.current !== null && engine.messagesContainerRef.current) {
+            const container = engine.messagesContainerRef.current;
+            container.scrollTop = container.scrollHeight - scrollOffsetRef.current.prevHeight + scrollOffsetRef.current.prevTop;
+            scrollOffsetRef.current = null;
+        }
+    }, [engine.messages]);
 
     useEffect(() => {
         if (engine.shouldScrollToBottom) {
             const container = engine.messagesContainerRef.current;
-            if (container) container.scrollTop = container.scrollHeight;
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+                engine.setShowScrollTopBtn(container.scrollTop > 80 || engine.hasMoreMessages);
+            }
             const timer = setTimeout(() => {
-                engine.messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
+                const c = engine.messagesContainerRef.current;
+                if (c) {
+                    c.scrollTop = c.scrollHeight;
+                    engine.setShowScrollTopBtn(c.scrollTop > 80 || engine.hasMoreMessages);
+                }
+                engine.messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+            }, 50);
             engine.setShouldScrollToBottom(false);
             return () => clearTimeout(timer);
         }
-    }, [engine.messages, engine.shouldScrollToBottom]);
+    }, [engine.shouldScrollToBottom, engine.hasMoreMessages]);
 
     const handleScrollMessages = useCallback(() => {
         const container = engine.messagesContainerRef.current;
         if (!container) return;
         const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
         engine.setShowScrollBtn(distanceFromBottom > 80);
+        engine.setShowScrollTopBtn(container.scrollTop > 80 || engine.hasMoreMessages);
 
-        if (container.scrollTop <= 5 && engine.hasMoreMessages && !engine.isLoadingMoreMessages) {
-            const prevScrollHeight = container.scrollHeight;
-            engine.loadMoreMessages().then(() => {
-                setTimeout(() => {
-                    if (container) container.scrollTop = container.scrollHeight - prevScrollHeight;
-                }, 50);
-            });
+        if (container.scrollTop <= 40 && engine.hasMoreMessages && !engine.isLoadingMoreMessages) {
+            scrollOffsetRef.current = { prevHeight: container.scrollHeight, prevTop: container.scrollTop };
+            engine.loadMoreMessages();
         }
     }, [engine]);
 
@@ -202,10 +189,11 @@ export default function ChatConversations({ onClose, onNavigate }) {
             engine.loadAvailableLabels();
         }, 5000);
         return () => clearInterval(convoInterval);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, orderBy]);
 
     useEffect(() => {
         if (!selectedConvo) return;
+        engine.setIsLoadingMessages?.(true);
         engine.setMessages([]);
         engine.setShouldScrollToBottom(true);
         engine.loadMessages(selectedConvo.id, true);
@@ -302,6 +290,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
                 isCancelingFunnel={isCancelingFunnel}
                 setIsCancelingFunnel={setIsCancelingFunnel}
                 selectAllPages={selectAllPages}
+                exportModal={exportModal}
+                setExportModal={setExportModal}
             />
 
             <div className="flex flex-col h-full w-full bg-[#0f172a] text-gray-100 overflow-hidden font-sans">
@@ -344,6 +334,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         setFilterStartDate={setFilterStartDate}
                         filterEndDate={filterEndDate}
                         setFilterEndDate={setFilterEndDate}
+                        orderBy={orderBy}
+                        setOrderBy={setOrderBy}
                         engine={engine}
                         selectedConvo={selectedConvo}
                         setSelectedConvo={setSelectedConvo}
@@ -386,10 +378,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     handleToggleUrgent={chatOps.handleToggleUrgent}
                                     handleUnblockContact={chatOps.handleUnblockContact}
                                     setShowFunnelModal={setShowFunnelModal}
-                                    exportConversationToDoc={(c, m, cl) => {
-                                        exportConversationToDoc(c, m, cl);
-                                        toast.success('Histórico exportado! Arquivo HTML pronto para abrir ou salvar como PDF.');
-                                    }}
+                                    exportConversationToDoc={handleExportConversation}
                                     activeClientId={activeClient?.id}
                                     isOpenAiConfigured={noteAndAi.isOpenAiConfigured}
                                     isAnalyzingAi={noteAndAi.isAnalyzingAi}
@@ -422,6 +411,10 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     setReplyingTo={setReplyingTo}
                                     chatInputRef={chatInputRef}
                                     highlightedMsgId={highlightedMsgId}
+                                    handleTogglePinMessage={chatOps.handleTogglePinMessage}
+                                    handleToggleStarMessage={chatOps.handleToggleStarMessage}
+                                    handleCopyMessageContent={chatOps.handleCopyMessageContent}
+                                    handleDeleteMessage={noteAndAi.handleDeleteNoteMsg}
                                 />
 
                                 <ActiveChatInput
@@ -485,6 +478,9 @@ export default function ChatConversations({ onClose, onNavigate }) {
                             isSearchMode={isSearchMode}
                             setIsSearchMode={setIsSearchMode}
                             onSelectMessage={handleSelectSearchMessage}
+                            messages={engine.messages}
+                            handleToggleStarMessage={chatOps.handleToggleStarMessage}
+                            formatMessageTimestamp={formatMessageTimestamp}
                         />
                     )}
                 </div>

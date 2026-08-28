@@ -10,7 +10,9 @@ from core.deps import get_db
 from core.security import limiter
 from core.logger import setup_logger
 from services.webhook_processing_service import check_hmac_signature_logic
+from core.webhook_security import verify_meta_signature
 from rabbitmq_client import rabbitmq
+
 
 logger = setup_logger(__name__)
 router = APIRouter()
@@ -96,6 +98,10 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
         except Exception as e:
             logger.error(f"❌ Erro ao decodificar payload bytes: {e}")
             return Response(content="Invalid JSON", status_code=400)
+        
+        
+        
+    logger.info(f"📦 [META_PAYLOAD]:\n{json.dumps(payload, indent=2, ensure_ascii=False)}")
 
     # Injetar client_id associado no payload para consumo do Worker
     # Se não foi resolvido pelo slug, tenta resolver dinamicamente pelo phone_number_id
@@ -178,13 +184,24 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
     except Exception as e:
         logger.info(f"📥 [META_WEBHOOK] Evento recebido (Erro ao resumir: {e}) | Client: {client_id}")
     
-    meta_secret = os.getenv("META_APP_SECRET", "")
+    meta_secret = None
+    if client_id:
+        cfg = db.query(models.AppConfig).filter(
+            models.AppConfig.client_id == client_id,
+            models.AppConfig.key == "META_APP_SECRET"
+        ).first()
+        if cfg and cfg.value:
+            meta_secret = cfg.value
+    if not meta_secret:
+        meta_secret = os.getenv("META_APP_SECRET", "")
+
     if meta_secret:
         body = await request.body()
         signature = request.headers.get("X-Hub-Signature-256", "")
-        if not check_hmac_signature_logic(body, meta_secret, signature):
-            logger.error("❌ Assinatura Meta inválida!")
+        if not verify_meta_signature(body, meta_secret, signature):
+            logger.error(f"❌ [META_SECURITY] Assinatura X-Hub-Signature-256 inválida para Client ID {client_id}!")
             return Response(content="Invalid signature", status_code=403)
+
 
     # Log para arquivo para depuração histórica
     try:
@@ -203,10 +220,17 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
         logger.error(f"❌ Falha ao publicar no RabbitMQ: {e}")
         return {"status": "error_queued_locally"}
 
-@router.post("/whatsapp/status")
+# ⚠️ ENDPOINT DE TESTES / DESENVOLVIMENTO (NÃO USADO EM PRODUÇÃO)
+# Este endpoint é um mock/atalho criado exclusivamente para testes automatizados e depuração local via Postman/cURL.
+# A Meta oficial em produção SEMPRE utiliza a rota '/api/meta' (ou '/api/meta/{slug}').
+@router.post("/whatsapp/status", summary="[DEV/TEST ONLY] Mock de status para testes")
 @limiter.exempt
 async def whatsapp_status_webhook(request: Request, payload: dict = Body(...), db: Session = Depends(get_db)):
-    """ Proxy to RabbitMQ """
+    """
+    ⚠️ [NÃO USADO EM PRODUÇÃO]
+    Proxy direto para o RabbitMQ sem validação de assinatura da Meta.
+    Utilizado apenas em scripts de testes locais (ex: scripts/tests/).
+    """
     try:
         await rabbitmq.publish("whatsapp_events", payload)
         return {"status": "ok"}
