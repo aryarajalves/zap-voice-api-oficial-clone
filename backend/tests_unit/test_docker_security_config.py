@@ -46,3 +46,18 @@ def test_production_docker_compose_no_hardcoded_env_file():
     assert "network_swarm_public" in networks, "A rede network_swarm_public deve estar declarada no compose de produção."
     assert networks["network_swarm_public"].get("external") is True, "A rede network_swarm_public deve ser externa."
 
+def test_production_docker_compose_rabbitmq_variables():
+    """
+    Testa se as variáveis críticas do RabbitMQ (como RABBITMQ_VHOST) estão devidamente mapeadas.
+    """
+    compose_path = os.path.join(os.path.dirname(__file__), "..", "..", "docker", "docker-compose-producao.yml")
+    with open(compose_path, "r", encoding="utf-8") as f:
+        compose_data = yaml.safe_load(f)
+
+    for service_name in ["zapvoice_app", "zapvoice_worker"]:
+        env_list = compose_data["services"][service_name].get("environment", [])
+        env_str = " ".join(env_list)
+        assert "RABBITMQ_VHOST" in env_str, f"{service_name} deve conter RABBITMQ_VHOST mapeado."
+        assert "RABBITMQ_HOST" in env_str, f"{service_name} deve conter RABBITMQ_HOST mapeado."
+
+
