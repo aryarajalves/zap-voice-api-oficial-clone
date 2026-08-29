@@ -51,9 +51,10 @@ jobs:
           DATABASE_URL: 'sqlite://'
           SECRET_KEY: 'test-secret-key-for-github-actions-32-chars-long'
           SIMULATE_MESSAGING: 'false'
+          PYTHONPATH: '.:backend'
         run: |
-          pytest scripts/tests/test_dispatch_portainer_webhooks.py -v
-          pytest backend/tests_unit/test_auth.py backend/tests_unit/test_invitations.py backend/tests_unit/test_password_reset_link.py -v
+          python -m pytest scripts/tests/test_dispatch_portainer_webhooks.py -v
+          python -m pytest backend/tests_unit/test_auth.py backend/tests_unit/test_invitations.py backend/tests_unit/test_password_reset_link.py backend/tests_unit/test_checkout_pre_populado.py backend/tests_unit/test_hotmart_order_bump_payload.py -v
 
       - name: 🟢 Configurar Node.js 20
         uses: actions/setup-node@v4
