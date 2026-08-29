@@ -169,17 +169,23 @@ def create_webhook_integration(
                     detail="Este slug personalizado já está em uso por outra integração."
                 )
 
+    from core.utils import sanitize_mojibake
+    clean_name = sanitize_mojibake(integration.name)
+    clean_discovered = [sanitize_mojibake(p) for p in (getattr(integration, 'discovered_products', []) or [])]
+    clean_whitelist = [sanitize_mojibake(p) for p in (getattr(integration, 'product_whitelist', []) or [])]
+    clean_upsell = [sanitize_mojibake(p) for p in (getattr(integration, 'upsell_products', []) or [])]
+
     try:
         db_integration = models.WebhookIntegration(
-            name=integration.name,
+            name=clean_name,
             platform=integration.platform,
             status=integration.status,
             custom_fields_mapping=integration.custom_fields_mapping,
             custom_slug=clean_slug if clean_slug else None,
             product_filtering=getattr(integration, 'product_filtering', False),
-            product_whitelist=getattr(integration, 'product_whitelist', []),
-            discovered_products=getattr(integration, 'discovered_products', []),
-            upsell_products=getattr(integration, 'upsell_products', []),
+            product_whitelist=clean_whitelist,
+            discovered_products=clean_discovered,
+            upsell_products=clean_upsell,
             client_id=x_client_id
         )
         db.add(db_integration)
@@ -328,16 +334,17 @@ def update_webhook_integration(
     try:
         logger.info(f"🔄 [WEBHOOKS] Atualizando integração {integration_id} (Client {x_client_id})")
         
-        db_integration.name = integration_update.name
+        from core.utils import sanitize_mojibake
+        db_integration.name = sanitize_mojibake(integration_update.name)
         db_integration.platform = integration_update.platform
         db_integration.status = integration_update.status
         db_integration.custom_fields_mapping = integration_update.custom_fields_mapping
         db_integration.custom_slug = clean_slug if clean_slug else None
 
         db_integration.product_filtering = getattr(integration_update, 'product_filtering', False)
-        db_integration.product_whitelist = getattr(integration_update, 'product_whitelist', [])
-        db_integration.discovered_products = getattr(integration_update, 'discovered_products', [])
-        db_integration.upsell_products = getattr(integration_update, 'upsell_products', [])
+        db_integration.product_whitelist = [sanitize_mojibake(p) for p in (getattr(integration_update, 'product_whitelist', []) or [])]
+        db_integration.discovered_products = [sanitize_mojibake(p) for p in (getattr(integration_update, 'discovered_products', []) or [])]
+        db_integration.upsell_products = [sanitize_mojibake(p) for p in (getattr(integration_update, 'upsell_products', []) or [])]
         
         # Limpar mapeamentos antigos
         db.query(models.WebhookEventMapping).filter(

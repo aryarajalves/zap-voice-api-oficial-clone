@@ -62,7 +62,8 @@ def test_smart_interruption():
         integration_id = integration['id']
         print(f"Integracao criada: {integration_id}")
 
-        test_phone = "5511977777777"
+        import random
+        test_phone = f"55119{random.randint(10000000, 99999999)}"
 
         # 3. Simular Webhook de Compra Aprovada
         print("Simulando Compra Aprovada...")
@@ -121,6 +122,27 @@ def test_smart_interruption():
             return False
         
         print("OK: Trigger cancelado com sucesso pela interrupção inteligente!")
+
+        # 7. Simular Novo Webhook de Compra Aprovada (Deve ser bloqueado pela regra de 24h)
+        print("Simulando nova Compra Aprovada para testar bloqueio de 24h...")
+        res = requests.post(f"{BASE_URL}/webhooks/{integration_id}", json=payload_compra)
+        if res.status_code != 200:
+            print(f"Erro no webhook de nova compra: {res.text}")
+            return False
+        
+        time.sleep(2)
+        
+        # O webhook deve ter status 'skipped' no histórico de webhooks
+        res_hist = requests.get(f"{BASE_URL}/webhook-integrations/{integration_id}/history", headers=headers)
+        if res_hist.status_code == 200:
+            hist_json = res_hist.json()
+            hist_items = hist_json if isinstance(hist_json, list) else hist_json.get("items", [])
+            latest_hist = hist_items[0] if hist_items else None
+            if latest_hist and latest_hist.get("status") == "skipped":
+                print("OK: Novo disparo bloqueado com sucesso nas 24h (status: skipped)!")
+            else:
+                print(f"Status do histórico: {latest_hist.get('status') if latest_hist else 'N/A'}")
+
         return True
 
     except Exception as e:

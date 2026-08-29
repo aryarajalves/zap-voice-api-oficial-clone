@@ -315,6 +315,19 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         except:
             result['price'] = str(price_to_normalize)
 
+    # Detecção prioritária para checkout pré-populado
+    if (
+        payload.get("checkout_pre_populado") or
+        payload.get("is_checkout_pre_populado") or
+        str(payload.get("tipo", "")).lower() == "checkout_pre_populado" or
+        str(payload.get("origem", "")).lower() == "checkout_pre_populado" or
+        str(payload.get("event", "")).upper() in ["PURCHASE_OUT_OF_SHOPPING_CART", "CHECKOUT_PRE_POPULADO"] or
+        str(payload.get("event_type", "")).lower() == "checkout_pre_populado" or
+        str(payload.get("status", "")).lower() == "checkout_pre_populado"
+    ):
+        result['event_type'] = "checkout_pre_populado"
+        result['raw_status'] = "Checkout Pré-populado"
+
     # Final event_type fallback
     if not result.get('event_type'):
         event_raw = payload.get("event") or payload.get("status") or payload.get("event_type") or ("form_submission" if platform_lower == "elementor" else "outros")
@@ -327,6 +340,11 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "COMPLETED": "Compra Aprovada", "COMPLETE": "Compra Aprovada",
         "COMPRA_APROVADA": "Compra Aprovada", "PIX_GERADO": "Pix Gerado", "BOLETO_IMPRESSO": "Boleto Impresso",
         "REEMBOLSO": "Reembolso", "CARTAO_RECUSADO": "Cartão Recusado", "CARRINHO_ABANDONADO": "Carrinho Abandonado",
+        "CHECKOUT_PRE_POPULADO": "Checkout Pré-populado",
+        "CHECKOUT PRÉ-POPULADO": "Checkout Pré-populado",
+        "CHECKOUT PRE-POPULADO": "Checkout Pré-populado",
+        "CHECKOUT PRE_POPULADO": "Checkout Pré-populado",
+        "CHECKOUT_PRE-POPULADO": "Checkout Pré-populado",
         "PIX_EXPIRADO": "Pix Expirado", "EVENTO_ALUNO": "Evento do Aluno", "OUTROS": "Outros",
         "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso",
         "PURCHASE_REFUNDED": "Reembolso", "PURCHASE_CANCELED": "Compra Cancelada",
@@ -341,7 +359,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "DISPUTE": "Em Disputa",
         "CLUB_FIRST_ACCESS": "Primeiro Acesso ao Club",
         "CLUB_MODULE_COMPLETED": "Módulo Concluído",
-        "PURCHASE_OUT_OF_SHOPPING_CART": "Carrinho Abandonado",
+        "PURCHASE_OUT_OF_SHOPPING_CART": "Checkout Pré-populado",
         "SUBSCRIPTION_CANCELLATION": "Assinatura Cancelada",
         "SUBSCRIPTION_CANCELED": "Assinatura Cancelada",
         "ASSINATURA_CANCELADA": "Assinatura Cancelada",

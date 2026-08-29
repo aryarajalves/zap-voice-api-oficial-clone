@@ -5,7 +5,7 @@ services:
   # SERVIÇO PRINCIPAL (Backend + Frontend)
   # ==========================================
   zapvoice_app:
-    image: aryalvesfernandes/zapvoice:backend-1.8.2
+    image: aryalvesfernandes/zapvoice:backend-1.8.5
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - network_swarm_public
@@ -93,7 +93,7 @@ services:
   # SERVIÇO WORKER (Processamento em Segundo Plano)
   # ==========================================
   zapvoice_worker:
-    image: aryalvesfernandes/zapvoice:worker-1.8.2
+    image: aryalvesfernandes/zapvoice:worker-1.8.5
     command: python worker.py
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:

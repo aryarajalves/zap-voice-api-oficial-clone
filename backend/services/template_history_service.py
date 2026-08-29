@@ -33,7 +33,12 @@ def is_template_sent_in_last_24h(db, client_id: int, phone: str, template_name: 
         )
     )
     if client_id:
-        msg_status_query = msg_status_query.join(models.ScheduledTrigger, models.MessageStatus.trigger_id == models.ScheduledTrigger.id).filter(models.ScheduledTrigger.client_id == client_id)
+        msg_status_query = msg_status_query.outerjoin(models.ScheduledTrigger, models.MessageStatus.trigger_id == models.ScheduledTrigger.id).filter(
+            or_(
+                models.ScheduledTrigger.client_id == client_id,
+                models.MessageStatus.trigger_id == None
+            )
+        )
 
     if msg_status_query.first() is not None:
         return True

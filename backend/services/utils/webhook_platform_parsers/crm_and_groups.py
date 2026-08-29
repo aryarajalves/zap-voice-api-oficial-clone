@@ -191,8 +191,8 @@ def parse_herospark(payload: dict, result: dict) -> None:
         result['event_type'] = "pix_expirado" if is_pix else "boleto_expirado"
     elif event == "PURCHASE_DELAYED":
         result['event_type'] = "assinatura_atrasada"
-    elif event == "PURCHASE_OUT_OF_SHOPPING_CART":
-        result['event_type'] = "carrinho_abandonado"
+    elif event in ("PURCHASE_OUT_OF_SHOPPING_CART", "CHECKOUT_PRE_POPULADO"):
+        result['event_type'] = "checkout_pre_populado"
     elif event == "SUBSCRIPTION_CANCELED":
         result['event_type'] = "assinatura_cancelada"
     elif event == "SUBSCRIPTION_RENEWED":

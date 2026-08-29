@@ -127,3 +127,18 @@ async def update_node_history_extra(db, trigger_id: int, node_id: str, key: str,
     if updated:
         trigger.execution_history = history
         db.commit()
+
+
+def sanitize_mojibake(text: Any) -> Any:
+    """
+    Corrige textos corrompidos por dupla codificação UTF-8 / Latin-1 (Mojibake).
+    Ex: 'Hotmart - BÃºssola AstrolÃ³gica' -> 'Hotmart - Bússola Astrológica'
+    """
+    if not text or not isinstance(text, str):
+        return text
+    if any(m in text for m in ["Ã", "Â"]):
+        try:
+            return text.encode("latin-1").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return text

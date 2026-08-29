@@ -26,7 +26,7 @@ export const PLATFORM_EVENT_OPTIONS = {
         { value: 'PURCHASE_COMPLETE', label: 'Compra Concluída' },
         { value: 'PURCHASE_DELAYED', label: 'Pagamento Atrasado' },
         { value: 'PURCHASE_EXPIRED', label: 'Compra Expirada' },
-        { value: 'PURCHASE_OUT_OF_SHOPPING_CART', label: 'Removido do Carrinho' },
+        { value: 'PURCHASE_OUT_OF_SHOPPING_CART', label: 'Checkout Pré-populado' },
         { value: 'ABANDONED_CART', label: 'Carrinho Abandonado' },
         { value: 'SUBSCRIPTION_CANCELLATION', label: 'Assinatura Cancelada' },
         { value: 'SWITCH_PLAN', label: 'Troca de Plano' },

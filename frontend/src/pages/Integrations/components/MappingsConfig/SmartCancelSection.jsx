@@ -40,7 +40,7 @@ const SmartCancelSection = ({ mapping, mIndex, updateMapping }) => {
               colorClass="focus-within:ring-red-500/20"
             />
             <p className="mt-2 text-[9px] text-red-400/60 italic font-medium leading-tight">
-              * Quando o evento {EVENT_TYPES.find(e => e.value === mapping.event_type)?.label} ocorrer, qualquer mensagem pendente na fila dos eventos selecionados acima será cancelada automaticamente para este contato.
+              * Quando o evento {EVENT_TYPES.find(e => e.value === mapping.event_type)?.label} ocorrer, qualquer mensagem pendente na fila dos eventos selecionados acima será cancelada e seus templates serão bloqueados por 24 horas para este contato.
             </p>
           </div>
         )}

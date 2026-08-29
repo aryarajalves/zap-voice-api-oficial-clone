@@ -16,8 +16,9 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 - **Filtro de Produtos**: Possibilidade de ignorar eventos de produtos que não estão na "White List".
 - **Webhook de Memória em Disparos em Massa**: Quando o Webhook de Memória do Agente está configurado, o sistema envia automaticamente para essa URL todas as mensagens de disparos em massa (Bulk) que são de fato entregues (status delivered/read) no WhatsApp do contato.
 
-### 3. Regras de Cancelamento
-- Se um novo evento chega para o mesmo contato (ex: "Compra Aprovada"), o sistema deve ser capaz de cancelar execuções pendentes de eventos anteriores (ex: "Boleto Gerado").
+### 3. Regras de Cancelamento e Interrupção Inteligente
+- Se um novo evento chega para o mesmo contato (ex: "Compra Aprovada"), o sistema é capaz de cancelar execuções pendentes/enfileiradas de eventos anteriores configurados (ex: "Carrinho Abandonado", "Pix Gerado", "Cartão Recusado") respeitando o filtro de produto.
+- **Bloqueio de 24h para Templates Cancelados**: Além de cancelar mensagens pendentes, a Interrupção Inteligente bloqueia os templates configurados nos gatilhos cancelados (principais e follow-up) para aquele contato específico pelo período de 24 horas (`ContactTemplateHistory`), impedindo que novos webhooks, funis ou disparos enviem esses templates para o contato durante essa janela.
 
 ### 4. Integração com Chatwoot (CRM)
 - [x] **Fluxo de Sincronização de Notas/Etiquetas**:

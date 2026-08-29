@@ -83,6 +83,51 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         # --- VALIDAÇÃO DE UNICIDADE DO LEAD POR INTEGRAÇÃO E TEMPLATE/FUNIL ---
         if phone:
             if template_name:
+                from services.template_history_service import is_template_sent_in_last_24h
+                if is_template_sent_in_last_24h(db, client_id, phone, template_name):
+                    logger.warning(f"🚫 [24H_BLOCK] Webhook #{history_id} ignorado. O template '{template_name}' está bloqueado nas últimas 24h para {phone} (Interrupção Inteligente ou envio recente).")
+                    
+                    auto_tag_list = []
+                    if getattr(mapping, "internal_tags", None):
+                        auto_tag_list.extend([t.strip() for t in mapping.internal_tags.split(',') if t.strip()])
+                    if not auto_tag_list and history.event_type:
+                        auto_tag_list.append(history.event_type.replace("_", " ").title())
+                    auto_tag = ", ".join(list(dict.fromkeys(auto_tag_list))) if auto_tag_list else None
+
+                    integration = db.query(models.WebhookIntegration).filter_by(id=mapping.integration_id).first()
+                    if integration and getattr(mapping, "update_contact_on_trigger", True):
+                        from services.leads import upsert_webhook_lead
+                        try:
+                            upsert_webhook_lead(
+                                db,
+                                client_id=client_id,
+                                platform=integration.platform,
+                                parsed_data=variables,
+                                tag=auto_tag,
+                                contact_save_fields=getattr(mapping, "contact_save_fields", None)
+                            )
+                        except Exception as lead_err:
+                            logger.error(f"Erro ao salvar lead no 24H_BLOCK: {lead_err}")
+
+                    if getattr(mapping, "chatwoot_label", None):
+                        try:
+                            from services.chat_label_service import apply_webhook_labels
+                            apply_webhook_labels(
+                                db=db,
+                                client_id=client_id,
+                                phone=phone,
+                                raw_labels=mapping.chatwoot_label,
+                                source=f"Webhook ({integration.name if integration else 'Integrador'})",
+                                contact_name=variables.get("name")
+                            )
+                        except Exception as label_err:
+                            logger.error(f"Erro ao aplicar etiquetas de chat no 24H_BLOCK: {label_err}")
+
+                    history.status = "skipped"
+                    history.error_message = f"Template '{template_name}' bloqueado pela regra de 24h (Interrupção Inteligente ou envio recente)."
+                    db.commit()
+                    return
+
                 existing_trigger = db.query(models.ScheduledTrigger).filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.ScheduledTrigger.contact_phone == phone,
@@ -130,16 +175,16 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                     db.commit()
                     return
 
-        # --- LÓGICA DE INTERRUPÇÃO INTELIGENTE (CANCELAMENTO) ---
+        # --- LÓGICA DE INTERRUPÇÃO INTELIGENTE (CANCELAMENTO E BLOQUEIO DE 24H) ---
         if getattr(mapping, "cancel_pending_on_trigger", False) and mapping.cancel_event_types:
             event_types_to_cancel = mapping.cancel_event_types
             
             if phone and event_types_to_cancel:
-                logger.info(f"🛡️ SMART_CANCEL | Iniciando cancelamento para {phone} nos eventos: {event_types_to_cancel}")
+                logger.info(f"🛡️ SMART_CANCEL | Iniciando interrupção inteligente para {phone} nos eventos: {event_types_to_cancel}")
                 
                 current_product = variables.get("product_name")
                 
-                # Busca disparos pendentes/enfileirados para este contato e eventos
+                # 1. Busca disparos pendentes/enfileirados para este contato e eventos
                 query_triggers = db.query(models.ScheduledTrigger).filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.ScheduledTrigger.contact_phone == phone,
@@ -154,15 +199,53 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                     )
                 
                 pending_triggers = query_triggers.all()
+                templates_to_block = set()
                 
                 for pt in pending_triggers:
                     logger.info(f"🚫 SMART_CANCEL | Cancelando trigger #{pt.id} (Evento: {pt.event_type}, Produto: {pt.product_name})")
                     pt.status = "cancelled"
                     pt.failure_reason = f"Interrompido pelo evento: {history.event_type}"
+                    if pt.template_name:
+                        templates_to_block.add(pt.template_name)
                 
-                if pending_triggers:
+                # 2. Busca também os templates configurados nos mapeamentos irmãos dos eventos cancelados
+                sibling_mappings = db.query(models.WebhookEventMapping).filter(
+                    models.WebhookEventMapping.integration_id == mapping.integration_id,
+                    models.WebhookEventMapping.event_type.in_(event_types_to_cancel)
+                ).all()
+                
+                for sm in sibling_mappings:
+                    if sm.product_name and current_product and sm.product_name.strip().lower() != current_product.strip().lower():
+                        continue
+                    if sm.template_name:
+                        templates_to_block.add(sm.template_name)
+                    elif sm.template_id:
+                        tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+                            models.WhatsAppTemplateCache.id == sm.template_id
+                        ).first()
+                        if tpl_cache and tpl_cache.name:
+                            templates_to_block.add(tpl_cache.name)
+                    
+                    if getattr(sm, "followup_active", False):
+                        if sm.followup_template_name:
+                            templates_to_block.add(sm.followup_template_name)
+                        elif getattr(sm, "followup_template_id", None):
+                            fu_tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
+                                models.WhatsAppTemplateCache.id == sm.followup_template_id
+                            ).first()
+                            if fu_tpl_cache and fu_tpl_cache.name:
+                                templates_to_block.add(fu_tpl_cache.name)
+
+                # 3. Registra bloqueio de 24h para esses templates no ContactTemplateHistory
+                if templates_to_block:
+                    from services.template_history_service import record_template_dispatch
+                    for tpl_name in templates_to_block:
+                        logger.info(f"🔒 SMART_CANCEL | Bloqueando template '{tpl_name}' por 24h para o contato {phone}")
+                        record_template_dispatch(db, client_id, phone, tpl_name)
+                
+                if pending_triggers or templates_to_block:
                     db.commit()
-                    logger.info(f"✅ SMART_CANCEL | {len(pending_triggers)} disparos cancelados com sucesso.")
+                    logger.info(f"✅ SMART_CANCEL | {len(pending_triggers)} disparos cancelados e {len(templates_to_block)} templates bloqueados por 24h com sucesso.")
 
         if not template_name and not funnel_id:
             logger.info(f"AUTO_SKIP | Mapeamento #{mapping.id} sem template nem funil definido — aplicando etiquetas e salvando lead...")
@@ -326,76 +409,80 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             
             # --- AGENDAMENTO DO GATILHO DE FOLLOW-UP ---
             if getattr(mapping, "followup_active", False) and mapping.followup_template_name:
-                fu_value = getattr(mapping, "followup_delay_value", 0) or 0
-                fu_unit = getattr(mapping, "followup_delay_unit", "minutes") or "minutes"
-                
-                fu_delay_sec = fu_value * 60
-                if fu_unit == "hours":
-                    fu_delay_sec = fu_value * 3600
+                from services.template_history_service import is_template_sent_in_last_24h
+                if is_template_sent_in_last_24h(db, client_id, st.contact_phone, mapping.followup_template_name):
+                    logger.warning(f"🚫 [FOLLOW-UP-24H-BLOCK] Template de follow-up '{mapping.followup_template_name}' bloqueado para {st.contact_phone} nas últimas 24h. Agendamento ignorado.")
+                else:
+                    fu_value = getattr(mapping, "followup_delay_value", 0) or 0
+                    fu_unit = getattr(mapping, "followup_delay_unit", "minutes") or "minutes"
                     
-                total_fu_delay = total_delay_sec + fu_delay_sec
-                fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=total_fu_delay)
-                fu_header_format = None
-                if mapping.followup_template_id:
-                    try:
-                        fu_tpl = db.query(models.WhatsAppTemplateCache).filter(
-                            models.WhatsAppTemplateCache.id == mapping.followup_template_id
-                        ).first()
-                        if fu_tpl and fu_tpl.components:
-                            fu_header_comp = next((c for c in fu_tpl.components if c.get("type") == "HEADER"), None)
-                            if fu_header_comp:
-                                fu_header_format = fu_header_comp.get("format")
-                    except Exception as e:
-                        logger.error(f"Erro ao obter fu_header_format para mapping {mapping.id}: {e}")
+                    fu_delay_sec = fu_value * 60
+                    if fu_unit == "hours":
+                        fu_delay_sec = fu_value * 3600
+                        
+                    total_fu_delay = total_delay_sec + fu_delay_sec
+                    fu_scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=total_fu_delay)
+                    fu_header_format = None
+                    if mapping.followup_template_id:
+                        try:
+                            fu_tpl = db.query(models.WhatsAppTemplateCache).filter(
+                                models.WhatsAppTemplateCache.id == mapping.followup_template_id
+                            ).first()
+                            if fu_tpl and fu_tpl.components:
+                                fu_header_comp = next((c for c in fu_tpl.components if c.get("type") == "HEADER"), None)
+                                if fu_header_comp:
+                                    fu_header_format = fu_header_comp.get("format")
+                        except Exception as e:
+                            logger.error(f"Erro ao obter fu_header_format para mapping {mapping.id}: {e}")
 
-                fu_components = extract_mapped_variables(payload, variables, mapping.followup_variables_mapping or {}, fu_header_format)
-                
-                fu_idempotency_key = f"fu_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
-                
-                # --- VALIDAÇÃO DE HORÁRIO COMERCIAL DO FOLLOW-UP ---
-                if getattr(mapping, "followup_business_hours_active", False):
-                    from core.engine.business_hours import is_within_business_hours_generic, get_next_business_hour_start_generic
+                    fu_components = extract_mapped_variables(payload, variables, mapping.followup_variables_mapping or {}, fu_header_format)
                     
-                    fu_days = getattr(mapping, "followup_business_hours_days", None) or [0, 1, 2, 3, 4]
-                    fu_start = getattr(mapping, "followup_business_hours_start", None) or "08:00"
-                    fu_end = getattr(mapping, "followup_business_hours_end", None) or "18:00"
+                    fu_idempotency_key = f"fu_{mapping.id}_{hashlib.sha256(payload_str.encode()).hexdigest()[:16]}"
                     
-                    if not is_within_business_hours_generic(fu_scheduled_time, fu_days, fu_start, fu_end):
-                        old_time = fu_scheduled_time
-                        fu_scheduled_time = get_next_business_hour_start_generic(fu_scheduled_time, fu_days, fu_start)
-                        logger.info(f"🕒 [FOLLOW-UP-BUSINESS-HOURS] Ajustando horario de follow-up {fu_idempotency_key} de {old_time} para {fu_scheduled_time} (fora do comercial)")
-                fu_st = models.ScheduledTrigger(
-                    scheduled_time=fu_scheduled_time,
-                    status="queued",
-                    contact_name=st.contact_name,
-                    contact_phone=st.contact_phone,
-                    template_name=mapping.followup_template_name,
-                    template_components=fu_components,
-                    template_language=mapping.template_language or "pt_BR",
-                    client_id=client_id,
-                    product_name=st.product_name,
-                    private_message="true",  # Sempre envia nota privada com o corpo do follow-up
-                    publish_external_event=True,
-                    chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
-                    is_free_message=False,
-                    cost_per_unit=mapping.cost_per_message or 0.35,
-                    sent_as="TEMPLATE",
-                    event_type=st.event_type,
-                    integration_id=mapping.integration_id,
-                    funnel_id=None,
-                    is_bulk=False,
-                    is_followup=True,
-                    parent_id=st.id,
-                    idempotency_key=fu_idempotency_key,
-                    skip_block_check=True
-                )
-                db.add(fu_st)
-                try:
-                    db.commit()
-                    logger.info(f"⏳ [FOLLOW-UP] Agendado follow-up #{fu_st.id} para #{st.id} as {fu_scheduled_time}")
-                except Exception as fu_err:
-                    db.rollback()
-                    logger.error(f"⚠️ [FOLLOW-UP] Erro ao salvar follow-up para trigger #{st.id}: {fu_err}")
+                    # --- VALIDAÇÃO DE HORÁRIO COMERCIAL DO FOLLOW-UP ---
+                    if getattr(mapping, "followup_business_hours_active", False):
+                        from core.engine.business_hours import is_within_business_hours_generic, get_next_business_hour_start_generic
+                        
+                        fu_days = getattr(mapping, "followup_business_hours_days", None) or [0, 1, 2, 3, 4]
+                        fu_start = getattr(mapping, "followup_business_hours_start", None) or "08:00"
+                        fu_end = getattr(mapping, "followup_business_hours_end", None) or "18:00"
+                        
+                        if not is_within_business_hours_generic(fu_scheduled_time, fu_days, fu_start, fu_end):
+                            old_time = fu_scheduled_time
+                            fu_scheduled_time = get_next_business_hour_start_generic(fu_scheduled_time, fu_days, fu_start)
+                            logger.info(f"🕒 [FOLLOW-UP-BUSINESS-HOURS] Ajustando horario de follow-up {fu_idempotency_key} de {old_time} para {fu_scheduled_time} (fora do comercial)")
+                    fu_st = models.ScheduledTrigger(
+                        scheduled_time=fu_scheduled_time,
+                        status="queued",
+                        contact_name=st.contact_name,
+                        contact_phone=st.contact_phone,
+                        template_name=mapping.followup_template_name,
+                        template_components=fu_components,
+                        template_language=mapping.template_language or "pt_BR",
+                        client_id=client_id,
+                        product_name=st.product_name,
+                        private_message="true",  # Sempre envia nota privada com o corpo do follow-up
+                        publish_external_event=True,
+                        chatwoot_label=robust_extract_labels(mapping.chatwoot_label),
+                        is_free_message=False,
+                        cost_per_unit=mapping.cost_per_message or 0.35,
+                        sent_as="TEMPLATE",
+                        event_type=st.event_type,
+                        integration_id=mapping.integration_id,
+                        funnel_id=None,
+                        is_bulk=False,
+                        is_followup=True,
+                        parent_id=st.id,
+                        idempotency_key=fu_idempotency_key,
+                        skip_block_check=True
+                    )
+                    db.add(fu_st)
+                    try:
+                        db.commit()
+                        logger.info(f"⏳ [FOLLOW-UP] Agendado follow-up #{fu_st.id} para #{st.id} as {fu_scheduled_time}")
+                    except Exception as fu_err:
+                        db.rollback()
+                        logger.error(f"⚠️ [FOLLOW-UP] Erro ao salvar follow-up para trigger #{st.id}: {fu_err}")
                     
         except Exception as e_st:
             db.rollback()

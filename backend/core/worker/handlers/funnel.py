@@ -99,6 +99,15 @@ async def handle_funnel_execution(data: dict):
                     db.commit()
                     return
 
+                # 0. Checagem de Trava de 24h (Deduplicação / Interrupção Inteligente)
+                from services.template_history_service import is_template_sent_in_last_24h, record_template_dispatch
+                if not getattr(trigger, 'skip_block_check', False) and is_template_sent_in_last_24h(db, client_id, contact_phone, trigger.template_name):
+                    logger.warning(f"🚫 [24H_BLOCK] Template '{trigger.template_name}' bloqueado para {contact_phone} nas últimas 24h. Trigger #{trigger.id} cancelado.")
+                    trigger.status = 'cancelled'
+                    trigger.failure_reason = "Template bloqueado pela regra de 24h (Interrupção Inteligente ou envio recente)"
+                    db.commit()
+                    return
+
                 # 1. Enviar Template via Meta
                 res = await chatwoot_cl.send_template(
                     contact_phone,
@@ -110,6 +119,9 @@ async def handle_funnel_execution(data: dict):
                 if res and not res.get("error"):
                     msg_id_raw = res.get("messages", [{}])[0].get("id") if res.get("messages") else "template_sent"
                     msg_id = str(msg_id_raw).replace("wamid.", "")
+
+                    # Registrar envio no histórico de 24h
+                    record_template_dispatch(db, client_id, contact_phone, trigger.template_name, trigger.id)
 
                     # Buscar o conteúdo real do template do cache para enviar no webhook de memória
                     from core.engine.utils import apply_vars

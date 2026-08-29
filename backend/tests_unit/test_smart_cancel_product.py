@@ -6,7 +6,8 @@ import models
 from database import SessionLocal
 from services.webhooks import process_webhook_automation
 
-def test_smart_cancel_with_product_filter(db_session):
+@pytest.mark.asyncio
+async def test_smart_cancel_with_product_filter(db_session):
     db = db_session
     
     # 1. Configurar cliente e integração
@@ -95,13 +96,12 @@ def test_smart_cancel_with_product_filter(db_session):
          patch.object(db, "execute", mock_execute), \
          patch("rabbitmq_client.rabbitmq", mock_rabbitmq):
          
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(process_webhook_automation(
+        await process_webhook_automation(
             client_id=client.id,
             mapping=mapping,
             variables={"phone": "5511999991111", "name": "Cliente Teste", "product_name": "Produto A"},
             history_id=history.id
-        ))
+        )
         
     db.refresh(trigger_same_product)
     db.refresh(trigger_diff_product)

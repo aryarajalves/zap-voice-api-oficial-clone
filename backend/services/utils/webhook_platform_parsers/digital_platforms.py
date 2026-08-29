@@ -12,7 +12,9 @@ def parse_hotmart(payload: dict, result: dict) -> None:
     purchase = data.get("purchase", {})
     
     # 1. Mapeamento de Evento Base
-    if event == "PURCHASE_APPROVED":
+    if payload.get("checkout_pre_populado") or payload.get("is_checkout_pre_populado") or str(payload.get("tipo", "")).lower() == "checkout_pre_populado" or str(payload.get("origem", "")).lower() == "checkout_pre_populado" or event in ["PURCHASE_OUT_OF_SHOPPING_CART", "CHECKOUT_PRE_POPULADO"]:
+        result['event_type'] = "checkout_pre_populado"
+    elif event == "PURCHASE_APPROVED":
         result['event_type'] = "compra_aprovada"
     elif event == "PURCHASE_COMPLETE":
         result['event_type'] = "compra_concluida"
@@ -31,7 +33,7 @@ def parse_hotmart(payload: dict, result: dict) -> None:
     elif event == "PURCHASE_EXPIRED":
         result['event_type'] = "pix_expirado"
     elif event == "PURCHASE_OUT_OF_SHOPPING_CART":
-        result['event_type'] = "carrinho_abandonado"
+        result['event_type'] = "checkout_pre_populado"
     elif event == "SUBSCRIPTION_CANCELLATION":
         result['event_type'] = "reembolso"
     elif event == "SWITCH_PLAN":
@@ -100,8 +102,15 @@ def parse_hotmart(payload: dict, result: dict) -> None:
             payment_type = "PIX"
         elif event == "PURCHASE_BILLET_PRINTED":
             payment_type = "BILLET"
-    result['payment_method'] = payment_type
-    result['order_bump'] = purchase.get("is_order_bump", False)
+    ob_data = purchase.get("order_bump") or data.get("order_bump") or payload.get("order_bump")
+    if isinstance(ob_data, dict):
+        result['order_bump'] = bool(ob_data.get("is_order_bump") or ob_data.get("order_bump") or ob_data.get("active"))
+    elif isinstance(ob_data, bool):
+        result['order_bump'] = ob_data
+    elif ob_data is not None:
+        result['order_bump'] = str(ob_data).lower() in ["true", "1", "yes"]
+    else:
+        result['order_bump'] = bool(purchase.get("is_order_bump", False))
     
     if payment_info:
         result['pix_code'] = payment_info.get("pix_code")
@@ -116,8 +125,8 @@ def parse_hotmart(payload: dict, result: dict) -> None:
         result['raw_status'] = "DELAYED"
     elif event == "PURCHASE_EXPIRED":
         result['raw_status'] = "EXPIRED"
-    elif event == "PURCHASE_OUT_OF_SHOPPING_CART":
-        result['raw_status'] = "PURCHASE_OUT_OF_SHOPPING_CART"
+    elif event in ["PURCHASE_OUT_OF_SHOPPING_CART", "CHECKOUT_PRE_POPULADO"]:
+        result['raw_status'] = "Checkout Pré-populado"
     elif event in ["PURCHASE_CANCELED", "PURCHASE_REFUNDED"]:
         result['raw_status'] = event
     elif event == "SUBSCRIPTION_CANCELLATION":
