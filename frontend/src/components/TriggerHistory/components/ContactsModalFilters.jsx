@@ -38,7 +38,7 @@ export default function ContactsModalFilters({
               <option value="free">🆓 Gratuitos (Livre)</option>
             </select>
           )}
-          {((contactsFilter === 'failed' || contactsFilter === 'blocked') && failureReasons.length > 0) && (
+          {((contactsFilter === 'failed' || contactsFilter === 'blocked' || contactsFilter === 'remaining') && failureReasons.length > 0) && (
             <select
               id="contacts-error-filter"
               value={contactsErrorFilter}
@@ -46,7 +46,7 @@ export default function ContactsModalFilters({
               className="text-[10px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 outline-none font-black uppercase tracking-widest text-gray-700 dark:text-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500/20 transition-all max-w-[200px] truncate cursor-pointer"
             >
               <option value="all">
-                {contactsFilter === 'blocked' ? '🚫 Todos os Bloqueios' : '⚠️ Todos os Erros'}
+                {contactsFilter === 'blocked' ? '🚫 Todos os Bloqueios' : contactsFilter === 'remaining' ? '⏳ Todos os Motivos' : '⚠️ Todos os Erros'}
               </option>
               {failureReasons.map((reason, idx) => (
                 <option key={idx} value={reason}>

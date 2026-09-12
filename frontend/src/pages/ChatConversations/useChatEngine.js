@@ -54,7 +54,7 @@ export function useChatEngine({
   const [isClearChatModalOpen, setIsClearChatModalOpen] = useState(false);
   const [isClearingChat, setIsClearingChat] = useState(false);
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
-  const [mediaData, setMediaData] = useState({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+  const [mediaData, setMediaData] = useState({ total_media: 0, total_docs: 0, total_links: 0, total_notes: 0, total_all: 0, media: [], docs: [], links: [], notes: [] });
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
 
   const loadConversationMedia = async (convoId) => {
@@ -66,10 +66,10 @@ export function useChatEngine({
         const data = await res.json();
         setMediaData(data);
       } else {
-        setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+        setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_notes: 0, total_all: 0, media: [], docs: [], links: [], notes: [] });
       }
     } catch (err) {
-      setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+      setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_notes: 0, total_all: 0, media: [], docs: [], links: [], notes: [] });
     } finally {
       setIsLoadingMedia(false);
     }
@@ -80,7 +80,7 @@ export function useChatEngine({
     if (selectedConvo?.id) {
       loadConversationMedia(selectedConvo.id);
     } else {
-      setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_all: 0, media: [], docs: [], links: [] });
+      setMediaData({ total_media: 0, total_docs: 0, total_links: 0, total_notes: 0, total_all: 0, media: [], docs: [], links: [], notes: [] });
     }
   }, [selectedConvo?.id]);
   const [confirmResendAgentflow, setConfirmResendAgentflow] = useState(null);
@@ -102,6 +102,8 @@ export function useChatEngine({
     conversations,
     setConversations,
     availableLabels,
+    chatLabels,
+    contactLabels,
     availableLabelsDetails,
     availableAgents,
     isAssigning,
@@ -168,7 +170,11 @@ export function useChatEngine({
     handleBulkArchive,
     handleTriggerFunnel,
     handleCancelFunnel,
-    handleClose24hWindow
+    handleClose24hWindow,
+    isBulkFunnelModalOpen,
+    setIsBulkFunnelModalOpen,
+    isTriggeringBulkFunnel,
+    handleBulkTriggerFunnel
   } = useChatFunnelAndStatus({
     activeClient,
     selectedConvo,
@@ -232,13 +238,17 @@ export function useChatEngine({
                 setMessages(prev => appendOrUpdateMessage(prev, msg));
                 setShouldScrollToBottom(true);
 
-                // SE tiver mídia, link ou documento, atualiza mediaData na hora!
+                // SE tiver mídia, link, documento ou anotação privada, atualiza mediaData na hora!
                 const isMediaMsg = msg.media_url ||
                   ['image', 'video', 'document', 'audio', 'voice'].includes(msg.message_type) ||
                   (typeof msg.content === 'string' && (msg.content.includes('http://') || msg.content.includes('https://') || msg.content.includes('www.'))) ||
                   (msg.meta_data && msg.meta_data.header);
 
-                if (isMediaMsg) {
+                const isNoteMsg = msg.sender_type === 'system' &&
+                  typeof msg.content === 'string' &&
+                  (msg.content.includes('Anotação Privada:') || msg.content.includes('Nota:'));
+
+                if (isMediaMsg || isNoteMsg) {
                   loadConversationMedia(selectedConvo.id);
                 }
               }
@@ -377,6 +387,8 @@ export function useChatEngine({
     loadAvailableAgents,
     handleAssignConversation,
     loadAvailableLabels,
+    chatLabels,
+    contactLabels,
     getLabelColor,
     loadMessages,
     handleSendMessage,
@@ -393,6 +405,10 @@ export function useChatEngine({
     loadMoreMessages,
     handleTriggerFunnel,
     handleCancelFunnel,
-    handleClose24hWindow
+    handleClose24hWindow,
+    isBulkFunnelModalOpen,
+    setIsBulkFunnelModalOpen,
+    isTriggeringBulkFunnel,
+    handleBulkTriggerFunnel
   };
 }

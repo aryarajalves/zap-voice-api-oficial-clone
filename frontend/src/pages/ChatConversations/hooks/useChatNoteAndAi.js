@@ -55,6 +55,7 @@ export function useChatNoteAndAi({ engine, selectedConvo, setSelectedConvo, acti
                 engine.setPrivateNote('');
 
                 toast.success('Anotação privada atualizada!');
+                engine.loadConversationMedia?.(selectedConvo.id);
                 setEditingNoteId(null);
                 setEditingNoteText('');
             } else {
@@ -88,6 +89,18 @@ export function useChatNoteAndAi({ engine, selectedConvo, setSelectedConvo, acti
                 engine.setConversations(prev => prev.map(c => c.id === selectedConvo.id ? { ...c, private_note: newestNote } : c));
                 engine.setPrivateNote('');
 
+                engine.setMediaData?.(prev => {
+                    if (!prev) return prev;
+                    const filteredNotes = (prev.notes || []).filter(n => n.id !== msgId && n.message_id !== msgId);
+                    return {
+                        ...prev,
+                        notes: filteredNotes,
+                        total_notes: Math.max(0, (prev.total_notes || (prev.notes || []).length) - 1),
+                        total_all: Math.max(0, (prev.total_all || 1) - 1)
+                    };
+                });
+
+                engine.loadConversationMedia?.(selectedConvo.id);
                 toast.success('Anotação privada excluída!');
                 setDeleteNoteConfirmMsgId(null);
             } else {

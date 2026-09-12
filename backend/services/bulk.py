@@ -1,6 +1,9 @@
 import asyncio
 import models
-from database import SessionLocal
+import database
+
+def SessionLocal():
+    return database.SessionLocal()
 from chatwoot_client import ChatwootClient
 from rabbitmq_client import rabbitmq
 from config_loader import get_setting
@@ -8,14 +11,14 @@ from core.logger import setup_logger
 from services.utils.bulk_helpers import render_template_body, extract_body_from_components, resolve_template_body_with_sync
 from services.utils.phone_utils import normalize_phone
 from services.bulk_persistence import get_sent_phones_set, update_trigger_stats, record_blocked_status, record_skipped_status
-from services.bulk_core import send_smart_message
+from services.bulk_core import send_smart_message, _extract_header_media
 
 # Re-exportações para compatibilidade retrógrada (Padrão Barrel)
 from services.bulk_funnel import process_bulk_funnel
 from services.bulk_simulation import simulate_lifecycle, notify_progress
 
 import zoneinfo
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 logger = setup_logger(__name__)
 BRAZIL_TZ = zoneinfo.ZoneInfo("America/Sao_Paulo")
@@ -41,26 +44,32 @@ async def refresh_dynamic_label_contacts(init_trig, db = None) -> list:
     """
     Se o trigger estiver configurado como is_dynamic_label=True, busca a lista
     de contatos mais recente da tabela de Contatos (WebhookLead - Aba de Contatos)
-    no banco de dados local para a etiqueta especificada (ex: 'aryaraj').
+    no banco de dados local para as etiquetas especificadas.
+    
+    Também aplica dinamicamente o filtro de exclusão:
+    - Re-consulta as etiquetas configuradas em `exclusion_tags` (com modo OR ou AND).
+    - Subtrai da lista de envio qualquer contato que possua a etiqueta de exclusão ou
+      esteja na `exclusion_list` (números estáticos manuais/planilha).
     """
     if not getattr(init_trig, "is_dynamic_label", False):
         return None
 
-    label_name = getattr(init_trig, "dynamic_label_name", None)
-    if not label_name and init_trig.chatwoot_label:
-        if isinstance(init_trig.chatwoot_label, list) and len(init_trig.chatwoot_label) > 0:
-            label_name = init_trig.chatwoot_label[0]
+    # 1. Coletar todas as etiquetas de envio (inclusão)
+    target_labels = []
+    if getattr(init_trig, "dynamic_label_name", None):
+        target_labels.extend([t.strip() for t in str(init_trig.dynamic_label_name).split(",") if t.strip()])
+    
+    if getattr(init_trig, "chatwoot_label", None):
+        if isinstance(init_trig.chatwoot_label, list):
+            target_labels.extend([str(t).strip() for t in init_trig.chatwoot_label if str(t).strip()])
         elif isinstance(init_trig.chatwoot_label, str):
-            label_name = init_trig.chatwoot_label
+            target_labels.extend([t.strip() for t in init_trig.chatwoot_label.split(",") if t.strip()])
 
-    if not label_name:
+    # Deduplicar preservando a ordem
+    target_labels = list(dict.fromkeys(target_labels))
+    if not target_labels:
         return None
 
-    clean_label = label_name.strip()
-    new_contacts = []
-    seen_phones = set()
-
-    # Buscar na tabela de Contatos local (WebhookLead - Aba de Contatos)
     local_db = db
     should_close = False
     if local_db is None:
@@ -69,32 +78,103 @@ async def refresh_dynamic_label_contacts(init_trig, db = None) -> list:
 
     try:
         from models import WebhookLead
-        from sqlalchemy import func
+        from sqlalchemy import func, or_, and_
 
+        # 2. Buscar contatos das etiquetas de destino (Inclusão)
+        inclusion_filters = [
+            func.concat(',', func.replace(func.coalesce(WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{label},%")
+            for label in target_labels
+        ]
+        
         leads = local_db.query(WebhookLead).filter(
             WebhookLead.client_id == init_trig.client_id,
-            func.concat(',', func.replace(func.coalesce(WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{clean_label},%")
+            or_(*inclusion_filters)
         ).all()
 
+        raw_contacts = []
+        seen_phones = set()
         for l in leads:
             if l.phone:
                 phone_digits = "".join(filter(str.isdigit, str(l.phone)))
                 if len(phone_digits) >= 8 and phone_digits not in seen_phones:
                     seen_phones.add(phone_digits)
-                    new_contacts.append({
+                    raw_contacts.append({
                         "phone": phone_digits,
                         "name": l.name or "",
                         "email": l.email or ""
                     })
-        if new_contacts:
-            logger.info(f"🔄 [DYNAMIC LABEL - ABA CONTATOS] Encontrados {len(new_contacts)} contatos locais com a etiqueta '{clean_label}' no trigger {init_trig.id}")
+
+        # 3. Coletar números a serem excluídos dinamicamente
+        excluded_phones = set()
+
+        # A) Etiquetas de exclusão (exclusion_tags)
+        raw_ex_tags = getattr(init_trig, "exclusion_tags", None)
+        ex_tags = []
+        if raw_ex_tags:
+            if isinstance(raw_ex_tags, list):
+                ex_tags = [str(t).strip() for t in raw_ex_tags if str(t).strip()]
+            elif isinstance(raw_ex_tags, str):
+                ex_tags = [t.strip() for t in raw_ex_tags.split(",") if t.strip()]
+
+        if ex_tags:
+            tag_mode = (getattr(init_trig, "exclusion_tag_mode", "OR") or "OR").upper()
+            tag_conditions = [
+                func.concat(',', func.replace(func.coalesce(WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                for t in ex_tags
+            ]
+            
+            ex_query = local_db.query(WebhookLead.phone).filter(
+                WebhookLead.client_id == init_trig.client_id
+            )
+            if tag_mode == "AND":
+                ex_query = ex_query.filter(and_(*tag_conditions))
+            else:
+                ex_query = ex_query.filter(or_(*tag_conditions))
+
+            for (phone_val,) in ex_query.all():
+                if phone_val:
+                    digits = "".join(filter(str.isdigit, str(phone_val)))
+                    if digits:
+                        excluded_phones.add(digits)
+
+        # B) Lista de exclusão estática (números manuais ou via CSV)
+        raw_ex_list = getattr(init_trig, "exclusion_list", None)
+        if raw_ex_list and isinstance(raw_ex_list, list):
+            for item in raw_ex_list:
+                num = item if isinstance(item, str) else (item.get("phone") if isinstance(item, dict) else str(item))
+                digits = "".join(filter(str.isdigit, str(num)))
+                if digits:
+                    excluded_phones.add(digits)
+
+        # Preparar sufixos de 8 dígitos para matching resiliente de exclusão
+        excluded_suffixes_8 = {p[-8:] for p in excluded_phones if len(p) >= 8}
+
+        # 4. Filtrar a lista final subtraindo os contatos excluídos
+        final_contacts = []
+        excluded_count = 0
+        for c in raw_contacts:
+            c_phone = c["phone"]
+            c_suffix_8 = c_phone[-8:] if len(c_phone) >= 8 else c_phone
+            
+            if c_phone in excluded_phones or c_suffix_8 in excluded_suffixes_8:
+                excluded_count += 1
+                continue
+            final_contacts.append(c)
+
+        logger.info(
+            f"🔄 [DYNAMIC REFRESH] Trigger {init_trig.id} | Etiquetas: {target_labels} | "
+            f"Brutos: {len(raw_contacts)} | Excluídos por tags ({ex_tags}) ou lista: {excluded_count} | "
+            f"Total Final Qualificado: {len(final_contacts)}"
+        )
+
+        return final_contacts
     except Exception as e_local:
-        logger.error(f"⚠️ Erro ao consultar a Aba de Contatos para a etiqueta '{clean_label}': {e_local}")
+        logger.error(f"⚠️ Erro ao atualizar contatos dinâmicos com exclusão para o trigger {init_trig.id}: {e_local}")
+        return None
     finally:
         if should_close:
             local_db.close()
 
-    return new_contacts if new_contacts else None
 
 async def sync_queued_dynamic_triggers(db, client_id: int):
     """
@@ -127,12 +207,13 @@ async def sync_queued_dynamic_triggers(db, client_id: int):
     except Exception as e:
         logger.error(f"⚠️ Erro ao sincronizar contatos de disparos dinâmicos em fila: {e}")
 
-async def process_bulk_send(trigger_id: int, template_name: str, contacts: list, delay: int, concurrency: int, language: str = 'pt_BR', components: list = None, direct_message: str = None, direct_message_params: dict = None):
+async def process_bulk_send(trigger_id: int, template_name: str, contacts: list, delay: int, concurrency: int, language: str = 'pt_BR', components: list = None, direct_message: str = None, direct_message_params: dict = None, db = None):
 
     logger.info(f"Starting BULK SEND {trigger_id} | Contacts: {len(contacts or [])} | Delay: {delay}s |  Concurrency: {concurrency} | Lang: {language} | DM: {bool(direct_message)}")
     
     # Initialize tracking and client
-    db_init = SessionLocal()
+    db_init = db or SessionLocal()
+    should_close_init = (db is None)
     try:
         init_trig = db_init.query(models.ScheduledTrigger).get(trigger_id)
         if not init_trig:
@@ -152,12 +233,64 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
             contacts = updated_dynamic_contacts
 
 
+        # Higienização e deduplicação preventiva: mantém apenas telefones válidos e únicos
+        unique_contacts = []
+        seen_phones_initial = set()
+        duplicates_removed = 0
+        invalid_removed = 0
+        for c in (contacts or []):
+            p_raw = c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or c.get('whatsapp') or c.get('contact_phone') or c.get('number') or '')
+            p_norm = normalize_phone(p_raw)
+            if not p_norm or len(p_norm) < 8:
+                invalid_removed += 1
+                continue
+            if p_norm in seen_phones_initial:
+                duplicates_removed += 1
+                continue
+            seen_phones_initial.add(p_norm)
+            unique_contacts.append(c)
+
+        if duplicates_removed > 0 or invalid_removed > 0:
+            logger.info(
+                f"🧹 [BULK CLEANUP] Trigger #{trigger_id} | Original: {len(contacts or [])} | "
+                f"Duplicados removidos: {duplicates_removed} | Inválidos: {invalid_removed} | "
+                f"Qualificados únicos: {len(unique_contacts)}"
+            )
+
+        contacts = unique_contacts
+
         if not contacts:
             init_trig.status = "completed"
             init_trig.total_sent = 0
             init_trig.total_failed = 0
             db_init.commit()
             return
+
+        # Checagem de Prazo Limite (se max_dispatch_time já passou no momento do início)
+        now_start = datetime.now(timezone.utc)
+        if getattr(init_trig, "max_dispatch_time", None):
+            mdt = init_trig.max_dispatch_time
+            if mdt.tzinfo is None:
+                mdt = mdt.replace(tzinfo=timezone.utc)
+            if now_start > mdt:
+                abort_msg = f"Prazo limite de envio já expirado ({mdt.astimezone(BRAZIL_TZ).strftime('%d/%m/%Y %H:%M')}). Disparo abortado."
+                logger.warning(f"🛑 [BULK TIMEOUT] Trigger #{trigger_id} já iniciado após o prazo limite ({mdt.isoformat()}). Abortado.")
+                for c in contacts:
+                    p_num = normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or ''))
+                    if p_num:
+                        db_init.add(models.MessageStatus(
+                            trigger_id=trigger_id, phone_number=p_num, status='failed',
+                            failure_reason=abort_msg, content=f"[Disparo Expirado] {template_name or 'Mensagem Direta'}"
+                        ))
+                from services.engine import log_node_execution
+                log_node_execution(db_init, init_trig, node_id=init_trig.current_node_id or 'DELIVERY', status='failed', details=abort_msg)
+                init_trig.status = "aborted"
+                init_trig.failure_reason = abort_msg
+                init_trig.total_failed = len(contacts)
+                init_trig.total_contacts = len(contacts)
+                init_trig.pending_contacts = []
+                db_init.commit()
+                return
 
         total = len(contacts)
         all_phones = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or '')) for c in contacts]
@@ -173,10 +306,15 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         if "started_at" not in pdata:
             pdata["started_at"] = datetime.utcnow().isoformat()
         pdata.pop("finished_at", None)
+        if duplicates_removed > 0:
+            pdata["duplicates_removed"] = duplicates_removed
+        if invalid_removed > 0:
+            pdata["invalid_removed"] = invalid_removed
         init_trig.processed_data = pdata
         
         c_label = init_trig.chatwoot_label
         c_id = init_trig.client_id
+        trig_exclusion_list = list(init_trig.exclusion_list or []) if getattr(init_trig, 'exclusion_list', None) else []
 
         from services.engine import log_node_execution
         client_name = get_setting("CLIENT_NAME", "ZAPVOICE", client_id=init_trig.client_id)
@@ -184,7 +322,8 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         log_node_execution(db_init, init_trig, node_id='DELIVERY', status='processing', details=f'{client_name}: Enviando para {total} contatos...')
         db_init.commit()
     finally:
-        db_init.close()
+        if should_close_init:
+            db_init.close()
 
 
     # Pre-fetch template and interaction data
@@ -232,8 +371,8 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                 if len(p_norm) >= 8:
                     blocked_set.add(p_norm[-8:])
                     
-        # Carregar contatos da lista de exclusão do disparo (Filtro de Exclusão com getattr seguro)
-        exclusion_list = getattr(init_trig, 'exclusion_list', None) or []
+        # Carregar contatos da lista de exclusão do disparo (Filtro de Exclusão seguro)
+        exclusion_list = trig_exclusion_list
         if exclusion_list:
             for excl in exclusion_list:
                 p_norm = normalize_phone(excl)
@@ -248,6 +387,22 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
         logger.error(f"⚠️ [BULK] Erro ao carregar contatos bloqueados/descanso/exclusao: {e_prefetch_block}")
     finally:
         db_check_init.close()
+
+    # Pre-warm Media ID da Meta para mídias no header do template (Otimização 1)
+    if components:
+        header_media = _extract_header_media(components)
+        if header_media:
+            m_type, m_url = header_media
+            try:
+                logger.info(f"🚀 [BULK WARMUP] Pré-carregando mídia do header ({m_type}) para obter Media ID único na Meta: {m_url}")
+                wa_client = getattr(chatwoot, "_wa", chatwoot)
+                media_payload = {"link": m_url}
+                if hasattr(wa_client, "_resolve_and_upload_media_param"):
+                    await wa_client._resolve_and_upload_media_param(m_type, media_payload)
+                    if media_payload.get("id"):
+                        logger.info(f"✅ [BULK WARMUP] Media ID ({media_payload['id']}) obtido e armazenado em cache para todos os contatos!")
+            except Exception as e_warm:
+                logger.warning(f"⚠️ [BULK WARMUP] Não foi possível pré-aquecer mídia do template: {e_warm}")
 
     all_sim_tasks = []
     try:
@@ -278,6 +433,50 @@ async def process_bulk_send(trigger_id: int, template_name: str, contacts: list,
                     db_batch.refresh(current_trig)
                     if not current_trig or current_trig.status == 'cancelled':
                         return
+
+                # Checagem de prazo limite e fallback 24h a cada lote
+                now_check = datetime.now(timezone.utc)
+                deadline = current_trig.max_dispatch_time
+                if not deadline:
+                    started_at_str = (current_trig.processed_data or {}).get("started_at")
+                    if started_at_str:
+                        try:
+                            started_dt = datetime.fromisoformat(started_at_str)
+                            if started_dt.tzinfo is None:
+                                started_dt = started_dt.replace(tzinfo=timezone.utc)
+                            deadline = started_dt + timedelta(hours=24)
+                        except Exception:
+                            deadline = None
+
+                if deadline and deadline.tzinfo is None:
+                    deadline = deadline.replace(tzinfo=timezone.utc)
+
+                if deadline and now_check > deadline:
+                    remaining_contacts = contacts[i:]
+                    formatted_deadline = deadline.astimezone(BRAZIL_TZ).strftime('%d/%m/%Y %H:%M')
+                    abort_reason = f"Prazo limite de envio atingido ({formatted_deadline}). Disparo abortado para contatos restantes."
+                    logger.warning(f"🛑 [BULK TIMEOUT] Trigger #{trigger_id} ultrapassou o prazo limite ({formatted_deadline}). Abortando {len(remaining_contacts)} contatos.")
+                    new_abort_fails = 0
+                    for rem_c in remaining_contacts:
+                        rem_p_raw = rem_c if isinstance(rem_c, str) else (rem_c.get('phone') or rem_c.get('telefone') or rem_c.get('whatsapp') or '')
+                        rem_p = normalize_phone(rem_p_raw)
+                        if rem_p and rem_p not in sent_phones_set:
+                            db_batch.add(models.MessageStatus(
+                                trigger_id=trigger_id, phone_number=rem_p, status='failed',
+                                failure_reason=abort_reason, content=f"[Disparo Abortado] {template_name or 'Mensagem Direta'}"
+                            ))
+                            new_abort_fails += 1
+                            sent_phones_set.add(rem_p)
+
+                    from services.engine import log_node_execution
+                    log_node_execution(db_batch, current_trig, node_id=current_trig.current_node_id or 'DELIVERY', status='failed', details=abort_reason)
+                    current_trig.status = 'aborted'
+                    current_trig.failure_reason = abort_reason
+                    current_trig.total_failed = (current_trig.total_failed or 0) + new_abort_fails
+                    current_trig.pending_contacts = []
+                    db_batch.commit()
+                    await rabbitmq.publish_event("trigger_updated", {"trigger_id": trigger_id, "status": "aborted", "client_id": c_id})
+                    return
 
                 batch = contacts[i:i + concurrency]
                 batch_phones_norm = [normalize_phone(c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or '')) for c in batch]

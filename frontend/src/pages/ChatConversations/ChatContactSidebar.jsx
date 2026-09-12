@@ -47,7 +47,8 @@ export default function ChatContactSidebar({
     onSelectMessage,
     messages = [],
     handleToggleStarMessage,
-    formatMessageTimestamp
+    formatMessageTimestamp,
+    handleDeleteNoteMsg
 }) {
     const [isMaximizedOpen, setIsMaximizedOpen] = React.useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
@@ -271,6 +272,7 @@ export default function ChatContactSidebar({
                 mediaData={mediaData}
                 isLoading={isLoadingMedia}
                 activeClientId={activeClientId}
+                onDeleteNote={handleDeleteNoteMsg}
             />
 
             {/* Modal de Compartilhar Contato */}

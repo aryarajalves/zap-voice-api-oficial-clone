@@ -4,6 +4,7 @@ import SearchableSelect from '../common/SearchableSelect';
 const ExclusionListManager = ({
     exclusionList,
     setExclusionList,
+    clearExclusionList,
     exclusionMode,
     setExclusionMode,
     exclusionText,
@@ -42,7 +43,7 @@ const ExclusionListManager = ({
                     </div>
                     {exclusionList.length > 0 && (
                         <button
-                            onClick={() => setExclusionList([])}
+                            onClick={clearExclusionList ? clearExclusionList : () => setExclusionList([])}
                             className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500 text-white rounded-2xl border border-red-500/20 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-900/10 group"
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="group-hover:rotate-12 transition-transform"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

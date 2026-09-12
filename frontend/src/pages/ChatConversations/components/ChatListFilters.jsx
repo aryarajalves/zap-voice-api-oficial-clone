@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { FiSearch, FiTag, FiRefreshCw, FiSlash, FiCalendar, FiClock, FiSliders, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import ChatLabelFilterDropdown from './ChatLabelFilterDropdown';
 
 export default function ChatListFilters({
     activeTab,
@@ -11,6 +12,8 @@ export default function ChatListFilters({
     selectedLabelFilter,
     setSelectedLabelFilter,
     availableLabels = [],
+    availableLabelsDetails = [],
+    getLabelColor,
     activeFilterTab,
     setActiveFilterTab,
     filterWindowOpen,
@@ -181,14 +184,13 @@ export default function ChatListFilters({
 
                 {activeFilterTab === 'marcador' && (
                     <div className="px-4 pb-3">
-                        <select
-                            value={selectedLabelFilter || ''}
-                            onChange={e => setSelectedLabelFilter(e.target.value || null)}
-                            className="bg-white dark:bg-[#1e293b] text-gray-700 dark:text-gray-300 text-xs w-full py-1.5 rounded-lg border"
-                        >
-                            <option value="">Todos</option>
-                            {availableLabels.map(l => <option key={l} value={l}>{l}</option>)}
-                        </select>
+                        <ChatLabelFilterDropdown
+                            selectedLabelFilter={selectedLabelFilter}
+                            setSelectedLabelFilter={setSelectedLabelFilter}
+                            availableLabels={availableLabels}
+                            availableLabelsDetails={availableLabelsDetails}
+                            getLabelColor={getLabelColor}
+                        />
                     </div>
                 )}
 

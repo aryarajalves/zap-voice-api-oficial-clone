@@ -37,7 +37,7 @@ venv/
 ENV/
 build/
 develop-eggs/
-dist/
+backend/dist/
 downloads/
 eggs/
 .eggs/
@@ -109,3 +109,9 @@ test_*.db
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# === Manter frontend/dist obrigatório para a imagem API ===
+!frontend/dist/
+!frontend/dist/**
+
+

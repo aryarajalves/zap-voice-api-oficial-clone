@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import { FiCpu } from 'react-icons/fi';
 import NodeHeader from '../components/NodeHeader';
+import ConditionTagSelector from '../components/ConditionTagSelector';
 
 const ConditionNode = ({ id, data }) => {
     const [activeTab, setActiveTab] = useState('config');
@@ -31,7 +32,7 @@ const ConditionNode = ({ id, data }) => {
                         onChange={(e) => data.onChange(id, { conditionType: e.target.value })}
                     >
                         <option value="text">Busca por Texto (Simples)</option>
-                        <option value="tag">Tag no Chatwoot</option>
+                        <option value="tag">Etiqueta no Chat (ZapVoice)</option>
                         <option value="ai_question">Análise de Resposta (IA)</option>
                         <option value="datetime_range">Período de Data/Hora (Antes/Durante/Depois)</option>
                         <option value="weekday">Dias da Semana</option>
@@ -72,17 +73,10 @@ const ConditionNode = ({ id, data }) => {
                 )}
 
                 {conditionType === 'tag' && (
-                    <div className="animate-fade-in">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Nome da Tag (sem #)</label>
-                        <input
-                            type="text"
-                            placeholder="ex: interessado"
-                            className="nodrag nopan w-full text-sm p-2 border rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono shadow-sm"
-                            value={data.tag || ''}
-                            onChange={(e) => data.onChange(id, { tag: e.target.value })}
-                        />
-                        <p className="text-[9px] text-gray-400 mt-1 italic">Dica: O sistema ignora acentos e maiúsculas automaticamente.</p>
-                    </div>
+                    <ConditionTagSelector
+                        selectedTag={data.tag || ''}
+                        onSelectTag={(tag) => data.onChange(id, { tag })}
+                    />
                 )}
 
                 {isRange && (

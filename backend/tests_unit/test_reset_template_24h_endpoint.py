@@ -33,6 +33,15 @@ def test_reset_template_24h_history_clears_records(db_session: Session):
         timestamp=cutoff,
         trigger_id=None
     )
+    # Mensagem vinculada a um disparo em massa (trigger_id != None) - JAMAIS pode ser apagada
+    ms_campaign = models.MessageStatus(
+        phone_number=phone,
+        template_name=template_name,
+        status="failed",
+        failure_reason="Business eligibility payment issue",
+        timestamp=cutoff,
+        trigger_id=999
+    )
 
     # 2. Criar dados para outro template (que NÃO deve ser afetado)
     hist2 = models.ContactTemplateHistory(
@@ -42,7 +51,7 @@ def test_reset_template_24h_history_clears_records(db_session: Session):
         dispatched_at=cutoff
     )
 
-    db_session.add_all([hist1, ms1, hist2])
+    db_session.add_all([hist1, ms1, ms_campaign, hist2])
     db_session.commit()
 
     # Executar a mesma consulta do endpoint
@@ -60,6 +69,13 @@ def test_reset_template_24h_history_clears_records(db_session: Session):
 
     assert deleted_history == 1
     assert deleted_ms == 1
+
+    # Verificar que a mensagem da campanha (trigger_id=999) permaneceu INTACTA
+    campaign_msg = db_session.query(models.MessageStatus).filter(
+        models.MessageStatus.trigger_id == 999
+    ).first()
+    assert campaign_msg is not None
+    assert campaign_msg.status == "failed"
 
     # Verificar que o outro template permaneceu intacto
     remaining_other = db_session.query(models.ContactTemplateHistory).filter(

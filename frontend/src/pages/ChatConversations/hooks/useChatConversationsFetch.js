@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../../AuthContext';
 import { API_URL } from '../../../config';
@@ -25,6 +25,8 @@ export function useChatConversationsFetch({
 }) {
   const [conversations, setConversations] = useState([]);
   const [availableLabels, setAvailableLabels] = useState([]);
+  const [chatLabels, setChatLabels] = useState([]);
+  const [contactLabels, setContactLabels] = useState([]);
   const [availableLabelsDetails, setAvailableLabelsDetails] = useState([]);
   const [availableAgents, setAvailableAgents] = useState([]);
   const [isAssigning, setIsAssigning] = useState(false);
@@ -153,20 +155,56 @@ export function useChatConversationsFetch({
     }
   };
 
-  // Fetch Available Labels
-  const loadAvailableLabels = async () => {
-    if (!activeClient) return;
+  // Fetch Available Labels & Contatos Tags
+  const loadAvailableLabels = useCallback(async () => {
+    if (!activeClient?.id) return;
     try {
-      const res = await fetchWithAuth(`${API_URL}/chat/labels/details`, {}, activeClient.id);
-      if (res.ok) {
-        const data = await res.json();
-        setAvailableLabelsDetails(data);
-        setAvailableLabels(data.map(l => l.name));
+      const [resChat, resLeads] = await Promise.all([
+        fetchWithAuth(`${API_URL}/chat/labels/details`, {}, activeClient.id),
+        fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id).catch(() => null)
+      ]);
+
+      let chatDetails = [];
+      const chatLabelSet = new Set();
+      const contactLabelSet = new Set();
+      const combinedSet = new Set();
+
+      if (resChat && resChat.ok) {
+        chatDetails = await resChat.json();
+        chatDetails.forEach(l => {
+          if (l.name) {
+            const clean = l.name.trim();
+            chatLabelSet.add(clean);
+            combinedSet.add(clean);
+          }
+        });
+        setAvailableLabelsDetails(chatDetails);
       }
+
+      if (resLeads && resLeads.ok) {
+        const leadsData = await resLeads.json();
+        if (Array.isArray(leadsData.tags)) {
+          leadsData.tags.forEach(t => {
+            if (t && typeof t === 'string' && t.trim()) {
+              const clean = t.trim();
+              contactLabelSet.add(clean);
+              combinedSet.add(clean);
+            }
+          });
+        }
+      }
+
+      const nextChat = Array.from(chatLabelSet).sort((a, b) => a.localeCompare(b));
+      const nextContact = Array.from(contactLabelSet).sort((a, b) => a.localeCompare(b));
+      const nextAvailable = Array.from(combinedSet).sort((a, b) => a.localeCompare(b));
+
+      setChatLabels(prev => (prev.length === nextChat.length && prev.every((v, i) => v === nextChat[i])) ? prev : nextChat);
+      setContactLabels(prev => (prev.length === nextContact.length && prev.every((v, i) => v === nextContact[i])) ? prev : nextContact);
+      setAvailableLabels(prev => (prev.length === nextAvailable.length && prev.every((v, i) => v === nextAvailable[i])) ? prev : nextAvailable);
     } catch (err) {
       console.error('Erro ao buscar marcadores detalhados:', err);
     }
-  };
+  }, [activeClient?.id]);
 
   const getLabelColor = (labelName) => {
     if (!labelName) return '#3b82f6';
@@ -180,6 +218,8 @@ export function useChatConversationsFetch({
     conversations,
     setConversations,
     availableLabels,
+    chatLabels,
+    contactLabels,
     availableLabelsDetails,
     availableAgents,
     isAssigning,

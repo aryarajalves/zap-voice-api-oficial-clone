@@ -1,143 +1,10 @@
-import React, { useState, useEffect, useMemo, memo } from 'react';
-import { FiX, FiImage, FiFileText, FiLink, FiDownload, FiExternalLink, FiVideo, FiMic, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { BsImages } from 'react-icons/bs';
-import { resolveMediaUrl } from '../../utils/mediaUrlResolver';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FiX, FiImage, FiFileText, FiLink, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { BsImages, BsJournalText } from 'react-icons/bs';
+import { MediaGridItem, DocumentGridItem, LinkGridItem, NoteCardItem } from './MediaModalItems';
+import ConfirmModal from '../../../../components/ConfirmModal';
 
 const ITEMS_PER_PAGE = 20;
-
-/**
- * Item de Mídia Otimizado com carregamento assíncrono e tratamento de erro isolado
- */
-const MediaGridItem = memo(function MediaGridItem({ item, activeClientId, formatDate }) {
-    const [hasError, setHasError] = useState(false);
-    const [isLoaded, setIsLoaded] = useState(false);
-
-    const resolvedUrl = useMemo(() => {
-        return resolveMediaUrl(item.url, activeClientId);
-    }, [item.url, activeClientId]);
-
-    const formattedDate = useMemo(() => formatDate(item.timestamp), [item.timestamp, formatDate]);
-
-    const isVideo = item.type === 'video';
-    const isAudio = item.type === 'audio' || item.type === 'voice';
-
-    return (
-        <div
-            className="group relative aspect-square bg-[#1e293b]/70 border border-white/10 rounded-xl overflow-hidden cursor-pointer hover:border-emerald-500/50 hover:shadow-lg transition-all transform-gpu"
-            onClick={() => window.open(resolvedUrl, '_blank')}
-        >
-            {isVideo ? (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-black/40 text-white">
-                    <FiVideo size={28} className="text-emerald-400 mb-1" />
-                    <span className="text-[10px] bg-black/60 px-1.5 py-0.5 rounded font-mono">Vídeo</span>
-                </div>
-            ) : isAudio ? (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-black/40 text-white">
-                    <FiMic size={28} className="text-amber-400 mb-1" />
-                    <span className="text-[10px] bg-black/60 px-1.5 py-0.5 rounded font-mono">Áudio</span>
-                </div>
-            ) : hasError ? (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-[#1e293b] text-gray-400 p-2 text-center">
-                    <FiImage size={24} className="mb-1 text-emerald-400/80" />
-                    <span className="text-[10px] truncate max-w-full">{item.caption || 'Imagem'}</span>
-                </div>
-            ) : (
-                <>
-                    {!isLoaded && (
-                        <div className="absolute inset-0 bg-slate-800/60 animate-pulse flex items-center justify-center">
-                            <FiImage size={20} className="text-gray-500 opacity-40" />
-                        </div>
-                    )}
-                    <img
-                        src={resolvedUrl}
-                        alt={item.caption || "Mídia"}
-                        loading="lazy"
-                        decoding="async"
-                        fetchPriority="low"
-                        onLoad={() => setIsLoaded(true)}
-                        onError={() => setHasError(true)}
-                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 ${
-                            isLoaded ? 'opacity-100' : 'opacity-0'
-                        }`}
-                    />
-                </>
-            )}
-
-            {/* Overlay ao passar mouse */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 text-white pointer-events-none">
-                <p className="text-[10px] font-medium truncate">{item.caption || (isVideo ? 'Vídeo' : isAudio ? 'Áudio' : 'Imagem')}</p>
-                <p className="text-[9px] text-gray-300">{formattedDate}</p>
-            </div>
-        </div>
-    );
-});
-
-/**
- * Item de Documento Otimizado
- */
-const DocumentGridItem = memo(function DocumentGridItem({ doc, activeClientId, formatDate }) {
-    const resolvedUrl = useMemo(() => resolveMediaUrl(doc.url, activeClientId), [doc.url, activeClientId]);
-    const formattedDate = useMemo(() => formatDate(doc.timestamp), [doc.timestamp, formatDate]);
-    const fileName = doc.filename || (doc.url ? doc.url.split('/').pop().split('?')[0] : 'Documento');
-
-    return (
-        <a
-            href={resolvedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-3.5 bg-[#1e293b]/70 hover:bg-[#1e293b] border border-white/10 hover:border-emerald-500/40 rounded-xl transition-all group"
-        >
-            <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
-                <FiFileText size={20} />
-            </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-200 truncate group-hover:text-emerald-400 transition-colors">
-                    {fileName}
-                </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">
-                    {formattedDate}
-                </p>
-            </div>
-            <FiDownload size={16} className="text-gray-400 group-hover:text-white transition-colors" />
-        </a>
-    );
-});
-
-/**
- * Item de Link Otimizado
- */
-const LinkGridItem = memo(function LinkGridItem({ linkItem, formatDate }) {
-    const formattedDate = useMemo(() => formatDate(linkItem.timestamp), [linkItem.timestamp, formatDate]);
-
-    return (
-        <a
-            href={linkItem.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-start gap-3 p-3.5 bg-[#1e293b]/70 hover:bg-[#1e293b] border border-white/10 hover:border-emerald-500/40 rounded-xl transition-all group"
-        >
-            <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform shrink-0 mt-0.5">
-                <FiLink size={18} />
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-semibold text-blue-400 truncate group-hover:underline">
-                        {linkItem.url}
-                    </p>
-                    <FiExternalLink size={12} className="text-gray-400 group-hover:text-blue-400 shrink-0" />
-                </div>
-                {linkItem.preview_text && (
-                    <p className="text-xs text-gray-300 line-clamp-2 mt-1 font-sans">
-                        {linkItem.preview_text}
-                    </p>
-                )}
-                <p className="text-[10px] text-gray-500 mt-1">
-                    {formattedDate}
-                </p>
-            </div>
-        </a>
-    );
-});
 
 export default function ConversationMediaModal({
     isOpen,
@@ -145,10 +12,28 @@ export default function ConversationMediaModal({
     contactName,
     mediaData,
     isLoading,
-    activeClientId
+    activeClientId,
+    onDeleteNote
 }) {
-    const [activeTab, setActiveTab] = useState('media'); // 'media' | 'docs' | 'links'
+    const [activeTab, setActiveTab] = useState('media'); // 'media' | 'docs' | 'links' | 'notes'
     const [currentPage, setCurrentPage] = useState(1);
+    const [noteToDelete, setNoteToDelete] = useState(null);
+    const [isDeletingNote, setIsDeletingNote] = useState(false);
+
+    const handleConfirmDeleteNote = async () => {
+        if (!noteToDelete) return;
+        setIsDeletingNote(true);
+        try {
+            if (onDeleteNote) {
+                await onDeleteNote(noteToDelete.id || noteToDelete.message_id);
+            }
+            setNoteToDelete(null);
+        } catch (err) {
+            console.error("Erro ao excluir anotação:", err);
+        } finally {
+            setIsDeletingNote(false);
+        }
+    };
 
     // Resetar página ao mudar de aba ou quando novos dados forem carregados
     useEffect(() => {
@@ -158,16 +43,20 @@ export default function ConversationMediaModal({
     const mediaList = useMemo(() => mediaData?.media || [], [mediaData?.media]);
     const docsList = useMemo(() => mediaData?.docs || [], [mediaData?.docs]);
     const linksList = useMemo(() => mediaData?.links || [], [mediaData?.links]);
+    const notesList = useMemo(() => mediaData?.notes || [], [mediaData?.notes]);
 
     const totalMedia = mediaData?.total_media ?? mediaList.length;
     const totalDocs = mediaData?.total_docs ?? docsList.length;
     const totalLinks = mediaData?.total_links ?? linksList.length;
+    const totalNotes = mediaData?.total_notes ?? notesList.length;
 
     const currentList = useMemo(() => {
         if (activeTab === 'media') return mediaList;
         if (activeTab === 'docs') return docsList;
-        return linksList;
-    }, [activeTab, mediaList, docsList, linksList]);
+        if (activeTab === 'links') return linksList;
+        if (activeTab === 'notes') return notesList;
+        return mediaList;
+    }, [activeTab, mediaList, docsList, linksList, notesList]);
 
     const totalItems = currentList.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
@@ -201,6 +90,8 @@ export default function ConversationMediaModal({
         setCurrentPage(prev => Math.min(totalPages, prev + 1));
     };
 
+    const totalAllCount = mediaData?.total_all ?? (totalMedia + totalDocs + totalLinks + totalNotes);
+
     return (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-6 md:p-8 select-none">
             {/* Backdrop que cobre 100% da tela (não fecha ao clicar fora) */}
@@ -219,7 +110,7 @@ export default function ConversationMediaModal({
                                 Mídia, links e docs
                             </h3>
                             <p className="text-xs text-gray-400">
-                                {contactName || 'Contato'} • {mediaData?.total_all || (totalMedia + totalDocs + totalLinks)} itens compartilhados
+                                {contactName || 'Contato'} • {totalAllCount} itens compartilhados
                             </p>
                         </div>
                     </div>
@@ -234,11 +125,11 @@ export default function ConversationMediaModal({
                 </div>
 
                 {/* Abas */}
-                <div className="flex border-b border-white/10 bg-[#0f172a] px-6">
+                <div className="flex border-b border-white/10 bg-[#0f172a] px-6 overflow-x-auto">
                     <button
                         type="button"
                         onClick={() => setActiveTab('media')}
-                        className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+                        className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
                             activeTab === 'media'
                                 ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
                                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -254,7 +145,7 @@ export default function ConversationMediaModal({
                     <button
                         type="button"
                         onClick={() => setActiveTab('docs')}
-                        className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+                        className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
                             activeTab === 'docs'
                                 ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
                                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -270,7 +161,7 @@ export default function ConversationMediaModal({
                     <button
                         type="button"
                         onClick={() => setActiveTab('links')}
-                        className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+                        className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
                             activeTab === 'links'
                                 ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
                                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -280,6 +171,22 @@ export default function ConversationMediaModal({
                         <span>Links</span>
                         <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-white/10 text-gray-300">
                             {totalLinks}
+                        </span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('notes')}
+                        className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                            activeTab === 'notes'
+                                ? 'border-amber-500 text-amber-400 bg-amber-500/5'
+                                : 'border-transparent text-gray-400 hover:text-gray-200'
+                        }`}
+                    >
+                        <BsJournalText size={16} />
+                        <span>Anotações</span>
+                        <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-white/10 text-gray-300">
+                            {totalNotes}
                         </span>
                     </button>
                 </div>
@@ -354,6 +261,28 @@ export default function ConversationMediaModal({
                                     </div>
                                 )
                             )}
+
+                            {/* ABA ANOTAÇÕES */}
+                            {activeTab === 'notes' && (
+                                paginatedItems.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {paginatedItems.map((note) => (
+                                            <NoteCardItem
+                                                key={note.id}
+                                                note={note}
+                                                formatDate={formatDate}
+                                                onDelete={onDeleteNote ? (item) => setNoteToDelete(item) : undefined}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+                                        <BsJournalText size={40} className="opacity-40 text-amber-400/60" />
+                                        <p className="text-sm font-medium">Nenhuma anotação privada nesta conversa</p>
+                                        <p className="text-xs text-gray-500">As anotações criadas no chat aparecerão aqui enquanto não forem apagadas.</p>
+                                    </div>
+                                )
+                            )}
                         </>
                     )}
                 </div>
@@ -403,6 +332,18 @@ export default function ConversationMediaModal({
                     </button>
                 </div>
             </div>
+
+            {/* Modal de Confirmação para Deletar Anotação */}
+            <ConfirmModal
+                isOpen={!!noteToDelete}
+                onClose={() => !isDeletingNote && setNoteToDelete(null)}
+                onConfirm={handleConfirmDeleteNote}
+                title="Excluir Anotação Privada"
+                message="Tem certeza que deseja excluir esta anotação privada? Esta ação removerá a anotação do chat permanentemente e não poderá ser desfeita."
+                confirmText={isDeletingNote ? "Excluindo..." : "Excluir"}
+                cancelText="Cancelar"
+                isDangerous={true}
+            />
         </div>
     );
 }

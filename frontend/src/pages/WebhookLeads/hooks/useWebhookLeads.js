@@ -22,6 +22,7 @@ export function useWebhookLeads(activeClient) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [eventType, setEventType] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
+  const [tagMode, setTagModeState] = useState('OR');
   const [excludedTags, setExcludedTags] = useState([]);
   const [importedByClientId, setImportedByClientId] = useState('');
   const [origin, setOrigin] = useState('');
@@ -76,6 +77,7 @@ export function useWebhookLeads(activeClient) {
     search: overrides.search !== undefined ? overrides.search : debouncedSearch,
     eventType: overrides.eventType !== undefined ? overrides.eventType : eventType,
     selectedTags: overrides.tags !== undefined ? overrides.tags : selectedTags,
+    tagMode: overrides.tagMode !== undefined ? overrides.tagMode : tagMode,
     excludedTags: overrides.excludedTags !== undefined ? overrides.excludedTags : excludedTags,
     skip: (overrides.page !== undefined ? overrides.page : page) * limit,
     limit,
@@ -89,7 +91,7 @@ export function useWebhookLeads(activeClient) {
     filterDdi: overrides.filterDdi !== undefined ? overrides.filterDdi : filterDdi,
     filterDdd: overrides.filterDdd !== undefined ? overrides.filterDdd : filterDdd,
     blockStatusFilter: overrides.blockStatusFilter !== undefined ? overrides.blockStatusFilter : blockStatusFilter,
-  }), [debouncedSearch, eventType, selectedTags, excludedTags, page, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
+  }), [debouncedSearch, eventType, selectedTags, tagMode, excludedTags, page, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
 
   const fetchLeads = useCallback(async (overrides = {}) => {
     if (!activeClient?.id) return;
@@ -140,6 +142,12 @@ export function useWebhookLeads(activeClient) {
       if (filterState.bsudFilter !== '') url += `&has_bsud=${filterState.bsudFilter}`;
       if (filterState.selectedTags?.length > 0) {
         filterState.selectedTags.forEach(t => { url += `&tag=${encodeURIComponent(t)}`; });
+        if (filterState.tagMode) {
+          url += `&tag_mode=${encodeURIComponent(filterState.tagMode)}`;
+        }
+      }
+      if (filterState.excludedTags?.length > 0) {
+        filterState.excludedTags.forEach(t => { url += `&exclude_tag=${encodeURIComponent(t)}`; });
       }
       if (from) url += `&date_from=${from}`;
       if (to) url += `&date_to=${to}`;
@@ -161,11 +169,12 @@ export function useWebhookLeads(activeClient) {
   const setFilterDdi = (val) => { setFilterDdiState(val); setPage(0); };
   const setFilterDdd = (val) => { setFilterDddState(val); setPage(0); };
   const setBlockStatusFilter = (val) => { setBlockStatusFilterState(val); setPage(0); };
+  const setTagMode = (val) => { setTagModeState(val); setPage(0); };
 
   useEffect(() => {
     setPage(0);
   }, [
-    debouncedSearch, eventType, selectedTags, importedByClientId, origin,
+    debouncedSearch, eventType, selectedTags, tagMode, excludedTags, importedByClientId, origin,
     lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter,
     datePreset, customDateFrom, customDateTo
   ]);
@@ -177,13 +186,13 @@ export function useWebhookLeads(activeClient) {
     } else {
       setLoading(false);
     }
-  }, [activeClient?.id, page, debouncedSearch, eventType, selectedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter, fetchLeads, fetchFilters]);
+  }, [activeClient?.id, page, debouncedSearch, eventType, selectedTags, tagMode, excludedTags, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter, fetchLeads, fetchFilters]);
 
   useEffect(() => {
     if (activeClient?.id) {
       fetchDdiDddOptions();
     }
-  }, [activeClient?.id, debouncedSearch, eventType, selectedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, fetchDdiDddOptions]);
+  }, [activeClient?.id, debouncedSearch, eventType, selectedTags, tagMode, excludedTags, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, fetchDdiDddOptions]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -247,7 +256,7 @@ export function useWebhookLeads(activeClient) {
 
   return {
     leads, total, loading, page, setPage, limit, setLimit,
-    search, setSearch, eventType, setEventType, selectedTags, setSelectedTags, excludedTags, setExcludedTags, availableFilters,
+    search, setSearch, eventType, setEventType, selectedTags, setSelectedTags, tagMode, setTagMode, excludedTags, setExcludedTags, availableFilters,
     importedByClientId, setImportedByClientId,
     origin, setOrigin,
     lockedFilter, setLockedFilter,

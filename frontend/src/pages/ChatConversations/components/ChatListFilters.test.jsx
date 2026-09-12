@@ -93,5 +93,31 @@ describe('ChatListFilters - Ordenação de Conversas', () => {
         fireEvent.click(btnMarcador);
         expect(setActiveFilterTabMock).toHaveBeenCalled();
     });
+
+    it('renderiza o seletor pesquisável de marcadores quando activeFilterTab é "marcador"', () => {
+        const setSelectedLabelFilterMock = vi.fn();
+        render(
+            <ChatListFilters
+                {...defaultProps}
+                activeFilterTab="marcador"
+                availableLabels={['suporte', 'compra-aprovada', 'vip']}
+                setSelectedLabelFilter={setSelectedLabelFilterMock}
+            />
+        );
+
+        const trigger = screen.getByText('Todos os marcadores');
+        expect(trigger).toBeInTheDocument();
+
+        fireEvent.click(trigger);
+        const searchInput = screen.getByPlaceholderText('Pesquisar etiqueta...');
+        expect(searchInput).toBeInTheDocument();
+
+        fireEvent.change(searchInput, { target: { value: 'compra' } });
+        expect(screen.getByText('compra-aprovada')).toBeInTheDocument();
+        expect(screen.queryByText('suporte')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('compra-aprovada'));
+        expect(setSelectedLabelFilterMock).toHaveBeenCalledWith('compra-aprovada');
+    });
 });
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../../AuthContext';
 import { API_URL } from '../../../config';
@@ -186,12 +187,54 @@ export function useChatFunnelAndStatus({
     }
   };
 
+  const [isBulkFunnelModalOpen, setIsBulkFunnelModalOpen] = useState(false);
+  const [isTriggeringBulkFunnel, setIsTriggeringBulkFunnel] = useState(false);
+
+  const handleBulkTriggerFunnel = async (funnelId, payloadExtra = {}) => {
+    if (!activeClient || !funnelId) return false;
+    setIsTriggeringBulkFunnel(true);
+    const loadingToast = toast.loading('Iniciando funil para as conversas selecionadas...');
+    try {
+      const res = await fetchWithAuth(`${API_URL}/chat/conversations/bulk-funnel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          funnel_id: funnelId,
+          ...payloadExtra
+        })
+      }, activeClient.id);
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.dismiss(loadingToast);
+        toast.success(data.message || `Funil "${data.funnel_name}" iniciado para ${data.total_contacts || 0} contato(s)!`);
+        await loadConversations();
+        return true;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.dismiss(loadingToast);
+        toast.error(errData.detail || 'Erro ao disparar funil em massa.');
+        return false;
+      }
+    } catch (err) {
+      toast.dismiss(loadingToast);
+      toast.error('Erro de conexão ao disparar funil.');
+      return false;
+    } finally {
+      setIsTriggeringBulkFunnel(false);
+    }
+  };
+
   return {
     handleToggleStatus,
     handleToggleArchive,
     handleBulkArchive,
     handleTriggerFunnel,
     handleCancelFunnel,
-    handleClose24hWindow
+    handleClose24hWindow,
+    isBulkFunnelModalOpen,
+    setIsBulkFunnelModalOpen,
+    isTriggeringBulkFunnel,
+    handleBulkTriggerFunnel
   };
 }

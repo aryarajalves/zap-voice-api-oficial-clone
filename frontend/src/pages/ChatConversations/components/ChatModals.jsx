@@ -148,6 +148,23 @@ export default function ChatModals({
                 />
             )}
 
+            <TriggerFunnelModal
+                isOpen={engine.isBulkFunnelModalOpen}
+                onClose={() => engine.setIsBulkFunnelModalOpen(false)}
+                onTrigger={async (funnelId) => {
+                    const payloadExtra = chatOps.getBulkPayloadExtra ? chatOps.getBulkPayloadExtra() : (
+                        selectAllPages ? { select_all_pages: true } : { ids: engine.selectedConvoIds }
+                    );
+                    const success = await engine.handleBulkTriggerFunnel(funnelId, payloadExtra);
+                    if (success) {
+                        engine.setIsBulkFunnelModalOpen(false);
+                    }
+                }}
+                isTriggering={engine.isTriggeringBulkFunnel}
+                selectedCount={selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}
+                isBulk={true}
+            />
+
             <CancelFunnelModal
                 isOpen={isCancelFunnelModalOpen && !!selectedConvo?.active_funnel}
                 onClose={() => setIsCancelFunnelModalOpen(false)}
@@ -181,14 +198,19 @@ export default function ChatModals({
                     chatOps.setSelectedBulkTag('');
                     chatOps.setCustomBulkTag('');
                 }}
+                chatLabels={engine.chatLabels}
+                contactLabels={engine.contactLabels}
                 availableLabels={engine.availableLabels}
+                availableLabelsDetails={engine.availableLabelsDetails}
+                getLabelColor={engine.getLabelColor}
                 selectedBulkTag={chatOps.selectedBulkTag}
                 setSelectedBulkTag={chatOps.setSelectedBulkTag}
                 customBulkTag={chatOps.customBulkTag}
                 setCustomBulkTag={chatOps.setCustomBulkTag}
-                onApply={() => chatOps.handleBulkTagConversations()}
+                onApply={(tag, target) => chatOps.handleBulkTagConversations(tag, target)}
                 isApplying={chatOps.isApplyingBulkTag}
                 selectedCount={selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}
+                loadAvailableLabels={engine.loadAvailableLabels}
             />
 
             <AiReportModal

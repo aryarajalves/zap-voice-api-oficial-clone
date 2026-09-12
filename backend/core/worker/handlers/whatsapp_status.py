@@ -287,7 +287,23 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                             reason = f"Erro Meta {err.get('code')}: {err.get('message') or err.get('title')}"
                         message_record.failure_reason = reason
                         
-                        # Fallback assíncrono para BSUD caso o envio original para o número bruto tenha falhado
+                        # Limpar bloqueio de ContactTemplateHistory para permitir reenvio imediato após falha da Meta
+                        try:
+                            clean_p_fail = ''.join(filter(str.isdigit, str(message_record.phone_number)))
+                            p_suffix_fail = clean_p_fail[-10:] if len(clean_p_fail) >= 10 else clean_p_fail
+                            target_cid_fail = trigger.client_id if trigger else (int(message_record.var1) if message_record.var1 else None)
+                            del_history = db.query(models.ContactTemplateHistory).filter(
+                                models.ContactTemplateHistory.template_name == message_record.template_name,
+                                or_(
+                                    models.ContactTemplateHistory.phone == clean_p_fail,
+                                    models.ContactTemplateHistory.phone.like(f"%{p_suffix_fail}")
+                                )
+                            )
+                            if target_cid_fail:
+                                del_history = del_history.filter(models.ContactTemplateHistory.client_id == target_cid_fail)
+                            del_history.delete(synchronize_session=False)
+                        except Exception as e_clean_hist:
+                            logger.warning(f"⚠️ [FAILED_CLEANUP] Erro ao limpar histórico de template na falha: {e_clean_hist}")
                         if trigger:
                             is_bsud = str(message_record.phone_number).startswith("BR.")
                             if not is_bsud:

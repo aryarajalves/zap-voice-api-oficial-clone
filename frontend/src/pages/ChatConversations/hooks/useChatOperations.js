@@ -279,6 +279,7 @@ export function useChatOperations({
                     engine.setShouldScrollToBottom(true);
                 }
                 engine.setPrivateNote('');
+                engine.loadConversationMedia?.(selectedConvo.id);
                 toast.success('Anotação privada salva!');
             }
         } catch (err) {
@@ -383,18 +384,9 @@ export function useChatOperations({
         }
     };
 
-    const handleBulkTagConversations = async (tagToApply) => {
-        const label = (tagToApply || customBulkTag || selectedBulkTag || '').trim();
-        if (!label) {
-            toast.error('Informe ou selecione uma etiqueta.');
-            return;
-        }
-        if (!engine.selectedConvoIds.length && !selectAllPages) return;
-
-        setIsApplyingBulkTag(true);
-        const payload = selectAllPages ? {
+    const getBulkPayloadExtra = () => {
+        return selectAllPages ? {
             select_all_pages: true,
-            labels: [label],
             tab: activeTab,
             status: statusFilter,
             search: searchQuery || undefined,
@@ -408,11 +400,37 @@ export function useChatOperations({
             template_sent_24h_only: filterTemplate24h || undefined,
             has_replied: filterHasReplied || undefined
         } : {
-            labels: [label],
             ids: engine.selectedConvoIds
         };
+    };
 
-        const toastId = toast.loading(`Aplicando etiqueta "${label}"...`);
+    const handleBulkTagConversations = async (tagToApply, target = 'chat') => {
+        let labels = [];
+        if (Array.isArray(tagToApply)) {
+            labels = tagToApply.map(t => (t || '').trim()).filter(Boolean);
+        } else if (typeof tagToApply === 'string' && tagToApply.trim()) {
+            labels = [tagToApply.trim()];
+        } else {
+            const fallback = (customBulkTag || selectedBulkTag || '').trim();
+            if (fallback) labels = [fallback];
+        }
+
+        if (labels.length === 0) {
+            toast.error('Informe ou selecione ao menos uma etiqueta.');
+            return;
+        }
+        if (!engine.selectedConvoIds.length && !selectAllPages) return;
+
+        setIsApplyingBulkTag(true);
+        const payload = {
+            ...getBulkPayloadExtra(),
+            labels,
+            target
+        };
+
+        const targetLabel = target === 'contacts' ? 'na Aba de Contatos' : 'no Chat';
+        const labelDisplay = labels.length === 1 ? `etiqueta "${labels[0]}"` : `${labels.length} etiquetas`;
+        const toastId = toast.loading(`Aplicando ${labelDisplay} ${targetLabel}...`);
         try {
             const res = await fetchWithAuth(`${API_URL}/chat/conversations/bulk-tag`, {
                 method: 'POST',
@@ -422,7 +440,8 @@ export function useChatOperations({
 
             if (res.ok) {
                 const data = await res.json();
-                toast.success(`Etiqueta "${label}" aplicada em ${data.updated_count || 0} conversa(s)!`, { id: toastId });
+                const unitName = target === 'contacts' ? 'contato(s) na Aba de Contatos' : 'conversa(s) no Chat';
+                toast.success(`${labelDisplay} aplicada(s) em ${data.updated_count || 0} ${unitName}!`, { id: toastId });
                 setIsBulkTagModalOpen(false);
                 setSelectedBulkTag('');
                 setCustomBulkTag('');
@@ -539,6 +558,7 @@ export function useChatOperations({
         customBulkTag,
         setCustomBulkTag,
         isApplyingBulkTag,
-        handleBulkTagConversations
+        handleBulkTagConversations,
+        getBulkPayloadExtra
     };
 }

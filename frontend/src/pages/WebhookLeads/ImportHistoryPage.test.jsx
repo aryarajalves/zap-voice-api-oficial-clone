@@ -261,4 +261,93 @@ describe('ImportHistoryPage Component', () => {
     const dateElements = screen.getAllByText(/Concluída em/i);
     expect(dateElements.length).toBeGreaterThan(0);
   });
+
+  it('exibe data e hora sem os segundos', async () => {
+    const fakeHistory = {
+      items: [
+        {
+          id: 5,
+          filename: 'teste_hora_sem_segundos.csv',
+          status: 'completed',
+          total_rows: 10,
+          imported_rows: 10,
+          error_rows: 0,
+          created_at: '2026-06-17T14:35:45Z',
+          updated_at: '2026-06-17T14:40:22Z'
+        }
+      ],
+      total: 1
+    };
+
+    mockFetchWithAuth.mockResolvedValue({
+      ok: true,
+      json: async () => fakeHistory
+    });
+
+    render(<ImportHistoryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('teste_hora_sem_segundos.csv')).toBeDefined();
+    });
+
+    const dateSpan = screen.getByText(/Concluída em:/i);
+    expect(dateSpan).toBeDefined();
+    // O texto deve conter a data e hora:minuto mas NÃO deve conter os segundos (:22 ou :45)
+    expect(dateSpan.textContent).toMatch(/\d{2}\/\d{2}\/\d{4}[,\s]+\d{2}:\d{2}$/);
+    expect(dateSpan.textContent).not.toMatch(/:\d{2}:\d{2}/);
+  });
+
+  it('limita o seletor de paginação a no máximo 20 por página', async () => {
+    mockFetchWithAuth.mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [], total: 0 })
+    });
+
+    render(<ImportHistoryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Histórico de Importação de Contatos')).toBeDefined();
+    });
+
+    const select = screen.getByRole('combobox');
+    const options = Array.from(select.querySelectorAll('option')).map(o => o.value);
+    expect(options).toEqual(['10', '20']);
+    options.forEach(opt => {
+      expect(Number(opt)).toBeLessThanOrEqual(20);
+    });
+  });
+
+  it('exibe o rodapé de paginação com indicador de páginas e botões acessíveis', async () => {
+    const fakeHistory = {
+      items: [
+        {
+          id: 6,
+          filename: 'paginada.csv',
+          status: 'completed',
+          total_rows: 10,
+          imported_rows: 10,
+          error_rows: 0,
+          created_at: '2026-06-17T14:35:00Z',
+          updated_at: '2026-06-17T14:40:00Z'
+        }
+      ],
+      total: 35
+    };
+
+    mockFetchWithAuth.mockResolvedValue({
+      ok: true,
+      json: async () => fakeHistory
+    });
+
+    render(<ImportHistoryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('paginada.csv')).toBeDefined();
+    });
+
+    expect(screen.getByText('Mostrando 1 - 20 de 35 listas')).toBeDefined();
+    expect(screen.getByText(/Página/i)).toBeDefined();
+    expect(screen.getByText('1')).toBeDefined();
+    expect(screen.getByText(/de 2/i)).toBeDefined();
+  });
 });

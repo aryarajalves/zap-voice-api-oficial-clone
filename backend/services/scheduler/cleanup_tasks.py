@@ -306,19 +306,57 @@ async def run_stale_triggers_cleanup(db_session=None):
             except Exception:
                 pass
 
-        # 3. Mensagens individuais presas na fila da Meta há mais de 24 horas
-        logger.info("🔍 [STALE CLEANUP] Verificando mensagens presas na fila da Meta há mais de 24h...")
-        stale_queue_messages = db.query(models.MessageStatus).filter(
+        # Gatilhos em 'queued' cujo max_dispatch_time já expirou
+        expired_queued = db.query(models.ScheduledTrigger).filter(
+            models.ScheduledTrigger.status == 'queued',
+            models.ScheduledTrigger.max_dispatch_time.isnot(None),
+            models.ScheduledTrigger.max_dispatch_time < datetime.now(timezone.utc)
+        ).with_for_update(skip_locked=True).all()
+        for tr in expired_queued:
+            logger.warning(f"🧟 [REAPER] Abortando Trigger agendado #{tr.id}: prazo limite ({tr.max_dispatch_time}) já expirou.")
+            tr.status = 'aborted'
+            tr.failure_reason = "Prazo limite de envio atingido antes do início do disparo agendado."
+            db.commit()
+            try:
+                from services.engine import log_node_execution
+                log_node_execution(db, tr, node_id=tr.current_node_id or 'DELIVERY', status="failed", details=tr.failure_reason)
+            except Exception:
+                pass
+
+        # 3. Mensagens individuais presas na fila da Meta (ultrapassou max_dispatch_time ou 24 horas)
+        logger.info("🔍 [STALE CLEANUP] Verificando mensagens presas na fila da Meta (prazo limite ou >24h)...")
+        now_utc = datetime.now(timezone.utc)
+        cutoff_24h = now_utc - timedelta(hours=24)
+        stale_queue_messages = db.query(models.MessageStatus).join(
+            models.ScheduledTrigger, models.ScheduledTrigger.id == models.MessageStatus.trigger_id
+        ).filter(
             models.MessageStatus.status == 'sent',
             models.MessageStatus.delivered_counted == False,
             models.MessageStatus.read_counted == False,
-            models.MessageStatus.timestamp < cutoff_24h
+            or_(
+                models.MessageStatus.timestamp < cutoff_24h,
+                and_(
+                    models.ScheduledTrigger.max_dispatch_time.isnot(None),
+                    models.ScheduledTrigger.max_dispatch_time < now_utc
+                )
+            )
         ).all()
 
         if stale_queue_messages:
-            queue_fail_reason = "Ultrapassou 24 horas ainda na fila da Meta (WhatsApp) sem confirmação de entrega — disparo abortado."
             failed_per_trigger = {}
             for ms in stale_queue_messages:
+                tr_parent = db.query(models.ScheduledTrigger).get(ms.trigger_id)
+                if tr_parent and tr_parent.max_dispatch_time:
+                    p_mdt = tr_parent.max_dispatch_time
+                    if p_mdt.tzinfo is None:
+                        p_mdt = p_mdt.replace(tzinfo=timezone.utc)
+                    if now_utc > p_mdt:
+                        queue_fail_reason = "Ultrapassou a data/hora limite configurada sem confirmação de entrega no WhatsApp (aparelho offline/sem internet) — disparo abortado."
+                    else:
+                        queue_fail_reason = "Ultrapassou 24 horas ainda na fila da Meta (WhatsApp) sem confirmação de entrega — disparo abortado."
+                else:
+                    queue_fail_reason = "Ultrapassou 24 horas ainda na fila da Meta (WhatsApp) sem confirmação de entrega — disparo abortado."
+
                 ms.status = 'failed'
                 ms.failure_reason = queue_fail_reason
                 failed_per_trigger[ms.trigger_id] = failed_per_trigger.get(ms.trigger_id, 0) + 1
@@ -330,7 +368,7 @@ async def run_stale_triggers_cleanup(db_session=None):
                 for tr in triggers_to_update:
                     tr.total_failed = (tr.total_failed or 0) + failed_per_trigger.get(tr.id, 0)
 
-            logger.warning(f"🧟 [REAPER] {len(stale_queue_messages)} mensagem(ns) presas na fila da Meta há +24h marcadas como falha.")
+            logger.warning(f"🧟 [REAPER] {len(stale_queue_messages)} mensagem(ns) presas na fila da Meta marcadas como falha (limite de prazo ou 24h).")
 
         db.commit()
         if not stale_waiting and not stale_processing and not stale_queue_messages:

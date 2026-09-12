@@ -55,7 +55,23 @@ def is_template_sent_in_last_24h(db, client_id: int, phone: str, template_name: 
     if client_id:
         history_query = history_query.filter(models.ContactTemplateHistory.client_id == client_id)
 
-    return history_query.first() is not None
+    if history_query.first() is not None:
+        # Se a última mensagem registrada no MessageStatus falhou na Meta (status == 'failed'),
+        # liberamos o reenvio (a tentativa falhou na Meta e o contato não recebeu).
+        last_failed = db.query(models.MessageStatus).filter(
+            models.MessageStatus.template_name == template_name,
+            models.MessageStatus.timestamp >= cutoff,
+            models.MessageStatus.status == 'failed',
+            or_(
+                models.MessageStatus.phone_number == clean_phone,
+                models.MessageStatus.phone_number.like(f"%{suffix}")
+            )
+        ).first()
+        if last_failed:
+            return False
+        return True
+
+    return False
 
 
 

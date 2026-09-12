@@ -209,6 +209,7 @@ const ContactsModal = ({
                   { id: 'interaction', label: 'Interagiram', icon: '👆' },
                   { id: 'blocked', label: 'Bloquearam', icon: '🚫' },
                   { id: 'failed', label: 'Falharam', icon: '❌' },
+                  { id: 'remaining', label: 'Restantes', icon: '⏳' },
                 ].map(tab => {
                   const count = contactsModal.counts?.[tab.id] || 0;
                   return (

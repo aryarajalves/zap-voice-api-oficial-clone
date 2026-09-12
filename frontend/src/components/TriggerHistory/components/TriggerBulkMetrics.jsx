@@ -102,10 +102,14 @@ export default function TriggerBulkMetrics({
         <span className="text-xs font-black text-red-500">{triggerWithActions.total_failed || 0}</span>
       </button>
 
-      <div className="flex items-center gap-1.5 cursor-default select-none" title="Faltam para terminar o lote">
+      <button
+        onClick={() => handleViewContacts(triggerWithActions, 'remaining')}
+        className="flex items-center gap-1.5 hover:opacity-80 transition cursor-pointer select-none group"
+        title="Ver Contatos Restantes"
+      >
         <span className="text-sm">⏳</span>
-        <span className="text-xs font-black text-slate-500 dark:text-slate-400">Restam {remaining}</span>
-      </div>
+        <span className="text-xs font-black text-slate-500 dark:text-slate-400 group-hover:text-blue-500">Restam {remaining}</span>
+      </button>
 
       {handleSyncStats && (
         <TriggerTableTip text="Recalcular os contadores (enviados, entregues, lidos, interações) a partir dos registros reais. Use quando os números da linha não batem com os da lista de contatos.">

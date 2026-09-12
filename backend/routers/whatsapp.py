@@ -703,10 +703,11 @@ async def reset_template_24h_history(
         models.ContactTemplateHistory.template_name == template_name
     ).delete(synchronize_session=False)
 
-    # 2. Deletar todos os registros de MessageStatus (disparos diretos ou em massa) desse template para esse cliente
-    # para que a trava anti-spam de 24h libera o re-envio para todos os contatos.
+    # 2. Deletar apenas registros de MessageStatus sem trigger_id (disparos diretos ou avulsos)
+    # NUNCA apagar registros vinculados a disparos/campanhas (trigger_id != None) para não corromper relatórios e contadores.
     deleted_ms = db.query(models.MessageStatus).filter(
-        models.MessageStatus.template_name == template_name
+        models.MessageStatus.template_name == template_name,
+        models.MessageStatus.trigger_id.is_(None)
     ).delete(synchronize_session=False)
 
     db.commit()

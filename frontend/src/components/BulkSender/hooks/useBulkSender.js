@@ -4,7 +4,8 @@ import { useClient } from '../../../contexts/ClientContext';
 import { fetchWithAuth, useAuth } from '../../../AuthContext';
 import { API_URL } from '../../../config';
 import * as XLSX from 'xlsx';
-import { buildComponentsPayload } from '../utils/payloadBuilder';
+import { buildComponentsPayload, buildDeduplicatedPayloadContacts } from '../utils/payloadBuilder';
+import { useBulkScheduling } from './useBulkScheduling';
 
 export const useBulkSender = (onViewChange, onSuccess) => {
     const { activeClient } = useClient();
@@ -49,10 +50,19 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [delaySeconds, setDelaySeconds] = useState(1); // Padrão solicitado: 1s
     const [delayUnit, setDelayUnit] = useState("seconds");
     const [concurrency, setConcurrency] = useState(10); // Padrão solicitado: 10 jobs
-    const [scheduledTime, setScheduledTime] = useState("");
-    const [isDynamicLabel, setIsDynamicLabel] = useState(true);
     const [isValidated, setIsValidated] = useState(false);
 
+    // Sub-hook de Agendamento, Recorrência e Prazos Limites
+    const {
+        scheduledTime, setScheduledTime,
+        maxDispatchTime, setMaxDispatchTime, clearMaxDispatchTime,
+        isDynamicLabel, setIsDynamicLabel,
+        isRecurring, setIsRecurring,
+        recurrenceFrequency, setRecurrenceFrequency,
+        recurrenceDaysOfWeek, setRecurrenceDaysOfWeek,
+        recurrenceDayOfMonth, setRecurrenceDayOfMonth,
+        recurrenceTime, setRecurrenceTime
+    } = useBulkScheduling();
 
     // Exclusion List
     const [exclusionList, setExclusionList] = useState([]);
@@ -61,17 +71,11 @@ export const useBulkSender = (onViewChange, onSuccess) => {
     const [exclusionAvailableTags, setExclusionAvailableTags] = useState([]);
     const [isLoadingExclusionTags, setIsLoadingExclusionTags] = useState(false);
     const [selectedExclusionTag, setSelectedExclusionTag] = useState([]);
+    const [configuredExclusionTags, setConfiguredExclusionTags] = useState([]);
     const [exclusionTagMode, setExclusionTagMode] = useState("OR");
     const [exclusionCsvData, setExclusionCsvData] = useState(null);
     const [exclusionColSelector, setExclusionColSelector] = useState(false);
     const [exclusionSelectedCol, setExclusionSelectedCol] = useState(null);
-
-    // Recurring
-    const [isRecurring, setIsRecurring] = useState(false);
-    const [recurrenceFrequency, setRecurrenceFrequency] = useState('weekly');
-    const [recurrenceDaysOfWeek, setRecurrenceDaysOfWeek] = useState([]);
-    const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState("");
-    const [recurrenceTime, setRecurrenceTime] = useState("09:00");
 
     // Modal Expansion
     const [expansionModal, setExpansionModal] = useState({ isOpen: false, title: '', key: '', value: '' });
@@ -207,7 +211,10 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         setSelectedChatwootLabels([]);
         setFinalContacts([]);
         setExclusionList([]);
+        setConfiguredExclusionTags([]);
+        setSelectedExclusionTag([]);
         setScheduledTime("");
+        setMaxDispatchTime("");
         setIsRecurring(false);
         setButtonActions({});
         toast.success("Configurações resetadas!");
@@ -218,6 +225,13 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         setExclusionList(prev => [...new Set([...prev, ...nums])]);
         setExclusionText("");
         toast.success(`${nums.length} números adicionados à exclusão.`);
+    };
+
+    const clearExclusionList = () => {
+        setExclusionList([]);
+        setConfiguredExclusionTags([]);
+        setSelectedExclusionTag([]);
+        toast.success("Lista de exclusão limpa!");
     };
 
     const handleExclusionFileUpload = (e) => {
@@ -260,6 +274,7 @@ export const useBulkSender = (onViewChange, onSuccess) => {
                 const nums = (data.items || []).map(l => String(l.phone || '').replace(/\D/g, '')).filter(n => n.length >= 8);
                 if (nums.length > 0) {
                     setExclusionList(prev => [...new Set([...prev, ...nums])]);
+                    setConfiguredExclusionTags(prev => [...new Set([...prev, ...tags])]);
                     toast.success(`${[...new Set(nums)].length} contatos únicos adicionados à exclusão.`);
                     setSelectedExclusionTag([]); // Limpa a seleção após adicionar
                 } else {
@@ -342,29 +357,14 @@ export const useBulkSender = (onViewChange, onSuccess) => {
             const vFilters = selectionMetadata?.variableFilters || {};
             
             const payload = {
-                contacts_list: finalContacts.map(c => {
-                    const processedVars = {};
-                    if (c.vars) {
-                        Object.entries(c.vars).forEach(([key, val]) => {
-                            if (vFilters[key] === 'first_name' && val) {
-                                processedVars[key] = String(val).trim().split(' ')[0];
-                            } else {
-                                processedVars[key] = val;
-                            }
-                        });
-                    }
-                    
-                    return {
-                        phone: c.phone,
-                        name: c.name,
-                        components: buildComponentsPayload(selectedTemplateObj, { ...templateParams, ...processedVars }),
-                        vars: processedVars
-                    };
-                }),
+                contacts_list: buildDeduplicatedPayloadContacts(finalContacts, selectedTemplateObj, templateParams, vFilters),
                 exclusion_list: [...new Set([...exclusionList, ...(selectionMetadata?.tagExclusions || [])])],
+                exclusion_tags: [...new Set([...configuredExclusionTags, ...(Array.isArray(selectedExclusionTag) ? selectedExclusionTag : (selectedExclusionTag ? [selectedExclusionTag] : []))])],
+                exclusion_tag_mode: exclusionTagMode || 'OR',
                 delay_seconds: delayUnit === 'minutes' ? delaySeconds * 60 : delaySeconds,
                 concurrency_limit: concurrency,
                 schedule_at: scheduledTime ? new Date(scheduledTime).toISOString() : new Date().toISOString(),
+                max_dispatch_time: maxDispatchTime ? new Date(maxDispatchTime).toISOString() : null,
                 chatwoot_label: selectedChatwootLabels,
                 template_name: selectedTemplate,
                 language: selectedTemplateObj.language || 'pt_BR',
@@ -471,17 +471,19 @@ export const useBulkSender = (onViewChange, onSuccess) => {
         privateMessageConcurrency, setPrivateMessageConcurrency, selectedChatwootLabels, setSelectedChatwootLabels,
         finalContacts, selectionMetadata, isSending, delaySeconds, setDelaySeconds,
         delayUnit, setDelayUnit, concurrency, setConcurrency, scheduledTime, setScheduledTime,
+        maxDispatchTime, setMaxDispatchTime, clearMaxDispatchTime,
         isDynamicLabel, setIsDynamicLabel,
 
         exclusionList, setExclusionList, exclusionMode, setExclusionMode, exclusionText, setExclusionText,
         exclusionAvailableTags, isLoadingExclusionTags, selectedExclusionTag, setSelectedExclusionTag,
+        configuredExclusionTags, setConfiguredExclusionTags,
         exclusionTagMode, setExclusionTagMode,
         exclusionCsvData, exclusionColSelector, setExclusionColSelector, exclusionSelectedCol, setExclusionSelectedCol,
         isRecurring, setIsRecurring, recurrenceFrequency, setRecurrenceFrequency,
         recurrenceDaysOfWeek, setRecurrenceDaysOfWeek, recurrenceDayOfMonth, setRecurrenceDayOfMonth,
         recurrenceTime, setRecurrenceTime, expansionModal, setExpansionModal,
         whatsappProfile,
-        handleTemplateChange, handleRecipientSelect, handleReset, handleSaveExclusion,
+        handleTemplateChange, handleRecipientSelect, handleReset, handleSaveExclusion, clearExclusionList,
         handleExclusionFileUpload, confirmExclusionColumn, loadExclusionContactsByTag, handleSend,
         extractTemplateVariables, extractTemplateButtons,
         activeClient

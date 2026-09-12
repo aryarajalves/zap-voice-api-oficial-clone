@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FiClock, FiFileText, FiCheckCircle, FiAlertTriangle, FiLoader, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
+import { parseDateSafe } from '../utils/importHistoryUtils';
 
 export default function ImportHistory({ activeClient, refreshTrigger }) {
   const [history, setHistory] = useState([]);
@@ -11,7 +12,7 @@ export default function ImportHistory({ activeClient, refreshTrigger }) {
   const fetchHistory = async () => {
     if (!activeClient?.id) return;
     try {
-      const response = await fetchWithAuth(`${API_URL}/leads/import/history?limit=99999`, {}, activeClient.id);
+      const response = await fetchWithAuth(`${API_URL}/leads/import/history?limit=20`, {}, activeClient.id);
       if (response && response.ok) {
         const data = await response.json();
         const items = Array.isArray(data) ? data : (data?.items || []);
@@ -77,7 +78,7 @@ export default function ImportHistory({ activeClient, refreshTrigger }) {
             const total = item.total_rows || 0;
             const processed = (item.imported_rows || 0) + (item.error_rows || 0);
             const percentage = total > 0 ? Math.min(Math.round((processed / total) * 100), 100) : 0;
-            const dateStr = new Date(item.created_at).toLocaleString('pt-BR');
+            const dateStr = parseDateSafe(item.created_at);
 
             return (
               <div key={item.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-4">

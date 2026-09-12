@@ -11,7 +11,7 @@ export default function ContactMediaSection({
 }) {
     const mediaList = mediaData?.media || [];
     const docsList = mediaData?.docs || [];
-    const totalAll = mediaData?.total_all || (mediaList.length + docsList.length + (mediaData?.links?.length || 0));
+    const totalAll = mediaData?.total_all ?? (mediaList.length + docsList.length + (mediaData?.links?.length || 0) + (mediaData?.notes?.length || 0));
 
     // Pegar até 4 miniaturas para o preview rápido
     const previewItems = mediaList.slice(0, 4);

@@ -27,9 +27,11 @@ from .parsers import (
     _clean_phone_digits,
     _clean_ddi_val,
     _resolve_ddi_for_row,
+    _decompose_and_build_phone,
     _get_phone_mapping_columns,
     _build_phone_series,
     _build_phone_components,
+    _build_phone_components_detailed,
     _extract_row_name,
 )
 from .processor import process_import_in_bg
@@ -268,7 +270,7 @@ async def preview_phones(
             if col_name not in df.columns:
                 raise HTTPException(status_code=400, detail=f"Coluna '{col_name}' não encontrada no arquivo.")
 
-        ddi_s, ddd_s, num_s = _build_phone_components(df, phone_mapping)
+        ddi_s, ddd_s, num_s, meta_list = _build_phone_components_detailed(df, phone_mapping)
         full_s = ddi_s + ddd_s + num_s
         valid_mask = full_s.str.len() >= 8
 
@@ -277,8 +279,12 @@ async def preview_phones(
         skip = max(0, skip)
         end = min(skip + limit, total_rows)
 
+        brazilian_count = sum(1 for m in meta_list if m.get("is_brazilian"))
+        international_count = total_rows - brazilian_count
+
         items = []
         for i in range(skip, end):
+            meta = meta_list[i]
             items.append({
                 "row_index": i,
                 "name": _extract_row_name(df.iloc[i], name_col) if name_col else None,
@@ -287,12 +293,19 @@ async def preview_phones(
                 "number": num_s.iat[i],
                 "full": full_s.iat[i],
                 "valid": bool(valid_mask.iat[i]),
+                "is_brazilian": meta.get("is_brazilian", True),
+                "country": meta.get("country", "Brasil"),
+                "flag": meta.get("flag", "🇧🇷"),
+                "detected_ddi": meta.get("detected_ddi", ""),
+                "ddi_applied": meta.get("ddi_applied", False),
             })
 
         return {
             "total_rows": total_rows,
             "valid_count": int(valid_mask.sum()),
             "invalid_count": int((~valid_mask).sum()),
+            "brazilian_count": brazilian_count,
+            "international_count": international_count,
             "items": items,
         }
     except HTTPException:
@@ -439,8 +452,9 @@ def get_import_history(
             models.ContactImportHistory.client_id == client_id
         )
         
+    safe_limit = max(1, min(limit, 20))
     total = query.count()
-    imports = query.order_by(desc(models.ContactImportHistory.created_at)).offset(skip).limit(limit).all()
+    imports = query.order_by(desc(models.ContactImportHistory.created_at)).offset(skip).limit(safe_limit).all()
     return {
         "items": imports,
         "total": total
@@ -491,10 +505,48 @@ def get_import_results(
     ).group_by(models.ImportRowResult.status).all()
     status_counts = {s: c for s, c in status_counts_raw}
 
+    # Enriquecer linhas com as etiquetas atuais dos contatos (WebhookLead)
+    phones = [r.phone for r in rows if r.phone]
+    phone_tags_map = {}
+    if phones:
+        clean_phones = [''.join(filter(str.isdigit, str(p))) for p in phones]
+        suffixes_8 = list(set([p[-8:] for p in clean_phones if len(p) >= 8]))
+        if suffixes_8:
+            lead_records = db.query(models.WebhookLead.phone, models.WebhookLead.tags).filter(
+                models.WebhookLead.client_id == client_id,
+                or_(*[models.WebhookLead.phone.like(f"%{s}") for s in suffixes_8])
+            ).all()
+            for lp, lt in lead_records:
+                clean_lp = ''.join(filter(str.isdigit, str(lp or '')))
+                if clean_lp:
+                    phone_tags_map[clean_lp[-8:]] = lt
+
+    serialized_items = []
+    for r in rows:
+        clean_p = ''.join(filter(str.isdigit, str(r.phone or '')))
+        s_8 = clean_p[-8:] if len(clean_p) >= 8 else clean_p
+        lead_tags = phone_tags_map.get(s_8) if s_8 else None
+        # Se for contato importado ou atualizado e não tiver tags individuais no lead, usa fixed_tags
+        row_tags = lead_tags or (history.fixed_tags if r.status in ('imported', 'updated') else None)
+
+        serialized_items.append({
+            "id": r.id,
+            "import_id": r.import_id,
+            "row_index": r.row_index,
+            "name": r.name,
+            "phone": r.phone,
+            "status": r.status,
+            "reason": r.reason,
+            "tags": row_tags,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        })
+
     return {
-        "items": rows,
+        "items": serialized_items,
         "total": total,
         "status_counts": status_counts,
+        "fixed_tags": history.fixed_tags,
+        "fixed_remove_tags": history.fixed_remove_tags,
     }
 
 
@@ -584,6 +636,7 @@ __all__ = [
     "_clean_phone_digits",
     "_clean_ddi_val",
     "_resolve_ddi_for_row",
+    "_decompose_and_build_phone",
     "_get_phone_mapping_columns",
     "_build_phone_series",
     "_build_phone_components",

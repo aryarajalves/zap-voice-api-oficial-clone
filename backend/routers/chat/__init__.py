@@ -40,6 +40,7 @@ from .funnel_routes import (
     router as funnel_router,
     trigger_funnel_for_conversation,
     cancel_funnel_for_conversation,
+    trigger_bulk_funnel_for_conversations,
 )
 from .notes_and_labels_routes import (
     router as notes_labels_router,

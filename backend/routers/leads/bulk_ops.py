@@ -29,6 +29,8 @@ class BulkDeleteAllRequest(BaseModel):
     search: Optional[str] = None
     event_type: Optional[str] = None
     tag: Optional[List[str]] = None
+    tag_mode: Optional[str] = "OR"
+    exclude_tag: Optional[List[str]] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
     imported_by_client_id: Optional[int] = None
@@ -45,6 +47,8 @@ class BulkTagAllRequest(BaseModel):
     search: Optional[str] = None
     event_type: Optional[str] = None
     tag_filter: Optional[List[str]] = None
+    tag_mode: Optional[str] = "OR"
+    exclude_tag: Optional[List[str]] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
     imported_by_client_id: Optional[int] = None
@@ -63,6 +67,8 @@ class BulkBlockAllRequest(BaseModel):
     search: Optional[str] = None
     event_type: Optional[str] = None
     tag_filter: Optional[List[str]] = None
+    tag_mode: Optional[str] = "OR"
+    exclude_tag: Optional[List[str]] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
     imported_by_client_id: Optional[int] = None
@@ -83,6 +89,8 @@ class BulkRestAllRequest(BaseModel):
     search: Optional[str] = None
     event_type: Optional[str] = None
     tag_filter: Optional[List[str]] = None
+    tag_mode: Optional[str] = "OR"
+    exclude_tag: Optional[List[str]] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
     imported_by_client_id: Optional[int] = None
@@ -171,10 +179,15 @@ def _filter_leads_by_active_filters(db: Session, client_id: int, filters):
     else:
         query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
 
+    tag_filter_val = getattr(filters, 'tag_filter', None) or getattr(filters, 'tag', None)
+    tag_mode_val = getattr(filters, 'tag_mode', 'OR') or 'OR'
+    exclude_tag_val = getattr(filters, 'exclude_tag', None)
+
     query = _apply_common_lead_filters(
-        query, filters.search, filters.event_type, None, getattr(filters, 'tag_filter', None), "OR",
+        query, filters.search, filters.event_type, None, tag_filter_val, tag_mode_val,
         getattr(filters, 'is_locked', None), getattr(filters, 'has_bsud', None),
-        filters.date_from, filters.date_to, filters.imported_by_client_id, filters.origin
+        filters.date_from, filters.date_to, filters.imported_by_client_id, filters.origin,
+        exclude_tag=exclude_tag_val
     )
 
     if getattr(filters, 'filter_ddi', None):
@@ -317,8 +330,9 @@ def bulk_delete_all_leads(
             ).delete(synchronize_session=False)
 
     query = _apply_common_lead_filters(
-        query, request.search, request.event_type, None, request.tag, "OR",
-        None, None, request.date_from, request.date_to, None, None
+        query, request.search, request.event_type, None, request.tag, getattr(request, 'tag_mode', 'OR') or 'OR',
+        None, None, request.date_from, request.date_to, request.imported_by_client_id, request.origin,
+        exclude_tag=getattr(request, 'exclude_tag', None)
     )
 
     leads = query.all()

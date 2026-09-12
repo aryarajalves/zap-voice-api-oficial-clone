@@ -21,6 +21,7 @@ describe('Modularized Chat Components Unit Tests', () => {
         const onSelect = vi.fn();
         const onToggleCheck = vi.fn();
         const onDelete = vi.fn();
+        const onTag = vi.fn();
         const getLabelColor = vi.fn(() => '#3b82f6');
         const formatTime = vi.fn(() => '10:30');
 
@@ -32,6 +33,7 @@ describe('Modularized Chat Components Unit Tests', () => {
                 onSelect={onSelect}
                 onToggleCheck={onToggleCheck}
                 onDelete={onDelete}
+                onTag={onTag}
                 getLabelColor={getLabelColor}
                 formatTime={formatTime}
             />
@@ -44,6 +46,11 @@ describe('Modularized Chat Components Unit Tests', () => {
 
         fireEvent.click(screen.getByText('Carlos'));
         expect(onSelect).toHaveBeenCalledTimes(1);
+
+        const tagBtn = screen.getByTitle('Etiquetar conversa');
+        expect(tagBtn).toBeDefined();
+        fireEvent.click(tagBtn);
+        expect(onTag).toHaveBeenCalledWith(convo);
     });
 
     it('ActiveChatBanner exibe nome e status do funil ativo e dispara handlers', () => {
@@ -96,7 +103,7 @@ describe('Modularized Chat Components Unit Tests', () => {
         expect(screen.getByText(/Aplicando em/)).toBeDefined();
         expect(screen.getByText('5')).toBeDefined();
 
-        fireEvent.click(screen.getByText('Aplicar Etiqueta'));
+        fireEvent.click(screen.getByText('Aplicar no Chat'));
         expect(onApply).toHaveBeenCalledTimes(1);
     });
 

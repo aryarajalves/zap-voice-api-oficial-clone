@@ -9,7 +9,15 @@ export const parseDateSafe = (raw) => {
       ? normalized
       : normalized + 'Z';
     const d = new Date(withTz);
-    return isNaN(d.getTime()) ? 'Data inválida' : d.toLocaleString('pt-BR');
+    return isNaN(d.getTime())
+      ? 'Data inválida'
+      : d.toLocaleString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
   } catch {
     return 'Data inválida';
   }

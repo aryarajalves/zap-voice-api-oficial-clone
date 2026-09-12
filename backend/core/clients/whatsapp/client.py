@@ -8,6 +8,10 @@ from config_loader import get_setting
 
 logger = setup_logger("WhatsAppClient")
 
+# Cache global de Media IDs da Meta (válidos por 30 dias na Meta)
+# Estrutura: {(client_id, url): {"id": media_id, "timestamp": datetime}}
+_META_MEDIA_CACHE = {}
+
 class WhatsAppClient:
     def __init__(self, client_id: int = None):
         self.client_id = client_id
@@ -595,10 +599,12 @@ class WhatsAppClient:
                 except: pass
 
     async def send_image_official(self, phone_number: str, image_url: str, caption: str = ""):
-        """Envia imagem pelo WhatsApp Oficial. Faz upload para a Meta se for URL local."""
-        image_data = {"link": image_url, "caption": caption}
-        # Upload para Meta quando URL local (a Meta não consegue acessar IPs privados)
-        await self._resolve_and_upload_media_param("image", image_data)
+        """Envia imagem pelo WhatsApp Oficial. Suporta Media ID direto ou URL com cache."""
+        if str(image_url).isdigit() or (isinstance(image_url, str) and not image_url.startswith("http") and "/" not in image_url):
+            image_data = {"id": str(image_url), "caption": caption}
+        else:
+            image_data = {"link": image_url, "caption": caption}
+            await self._resolve_and_upload_media_param("image", image_data)
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -610,9 +616,12 @@ class WhatsAppClient:
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_video_official(self, phone_number: str, video_url: str, caption: str = ""):
-        """Envia vídeo pelo WhatsApp Oficial. Faz upload para a Meta se for URL local."""
-        video_data = {"link": video_url, "caption": caption}
-        await self._resolve_and_upload_media_param("video", video_data)
+        """Envia vídeo pelo WhatsApp Oficial. Suporta Media ID direto ou URL com cache."""
+        if str(video_url).isdigit() or (isinstance(video_url, str) and not video_url.startswith("http") and "/" not in video_url):
+            video_data = {"id": str(video_url), "caption": caption}
+        else:
+            video_data = {"link": video_url, "caption": caption}
+            await self._resolve_and_upload_media_param("video", video_data)
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -624,9 +633,12 @@ class WhatsAppClient:
         return await self._meta_request("POST", "messages", json=payload)
 
     async def send_document_official(self, phone_number: str, document_url: str, caption: str = "", filename: str = ""):
-        """Envia documento pelo WhatsApp Oficial. Faz upload para a Meta se for URL local."""
-        document_data = {"link": document_url, "caption": caption, "filename": filename or "documento"}
-        await self._resolve_and_upload_media_param("document", document_data)
+        """Envia documento pelo WhatsApp Oficial. Suporta Media ID direto ou URL com cache."""
+        if str(document_url).isdigit() or (isinstance(document_url, str) and not document_url.startswith("http") and "/" not in document_url):
+            document_data = {"id": str(document_url), "caption": caption, "filename": filename or "documento"}
+        else:
+            document_data = {"link": document_url, "caption": caption, "filename": filename or "documento"}
+            await self._resolve_and_upload_media_param("document", document_data)
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -646,6 +658,17 @@ class WhatsAppClient:
             return
 
         if media_data.get("id"):
+            return
+
+        # ⚡ Cache de Media ID da Meta: se a URL já foi convertida para este cliente, reutiliza o Media ID
+        cache_key = (self.client_id, url)
+        cached = _META_MEDIA_CACHE.get(cache_key)
+        if cached:
+            cached_id = cached.get("id") if isinstance(cached, dict) else cached
+            logger.info(f"⚡ [MEDIA_CACHE] Reutilizando Media ID da Meta em cache ({media_type}): {cached_id} para URL: {url}")
+            media_data["id"] = cached_id
+            if "link" in media_data:
+                del media_data["link"]
             return
 
         # Para garantir que vídeos, imagens e mídias de templates rodem perfeitamente no WhatsApp mobile (Android/iPhone),
@@ -680,6 +703,7 @@ class WhatsAppClient:
                 media_id = await self.upload_media_to_meta(file_path, mime_type)
                 if media_id:
                     logger.info(f"✅ Mídia de template/mensagem ({media_type}) convertida em Media ID nativo da Meta: {media_id}")
+                    _META_MEDIA_CACHE[cache_key] = {"id": media_id, "timestamp": datetime.now(timezone.utc)}
                     media_data["id"] = media_id
                     if "link" in media_data:
                         del media_data["link"]

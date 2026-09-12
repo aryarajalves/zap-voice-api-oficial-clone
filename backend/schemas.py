@@ -103,6 +103,7 @@ class ScheduledTriggerBase(BaseModel):
     funnel_id: Optional[int] = Field(None, description="ID do funil a ser executado")
     conversation_id: Optional[int] = Field(None, description="ID da conversa no Chatwoot")
     scheduled_time: Optional[datetime] = Field(None, description="Data/Hora agendada para execução")
+    max_dispatch_time: Optional[datetime] = Field(None, description="Data/Hora limite para envio/expiração do disparo")
     status: str = Field("pending", description="Status do agendamento (pending, queued, processing, completed, cancelled, failed)")
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
@@ -316,6 +317,8 @@ class RecurringTriggerBase(BaseModel):
     contacts_list: Optional[List[Any]] = None
     tag: Optional[str] = None
     exclusion_list: Optional[List[str]] = None
+    exclusion_tags: Optional[List[str]] = None
+    exclusion_tag_mode: Optional[str] = "OR"
     
     delay_seconds: int = 5
     concurrency_limit: int = 1
@@ -370,6 +373,8 @@ class RecurringTriggerUpdate(BaseModel):
     template_components: Optional[List[dict]] = None
     funnel_id: Optional[int] = None
     exclusion_list: Optional[List[str]] = None
+    exclusion_tags: Optional[List[str]] = None
+    exclusion_tag_mode: Optional[str] = None
     button_actions: Optional[Dict[str, Any]] = None
 
 class RecurringTriggerCreate(RecurringTriggerBase):

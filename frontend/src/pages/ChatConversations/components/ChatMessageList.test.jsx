@@ -81,7 +81,7 @@ describe('ChatMessageList', () => {
         expect(screen.getByText('Envie uma mensagem abaixo para iniciar a conversa.')).toBeInTheDocument();
     });
 
-    it('renderiza divisores de data entre mensagens de dias diferentes', () => {
+    it('renderiza divisores de data entre mensagens de dias diferentes sem classe sticky para evitar sobreposição', () => {
         const engine = {
             isLoadingMessages: false,
             messages: [
@@ -98,6 +98,10 @@ describe('ChatMessageList', () => {
         expect(separators.length).toBe(2);
         expect(separators[0].textContent).toMatch(/18 de agosto/i);
         expect(separators[1].textContent).toMatch(/19 de agosto/i);
+        // Garante que os containers de separador de data não possuem 'sticky' para evitar sobreposição
+        separators.forEach(sep => {
+            expect(sep.parentElement.className).not.toContain('sticky');
+        });
     });
 
     it('renderiza o botão flutuante de rolar para o final quando showScrollBtn é true e executa o scroll ao clicar', async () => {

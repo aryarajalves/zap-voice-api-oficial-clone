@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { read, utils } from 'xlsx';
 import { fetchWithAuth } from '../../../../AuthContext';
 import { API_URL } from '../../../../config';
+import { normalizePhone } from '../../../../utils/phoneFilters';
 
 export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing, setShowList, setIsValidated, fileVariables, activeClient, saveLeadsTags, loadFilters }) => {
     const [isReadingFile, setIsReadingFile] = useState(false);
@@ -101,12 +102,26 @@ export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing,
         setIsProcessing(true);
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        const incoming = csvData.rows.map(row => {
-            const rawCell = String(row[parseInt(phoneIdx)] || '');
-            const firstPart = rawCell.split(/[,;|\s]+/)[0];
-            let phone = firstPart.replace(/\D/g, '');
-            if (phone.length === 0) return null;
-            if (phone.length === 11 && phone.startsWith('0')) phone = phone.substring(1);
+        const validRows = csvData.rows.filter(row => {
+            const rawCell = String(row[parseInt(phoneIdx)] || '').trim();
+            return rawCell.length > 0;
+        });
+        const totalRows = validRows.length;
+        const seenInFile = new Set();
+        const uniqueIncoming = [];
+        let duplicatesInFile = 0;
+
+        for (const row of validRows) {
+            const rawCell = String(row[parseInt(phoneIdx)] || '').trim();
+            const firstPart = rawCell.split(/[,;|]+/)[0].trim();
+            const phone = normalizePhone(firstPart);
+            if (!phone || phone.length < 8) continue;
+
+            if (seenInFile.has(phone)) {
+                duplicatesInFile++;
+                continue;
+            }
+            seenInFile.add(phone);
 
             const variables = { ...fileVariables };
             Object.entries(columnMapping).forEach(([colIdx, varKey]) => {
@@ -130,16 +145,22 @@ export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing,
                 contactEmail = String(row[parseInt(emailColumn)] ?? '').trim();
             }
 
-            return { phone, name: contactName || null, email: contactEmail || null, vars: variables, status: 'pending', window_open: false, rowTags };
-        }).filter(c => c !== null);
+            uniqueIncoming.push({
+                phone,
+                name: contactName || null,
+                email: contactEmail || null,
+                vars: variables,
+                status: 'pending',
+                window_open: false,
+                rowTags
+            });
+        }
 
-        // Salvar contatos importados automaticamente na base de leads/contatos do backend
-        if (shouldSaveToLeads && activeClient && incoming.length > 0) {
+        // Salvar contatos importados automaticamente na base de leads/contatos do backend (apenas únicos)
+        if (shouldSaveToLeads && activeClient && uniqueIncoming.length > 0) {
             setWorkingMessage('Salvando contatos no banco de dados...');
             try {
-                // Se o usuário selecionou uma tag manual geral, a usamos. Caso contrário, usamos a tag por linha ou nenhuma.
-                // Criamos conjuntos de tags para cada contato
-                const leadsPayload = incoming.map(c => {
+                const leadsPayload = uniqueIncoming.map(c => {
                     const finalTagsList = [];
                     if (saveLeadsTags) {
                         finalTagsList.push(...saveLeadsTags.split(',').map(t => t.trim()));
@@ -147,7 +168,6 @@ export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing,
                     if (c.rowTags) {
                         finalTagsList.push(...c.rowTags.split(',').map(t => t.trim()));
                     }
-                    // Junta em uma string separada por virgulas
                     const contactTags = Array.from(new Set(finalTagsList.filter(Boolean))).join(', ');
 
                     return {
@@ -158,25 +178,10 @@ export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing,
                     };
                 });
 
-                // Envia em lotes de até 500 para evitar payload excessivo
                 const chunkSize = 500;
                 let savedCount = 0;
                 for (let i = 0; i < leadsPayload.length; i += chunkSize) {
                     const chunk = leadsPayload.slice(i, i + chunkSize);
-                    // Para fins de compatibilidade, o endpoint /leads/bulk aceita { leads, tags }
-                    // Mas como cada contato pode ter tags diferentes (da coluna), criaremos uma rota ou chamaremos múltiplas vezes.
-                    // Para mantermos simplicidade e performance, vamos adaptar o payload ou enviar individualmente/em blocos.
-                    // No backend, a rota routers/leads.py bulk_create_leads aceita request.leads e request.tags.
-                    // Se passarmos as tags em request.tags, elas se aplicam a todos. Mas a rota upsert_webhook_lead aceita também tags individuais.
-                    // Como a rota /leads/bulk aceita tags globais no request.tags, podemos passar request.tags e no backend, se o item tiver suas próprias tags,
-                    // podemos adaptar no backend ou enviar blocos agrupados.
-                    // Mas repare que o endpoint `/leads/bulk` do backend recebe no corpo:
-                    // class BulkCreateLeadsRequest(BaseModel):
-                    //     leads: List[LeadBatchItem]
-                    //     tags: Optional[str] = None
-                    // Onde LeadBatchItem tem apenas phone, name, email.
-                    // Para suportar tags por linha, vamos atualizar o backend (LeadBatchItem) adicionando `tags: Optional[str] = None`
-                    // para que cada contato da lista possa trazer suas próprias etiquetas!
                     const res = await fetchWithAuth(`${API_URL}/leads/bulk`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -203,31 +208,24 @@ export const useFileImport = ({ setContacts, setWorkingMessage, setIsProcessing,
         }
 
         setContacts(prev => {
-            const existingPhones = new Set(prev.map(c => c.phone));
-            const seenInBatch = new Set();
-
-            const uniqueIncoming = incoming.filter(c => {
-                if (existingPhones.has(c.phone) || seenInBatch.has(c.phone)) return false;
-                seenInBatch.add(c.phone);
-                return true;
-            });
-
-            const duplicatesCount = incoming.length - uniqueIncoming.length;
-            if (duplicatesCount > 0) {
-                toast(`${duplicatesCount} duplicados ignorados no arquivo.`, {
-                    icon: 'ℹ',
-                    id: 'duplicates-file-ignored'
-                });
-            }
-
-            return [...prev, ...uniqueIncoming];
+            const existingPhones = new Set(prev.map(c => normalizePhone(c.phone)));
+            const genuinelyNew = uniqueIncoming.filter(c => !existingPhones.has(c.phone));
+            return [...prev, ...genuinelyNew];
         });
 
         setIsProcessing(false);
         setShowColumnSelector(false);
         setShowList(true);
         setIsValidated(false);
-        toast.success(`Contatos carregados com sucesso!`);
+
+        if (duplicatesInFile > 0) {
+            toast.success(
+                `Lista carregada: ${totalRows} linhas processadas (${uniqueIncoming.length} contatos únicos, ${duplicatesInFile} duplicados descartados)`,
+                { duration: 6000, id: 'bulk-list-loaded' }
+            );
+        } else {
+            toast.success(`Lista carregada: ${uniqueIncoming.length} contatos únicos carregados com sucesso!`, { id: 'bulk-list-loaded' });
+        }
     };
 
     return {

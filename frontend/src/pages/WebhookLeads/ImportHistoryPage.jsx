@@ -45,8 +45,8 @@ export default function ImportHistoryPage({ onNavigateToLeads }) {
     if (!activeClient?.id) return;
     if (showLoading) setLoading(true);
     try {
-      const currentLimit = limit === 'all' ? 999999 : limit;
-      const skipValue = limit === 'all' ? 0 : page * limit;
+      const currentLimit = Math.max(1, Math.min(Number(limit) || 20, 20));
+      const skipValue = page * currentLimit;
 
       const response = await fetchWithAuth(
         `${API_URL}/leads/import/history?skip=${skipValue}&limit=${currentLimit}`,

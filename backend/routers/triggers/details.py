@@ -31,7 +31,134 @@ async def get_trigger_messages(
     if not trigger: raise HTTPException(status_code=404, detail="Disparo não encontrado")
     
     all_trigger_ids = [trigger_id]
-    
+    child_ids = [c[0] for c in db.query(models.ScheduledTrigger.id).filter(models.ScheduledTrigger.parent_id == trigger_id).all()]
+    all_trigger_ids += child_ids
+
+    # Tratamento dedicado para listar contatos restantes (não processados)
+    if status_filter == 'remaining':
+        from services.utils.phone_utils import normalize_phone
+        raw_contacts = trigger.contacts_list or []
+
+        existing_statuses = db.query(models.MessageStatus.phone_number, models.MessageStatus.status, models.MessageStatus.failure_reason).filter(
+            models.MessageStatus.trigger_id.in_(all_trigger_ids)
+        ).all()
+
+        processed_phone_counts = {}
+        for row in existing_statuses:
+            p_val = getattr(row, 'phone_number', None) if hasattr(row, 'phone_number') else (row[0] if row else None)
+            p_norm = normalize_phone(p_val)
+            if p_norm:
+                processed_phone_counts[p_norm] = processed_phone_counts.get(p_norm, 0) + 1
+                if len(p_norm) >= 8:
+                    p_suf = p_norm[-8:]
+                    processed_phone_counts[p_suf] = processed_phone_counts.get(p_suf, 0) + 1
+
+        remaining_items = []
+        seen_raw_phones = {}
+        unique_reasons_remaining = set()
+
+        for idx, c in enumerate(raw_contacts):
+            phone_raw = c if isinstance(c, str) else (c.get('phone') or c.get('telefone') or c.get('whatsapp') or c.get('contact_phone') or c.get('number') or '')
+            p_norm = normalize_phone(phone_raw)
+            name = '' if isinstance(c, str) else (c.get('nome') or c.get('name') or c.get('full_name') or c.get('{{1}}') or c.get('1') or '')
+            tags_raw = '' if isinstance(c, str) else (c.get('tags') or c.get('rowTags') or '')
+
+            is_dup = False
+            if p_norm:
+                seen_raw_phones[p_norm] = seen_raw_phones.get(p_norm, 0) + 1
+                if seen_raw_phones[p_norm] > 1:
+                    is_dup = True
+
+            suffix = p_norm[-8:] if len(p_norm) >= 8 else p_norm
+            is_processed = False
+            if p_norm and processed_phone_counts.get(p_norm, 0) > 0:
+                processed_phone_counts[p_norm] -= 1
+                if suffix and processed_phone_counts.get(suffix, 0) > 0:
+                    processed_phone_counts[suffix] -= 1
+                is_processed = True
+            elif suffix and processed_phone_counts.get(suffix, 0) > 0:
+                processed_phone_counts[suffix] -= 1
+                is_processed = True
+
+            if not is_processed:
+                if not p_norm:
+                    reason = "Telefone ausente ou inválido"
+                elif is_dup:
+                    reason = "Número duplicado na lista (ignorado para evitar repetição)"
+                elif trigger.status in ('completed', 'failed', 'aborted', 'cancelled'):
+                    reason = "Não disparado (interrupção do lote)"
+                else:
+                    reason = "Pendente de envio"
+
+                unique_reasons_remaining.add(reason)
+
+                clean_p = "".join(filter(str.isdigit, str(phone_raw)))
+                if search_phone and "".join(filter(str.isdigit, search_phone)) not in clean_p:
+                    continue
+                if filter_ddi and not clean_p.startswith("".join(filter(str.isdigit, filter_ddi))):
+                    continue
+                if filter_ddd:
+                    c_ddd = "".join(filter(str.isdigit, filter_ddd))
+                    if not (clean_p.startswith(f"55{c_ddd}") or clean_p.startswith(c_ddd)):
+                        continue
+                if failure_reason and failure_reason != 'all' and reason != failure_reason:
+                    continue
+
+                remaining_items.append({
+                    "id": f"rem_{trigger_id}_{idx+1}",
+                    "trigger_id": trigger_id,
+                    "message_id": f"virtual_rem_{idx+1}",
+                    "phone_number": str(phone_raw) if phone_raw else "Sem número",
+                    "status": "pending",
+                    "failure_reason": reason,
+                    "is_interaction": False,
+                    "message_type": "TEMPLATE" if trigger.template_name else "FREE_MESSAGE",
+                    "meta_price_category": None,
+                    "meta_price_brl": 0.0,
+                    "content": trigger.template_name or "Disparo em Massa",
+                    "private_note_posted": False,
+                    "memory_webhook_status": None,
+                    "memory_webhook_error": None,
+                    "chatwoot_conversation_id": None,
+                    "chatwoot_account_id": None,
+                    "chatwoot_inbox_id": None,
+                    "timestamp": trigger.created_at.isoformat() if trigger.created_at else None,
+                    "updated_at": trigger.updated_at.isoformat() if trigger.updated_at else None,
+                    "contact_name": name or str(phone_raw),
+                    "chatwoot_url": None,
+                    "lead_tags": tags_raw or None,
+                    "failure_resolution": None,
+                    "failure_resolved_at": None,
+                    "is_remaining": True
+                })
+
+        total_rem = len(remaining_items)
+        paginated_rem = remaining_items[skip : skip + limit]
+
+        total_c = trigger.total_contacts or len(raw_contacts)
+        proc_num = (trigger.total_sent or 0) + (trigger.total_failed or 0) + (trigger.total_skipped or 0) + (trigger.total_blocked or 0)
+        counts = {
+            "all": total_c,
+            "sent": trigger.total_sent or 0,
+            "delivered": trigger.total_delivered or 0,
+            "read": trigger.total_read or 0,
+            "failed": trigger.total_failed or 0,
+            "blocked": trigger.total_blocked or 0,
+            "skipped": trigger.total_skipped or 0,
+            "interaction": trigger.total_interactions or 0,
+            "queue": max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0)),
+            "free": 0,
+            "template": 0,
+            "private_note": trigger.total_private_notes or 0,
+            "remaining": max(0, total_c - proc_num)
+        }
+        return {
+            "items": paginated_rem,
+            "counts": counts,
+            "total": total_rem,
+            "failure_reasons": sorted(list(unique_reasons_remaining))
+        }
+
     base_query = db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == trigger_id)
     
     # Guardar cópia da query base antes de aplicar filtros específicos para calcular a contagem total correta de cada tab
@@ -218,49 +345,69 @@ async def get_trigger_messages(
                     "failure_resolution": None,
                     "failure_resolved_at": None
                 })
-        elif trigger.contacts_list and status_filter in (None, 'all', 'total') and (trigger.total_sent or 0) == 0:
-            raw = trigger.contacts_list or []
-            for idx, c in enumerate(raw):
-                phone = c if isinstance(c, str) else (c.get('phone') or c.get('whatsapp') or c.get('telefone') or c.get('number') or '')
-                name = '' if isinstance(c, str) else (c.get('nome') or c.get('name') or c.get('full_name') or c.get('{{1}}') or c.get('1') or '')
-                if not phone: continue
+        elif trigger.contacts_list:
+            is_lost_status = counts_query.count() == 0 and ((trigger.total_sent or 0) > 0 or (trigger.total_failed or 0) > 0)
+            is_pending_bulk = (trigger.total_sent or 0) == 0 and status_filter in (None, 'all', 'total')
+            
+            if is_pending_bulk or is_lost_status:
+                raw = trigger.contacts_list or []
+                for idx, c in enumerate(raw):
+                    phone = c if isinstance(c, str) else (c.get('phone') or c.get('whatsapp') or c.get('telefone') or c.get('number') or '')
+                    name = '' if isinstance(c, str) else (c.get('nome') or c.get('name') or c.get('full_name') or c.get('{{1}}') or c.get('1') or '')
+                    if not phone: continue
 
-                clean_p = "".join(filter(str.isdigit, str(phone)))
-                if search_phone and clean_p and "".join(filter(str.isdigit, search_phone)) not in clean_p:
-                    continue
-                if filter_ddi and clean_p and not clean_p.startswith("".join(filter(str.isdigit, filter_ddi))):
-                    continue
-                if filter_ddd:
-                    c_ddd = "".join(filter(str.isdigit, filter_ddd))
-                    if clean_p and not (clean_p.startswith(f"55{c_ddd}") or clean_p.startswith(c_ddd)):
+                    clean_p = "".join(filter(str.isdigit, str(phone)))
+                    if search_phone and clean_p and "".join(filter(str.isdigit, search_phone)) not in clean_p:
                         continue
+                    if filter_ddi and clean_p and not clean_p.startswith("".join(filter(str.isdigit, filter_ddi))):
+                        continue
+                    if filter_ddd:
+                        c_ddd = "".join(filter(str.isdigit, filter_ddd))
+                        if clean_p and not (clean_p.startswith(f"55{c_ddd}") or clean_p.startswith(c_ddd)):
+                            continue
 
-                virtual_items.append({
-                    "id": idx + 1,
-                    "trigger_id": trigger_id,
-                    "message_id": f"virtual_raw_{idx+1}",
-                    "phone_number": str(phone),
-                    "status": "pending",
-                    "failure_reason": None,
-                    "is_interaction": False,
-                    "message_type": "TEMPLATE" if trigger.template_name else "FREE_MESSAGE",
-                    "meta_price_category": None,
-                    "meta_price_brl": 0.0,
-                    "content": trigger.template_name or "Disparo em Massa",
-                    "private_note_posted": False,
-                    "memory_webhook_status": None,
-                    "memory_webhook_error": None,
-                    "chatwoot_conversation_id": None,
-                    "chatwoot_account_id": trigger.chatwoot_account_id,
-                    "chatwoot_inbox_id": trigger.chatwoot_inbox_id,
-                    "timestamp": trigger.created_at.isoformat() if trigger.created_at else None,
-                    "updated_at": trigger.created_at.isoformat() if trigger.created_at else None,
-                    "contact_name": name or str(phone),
-                    "chatwoot_url": None,
-                    "lead_tags": None,
-                    "failure_resolution": None,
-                    "failure_resolved_at": None
-                })
+                    v_status = "pending"
+                    v_reason = None
+                    if is_lost_status:
+                        if status_filter == 'failed':
+                            if (trigger.total_failed or 0) == 0:
+                                continue
+                            v_status = "failed"
+                            v_reason = trigger.failure_reason or "Falha no envio (registro redefinido)"
+                        elif status_filter in ('sent', 'delivered'):
+                            v_status = "sent"
+                        elif status_filter not in (None, 'all', 'total'):
+                            continue
+
+                    if v_reason and v_reason not in unique_reasons:
+                        unique_reasons.append(v_reason)
+
+                    virtual_items.append({
+                        "id": idx + 1,
+                        "trigger_id": trigger_id,
+                        "message_id": f"virtual_raw_{idx+1}",
+                        "phone_number": str(phone),
+                        "status": v_status,
+                        "failure_reason": v_reason,
+                        "is_interaction": False,
+                        "message_type": "TEMPLATE" if trigger.template_name else "FREE_MESSAGE",
+                        "meta_price_category": None,
+                        "meta_price_brl": 0.0,
+                        "content": trigger.template_name or "Disparo em Massa",
+                        "private_note_posted": False,
+                        "memory_webhook_status": None,
+                        "memory_webhook_error": None,
+                        "chatwoot_conversation_id": None,
+                        "chatwoot_account_id": trigger.chatwoot_account_id,
+                        "chatwoot_inbox_id": trigger.chatwoot_inbox_id,
+                        "timestamp": trigger.created_at.isoformat() if trigger.created_at else None,
+                        "updated_at": trigger.created_at.isoformat() if trigger.created_at else None,
+                        "contact_name": name or str(phone),
+                        "chatwoot_url": None,
+                        "lead_tags": None,
+                        "failure_resolution": None,
+                        "failure_resolved_at": None
+                    })
         
         total = len(virtual_items)
         virtual_items = virtual_items[skip:skip+limit]
@@ -362,7 +509,8 @@ async def get_trigger_messages(
             "blocked": trigger.total_blocked or 0,
             "interaction": trigger.total_interactions or 0,
             "private_note": trigger.total_private_notes or 0,
-            "queue": max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0))
+            "queue": max(0, (trigger.total_sent or 0) - (trigger.total_delivered or 0)),
+            "remaining": 0
         }
     else:
         # Se for bulk, calcular contadores baseado na query agrupada por telefone para garantir contagens únicas
@@ -374,6 +522,7 @@ async def get_trigger_messages(
             # Campos não armazenados no trigger (free, template, private_note) ainda são
             # calculados via SQL.
             total_c = trigger.total_contacts or counts_query.count()
+            proc_num = (trigger.total_sent or 0) + (trigger.total_failed or 0) + (trigger.total_skipped or 0) + (trigger.total_blocked or 0)
             counts = {
                 "all": total_c,
                 "sent": trigger.total_sent or 0,
@@ -391,6 +540,7 @@ async def get_trigger_messages(
                 "free": counts_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
                 "template": counts_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
                 "private_note": trigger.total_private_notes or 0,
+                "remaining": max(0, total_c - proc_num),
             }
         else:
             counts = {
@@ -421,7 +571,8 @@ async def get_trigger_messages(
                     models.MessageStatus.status == 'sent',
                     models.MessageStatus.delivered_counted == False,
                     models.MessageStatus.read_counted == False
-                ).count()
+                ).count(),
+                "remaining": 0,
             }
 
     return {"items": serialized_items, "counts": counts, "total": total, "failure_reasons": unique_reasons}

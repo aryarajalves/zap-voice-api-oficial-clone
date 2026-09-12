@@ -27,6 +27,8 @@ Este arquivo registra a estrutura atual do banco de dados e todas as alteraçõe
 ## 🕒 Histórico de Migrações (Últimas Alterações)
 
 | Data | Alteração | Tabela | Colunas Adicionadas | Script de Migração |
+| 11/09/2026 | Prazo Limite de Envio e Fallback 24h | `scheduled_triggers` | `max_dispatch_time` | `backend/scripts/database/add_max_dispatch_time_column.py` |
+| 09/09/2026 | Etiquetas de Exclusão Dinâmica e Base de Exclusão | `scheduled_triggers`, `recurring_triggers` | `exclusion_tags`, `exclusion_tag_mode`, `exclusion_list` (em `scheduled_triggers`) e `exclusion_tags`, `exclusion_tag_mode` (em `recurring_triggers`) | `backend/scripts/add_exclusion_tags_columns.py` |
 | 26/08/2026 | Índice de Performance em Mensagens Favoritas | `chat_messages` | Índice composto `idx_chat_messages_starred` em `(conversation_id, is_starred, timestamp DESC)` | `backend/add_starred_messages_index.py` |
 | 26/08/2026 | Fixar e Favoritar Mensagens de Chat | `chat_conversations`, `chat_messages` | `pinned_message_id` em `chat_conversations`, `is_starred` em `chat_messages` | `backend/add_chat_message_pin_and_star.py` |
 | 24/08/2026 | Validação de E-mail via Brevo no Cadastro | `email_verification_codes` | Tabela nova completa (`id`, `email`, `code`, `token`, `created_at`, `expires_at`, `is_used`, `attempts`) | `backend/scripts/database/create_email_verification_codes_table.py` |
@@ -202,3 +204,25 @@ docker exec zapvoice_app python /app/scripts/add_email_marketing_tables.py
 **Valores suportados:** `'open'`, `'resolved'`, `'archived'`
 
 **Contexto:** Funcionalidade de arquivamento de conversas no Painel de Atendimento (individual e em lote). Não exige alteração de DDL pois a coluna `status` já é indexada e do tipo `VARCHAR`, agora aceitando o valor `'archived'`.
+
+---
+
+## 📋 Migração: Prazo Limite de Disparo em Massa (2026-09-11)
+
+**Tabela afetada:** `scheduled_triggers`
+
+**Script:** `backend/scripts/database/add_max_dispatch_time_column.py`
+
+**Novas colunas:**
+
+| Coluna | Tipo | Default | Descrição |
+|--------|------|---------|-----------|
+| `max_dispatch_time` | `TIMESTAMPTZ` | `NULL` | Data e horário limite para envio/expiração do disparo e aborto de mensagens não entregues |
+
+**Contexto:** Permite definir data e hora limite para abortar o envio de templates para contatos restantes e abortar mensagens retidas na fila da Meta (usuário sem internet).
+
+**Como aplicar em produção:**
+```bash
+docker exec zapvoice_app python /app/scripts/database/add_max_dispatch_time_column.py
+```
+

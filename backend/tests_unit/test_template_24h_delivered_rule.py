@@ -124,8 +124,15 @@ def test_contact_template_history_bloqueia(db_session: Session):
 
 def test_failed_nao_bloqueia(db_session: Session):
     """
-    Se o status é 'failed' (erro confirmado), definitivamente não deve bloquear.
+    Se o status é 'failed' (erro confirmado), definitivamente não deve bloquear,
+    mesmo que haja registro em ContactTemplateHistory gerado no despacho.
     """
+    history = models.ContactTemplateHistory(
+        client_id=CLIENT_ID,
+        phone=PHONE,
+        template_name=TEMPLATE,
+        dispatched_at=CUTOFF_OK
+    )
     ms = models.MessageStatus(
         phone_number=PHONE,
         template_name=TEMPLATE,
@@ -134,11 +141,11 @@ def test_failed_nao_bloqueia(db_session: Session):
         timestamp=CUTOFF_OK,
         trigger_id=None
     )
-    db_session.add(ms)
+    db_session.add_all([history, ms])
     db_session.commit()
 
     result = is_template_sent_in_last_24h(db_session, CLIENT_ID, PHONE, TEMPLATE)
-    assert result is False, "Status 'failed' NÃO deve bloquear"
+    assert result is False, "Status 'failed' NÃO deve bloquear mesmo com ContactTemplateHistory"
 
 
 # ─── CENÁRIO 7: Número com formato diferente mas mesmo sufixo ────────────────

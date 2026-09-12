@@ -61,7 +61,8 @@ Abaixo, detalho cada tela identificada no sistema e as dúvidas que precisamos s
 
 ### 1. Dashboard / Disparo em Massa (`bulk_sender`)
 - **Propósito**: Realizar envios rápidos de templates para listas de contatos.
-- **Funcionalidades**: Upload de CSV/Excel, seleção de template, mapeamento de variáveis.
+- **Funcionalidades**: Upload de CSV/Excel, seleção de template, mapeamento de variáveis, deduplicação preventiva.
+- **Deduplicação Preventiva de Contatos**: Ao carregar lista via planilha (CSV/XLSX), entrada manual ou API de agendamento/reserva (`/bulk-send/schedule`, `/bulk-send/reserve`), o sistema normaliza os números telefônicos (DDI 55 + DDD + 9 dígitos) e elimina contatos duplicados antes do disparo. O usuário é notificado via toast no formato: `"Lista carregada: X linhas processadas (Y contatos únicos, Z duplicados descartados)"`. O total gravado no backend (`total_contacts`) reflete estritamente os contatos únicos, garantindo que o disparo conclua com 100% de progresso e `Restam 0`.
 - **Dúvidas UI/UX**:
     - [x] Como deve ser o feedback visual durante um disparo de 10.000 contatos?
         - **Resposta**: O usuário é redirecionado para a tela de Histórico, onde acompanha o progresso em tempo real.
@@ -138,7 +139,7 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
 - [x] [NOVO] Caso a execução seja considerada "atrasada" e siga para o caminho `late`, mas o usuário não tenha conectado nenhum nó a esta porta, o fluxo deve ser encerrado ou seguir pelo caminho `default` como fallback?
     - **Resposta**: Deve ser encerrado (o fluxo de automação é finalizado se a porta `late` não possuir nenhuma conexão).
 - [x] [NOVO] Ao agendar um disparo em massa utilizando Etiquetas, o sistema deve permitir uma opção para buscar dinamicamente os contatos atualizados da etiqueta no momento exato do disparo (capturando novos leads que entraram na etiqueta após a criação do agendamento)?
-    - **Resposta**: Sim. Ao marcar essa opção, no momento da execução o worker re-consulta o Chatwoot e inclui os novos contatos. No Histórico, o número total (🚀 Total) refletirá a contagem final atualizada no momento do envio. Na aba de Agendamentos, será exibido o indicador `🔄 Dinâmico (Etiqueta)` e a quantidade estimada/atualizada.
+    - **Resposta**: Sim. Ao marcar essa opção, no momento da execução o worker re-consulta a base e inclui os novos contatos qualificados na etiqueta de destinatário (aumentando o número total de destinatários caso novos contatos entrem). Simultaneamente, se houver filtro de etiquetas na base de exclusão (`exclusion_tags`) ou lista de exclusão manual (`exclusion_list`), o sistema re-verifica no momento do disparo e remove qualquer contato que tenha entrado nas etiquetas de exclusão ou na lista de exclusão, respeitando os modos OR (qualquer etiqueta) ou AND (todas as etiquetas). No Histórico, o número total (🚀 Total) refletirá a contagem final atualizada no momento do envio. Na aba de Agendamentos, será exibido o indicador `🔄 Dinâmico (Etiqueta)` e a quantidade estimada/atualizada.
 
 - [ ] [NOVO] Ao enviar uma mensagem manual ou por template a partir do Chat Local (ZapVoice), o sistema deve aplicar alguma etiqueta automaticamente ao contato? Se sim, qual etiqueta e sob quais condições?
 - [x] [NOVO] **E-mail Marketing (Provedor):** O envio de e-mails deve suportar SMTP próprio configurado por cliente ou suporte a APIs nativas (Resend, SendGrid, Amazon SES)?
@@ -147,13 +148,11 @@ Abaixo estão as perguntas sobre mecânicas de fundo que ainda não estão docum
     - **Resposta**: Editor de Texto Versão 01 (Rich Text + HTML + Variáveis dinâmicas).
 - [x] [NOVO] **E-mail Marketing (Rastreamento):** Devemos incluir rastreamento de aberturas (Pixel transparent 1px) e cliques em links nos e-mails disparados?
     - **Resposta**: Não precisa nesta fase inicial. Focar na entrega rápida e histórico simples.
-- [ ] [NOVO] **E-mail Marketing (Recebimento de Respostas / Inbound):** Devemos criar a aba **💬 Respostas Recebidas** no painel de E-mail Marketing para capturar via Webhook (Resend / Amazon SES / Cloudflare) e visualizar as respostas dos leads com opção de responder diretamente pelo ZapVoice?
-
+- [x] [NOVO] **Prazo Limite e Expiração de Disparo em Massa:** No disparo em massa, devemos disponibilizar o campo opcional de "Data e Hora Limite de Envio" com fallback automático de 24 horas caso o usuário não preencha? Mensagens retidas na fila da Meta (usuário sem internet) e contatos pendentes serão abortados ao atingir esse prazo.
+    - **Resposta**: Sim. Foi disponibilizado o campo opcional "Prazo Limite de Envio" no passo de opções de disparo (`SchedulingSection`). Se o usuário não definir uma data/hora limite personalizada, o sistema adota automaticamente o **fallback padrão de 24 horas** a partir do início do disparo (`started_at`). Ao atingir o prazo limite ou as 24 horas: (1) O envio dos contatos pendentes restantes na lista é imediatamente abortado no backend (`process_bulk_send`), marcando o disparo como `aborted` e os contatos pendentes como falha por timeout; (2) Mensagens retidas na fila da Meta (`status == 'sent'` sem confirmação de `delivered`, ex: contato sem internet/offline) são limpas e marcadas como falha pelo scheduler de limpeza periódica (`cleanup_tasks.py`), atualizando os contadores do histórico.
 
 ## 📋 Histórico de Decisões
 As perguntas iniciais sobre regras de negócio foram todas respondidas e integradas às seções acima. O sistema segue o modelo de isolamento total entre clientes e automação robusta com retentativas configuradas.
 
 ---
-> 📋 **Documentação Atualizada:** Todas as pendências do BUSINESS_RULES.md foram sanadas.
-
-> 📋 **Perguntas novas adicionadas ao BUSINESS_RULES.md:** Suporte a E-mail Marketing (Provedor, Editor de E-mail e Rastreamento de Aberturas/Cliques).
+> 📋 **Documentação Atualizada:** Regras de negócio de Prazo Limite e Expiração de Disparo em Massa consolidadas.

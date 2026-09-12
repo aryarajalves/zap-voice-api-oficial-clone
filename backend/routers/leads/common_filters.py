@@ -36,6 +36,16 @@ def extract_ddi_ddd(raw_phone: Optional[str]):
     return "", ""
 
 
+def escape_sql_like(val: str) -> str:
+    """
+    Escapa caracteres especiais coringa de LIKE/ILIKE (% e _) para busca literal de etiquetas.
+    Sem isso, '_' casa com qualquer caractere único (inclusive vírgulas separando outras tags).
+    """
+    if not val:
+        return ""
+    return str(val).replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+
+
 def _apply_common_lead_filters(query, search, event_type, product_name,
                                 tag, tag_mode, is_locked, has_bsud, date_from, date_to,
                                 imported_by_client_id, origin, exclude_tag=None):
@@ -123,14 +133,14 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
             if tag_mode == "AND":
                 query = query.filter(
                     and_(*(
-                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{escape_sql_like(t)},%", escape='\\')
                         for t in tags_filter
                     ))
                 )
             else:
                 query = query.filter(
                     or_(*(
-                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{escape_sql_like(t)},%", escape='\\')
                         for t in tags_filter
                     ))
                 )
@@ -149,7 +159,7 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
                 and_(*(
                     or_(
                         models.WebhookLead.tags.is_(None),
-                        ~func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                        ~func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{escape_sql_like(t)},%", escape='\\')
                     )
                     for t in exclude_tags_filter
                 ))

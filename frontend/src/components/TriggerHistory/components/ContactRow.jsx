@@ -60,6 +60,10 @@ const ContactRow = ({
                         <div className="text-orange-500" title="Bloqueado pelo usuário">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                         </div>
+                    ) : contact.status === 'pending' || contact.is_remaining ? (
+                        <div className="text-amber-500 flex items-center justify-center text-sm" title={contact.is_remaining ? "Restante (Não enviado)" : "Aguardando envio"}>
+                            ⏳
+                        </div>
                     ) : (
                         <div className="w-2 h-2 rounded-full bg-gray-300" />
                     )}
@@ -154,7 +158,7 @@ const ContactRow = ({
                     )}
                     {contact.failure_reason && (
                         <div className="flex items-center justify-end gap-1">
-                            <div className="text-xs text-red-500 font-bold max-w-[150px] truncate" title={contact.failure_reason}>
+                            <div className={`text-xs ${contact.is_remaining ? 'text-amber-500' : 'text-red-500'} font-bold max-w-[150px] truncate`} title={contact.failure_reason}>
                                 {contact.failure_reason === 'BLOCKED_VIA_BUTTON' ? 'BLOQUEOU O BOT' : contact.failure_reason}
                             </div>
                             <button

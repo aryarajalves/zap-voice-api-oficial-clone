@@ -1,8 +1,20 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from 'reactflow';
-import { vi } from 'vitest';
+import { vi, describe, test, expect, beforeEach } from 'vitest';
 import ConditionNode from './ConditionNode';
+import { useClient } from '../../../contexts/ClientContext';
+import { fetchWithAuth } from '../../../AuthContext';
+
+vi.mock('../../../contexts/ClientContext');
+vi.mock('../../../AuthContext');
+
+const mockClient = { id: 11, name: 'SST' };
+const mockChatLabels = [
+    { id: 1, name: 'interessado', color: '#10B981' },
+    { id: 2, name: 'suporte', color: '#3B82F6' },
+    { id: 3, name: 'vip', color: '#8B5CF6' }
+];
 
 describe('ConditionNode', () => {
     const mockOnChange = vi.fn();
@@ -21,9 +33,16 @@ describe('ConditionNode', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        useClient.mockReturnValue({ activeClient: mockClient });
+        fetchWithAuth.mockImplementation(() => {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve(mockChatLabels)
+            });
+        });
     });
 
-    test('renderiza as opções de validação padrão', () => {
+    test('renderiza as opções de validação padrão incluindo Etiqueta no Chat (ZapVoice)', () => {
         render(
             <ReactFlowProvider>
                 <ConditionNode id="node-cond" data={mockData} />
@@ -32,18 +51,77 @@ describe('ConditionNode', () => {
 
         expect(screen.getByText('Tipo de Validação')).toBeInTheDocument();
         expect(screen.getByText('Busca por Texto (Simples)')).toBeInTheDocument();
+        expect(screen.getByText('Etiqueta no Chat (ZapVoice)')).toBeInTheDocument();
         expect(screen.getByPlaceholderText("Ex: Clicou 'Promo'?")).toBeInTheDocument();
     });
 
-    test('quando o tipo é tag, renderiza o input de tag', () => {
-        const tagData = { ...mockData, conditionType: 'tag' };
+    test('quando o tipo é tag, renderiza o seletor de etiquetas do Chat ZapVoice e permite selecionar uma etiqueta existente', async () => {
+        const tagData = { ...mockData, conditionType: 'tag', tag: '' };
         render(
             <ReactFlowProvider>
                 <ConditionNode id="node-cond" data={tagData} />
             </ReactFlowProvider>
         );
 
-        expect(screen.getByPlaceholderText('ex: interessado')).toBeInTheDocument();
+        // Deve renderizar o trigger do seletor
+        const trigger = screen.getByTestId('condition-tag-trigger');
+        expect(trigger).toBeInTheDocument();
+        
+        await waitFor(() => {
+            expect(screen.getByText(/Escolha ou digite uma etiqueta/i)).toBeInTheDocument();
+        });
+
+        // Clica no seletor para abrir o dropdown
+        fireEvent.click(trigger);
+
+        // Aguarda carregar e exibir as etiquetas mockadas
+        await waitFor(() => {
+            expect(screen.getByTestId('condition-tag-option-interessado')).toBeInTheDocument();
+            expect(screen.getByTestId('condition-tag-option-suporte')).toBeInTheDocument();
+            expect(screen.getByTestId('condition-tag-option-vip')).toBeInTheDocument();
+        });
+
+        // Clica na etiqueta 'interessado'
+        fireEvent.click(screen.getByTestId('condition-tag-option-interessado'));
+
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { tag: 'interessado' });
+    });
+
+    test('permite digitar uma etiqueta personalizada no seletor', async () => {
+        const tagData = { ...mockData, conditionType: 'tag', tag: '' };
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={tagData} />
+            </ReactFlowProvider>
+        );
+
+        const trigger = screen.getByTestId('condition-tag-trigger');
+        fireEvent.click(trigger);
+
+        const searchInput = await screen.findByTestId('condition-tag-search-input');
+        fireEvent.change(searchInput, { target: { value: 'etiqueta_nova' } });
+
+        const customOption = await screen.findByTestId('condition-tag-custom-option');
+        expect(customOption).toHaveTextContent('Usar etiqueta: "etiqueta_nova"');
+        fireEvent.click(customOption);
+
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { tag: 'etiqueta_nova' });
+    });
+
+    test('exibe botão de limpar quando uma etiqueta já está selecionada', () => {
+        const tagData = { ...mockData, conditionType: 'tag', tag: 'interessado' };
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={tagData} />
+            </ReactFlowProvider>
+        );
+
+        expect(screen.getByText('interessado')).toBeInTheDocument();
+        const clearBtn = screen.getByTestId('condition-tag-clear');
+        expect(clearBtn).toBeInTheDocument();
+
+        fireEvent.click(clearBtn);
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { tag: '' });
     });
 
     test('quando o tipo é ai_question, renderiza as abas Parâmetros e Critérios de Sucesso', () => {

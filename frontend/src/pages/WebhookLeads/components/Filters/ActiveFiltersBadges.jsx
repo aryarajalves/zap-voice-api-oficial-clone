@@ -39,9 +39,13 @@ export default function ActiveFiltersBadges({
   setBlockStatusFilter,
   selectedTags = [],
   setSelectedTags,
+  tagMode = 'OR',
+  setTagMode,
+  excludedTags = [],
+  setExcludedTags,
   total
 }) {
-  const hasActiveBadges = hasDateFilter || filterDdi || filterDdd || blockStatusFilter || (selectedTags && selectedTags.length > 0);
+  const hasActiveBadges = hasDateFilter || filterDdi || filterDdd || blockStatusFilter || (selectedTags && selectedTags.length > 0) || (excludedTags && excludedTags.length > 0);
 
   if (!hasActiveBadges) {
     return (
@@ -117,6 +121,41 @@ export default function ActiveFiltersBadges({
             type="button"
             onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
             className="ml-0.5 text-purple-400 hover:text-purple-600 transition-colors cursor-pointer"
+          >
+            <FiX size={11} />
+          </button>
+        </span>
+      ))}
+
+      {/* Badge interativo para alternar regra de combinação (E / OU) */}
+      {selectedTags && selectedTags.length >= 2 && (
+        <button
+          id="contacts-tag-mode-toggle-badge"
+          type="button"
+          onClick={() => setTagMode?.(tagMode === 'AND' ? 'OR' : 'AND')}
+          title="Clique para alternar entre 'Todas juntas (E)' e 'Qualquer uma (OU)'"
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all cursor-pointer shadow-sm ${
+            tagMode === 'AND'
+              ? 'bg-purple-600 text-white border-purple-500 shadow-purple-900/20 hover:bg-purple-700'
+              : 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 hover:bg-purple-200'
+          }`}
+        >
+          <span className="text-[10px] uppercase tracking-wider font-extrabold opacity-75">Regra:</span>
+          <span>{tagMode === 'AND' ? 'Todas juntas (E)' : 'Qualquer uma (OU)'}</span>
+          <span className="text-[10px] ml-0.5 opacity-80">⇄</span>
+        </button>
+      )}
+
+      {/* Badges de etiquetas excluídas */}
+      {excludedTags && excludedTags.map(tag => (
+        <span key={`ex-${tag}`} className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700/50">
+          <FiTag size={11} />
+          <span className="line-through">{tag}</span>
+          <button
+            id={`contacts-excluded-tag-badge-remove-${tag}`}
+            type="button"
+            onClick={() => setExcludedTags?.(prev => prev.filter(t => t !== tag))}
+            className="ml-0.5 text-rose-400 hover:text-rose-600 transition-colors cursor-pointer"
           >
             <FiX size={11} />
           </button>

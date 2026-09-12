@@ -3,7 +3,6 @@ import { FiSend, FiCornerUpLeft, FiChevronDown } from 'react-icons/fi';
 import { BsJournalText, BsPinAngleFill, BsStarFill } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
 import { renderLinkedText } from '../utils/linkifyText';
-import { extractAiCostInfo } from '../utils/aiCostExtractor';
 import SystemMessageBubble from './SystemMessageBubble';
 
 const getReactionsList = (raw) => {
@@ -66,7 +65,6 @@ export default function ChatMessageBubble({
 
     const isTemplate = msg.meta_data && msg.meta_data.is_template;
     const reactionList = getReactionsList(msg.meta_data?.reactions);
-    const aiCostInfo = extractAiCostInfo(msg);
     const isPinned = String(selectedConvo?.pinned_message_id) === String(msg.id);
     const isStarred = Boolean(msg.is_starred || (msg.meta_data && msg.meta_data.is_starred));
 
@@ -363,30 +361,6 @@ export default function ChatMessageBubble({
                                 <span>{btnText}</span>
                             </div>
                         ))}
-                    </div>
-                )}
-
-                {/* Badge de Custo da IA (Pré-Router + Agente Principal) */}
-                {aiCostInfo && (
-                    <div className="mt-2 pt-1.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-1.5 text-[10px] select-none">
-                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 font-medium">
-                            <span>⚡ IA:</span>
-                            <span className="font-bold">{aiCostInfo.isFree ? 'Gratuito' : (aiCostInfo.totalBrl || aiCostInfo.brlEstimate)}</span>
-                        </div>
-                        {!aiCostInfo.isFree && aiCostInfo.routerCost !== null && aiCostInfo.agentCost !== null && (
-                            <div className="inline-flex items-center gap-1.5 text-[9px] opacity-80 text-gray-200">
-                                <span title="Custo do Pré-Router">🚦 Router: {aiCostInfo.routerBrl || aiCostInfo.routerFormatted}</span>
-                                <span>•</span>
-                                <span title="Custo do Agente Principal">🤖 Agente: {aiCostInfo.agentBrl || aiCostInfo.agentFormatted}</span>
-                            </div>
-                        )}
-                        {aiCostInfo.isFree && aiCostInfo.routerCost !== null && aiCostInfo.agentCost !== null && (aiCostInfo.routerCost > 0 || aiCostInfo.agentCost > 0) && (
-                            <div className="inline-flex items-center gap-1.5 text-[9px] opacity-80 text-gray-200">
-                                <span title="Custo do Pré-Router">🚦 Router: {aiCostInfo.routerBrl || aiCostInfo.routerFormatted}</span>
-                                <span>•</span>
-                                <span title="Custo do Agente Principal">🤖 Agente: {aiCostInfo.agentBrl || aiCostInfo.agentFormatted}</span>
-                            </div>
-                        )}
                     </div>
                 )}
 

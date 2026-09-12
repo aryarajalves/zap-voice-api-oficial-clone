@@ -98,10 +98,6 @@ async def meta_webhook_handler(request: Request, db: Session = Depends(get_db), 
         except Exception as e:
             logger.error(f"❌ Erro ao decodificar payload bytes: {e}")
             return Response(content="Invalid JSON", status_code=400)
-        
-        
-        
-    logger.info(f"📦 [META_PAYLOAD]:\n{json.dumps(payload, indent=2, ensure_ascii=False)}")
 
     # Injetar client_id associado no payload para consumo do Worker
     # Se não foi resolvido pelo slug, tenta resolver dinamicamente pelo phone_number_id

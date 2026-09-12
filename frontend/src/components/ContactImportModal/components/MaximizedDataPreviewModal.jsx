@@ -12,7 +12,7 @@ export default function MaximizedDataPreviewModal({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-8 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full h-full max-w-6xl overflow-hidden border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-150 flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50 shrink-0">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-900 shrink-0">
           <div>
             <h3 className="font-bold text-gray-900 dark:text-white">Prévia dos Dados</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400">

@@ -87,3 +87,5 @@ out/
 
 # === Estudo (pasta local, não vai pro git) ===
 estudo/
+scratch/
+

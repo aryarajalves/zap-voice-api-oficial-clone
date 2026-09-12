@@ -57,9 +57,9 @@ export default function Modals({
         isOpen={isCleanConfirmOpen}
         onClose={() => setIsCleanConfirmOpen(false)}
         onConfirm={handleCleanTags}
-        title="Sincronizar Contatos"
-        message="Isso vai varrer todos os contatos e: (1) corrigir encoding e capitalização dos nomes (ex: 'ALBERTO levi' → 'Alberto Levi'), e (2) remover etiquetas com caracteres especiais ou escapados. Etiquetas normais não serão afetadas."
-        confirmText="Sincronizar Agora"
+        title="Sincronizar e Deduplicar Contatos"
+        message="Esta ação vai analisar toda a sua base de contatos e: (1) identificar, unificar e remover contatos duplicados (mesmo com variações de DDI 55, zeros à esquerda/após DDD ou nono dígito), combinando todas as etiquetas e histórico sem perder nenhum dado; (2) corrigir a capitalização dos nomes; e (3) limpar tags corrompidas."
+        confirmText="Sincronizar e Unificar"
         cancelText="Cancelar"
         isDangerous={false}
       />

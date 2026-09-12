@@ -1,5 +1,4 @@
-import { describe, it, expect } from 'vitest';
-import { buildComponentsPayload } from './payloadBuilder';
+import { buildComponentsPayload, buildDeduplicatedPayloadContacts } from './payloadBuilder';
 
 describe('buildComponentsPayload', () => {
     it('should format text components correctly', () => {
@@ -127,5 +126,41 @@ describe('buildComponentsPayload', () => {
                 parameters: [{ type: 'text', text: 'promo123' }]
             }
         ]);
+    });
+});
+
+describe('buildDeduplicatedPayloadContacts', () => {
+    const mockTemplate = {
+        components: [
+            { type: 'BODY', text: 'Olá {{1}}' }
+        ]
+    };
+
+    it('should remove duplicates and normalize phone numbers', () => {
+        const contacts = [
+            { phone: '(11) 98888-7777', name: 'João', vars: { nome: 'João Silva' } },
+            { phone: '5511988887777', name: 'João Duplicado', vars: { nome: 'João Silva' } },
+            { phone: '11988887777', name: 'João Triplicado', vars: { nome: 'João Silva' } },
+            { phone: '21977776666', name: 'Maria', vars: { nome: 'Maria Santos' } }
+        ];
+
+        const result = buildDeduplicatedPayloadContacts(contacts, mockTemplate, {}, { nome: 'first_name' });
+        expect(result).toHaveLength(2);
+        expect(result[0].phone).toBe('5511988887777');
+        expect(result[0].name).toBe('João');
+        expect(result[0].vars.nome).toBe('João');
+        expect(result[1].phone).toBe('5521977776666');
+        expect(result[1].name).toBe('Maria');
+    });
+
+    it('should discard invalid phone numbers with less than 8 digits', () => {
+        const contacts = [
+            { phone: '12345', name: 'Inválido' },
+            { phone: '5511999998888', name: 'Válido' }
+        ];
+
+        const result = buildDeduplicatedPayloadContacts(contacts, mockTemplate, {});
+        expect(result).toHaveLength(1);
+        expect(result[0].phone).toBe('5511999998888');
     });
 });

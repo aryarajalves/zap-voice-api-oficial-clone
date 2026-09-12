@@ -10,6 +10,7 @@ import ActiveFiltersBadges from './Filters/ActiveFiltersBadges';
 export default function Filters({
   search, setSearch,
   selectedTags = [], setSelectedTags,
+  tagMode = 'OR', setTagMode,
   excludedTags = [], setExcludedTags,
   importedByClientId, setImportedByClientId,
   origin, setOrigin,
@@ -105,6 +106,8 @@ export default function Filters({
             <FilterTagDropdown
               selectedTags={selectedTags}
               setSelectedTags={setSelectedTags}
+              tagMode={tagMode}
+              setTagMode={setTagMode}
               excludedTags={excludedTags}
               setExcludedTags={setExcludedTags}
               availableTags={availableFilters.tags || []}
@@ -178,6 +181,10 @@ export default function Filters({
         setBlockStatusFilter={setBlockStatusFilter}
         selectedTags={selectedTags}
         setSelectedTags={setSelectedTags}
+        tagMode={tagMode}
+        setTagMode={setTagMode}
+        excludedTags={excludedTags}
+        setExcludedTags={setExcludedTags}
         total={total}
       />
     </div>

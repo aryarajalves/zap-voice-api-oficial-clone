@@ -45,6 +45,8 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         setSearch={logic.setSearch}
         selectedTags={logic.selectedTags}
         setSelectedTags={logic.setSelectedTags}
+        tagMode={logic.tagMode}
+        setTagMode={logic.setTagMode}
         excludedTags={logic.excludedTags}
         setExcludedTags={logic.setExcludedTags}
         importedByClientId={logic.importedByClientId}

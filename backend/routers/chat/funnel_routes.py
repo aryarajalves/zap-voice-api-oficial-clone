@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone, timedelta, time
+from fastapi import APIRouter, Depends, HTTPException, Body
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import models
@@ -135,3 +136,164 @@ async def cancel_funnel_for_conversation(
         "message": "Funil cancelado com sucesso!",
         "trigger_id": target_trigger.id
     }
+
+
+@router.post("/chat/conversations/bulk-funnel", summary="Disparar funil em massa para conversas")
+async def trigger_bulk_funnel_for_conversations(
+    payload: dict = Body(...),
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not client_id:
+        raise HTTPException(status_code=400, detail="Client ID não fornecido.")
+
+    funnel_id = payload.get("funnel_id")
+    if not funnel_id:
+        raise HTTPException(status_code=400, detail="Funil não especificado.")
+
+    funnel = db.query(models.Funnel).filter(
+        models.Funnel.id == funnel_id,
+        models.Funnel.client_id == client_id
+    ).first()
+    if not funnel:
+        raise HTTPException(status_code=404, detail="Funil não encontrado.")
+
+    select_all_pages = payload.get("select_all_pages", False)
+    ids = payload.get("ids", [])
+
+    if not select_all_pages and not ids:
+        raise HTTPException(status_code=400, detail="Nenhuma conversa selecionada para disparar funil.")
+
+    if select_all_pages:
+        query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
+
+        tab = payload.get("tab", "todos")
+        status = payload.get("status", "open")
+        search = payload.get("search")
+        label = payload.get("label")
+        block_status = payload.get("block_status")
+        has_note = payload.get("has_note")
+        start_date = payload.get("start_date")
+        end_date = payload.get("end_date")
+        unread_only = payload.get("unread_only")
+        window_open_only = payload.get("window_open_only")
+        has_replied = payload.get("has_replied")
+
+        if status != "all":
+            query = query.filter(models.ChatConversation.status == status)
+
+        if unread_only:
+            query = query.filter(models.ChatConversation.unread_count > 0)
+
+        if window_open_only:
+            limit_time = datetime.now(timezone.utc) - timedelta(hours=24)
+            query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
+
+        if has_replied:
+            query = query.filter(models.ChatConversation.last_contact_message_at.isnot(None))
+
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                query = query.filter(models.ChatConversation.last_message_at >= start_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear start_date em bulk-funnel: {e_dt}")
+
+        if end_date:
+            try:
+                end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time(23, 59, 59, 999999))
+                query = query.filter(models.ChatConversation.last_message_at <= end_dt)
+            except Exception as e_dt:
+                logger.error(f"Erro ao parsear end_date em bulk-funnel: {e_dt}")
+
+        if tab == "minha":
+            query = query.filter(models.ChatConversation.assigned_user_id == current_user.id)
+        elif tab == "nao_atribuida":
+            query = query.filter(models.ChatConversation.assigned_user_id == None)
+
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    models.ChatConversation.contact_name.ilike(search_term),
+                    models.ChatConversation.phone.ilike(search_term)
+                )
+            )
+
+        if label:
+            query = query.filter(models.ChatConversation.labels.contains([label]))
+
+        convos = query.all()
+    else:
+        convos = db.query(models.ChatConversation).filter(
+            models.ChatConversation.id.in_(ids),
+            models.ChatConversation.client_id == client_id
+        ).all()
+
+    contacts = []
+    seen_phones = set()
+    for c in convos:
+        if not c.phone:
+            continue
+        digits = "".join(filter(str.isdigit, c.phone))
+        if not digits or digits in seen_phones:
+            continue
+        seen_phones.add(digits)
+        contacts.append({
+            "id": c.id,
+            "conversation_id": c.id,
+            "phone": c.phone,
+            "name": c.contact_name or c.phone,
+            "meta": {
+                "sender": {
+                    "name": c.contact_name or c.phone,
+                    "phone_number": c.phone
+                }
+            }
+        })
+
+    if not contacts:
+        raise HTTPException(status_code=400, detail="Nenhum contato com telefone válido encontrado nas conversas selecionadas.")
+
+    trigger = models.ScheduledTrigger(
+        client_id=client_id,
+        funnel_id=funnel_id,
+        status='queued',
+        is_bulk=True,
+        contacts_list=contacts,
+        total_contacts=len(contacts),
+        scheduled_time=datetime.now(timezone.utc),
+        delay_seconds=payload.get("delay_seconds", 5),
+        concurrency_limit=payload.get("concurrency_limit", 1)
+    )
+    db.add(trigger)
+    db.commit()
+    db.refresh(trigger)
+
+    from rabbitmq_client import rabbitmq
+    try:
+        await rabbitmq.publish("zapvoice_bulk_sends", {
+            "trigger_id": trigger.id,
+            "funnel_id": funnel_id,
+            "contacts": contacts,
+            "delay": trigger.delay_seconds,
+            "concurrency": trigger.concurrency_limit,
+            "type": "funnel_bulk"
+        })
+        trigger.status = 'processing'
+        db.commit()
+    except Exception as e:
+        logger.error(f"Erro ao publicar disparo de funil em massa: {e}")
+
+    logger.info(f"🚀 [BULK_FUNNEL] Funil {funnel_id} disparado para {len(contacts)} contatos (Trigger #{trigger.id}) pelo usuário {current_user.email}")
+
+    return {
+        "status": "ok",
+        "trigger_id": trigger.id,
+        "funnel_id": funnel_id,
+        "funnel_name": funnel.name,
+        "total_contacts": len(contacts),
+        "message": f"Funil \"{funnel.name}\" iniciado com sucesso para {len(contacts)} contato(s)!"
+    }
+

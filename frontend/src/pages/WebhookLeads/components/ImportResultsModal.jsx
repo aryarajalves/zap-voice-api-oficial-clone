@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { FiX, FiSearch, FiLoader, FiUsers } from 'react-icons/fi';
+import { FiX, FiSearch, FiLoader, FiUsers, FiTag } from 'react-icons/fi';
 import { useClient } from '../../../contexts/ClientContext';
 import { API_URL } from '../../../config';
 import { fetchWithAuth } from '../../../AuthContext';
@@ -32,6 +32,8 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [statusCounts, setStatusCounts] = useState({});
+  const [fixedTags, setFixedTags] = useState('');
+  const [fixedRemoveTags, setFixedRemoveTags] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Reset ao abrir para uma importação diferente
@@ -41,8 +43,10 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
       setSearch('');
       setDebouncedSearch('');
       setPage(0);
+      setFixedTags(importItem?.fixed_tags || '');
+      setFixedRemoveTags(importItem?.fixed_remove_tags || '');
     }
-  }, [isOpen, importItem?.id]);
+  }, [isOpen, importItem?.id, importItem?.fixed_tags, importItem?.fixed_remove_tags]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -83,6 +87,8 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
         setRows(data.items || []);
         setTotal(data.total || 0);
         setStatusCounts(data.status_counts || {});
+        if (data.fixed_tags !== undefined) setFixedTags(data.fixed_tags || '');
+        if (data.fixed_remove_tags !== undefined) setFixedRemoveTags(data.fixed_remove_tags || '');
       }
     } catch (err) {
       console.error('Erro ao carregar resultados da importação:', err);
@@ -102,11 +108,45 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50 shrink-0">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 pr-4">
             <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <FiUsers /> Detalhes da Importação
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate max-w-md">{importItem.filename}</p>
+            <div className="flex flex-wrap items-center gap-2.5 mt-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate max-w-md">
+                {importItem.filename}
+              </span>
+              {fixedTags && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10.5px] text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1">
+                    <FiTag size={11} /> Adicionadas no lote:
+                  </span>
+                  {fixedTags.replace(/[\[\]'"]/g, '').split(',').map(t => t.trim()).filter(Boolean).map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/40"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {fixedRemoveTags && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10.5px] text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
+                    Removidas no lote:
+                  </span>
+                  {fixedRemoveTags.replace(/[\[\]'"]/g, '').split(',').map(t => t.trim()).filter(Boolean).map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/40"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-400 shrink-0">
             <FiX size={20} />
@@ -146,7 +186,7 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
         </div>
 
         {/* Table */}
-        <div className="flex-1 overflow-y-auto px-6 py-3">
+        <div className="flex-1 overflow-y-auto px-6 pb-3">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 text-gray-400">
               <FiLoader className="animate-spin mb-2" size={24} />
@@ -158,12 +198,13 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
             </div>
           ) : (
             <table className="w-full text-xs text-left border-collapse">
-              <thead className="sticky top-0 bg-white dark:bg-gray-800">
+              <thead className="sticky top-0 z-20 bg-gray-100 dark:bg-gray-900 shadow-sm">
                 <tr>
-                  <th className="px-3 py-2 font-bold border-b border-gray-100 dark:border-gray-700">Nome</th>
-                  <th className="px-3 py-2 font-bold border-b border-gray-100 dark:border-gray-700">Telefone</th>
-                  <th className="px-3 py-2 font-bold border-b border-gray-100 dark:border-gray-700">Status</th>
-                  <th className="px-3 py-2 font-bold border-b border-gray-100 dark:border-gray-700">Motivo</th>
+                  <th className="px-3 py-2.5 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 sticky top-0 z-20">Nome</th>
+                  <th className="px-3 py-2.5 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 sticky top-0 z-20">Telefone</th>
+                  <th className="px-3 py-2.5 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 sticky top-0 z-20">Etiquetas</th>
+                  <th className="px-3 py-2.5 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 sticky top-0 z-20">Status</th>
+                  <th className="px-3 py-2.5 font-bold border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 sticky top-0 z-20">Motivo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -175,6 +216,23 @@ export default function ImportResultsModal({ isOpen, onClose, importItem }) {
                         {r.name || <span className="text-gray-400 italic">sem nome</span>}
                       </td>
                       <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{r.phone || '-'}</td>
+                      <td className="px-3 py-2">
+                        {r.tags ? (
+                          <div className="flex flex-wrap gap-1 items-center max-w-[240px]">
+                            {r.tags.replace(/[\[\]'"]/g, '').split(',').map(t => t.trim()).filter(Boolean).map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/40 whitespace-nowrap"
+                                title={tag}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic text-[11px]">-</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${meta.badgeClass}`}>
                           {meta.label}

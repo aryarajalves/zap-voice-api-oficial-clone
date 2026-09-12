@@ -313,72 +313,85 @@ async def bulk_tag_conversations(
             models.ChatConversation.id.in_(ids)
         ).all()
 
+    target = payload.get("target", "both")
     count_updated = 0
     convo_phone_set = set()
 
-    for convo in conversations:
-        current_labels = convo.labels if isinstance(convo.labels, list) else []
-        new_labels = list(current_labels)
-        updated_this = False
-        for lbl in labels_to_add:
-            if lbl.lower() not in [x.lower() for x in new_labels]:
-                new_labels.append(lbl)
-                updated_this = True
-        if updated_this:
-            convo.labels = new_labels
-            flag_modified(convo, "labels")
-            count_updated += 1
-        if convo.phone:
-            cp = str(convo.phone).replace('+', '').strip()
-            if cp:
-                convo_phone_set.add(cp)
-                convo_phone_set.add(f"+{cp}")
-
-    if convo_phone_set:
-        all_leads = db.query(models.WebhookLead).filter(
-            models.WebhookLead.client_id == client_id,
-            models.WebhookLead.phone.in_(list(convo_phone_set))
-        ).all()
-
-        leads_by_phone = {}
-        for lead in all_leads:
-            cp = str(lead.phone).replace('+', '').strip()
-            if cp not in leads_by_phone:
-                leads_by_phone[cp] = []
-            leads_by_phone[cp].append(lead)
-
-        existing_lead_phones = set(leads_by_phone.keys())
-
-        for lead in all_leads:
-            existing_tags = [t.strip() for t in (lead.tags or "").split(",") if t.strip()]
-            lead_updated = False
+    # Atualiza as etiquetas das conversas (Chat) se target for 'chat' ou 'both'
+    if target in ("chat", "both"):
+        for convo in conversations:
+            current_labels = convo.labels if isinstance(convo.labels, list) else []
+            new_labels = list(current_labels)
+            updated_this = False
             for lbl in labels_to_add:
-                if lbl.lower() not in [t.lower() for t in existing_tags]:
-                    existing_tags.append(lbl)
-                    lead_updated = True
-            if lead_updated:
-                lead.tags = ", ".join(existing_tags)
-                flag_modified(lead, "tags")
+                if lbl.lower() not in [x.lower() for x in new_labels]:
+                    new_labels.append(lbl)
+                    updated_this = True
+            if updated_this:
+                convo.labels = new_labels
+                flag_modified(convo, "labels")
+                count_updated += 1
 
-        new_leads = []
+    # Atualiza as tags dos contatos (Aba de Contatos / Leads) se target for 'contacts', 'contatos' ou 'both'
+    if target in ("contacts", "contatos", "both"):
         for convo in conversations:
             if convo.phone:
                 cp = str(convo.phone).replace('+', '').strip()
-                if cp and cp not in existing_lead_phones:
-                    existing_lead_phones.add(cp)
-                    new_leads.append(models.WebhookLead(
-                        client_id=client_id,
-                        phone=cp,
-                        name=convo.contact_name or cp,
-                        tags=", ".join(labels_to_add),
-                        platform="Chatwoot",
-                        created_at=datetime.utcnow()
-                    ))
-        if new_leads:
-            db.add_all(new_leads)
+                if cp:
+                    convo_phone_set.add(cp)
+                    convo_phone_set.add(f"+{cp}")
+
+        leads_updated_count = 0
+        if convo_phone_set:
+            all_leads = db.query(models.WebhookLead).filter(
+                models.WebhookLead.client_id == client_id,
+                models.WebhookLead.phone.in_(list(convo_phone_set))
+            ).all()
+
+            leads_by_phone = {}
+            for lead in all_leads:
+                cp = str(lead.phone).replace('+', '').strip()
+                if cp not in leads_by_phone:
+                    leads_by_phone[cp] = []
+                leads_by_phone[cp].append(lead)
+
+            existing_lead_phones = set(leads_by_phone.keys())
+
+            for lead in all_leads:
+                existing_tags = [t.strip() for t in (lead.tags or "").split(",") if t.strip()]
+                lead_updated = False
+                for lbl in labels_to_add:
+                    if lbl.lower() not in [t.lower() for t in existing_tags]:
+                        existing_tags.append(lbl)
+                        lead_updated = True
+                if lead_updated:
+                    lead.tags = ", ".join(existing_tags)
+                    flag_modified(lead, "tags")
+                    leads_updated_count += 1
+
+            new_leads = []
+            for convo in conversations:
+                if convo.phone:
+                    cp = str(convo.phone).replace('+', '').strip()
+                    if cp and cp not in existing_lead_phones:
+                        existing_lead_phones.add(cp)
+                        new_leads.append(models.WebhookLead(
+                            client_id=client_id,
+                            phone=cp,
+                            name=convo.contact_name or cp,
+                            tags=", ".join(labels_to_add),
+                            platform="Chatwoot",
+                            created_at=datetime.utcnow()
+                        ))
+                        leads_updated_count += 1
+            if new_leads:
+                db.add_all(new_leads)
+
+        if target in ("contacts", "contatos"):
+            count_updated = leads_updated_count
 
     db.commit()
-    return {"status": "ok", "updated_count": count_updated}
+    return {"status": "ok", "updated_count": count_updated, "target": target}
 
 
 @router.post("/chat/conversations/{conversation_id}/note")
@@ -547,6 +560,47 @@ async def finish_human_handover(
         updated_convo.human_handover_at = None
         db.commit()
         return {"status": "success", "labels": updated_convo.labels}
+    return {"status": "success"}
+
+
+@router.post("/chat/conversations/bulk-finish-human-handover")
+async def bulk_finish_human_handover(
+    payload: dict,
+    client_id: int = Depends(get_client_id),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    ids = payload.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="Nenhum ID fornecido.")
+
+    convos = db.query(models.ChatConversation).filter(
+        models.ChatConversation.id.in_(ids),
+        models.ChatConversation.client_id == client_id
+    ).all()
+
+    human_label = get_setting("WA_HUMAN_LABEL", "", client_id=client_id).strip()
+    robo_label = get_setting("WA_ROBO_LABEL", "", client_id=client_id).strip()
+    from services.chat_label_service import apply_webhook_labels
+    user_name = current_user.full_name or current_user.email
+
+    count = 0
+    for convo in convos:
+        if human_label or robo_label:
+            apply_webhook_labels(
+                db=db,
+                client_id=client_id,
+                phone=convo.phone,
+                raw_labels=robo_label if robo_label else None,
+                remove_raw_labels=human_label if human_label else None,
+                source=f"Atendente ({user_name})",
+                contact_name=convo.contact_name
+            )
+        convo.human_handover_at = None
+        count += 1
+
+    db.commit()
+    return {"status": "success", "count": count}
 
 
 @router.get("/chat/ai-config")

@@ -170,7 +170,7 @@ export default function ChatMessageList({
                         return (
                             <React.Fragment key={msg.id || index}>
                                 {isNewDay && dateLabel && (
-                                    <div className="flex justify-center my-3 sticky top-1 z-10 select-none">
+                                    <div className="flex justify-center my-3 select-none">
                                         <div 
                                             data-testid="chat-date-separator"
                                             className="px-3.5 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-gray-200/90 dark:bg-[#1e293b]/95 text-gray-700 dark:text-gray-300 border border-gray-300/50 dark:border-white/10 shadow-sm backdrop-blur-md"

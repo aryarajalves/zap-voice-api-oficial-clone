@@ -221,8 +221,8 @@ async def send_smart_message(
                                 await chatwoot.send_image_official(phone, media_url)
                             elif media_type == "document":
                                 await chatwoot.send_document_official(phone, media_url)
-                            logger.info(f"✅ [Smart Send] Mídia ({media_type}) enviada. Aguardando 7s antes do texto para {phone}...")
-                            await asyncio.sleep(7)
+                            logger.info(f"✅ [Smart Send] Mídia ({media_type}) enviada. Aguardando 2s antes do texto para {phone}...")
+                            await asyncio.sleep(2)
                         except Exception as e_media:
                             logger.warning(f"⚠️ [Smart Send] Falha ao enviar mídia do header: {e_media}. Continuando com texto...")
 

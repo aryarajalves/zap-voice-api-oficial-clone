@@ -4,6 +4,8 @@ import { FiTag, FiChevronDown, FiSearch, FiX } from 'react-icons/fi';
 export default function FilterTagDropdown({
   selectedTags = [],
   setSelectedTags,
+  tagMode = 'OR',
+  setTagMode,
   excludedTags = [],
   setExcludedTags,
   availableTags = []
@@ -59,7 +61,7 @@ export default function FilterTagDropdown({
           <FiTag size={15} className="flex-shrink-0" />
           <span className="truncate">
             {totalActiveTagFilters > 0
-              ? `${selectedTags.length > 0 ? `+${selectedTags.length}` : ''} ${excludedTags.length > 0 ? `-${excludedTags.length}` : ''}`
+              ? `${selectedTags.length > 0 ? `+${selectedTags.length}${selectedTags.length >= 2 ? ` (${tagMode === 'AND' ? 'E' : 'OU'})` : ''}` : ''} ${excludedTags.length > 0 ? `-${excludedTags.length}` : ''}`
               : 'Todas as Etiquetas'
             }
           </span>
@@ -98,6 +100,47 @@ export default function FilterTagDropdown({
               )}
             </div>
           </div>
+
+          {/* Seletor de Modo de Combinação de Etiquetas (E / OU) */}
+          {selectedTags.length >= 2 && (
+            <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/40 border-b border-purple-100 dark:border-purple-900/50">
+              <div className="flex items-center justify-between gap-1 mb-1.5 px-0.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                  Regra de Filtro:
+                </span>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  {tagMode === 'AND' ? 'Exige todas as etiquetas juntas' : 'Soma contatos de cada etiqueta'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-white/80 dark:bg-gray-900/80 rounded-xl border border-purple-100 dark:border-purple-900/40 shadow-inner">
+                <button
+                  id="tag-mode-or-btn"
+                  type="button"
+                  onClick={() => setTagMode?.('OR')}
+                  className={`py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    tagMode === 'OR'
+                      ? 'bg-purple-600 text-white shadow-sm shadow-purple-600/30'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-300 hover:bg-purple-50/50 dark:hover:bg-purple-900/20'
+                  }`}
+                >
+                  <span>Qualquer (OU)</span>
+                </button>
+
+                <button
+                  id="tag-mode-and-btn"
+                  type="button"
+                  onClick={() => setTagMode?.('AND')}
+                  className={`py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    tagMode === 'AND'
+                      ? 'bg-purple-600 text-white shadow-sm shadow-purple-600/30'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-300 hover:bg-purple-50/50 dark:hover:bg-purple-900/20'
+                  }`}
+                >
+                  <span>Todas (E)</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="max-h-60 overflow-y-auto p-2 space-y-1">
             <button

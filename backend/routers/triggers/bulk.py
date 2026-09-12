@@ -5,6 +5,7 @@ import models, schemas
 from datetime import datetime, timezone
 from core.deps import get_current_user, get_db, get_validated_client_id
 from services.triggers_service import process_bulk_csv_logic
+from services.utils.phone_utils import normalize_phone
 
 router = APIRouter()
 
@@ -246,10 +247,27 @@ async def reserve_bulk_send(
 
     formatted_contacts = []
     pending_numbers = []
+    seen_phones = set()
     for c in contacts_list:
-        num = c if isinstance(c, str) else c.get("phone")
-        formatted_contacts.append({"phone": num})
-        pending_numbers.append(num)
+        raw_num = c if isinstance(c, str) else (c.get("phone") or c.get("telefone") or "")
+        norm = normalize_phone(raw_num)
+        if not norm or len(norm) < 8:
+            continue
+        if norm in seen_phones:
+            continue
+        seen_phones.add(norm)
+        c_obj = dict(c) if isinstance(c, dict) else {"phone": norm}
+        c_obj["phone"] = norm
+        formatted_contacts.append(c_obj)
+        pending_numbers.append(norm)
+
+    max_dispatch_time = None
+    max_dispatch_str = payload.get("max_dispatch_time")
+    if max_dispatch_str:
+        try:
+            max_dispatch_time = datetime.fromisoformat(str(max_dispatch_str).replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            pass
 
     trigger = models.ScheduledTrigger(
         client_id=x_client_id,
@@ -266,6 +284,7 @@ async def reserve_bulk_send(
         private_message_delay=payload.get("private_message_delay", 5),
         private_message_concurrency=payload.get("private_message_concurrency", 1),
         scheduled_time=datetime.now(timezone.utc),
+        max_dispatch_time=max_dispatch_time,
         button_actions=payload.get("button_actions")
     )
     db.add(trigger)
@@ -286,15 +305,31 @@ async def schedule_bulk_send(
     try: scheduled_time = datetime.fromisoformat(schedule_at_str.replace('Z', '+00:00'))
     except ValueError: raise HTTPException(status_code=400, detail="Invalid date format")
 
+    max_dispatch_time = None
+    max_dispatch_str = payload.get("max_dispatch_time")
+    if max_dispatch_str:
+        try:
+            max_dispatch_time = datetime.fromisoformat(str(max_dispatch_str).replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            pass
 
     template_name = payload.get("template_name")
     language = payload.get("language", "pt_BR")
     contacts_list = payload.get("contacts_list", [])
     
     formatted_contacts = []
+    seen_phones = set()
     for c in contacts_list:
-        if isinstance(c, str): formatted_contacts.append({"phone": c})
-        else: formatted_contacts.append(c)
+        raw_num = c if isinstance(c, str) else (c.get("phone") or c.get("telefone") or "")
+        norm = normalize_phone(raw_num)
+        if not norm or len(norm) < 8:
+            continue
+        if norm in seen_phones:
+            continue
+        seen_phones.add(norm)
+        c_obj = dict(c) if isinstance(c, dict) else {"phone": norm}
+        c_obj["phone"] = norm
+        formatted_contacts.append(c_obj)
 
     trigger = models.ScheduledTrigger(
         client_id=x_client_id,
@@ -305,6 +340,7 @@ async def schedule_bulk_send(
         contacts_list=formatted_contacts,
         total_contacts=len(formatted_contacts),
         scheduled_time=scheduled_time,
+        max_dispatch_time=max_dispatch_time,
         delay_seconds=payload.get("delay_seconds", 5),
         concurrency_limit=payload.get("concurrency_limit", 1),
         template_components=payload.get("components"),
@@ -317,7 +353,10 @@ async def schedule_bulk_send(
         chatwoot_label=payload.get("chatwoot_label"),
         button_actions=payload.get("button_actions"),
         is_dynamic_label=payload.get("is_dynamic_label", False),
-        dynamic_label_name=payload.get("dynamic_label_name")
+        dynamic_label_name=payload.get("dynamic_label_name"),
+        exclusion_tags=payload.get("exclusion_tags"),
+        exclusion_tag_mode=payload.get("exclusion_tag_mode", "OR"),
+        exclusion_list=payload.get("exclusion_list")
     )
     db.add(trigger)
     db.commit()

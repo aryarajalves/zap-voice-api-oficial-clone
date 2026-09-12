@@ -60,6 +60,8 @@ describe('useChatEngine Hook', () => {
         expect(result.current.shouldScrollToBottom).toBe(false);
         expect(result.current.selectedConvoIds).toEqual([]);
         expect(typeof result.current.loadConversationMedia).toBe('function');
+        expect(Array.isArray(result.current.chatLabels)).toBe(true);
+        expect(Array.isArray(result.current.contactLabels)).toBe(true);
     });
 
     it('deve carregar mídias da conversa quando selectedConvo mudar', async () => {

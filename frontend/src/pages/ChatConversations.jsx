@@ -481,6 +481,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                             messages={engine.messages}
                             handleToggleStarMessage={chatOps.handleToggleStarMessage}
                             formatMessageTimestamp={formatMessageTimestamp}
+                            handleDeleteNoteMsg={noteAndAi.handleDeleteNoteMsg}
                         />
                     )}
                 </div>

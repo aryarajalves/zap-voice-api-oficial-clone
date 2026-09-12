@@ -21,6 +21,7 @@ class ScheduledTrigger(Base):
     chatwoot_account_id = Column(Integer, nullable=True)
     chatwoot_inbox_id = Column(Integer, nullable=True)
     scheduled_time = Column(DateTime(timezone=True), index=True)
+    max_dispatch_time = Column(DateTime(timezone=True), nullable=True, index=True)
     status = Column(String, default="pending") 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     contact_name = Column(String, nullable=True)
@@ -92,6 +93,9 @@ class ScheduledTrigger(Base):
 
     is_dynamic_label = Column(Boolean, default=False, nullable=False, server_default="false")
     dynamic_label_name = Column(String, nullable=True)
+    exclusion_tags = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    exclusion_tag_mode = Column(String, default="OR", nullable=True)
+    exclusion_list = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
 
 
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -390,6 +394,9 @@ class RecurringTrigger(Base):
     contacts_list = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     tag = Column(String, nullable=True)
     exclusion_list = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    exclusion_tags = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    exclusion_tag_mode = Column(String, default="OR", nullable=True)
+
     
     delay_seconds = Column(Integer, default=5)
     concurrency_limit = Column(Integer, default=1)

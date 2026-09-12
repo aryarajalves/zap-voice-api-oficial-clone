@@ -3,7 +3,7 @@ import httpx
 import tempfile
 import mimetypes
 from typing import Optional
-from core.clients.whatsapp.client import WhatsAppClient
+from core.clients.whatsapp.client import WhatsAppClient, _META_MEDIA_CACHE
 from core.logger import setup_logger
 
 logger = setup_logger("ChatMediaService")
@@ -13,7 +13,14 @@ async def upload_media_to_meta_from_url(wa_client: WhatsAppClient, media_url: st
     Baixa a mídia de uma URL (resolvendo URLs internas do MinIO quando necessário)
     e faz upload para a Meta, retornando o media_id.
     Retorna None se falhar (neste caso, deve-se tentar enviar por link).
+    Utiliza cache global para evitar re-downloads e re-uploads redundantes.
     """
+    cache_key = (getattr(wa_client, "client_id", None), media_url)
+    cached = _META_MEDIA_CACHE.get(cache_key)
+    if cached:
+        cached_id = cached.get("id") if isinstance(cached, dict) else cached
+        logger.info(f"⚡ [CHAT_MEDIA] Reutilizando Media ID em cache ({media_type}): {cached_id}")
+        return cached_id
     # Resolver URL interna do MinIO: substituir URL pública pelo hostname interno
     internal_url = media_url
     s3_public_url = os.getenv("S3_PUBLIC_URL", "")
@@ -76,6 +83,7 @@ async def upload_media_to_meta_from_url(wa_client: WhatsAppClient, media_url: st
         
         if media_id:
             logger.info(f"✅ [CHAT_MEDIA] Upload para Meta bem-sucedido! media_id: {media_id}")
+            _META_MEDIA_CACHE[cache_key] = {"id": media_id}
         else:
             logger.error(f"❌ [CHAT_MEDIA] Meta não retornou media_id")
         

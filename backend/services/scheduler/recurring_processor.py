@@ -254,11 +254,39 @@ async def process_recurring_triggers(db, now_utc):
         
         is_aborted = delay_minutes > 30.0
         
-        # Determine contacts
+        # Determine contacts e exclusões dinâmicas
         exclusions = set(rt.exclusion_list or [])
+        if getattr(rt, "exclusion_tags", None):
+            raw_ex = rt.exclusion_tags
+            ex_tags = [str(t).strip() for t in raw_ex if str(t).strip()] if isinstance(raw_ex, list) else [t.strip() for t in str(raw_ex).split(",") if t.strip()]
+            if ex_tags:
+                try:
+                    mode = (getattr(rt, "exclusion_tag_mode", "OR") or "OR").upper()
+                    tag_conds = [
+                        func.concat(',', func.replace(func.coalesce(models.WebhookLead.tags, ''), ', ', ','), ',').ilike(f"%,{t},%")
+                        for t in ex_tags
+                    ]
+                    ex_q = db.query(models.WebhookLead.phone).filter(models.WebhookLead.client_id == rt.client_id)
+                    if mode == "AND":
+                        ex_q = ex_q.filter(and_(*tag_conds))
+                    else:
+                        ex_q = ex_q.filter(or_(*tag_conds))
+                    for (pv,) in ex_q.all():
+                        if pv:
+                            digits = "".join(filter(str.isdigit, str(pv)))
+                            if digits:
+                                exclusions.add(digits)
+                except Exception as e_ex:
+                    logger.warning(f"⚠️ [RECURRING SCHEDULER] Erro ao buscar exclusion_tags: {e_ex}")
+
+        exclusions_suffixes_8 = {p[-8:] for p in exclusions if len(p) >= 8}
+
         final_contacts = []
         if rt.contacts_list:
-            final_contacts = [c for c in rt.contacts_list if c.get('phone') not in exclusions]
+            for c in rt.contacts_list:
+                cp = c.get('phone') or ''
+                if cp not in exclusions and cp[-8:] not in exclusions_suffixes_8:
+                    final_contacts.append(c)
             
         if rt.tag:
             logger.info(f"🔍 Buscando contatos da etiqueta '{rt.tag}' na Aba de Contatos (WebhookLead) para a recorrência {rt.id}...")
@@ -297,7 +325,8 @@ async def process_recurring_triggers(db, now_utc):
             
             phones_in_list = {c.get('phone') for c in final_contacts}
             for tc in tag_contacts:
-                if tc['phone'] not in phones_in_list and tc['phone'] not in exclusions:
+                tc_phone = tc.get('phone') or ''
+                if tc_phone not in phones_in_list and tc_phone not in exclusions and tc_phone[-8:] not in exclusions_suffixes_8:
                     final_contacts.append(tc)
 
         if is_aborted:

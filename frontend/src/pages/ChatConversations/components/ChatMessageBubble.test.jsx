@@ -53,7 +53,7 @@ describe('ChatMessageBubble Unit Tests', () => {
         expect(link.getAttribute('href')).toBe('https://zapvoice.com.br/planos');
     });
 
-    it('renderiza badge de custo da IA com Pré-Router e Agente Principal na parte inferior da mensagem', () => {
+    it('não exibe badge de custos da IA (Router, Agente, IA) nas mensagens do chat', () => {
         const msgWithAiCost = {
             id: 3,
             sender_type: 'user',
@@ -77,10 +77,9 @@ describe('ChatMessageBubble Unit Tests', () => {
             />
         );
 
-        expect(screen.getByText('⚡ IA:')).toBeInTheDocument();
-        expect(screen.getByText('R$ 0.014')).toBeInTheDocument();
-        expect(screen.getByText(/Router: R\$ 0.0022/)).toBeInTheDocument();
-        expect(screen.getByText(/Agente: R\$ 0.012/)).toBeInTheDocument();
+        expect(screen.queryByText('⚡ IA:')).not.toBeInTheDocument();
+        expect(screen.queryByText(/Router:/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Agente:/)).not.toBeInTheDocument();
     });
 
     it('renderiza ícones de fixada e favoritada quando a mensagem possui esses atributos', () => {
@@ -107,7 +106,7 @@ describe('ChatMessageBubble Unit Tests', () => {
         expect(screen.getByTitle('Mensagem favoritada')).toBeInTheDocument();
     });
 
-    it('renderiza badge de custo da IA como Gratuito quando o custo total for 0', () => {
+    it('não exibe badge de IA nem texto Gratuito mesmo quando total_cost for 0', () => {
         const msgFreeAi = {
             id: 5,
             sender_type: 'user',
@@ -131,7 +130,7 @@ describe('ChatMessageBubble Unit Tests', () => {
             />
         );
 
-        expect(screen.getByText('⚡ IA:')).toBeInTheDocument();
-        expect(screen.getByText('Gratuito')).toBeInTheDocument();
+        expect(screen.queryByText('⚡ IA:')).not.toBeInTheDocument();
+        expect(screen.queryByText('Gratuito')).not.toBeInTheDocument();
     });
 });

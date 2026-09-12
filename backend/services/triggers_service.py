@@ -372,9 +372,10 @@ async def start_now_trigger_logic(trigger_id: int, db: Session):
 
 def process_bulk_csv_logic(csv_content: str):
     """
-    Processa conteúdo de CSV e extrai contatos válidos.
+    Processa conteúdo de CSV e extrai contatos válidos e únicos.
     """
     contacts = []
+    seen_phones = set()
     try:
         csv_reader = csv.DictReader(io.StringIO(csv_content))
         if csv_reader.fieldnames:
@@ -383,8 +384,9 @@ def process_bulk_csv_logic(csv_content: str):
         for row in csv_reader:
             phone = row.get('phone') or row.get('telefone') or row.get('celular') or row.get('whatsapp')
             if phone:
-                clean_phone = ''.join(filter(str.isdigit, phone))
-                if len(clean_phone) >= 10:
+                clean_phone = normalize_phone(phone)
+                if len(clean_phone) >= 8 and clean_phone not in seen_phones:
+                    seen_phones.add(clean_phone)
                     row['phone'] = clean_phone
                     contacts.append(row)
     except Exception as e:

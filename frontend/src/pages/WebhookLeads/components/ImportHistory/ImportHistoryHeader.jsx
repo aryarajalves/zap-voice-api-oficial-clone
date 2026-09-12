@@ -29,17 +29,14 @@ export default function ImportHistoryHeader({
           <select
             value={limit}
             onChange={(e) => {
-              const val = e.target.value;
-              setLimit(val === 'all' ? 'all' : parseInt(val, 10));
+              const val = parseInt(e.target.value, 10) || 20;
+              setLimit(Math.min(val, 20));
               setPage(0);
             }}
             className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer shadow-sm text-gray-700 dark:text-gray-200"
           >
+            <option value={10}>10</option>
             <option value={20}>20</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={500}>500</option>
-            <option value="all">Tudo</option>
           </select>
         </div>
 

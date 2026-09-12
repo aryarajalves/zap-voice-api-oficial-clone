@@ -14,6 +14,7 @@ from core.deps import get_db, get_current_user, get_validated_client_id
 from core.permissions import require_premium
 from core.logger import setup_logger
 from services.leads import upsert_webhook_lead
+from services.utils.phone_utils import get_canonical_phone_key, clean_phone_for_canonical, normalize_phone
 
 logger = setup_logger("LeadsRouter.CRUD")
 
@@ -264,12 +265,12 @@ def clean_corrupted_tags(
 
     phone_groups = defaultdict(list)
 
-    # 1. Agrupar leads por telefone normalizado
+    # 1. Agrupar leads por chave canônica de telefone (deduplicação inteligente)
     for lead in leads:
         if lead.phone:
-            clean_p = re.sub(r"\D", "", lead.phone)
-            if len(clean_p) >= 8:
-                phone_groups[clean_p].append(lead)
+            canonical_key = get_canonical_phone_key(lead.phone)
+            if canonical_key:
+                phone_groups[canonical_key].append(lead)
 
     # 2. Mesclar e remover duplicados
     for clean_phone, group in phone_groups.items():
@@ -279,12 +280,31 @@ def clean_corrupted_tags(
             duplicados = sorted_group[1:]
             principal_changed = False
 
+            # Telefone: Normaliza para o padrão canônico limpo
+            best_phone_candidate = principal.phone
+            for cand in [principal] + duplicados:
+                cand_clean = clean_phone_for_canonical(cand.phone)
+                if cand_clean.startswith("55") and len(cand_clean) == 13:
+                    best_phone_candidate = cand_clean
+                    break
+            norm_phone = normalize_phone(clean_phone_for_canonical(best_phone_candidate))
+            if norm_phone and norm_phone != principal.phone:
+                principal.phone = norm_phone
+                principal_changed = True
+
             # Nome
             for dup in duplicados:
                 if dup.name:
                     if not principal.name or len(dup.name) > len(principal.name):
                         principal.name = dup.name
                         principal_changed = True
+
+            if principal.name:
+                normalized_name = _normalize_name(principal.name)
+                if normalized_name != principal.name:
+                    principal.name = normalized_name
+                    names_fixed += 1
+                    principal_changed = True
 
             # E-mail
             if not principal.email:
@@ -418,6 +438,13 @@ def clean_corrupted_tags(
         else:
             lead = group[0]
             changed = False
+
+            # Normalização de Telefone
+            norm_phone = normalize_phone(clean_phone_for_canonical(lead.phone))
+            if norm_phone and norm_phone != lead.phone:
+                lead.phone = norm_phone
+                changed = True
+
             if lead.name:
                 normalized = _normalize_name(lead.name)
                 if normalized != lead.name:
@@ -441,7 +468,7 @@ def clean_corrupted_tags(
     
     msg_detail = f"Sincronização concluída. "
     if leads_merged > 0:
-        msg_detail += f"{leads_merged} contato(s) duplicado(s) unificado(s). "
+        msg_detail += f"{leads_merged} contato(s) duplicado(s) unificado(s) e removido(s). "
     msg_detail += f"{names_fixed} nome(s) corrigido(s) e {tags_removed} tag(s) limpa(s)."
 
     return {
@@ -593,3 +620,92 @@ async def validate_contacts_for_bulk(
     except Exception as e:
         logger.error(f"Error in validate_contacts_for_bulk: {e}")
         return {}
+
+
+@router.post("/leads/contacts-tags-info", summary="Consultar se contatos estão cadastrados na aba de contatos e suas etiquetas")
+def check_contacts_tags_info(
+    payload: dict,
+    client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Recebe uma lista de telefones e retorna se cada um está cadastrado
+    na tabela webhook_leads (aba de contatos) do cliente/projeto ativo,
+    junto com as etiquetas (tags) atribuídas a cada um.
+    """
+    phones = payload.get("phones", [])
+    if not phones:
+        return {}
+
+    active_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    proj_id = active_client.project_id if active_client else None
+
+    # Normalizar números para consulta (apenas dígitos)
+    clean_phones = []
+    for p in phones:
+        raw_str = str(p or "").strip()
+        digits = "".join(filter(str.isdigit, raw_str))
+        if digits:
+            clean_phones.append(digits)
+            if digits.startswith("55") and len(digits) in (12, 13):
+                clean_phones.append(digits[2:])
+            elif len(digits) in (10, 11):
+                clean_phones.append("55" + digits)
+
+    unique_clean = list(set(clean_phones))
+    if not unique_clean:
+        return {}
+
+    query = db.query(models.WebhookLead)
+    if proj_id:
+        query = query.filter(models.WebhookLead.project_id == proj_id)
+    else:
+        query = query.filter(models.WebhookLead.client_id == client_id)
+
+    leads = query.filter(models.WebhookLead.phone.in_(unique_clean)).all()
+
+    result = {}
+    for lead in leads:
+        lead_digits = "".join(filter(str.isdigit, str(lead.phone or "")))
+        raw_tags = lead.tags or ""
+        tag_list = []
+        if raw_tags:
+            cleaned_tags_str = re.sub(r"[\[\]'\"]", "", raw_tags)
+            tag_list = [t.strip() for t in cleaned_tags_str.split(",") if t.strip()]
+
+        lead_info = {
+            "is_registered": True,
+            "lead_id": lead.id,
+            "name": lead.name,
+            "tags": tag_list
+        }
+
+        result[lead_digits] = lead_info
+        if lead.phone:
+            result[lead.phone] = lead_info
+        if len(lead_digits) >= 8:
+            result[lead_digits[-8:]] = lead_info
+
+    response_data = {}
+    for p in phones:
+        raw_str = str(p or "").strip()
+        digits = "".join(filter(str.isdigit, raw_str))
+        matched = result.get(raw_str) or result.get(digits)
+        if not matched and len(digits) >= 8:
+            matched = result.get(digits[-8:])
+        if not matched and digits.startswith("55"):
+            matched = result.get(digits[2:])
+
+        if matched:
+            response_data[raw_str] = matched
+        else:
+            response_data[raw_str] = {
+                "is_registered": False,
+                "lead_id": None,
+                "name": None,
+                "tags": []
+            }
+
+    return response_data
+

@@ -114,6 +114,7 @@ async def list_conversation_media(
     media_items = []
     doc_items = []
     link_items = []
+    note_items = []
 
     # Regex para capturar links em textos
     url_pattern = re.compile(r'https?://[^\s<>"]+|www\.[^\s<>"]+')
@@ -121,6 +122,29 @@ async def list_conversation_media(
     for m in messages:
         msg_time = m.timestamp.isoformat() if m.timestamp else None
         m_type = m.message_type or "text"
+
+        # 0. Anotações privadas do chat (que ainda existem e não foram apagadas)
+        if m.sender_type == "system" and m.content and ("Anotação Privada:" in m.content or "Nota:" in m.content):
+            clean_text = m.content
+            if "🔒 Anotação Privada: " in clean_text:
+                clean_text = clean_text.split("🔒 Anotação Privada: ", 1)[1]
+            elif "🔒 Anotação Privada:" in clean_text:
+                clean_text = clean_text.split("🔒 Anotação Privada:", 1)[1]
+            elif "🔒 Nota: " in clean_text:
+                clean_text = clean_text.split("🔒 Nota: ", 1)[1]
+            elif "Anotação Privada: " in clean_text:
+                clean_text = clean_text.split("Anotação Privada: ", 1)[1]
+
+            note_items.append({
+                "id": m.id,
+                "message_id": m.id,
+                "content": clean_text.strip(),
+                "raw_content": m.content,
+                "timestamp": msg_time,
+                "user_id": m.user_id,
+                "sender_type": m.sender_type
+            })
+            continue
 
         # 1. Mídias de mensagens diretas
         if m.media_url:
@@ -185,14 +209,16 @@ async def list_conversation_media(
         "total_media": len(media_items),
         "total_docs": len(doc_items),
         "total_links": len(link_items),
-        "total_all": len(media_items) + len(doc_items) + len(link_items),
+        "total_notes": len(note_items),
+        "total_all": len(media_items) + len(doc_items) + len(link_items) + len(note_items),
         "user_messages_count": user_msgs_count,
         "agent_messages_count": agent_msgs_count,
         "system_messages_count": system_msgs_count,
         "total_messages": len(messages),
         "media": media_items,
         "docs": doc_items,
-        "links": link_items
+        "links": link_items,
+        "notes": note_items
     }
 
 
@@ -786,7 +812,7 @@ async def delete_chat_message(
 
     if msg.content and msg.content.startswith("🔒 Anotação Privada:"):
         note_text = msg.content.replace("🔒 Anotação Privada: ", "")
-        if convo.private_note == note_text or note_text in convo.private_note:
+        if convo.private_note and (convo.private_note == note_text or note_text in convo.private_note):
             convo.private_note = ""
 
     wa_result = {"skipped": True}

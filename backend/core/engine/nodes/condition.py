@@ -17,12 +17,54 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
     
     if condition_type == "tag":
         required_tag = normalize_text(data.get("tag", ""))
-        clean_phone = ''.join(filter(str.isdigit, contact_phone))
-        contact_res = await chatwoot.search_contact(clean_phone)
-        if contact_res and contact_res.get("payload"):
-            contact_id = contact_res["payload"][0]["id"]
-            contact_labels = await chatwoot.get_contact_labels(contact_id)
-            if required_tag in [normalize_text(t) for t in contact_labels]:
+        if not required_tag:
+            source_handle = 'no'
+        else:
+            clean_phone = ''.join(filter(str.isdigit, str(contact_phone or '')))
+            suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
+            matched = False
+            client_id = getattr(trigger, "client_id", None)
+            
+            # 1. Prioridade: Verificar na conversa do Chat Local do ZapVoice (ChatConversation)
+            if client_id and suffix:
+                import models
+                chat_convo = db.query(models.ChatConversation).filter(
+                    models.ChatConversation.client_id == client_id,
+                    models.ChatConversation.phone.like(f"%{suffix}")
+                ).first()
+                if chat_convo and chat_convo.labels and isinstance(chat_convo.labels, list):
+                    convo_labels = [normalize_text(t) for t in chat_convo.labels if isinstance(t, str)]
+                    if required_tag in convo_labels:
+                        matched = True
+                        logger.info(f"✅ [CONDITION_TAG] Etiqueta '{required_tag}' encontrada no Chat do ZapVoice para {contact_phone}.")
+
+            # 2. Fallback: verificar se o lead possui a tag no ZapVoice (WebhookLead.tags)
+            if not matched and client_id and suffix:
+                import models
+                lead = db.query(models.WebhookLead).filter(
+                    models.WebhookLead.client_id == client_id,
+                    models.WebhookLead.phone.like(f"%{suffix}")
+                ).first()
+                if lead and lead.tags:
+                    lead_tags = [normalize_text(t.strip()) for t in lead.tags.split(',') if t.strip()]
+                    if required_tag in lead_tags:
+                        matched = True
+                        logger.info(f"✅ [CONDITION_TAG] Etiqueta '{required_tag}' encontrada nas tags do Lead ZapVoice para {contact_phone}.")
+
+            # 3. Fallback legado: se ainda não encontrou e chatwoot estiver disponível
+            if not matched and chatwoot:
+                try:
+                    contact_res = await chatwoot.search_contact(clean_phone)
+                    if contact_res and contact_res.get("payload"):
+                        contact_id = contact_res["payload"][0]["id"]
+                        contact_labels = await chatwoot.get_contact_labels(contact_id)
+                        if required_tag in [normalize_text(t) for t in contact_labels]:
+                            matched = True
+                            logger.info(f"✅ [CONDITION_TAG] Etiqueta '{required_tag}' encontrada no Chatwoot legado para {contact_phone}.")
+                except Exception as cw_err:
+                    logger.warning(f"⚠️ [CONDITION_TAG] Erro ao consultar Chatwoot legado: {cw_err}")
+
+            if matched:
                 source_handle = 'yes'
 
     elif condition_type == "datetime_range":

@@ -11,6 +11,9 @@ const Filters = ({
     filterBlockedOnly,
     setFilterBlockedOnly,
     blockedCount,
+    filterExcludedOnly,
+    setFilterExcludedOnly,
+    excludedCount = 0,
     hasStatus,
     addBrazilCode,
     copyToClipboard
@@ -59,6 +62,23 @@ const Filters = ({
             </div>
 
             <div className="flex items-center gap-2">
+                {excludedCount > 0 && (
+                    <label className={`flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border transition-all whitespace-nowrap group ${filterExcludedOnly ? 'bg-amber-500/20 border-amber-500/50 shadow-lg shadow-amber-900/20' : 'bg-slate-800/60 border-white/10 hover:bg-slate-800 hover:border-white/20'}`}>
+                        <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/30 transition-all cursor-pointer"
+                            checked={filterExcludedOnly}
+                            onChange={(e) => {
+                                const next = e.target.checked;
+                                setFilterExcludedOnly(next);
+                                if (next && setFilterBlockedOnly) setFilterBlockedOnly(false);
+                            }}
+                        />
+                        <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${filterExcludedOnly ? 'text-amber-400' : 'text-slate-400 group-hover:text-slate-300'}`}>Excluídos</span>
+                        <span className="bg-amber-500 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{excludedCount}</span>
+                    </label>
+                )}
+
                 {hasStatus && (
                     <label className={`flex items-center gap-2 cursor-pointer px-4 py-2.5 rounded-xl border transition-all whitespace-nowrap group ${filterBlockedOnly ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-800/60 border-white/10 hover:bg-slate-800 hover:border-white/20'}`}>
                         <input

@@ -17,6 +17,7 @@ export function buildLeadsQueryParams(filters) {
     filterDdd,
     blockStatusFilter,
     selectedTags,
+    tagMode,
     excludedTags,
     datePreset,
     customDateFrom,
@@ -50,6 +51,9 @@ export function buildLeadsQueryParams(filters) {
 
     if (selectedTags && selectedTags.length > 0) {
       selectedTags.forEach(t => params.push(`tag=${encodeURIComponent(t)}`));
+      if (tagMode) {
+        params.push(`tag_mode=${encodeURIComponent(tagMode)}`);
+      }
     }
     if (excludedTags && excludedTags.length > 0) {
       excludedTags.forEach(t => params.push(`exclude_tag=${encodeURIComponent(t)}`));
@@ -69,6 +73,8 @@ export function buildCommonFilterPayload(filters) {
     search,
     eventType,
     selectedTags,
+    tagMode,
+    excludedTags,
     datePreset,
     customDateFrom,
     customDateTo,
@@ -87,9 +93,11 @@ export function buildCommonFilterPayload(filters) {
     event_type: eventType || null,
     tag: selectedTags?.length > 0 ? selectedTags : null,
     tag_filter: selectedTags?.length > 0 ? selectedTags : null,
+    tag_mode: tagMode || 'OR',
+    exclude_tag: excludedTags?.length > 0 ? excludedTags : null,
     date_from: from || null,
     date_to: to || null,
-    imported_by_client_id: importedByClientId || null,
+    importedByClientId: importedByClientId || null,
     origin: origin || null,
     is_locked: (lockedFilter !== '' && lockedFilter !== undefined && lockedFilter !== null) ? lockedFilter : null,
     has_bsud: (bsudFilter !== '' && bsudFilter !== undefined && bsudFilter !== null) ? bsudFilter : null,

@@ -248,7 +248,15 @@ describe('useBulkSender Hook - loadExclusionContactsByTag', () => {
         expect(result.current.exclusionList).toContain('5511999999991');
         expect(result.current.exclusionList).toContain('5511999999992');
         expect(result.current.exclusionList.length).toBe(2);
+        expect(result.current.configuredExclusionTags).toEqual(['tag1', 'tag2']);
         expect(result.current.selectedExclusionTag).toEqual([]);
+
+        // Testar limpeza de exclusão
+        await act(async () => {
+            result.current.clearExclusionList();
+        });
+        expect(result.current.exclusionList).toEqual([]);
+        expect(result.current.configuredExclusionTags).toEqual([]);
     });
 });
 

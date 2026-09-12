@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { API_URL } from '../../../config';
 import { useClient } from '../../../contexts/ClientContext';
 import { toast } from 'react-hot-toast';
+import { fetchWithAuth } from '../../../AuthContext';
 
 // Mapeamento de telefone pode ser:
 // - uma string simples: nome da coluna com o telefone completo
@@ -39,6 +40,25 @@ export function useContactImport(onClose, onImportComplete) {
   // Tags fixas digitadas manualmente no passo 2
   const [fixedTags, setFixedTags] = useState([]);
   const [fixedRemoveTags, setFixedRemoveTags] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
+
+  useEffect(() => {
+    const fetchAvailableTags = async () => {
+      if (!activeClient?.id) return;
+      try {
+        const response = await fetchWithAuth(`${API_URL}/leads/filters`, {}, activeClient.id);
+        if (response && response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data.tags)) {
+            setAvailableTags(data.tags);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar etiquetas para importação:', err);
+      }
+    };
+    fetchAvailableTags();
+  }, [activeClient?.id]);
 
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
@@ -202,6 +222,7 @@ export function useContactImport(onClose, onImportComplete) {
     previewData, setPreviewData, mapping, setMapping, importResult, setImportResult,
     fileInputRef,
     handleFileChange, handleExecuteImport, reset,
-    fixedTags, setFixedTags, fixedRemoveTags, setFixedRemoveTags
+    fixedTags, setFixedTags, fixedRemoveTags, setFixedRemoveTags,
+    availableTags
   };
 }

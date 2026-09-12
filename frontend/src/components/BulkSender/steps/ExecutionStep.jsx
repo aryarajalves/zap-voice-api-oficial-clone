@@ -23,6 +23,7 @@ const ExecutionStep = ({
     handleCopyFinalList,
     exclusionList = [],
     setExclusionList,
+    clearExclusionList,
     exclusionMode = 'manual',
     setExclusionMode,
     exclusionText = '',
@@ -56,6 +57,9 @@ const ExecutionStep = ({
     recurrenceDayOfMonth = '',
     setRecurrenceDayOfMonth,
     scheduledTime = '',
+    maxDispatchTime = '',
+    setMaxDispatchTime,
+    clearMaxDispatchTime,
     isDynamicLabel = true,
     setIsDynamicLabel,
     selectedChatwootLabels = [],
@@ -164,6 +168,7 @@ const ExecutionStep = ({
                 <ExclusionListManager 
                     exclusionList={exclusionList}
                     setExclusionList={setExclusionList}
+                    clearExclusionList={clearExclusionList}
                     exclusionMode={exclusionMode}
                     setExclusionMode={setExclusionMode}
                     exclusionText={exclusionText}
@@ -258,6 +263,9 @@ const ExecutionStep = ({
                             recurrenceDayOfMonth={recurrenceDayOfMonth}
                             setRecurrenceDayOfMonth={setRecurrenceDayOfMonth}
                             scheduledTime={scheduledTime}
+                            maxDispatchTime={maxDispatchTime}
+                            setMaxDispatchTime={setMaxDispatchTime}
+                            clearMaxDispatchTime={clearMaxDispatchTime}
                             isDynamicLabel={isDynamicLabel}
                             setIsDynamicLabel={setIsDynamicLabel}
                             selectionMetadata={selectionMetadata}

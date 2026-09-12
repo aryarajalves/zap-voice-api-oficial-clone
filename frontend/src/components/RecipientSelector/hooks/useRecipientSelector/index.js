@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useClient } from '../../../../contexts/ClientContext';
-import { applyFilters, getDispatchList } from '../../../../utils/phoneFilters';
+import { applyFilters, getDispatchList, isPhoneExcluded, normalizePhone } from '../../../../utils/phoneFilters';
 import { useFileImport } from './useFileImport';
 import { useValidation } from './useValidation';
 import { useTagManagement } from './useTagManagement';
@@ -26,6 +26,7 @@ export const useRecipientSelector = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [filterOpenOnly, setFilterOpenOnly] = useState(false);
     const [filterBlockedOnly, setFilterBlockedOnly] = useState(false);
+    const [filterExcludedOnly, setFilterExcludedOnly] = useState(false);
     const [dddSearch, setDddSearch] = useState('');
     const [showList, setShowList] = useState(false);
     const [isValidated, setIsValidated] = useState(false);
@@ -87,6 +88,7 @@ export const useRecipientSelector = ({
     }, [contacts, activeClient]);
 
     const blockedCount = useMemo(() => contacts.filter(c => c.is_blocked).length, [contacts]);
+    const excludedCount = useMemo(() => contacts.filter(c => isPhoneExcluded(c.phone, exclusionList)).length, [contacts, exclusionList]);
 
     const filteredContacts = useMemo(() => {
         return applyFilters(contacts, {
@@ -94,13 +96,14 @@ export const useRecipientSelector = ({
             dddSearch,
             filterOpenOnly,
             filterBlockedOnly,
+            filterExcludedOnly,
             exclusionList
         });
-    }, [contacts, searchTerm, filterOpenOnly, filterBlockedOnly, dddSearch, exclusionList]);
+    }, [contacts, searchTerm, filterOpenOnly, filterBlockedOnly, filterExcludedOnly, dddSearch, exclusionList]);
 
     const selectedList = useMemo(() => {
-        return getDispatchList(filteredContacts, limitMode, dispatchLimit);
-    }, [filteredContacts, limitMode, dispatchLimit]);
+        return getDispatchList(filteredContacts, limitMode, dispatchLimit, exclusionList);
+    }, [filteredContacts, limitMode, dispatchLimit, exclusionList]);
 
     const displayedContacts = useMemo(() => {
         return filteredContacts.slice(0, displayLimit);
@@ -191,14 +194,14 @@ export const useRecipientSelector = ({
         const lines = inputText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         const incoming = lines.map(l => {
             const parts = l.split('|').map(p => p.trim());
-            const phone = parts[0].replace(/\D/g, '');
+            const phone = normalizePhone(parts[0]);
             const variables = {};
             parts.slice(1).forEach((val, pos) => {
                 const varKey = templateVariables[pos]?.key || `BODY_${pos}`;
                 variables[varKey] = val;
             });
             return { phone, vars: variables, status: 'pending', window_open: false };
-        }).filter(c => c.phone.length >= 8);
+        }).filter(c => c.phone && c.phone.length >= 8);
 
         if (incoming.length === 0) {
             setIsWorking(false);
@@ -206,7 +209,7 @@ export const useRecipientSelector = ({
         }
 
         setContacts(prev => {
-            const existingPhones = new Set(prev.map(c => c.phone));
+            const existingPhones = new Set(prev.map(c => normalizePhone(c.phone)));
             const seenInBatch = new Set();
             const uniqueIncoming = incoming.filter(c => {
                 if (existingPhones.has(c.phone) || seenInBatch.has(c.phone)) return false;
@@ -215,10 +218,12 @@ export const useRecipientSelector = ({
             });
             const duplicatesCount = incoming.length - uniqueIncoming.length;
             if (duplicatesCount > 0) {
-                toast(`${duplicatesCount} números duplicados foram ignorados.`, {
-                    icon: 'ℹ️',
-                    id: 'duplicates-ignored'
-                });
+                toast.success(
+                    `Lista processada: ${incoming.length} linhas (${uniqueIncoming.length} contatos únicos, ${duplicatesCount} duplicados descartados)`,
+                    { icon: 'ℹ️', id: 'duplicates-ignored', duration: 5000 }
+                );
+            } else {
+                toast.success(`Lista processada: ${uniqueIncoming.length} contatos únicos carregados com sucesso!`);
             }
             return [...prev, ...uniqueIncoming];
         });
@@ -300,12 +305,14 @@ export const useRecipientSelector = ({
         searchTerm, setSearchTerm,
         filterOpenOnly, setFilterOpenOnly,
         filterBlockedOnly, setFilterBlockedOnly,
+        filterExcludedOnly, setFilterExcludedOnly,
         dddSearch, setDddSearch,
         showList, setShowList,
         tagVariables, setTagVariables,
         fileVariables, setFileVariables,
         activeDropdown, setActiveDropdown,
         blockedCount,
+        excludedCount,
         filteredContacts,
         displayedContacts,
         selectedList,

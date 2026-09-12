@@ -21,6 +21,35 @@ describe('Filters Subcomponents', () => {
 
       expect(screen.getByText('+1')).toBeDefined();
     });
+    it('renderiza o seletor de regra de filtro quando há 2 ou mais etiquetas selecionadas', () => {
+      const setTagMode = vi.fn();
+      render(
+        <FilterTagDropdown
+          selectedTags={['VIP', 'Lead Quente']}
+          setSelectedTags={vi.fn()}
+          tagMode="OR"
+          setTagMode={setTagMode}
+          excludedTags={[]}
+          setExcludedTags={vi.fn()}
+          availableTags={['VIP', 'Lead Quente']}
+        />
+      );
+
+      // Botão mostra +2 (OU)
+      expect(screen.getByText('+2 (OU)')).toBeDefined();
+
+      // Abrir dropdown
+      fireEvent.click(screen.getByRole('button', { name: /\+2 \(OU\)/i }));
+
+      // Seletor de modo visível
+      expect(screen.getByText('Regra de Filtro:')).toBeDefined();
+      expect(screen.getByText('Qualquer (OU)')).toBeDefined();
+      expect(screen.getByText('Todas (E)')).toBeDefined();
+
+      // Clicar em Todas (E)
+      fireEvent.click(screen.getByText('Todas (E)'));
+      expect(setTagMode).toHaveBeenCalledWith('AND');
+    });
   });
 
   describe('AdvancedFiltersPanel', () => {
@@ -81,6 +110,27 @@ describe('Filters Subcomponents', () => {
       expect(screen.getByText('Últimos 7 dias')).toBeDefined();
       expect(screen.getByText('VIP')).toBeDefined();
       expect(screen.getByText('42 resultados')).toBeDefined();
+    });
+
+    it('renderiza badge de troca rápida de regra (E / OU) quando há 2+ etiquetas selecionadas', () => {
+      const setTagMode = vi.fn();
+
+      render(
+        <ActiveFiltersBadges
+          selectedTags={['VIP', 'Lead Quente']}
+          setSelectedTags={vi.fn()}
+          tagMode="OR"
+          setTagMode={setTagMode}
+          total={10}
+        />
+      );
+
+      expect(screen.getByText('Qualquer uma (OU)')).toBeDefined();
+
+      // Clicar no badge para alternar
+      const toggleBtn = screen.getByRole('button', { name: /Qualquer uma \(OU\)/i });
+      fireEvent.click(toggleBtn);
+      expect(setTagMode).toHaveBeenCalledWith('AND');
     });
   });
 });

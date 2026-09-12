@@ -15,6 +15,7 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
     activeClient, step, setStep, loading, previewData, mapping, setMapping, importResult,
     fileInputRef, file,
     fixedTags, setFixedTags, fixedRemoveTags, setFixedRemoveTags,
+    availableTags,
     handleFileChange, handleExecuteImport, reset
   } = useContactImport(onClose, onImportComplete);
 
@@ -120,7 +121,7 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
               <FiUpload size={18} />
@@ -161,6 +162,7 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
               setFixedTags={setFixedTags}
               fixedRemoveTags={fixedRemoveTags}
               setFixedRemoveTags={setFixedRemoveTags}
+              availableTags={availableTags}
               renderPreviewTable={renderPreviewTable}
               setIsPreviewMaximized={setIsPreviewMaximized}
               setIsPhonePreviewMaximized={setIsPhonePreviewMaximized}
@@ -226,6 +228,7 @@ export default function ContactImportModal({ isOpen, onClose, onImportComplete }
         onClose={() => setIsPhonePreviewMaximized(false)}
         file={file}
         mapping={mapping}
+        setMapping={setMapping}
         activeClient={activeClient}
       />
 

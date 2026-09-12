@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiUser, FiSlash, FiClock, FiArchive } from 'react-icons/fi';
+import { FiUser, FiSlash, FiClock, FiArchive, FiTag } from 'react-icons/fi';
 import { BsPinAngleFill, BsExclamationCircleFill } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
 
@@ -11,6 +11,7 @@ export default function ChatListItem({
     onToggleCheck,
     onDelete,
     onArchive,
+    onTag,
     getLabelColor,
     formatTime
 }) {
@@ -109,6 +110,18 @@ export default function ChatListItem({
 
             {/* Ações individuais no hover */}
             <div className="absolute right-2 inset-y-0 my-auto h-fit opacity-0 group-hover/convo:opacity-100 flex items-center gap-1 z-10 transition">
+                {onTag && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onTag(convo);
+                        }}
+                        className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 hover:text-blue-600 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 dark:text-blue-400 dark:hover:text-blue-300 rounded-lg transition"
+                        title="Etiquetar conversa"
+                    >
+                        <FiTag size={14} />
+                    </button>
+                )}
                 {onArchive && (
                     <button
                         onClick={(e) => {

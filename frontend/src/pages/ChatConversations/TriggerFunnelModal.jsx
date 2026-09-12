@@ -9,7 +9,9 @@ export default function TriggerFunnelModal({
     isOpen,
     onClose,
     onTrigger,
-    isTriggering
+    isTriggering,
+    selectedCount,
+    isBulk = false
 }) {
     const { activeClient } = useClient();
     const clientId = activeClient?.id || localStorage.getItem('activeClientId');
@@ -76,7 +78,7 @@ export default function TriggerFunnelModal({
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#1e293b]/50">
                     <h3 className="text-base font-semibold text-white flex items-center gap-2">
                         <FiLayers className="text-blue-500" />
-                        Disparar Funil
+                        {isBulk ? `Disparar Funil (${selectedCount || 0} conversa${selectedCount !== 1 ? 's' : ''})` : 'Disparar Funil'}
                     </h3>
                     <button
                         onClick={onClose}
@@ -86,6 +88,15 @@ export default function TriggerFunnelModal({
                         <FiX size={18} />
                     </button>
                 </div>
+
+                {isBulk && (
+                    <div className="px-6 py-2.5 bg-indigo-500/10 border-b border-indigo-500/20 text-xs text-indigo-300 flex items-center justify-between">
+                        <span>O funil selecionado será disparado para a sequência de contatos selecionados.</span>
+                        <span className="font-bold bg-indigo-500/20 text-indigo-200 px-2 py-0.5 rounded-full text-[11px] border border-indigo-500/30 shrink-0">
+                            {selectedCount || 0} contato(s)
+                        </span>
+                    </div>
+                )}
 
                 {/* Search Bar */}
                 <div className="p-4 border-b border-white/5 bg-[#0b0f19]/40 flex gap-2 items-center">
@@ -203,7 +214,7 @@ export default function TriggerFunnelModal({
                             </>
                         ) : (
                             <>
-                                <FiPlay size={13} /> Disparar Funil
+                                <FiPlay size={13} /> {isBulk ? `Disparar para ${selectedCount || 0} contato(s)` : 'Disparar Funil'}
                             </>
                         )}
                     </button>

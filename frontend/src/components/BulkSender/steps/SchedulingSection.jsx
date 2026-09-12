@@ -13,6 +13,9 @@ const SchedulingSection = ({
     recurrenceDayOfMonth,
     setRecurrenceDayOfMonth,
     scheduledTime,
+    maxDispatchTime,
+    setMaxDispatchTime,
+    clearMaxDispatchTime,
     isDynamicLabel,
     setIsDynamicLabel,
     selectionMetadata,
@@ -206,6 +209,62 @@ const SchedulingSection = ({
                                     className="w-5 h-5 accent-emerald-500 rounded cursor-pointer flex-shrink-0"
                                 />
                             </div>
+                        )}
+                    </div>
+
+                    {/* Prazo Limite de Envio / Abortar Disparo */}
+                    <div className="p-6 bg-slate-800/40 border border-white/5 rounded-[2.5rem] group/limit focus-within:border-amber-500/50 transition-all shadow-lg">
+                        <div className="flex items-center justify-between mb-4">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] group-hover/limit:text-slate-200 transition-colors flex items-center gap-2">
+                                <div className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" />
+                                    </svg>
+                                </div>
+                                Prazo Limite de Envio (Opcional)
+                            </label>
+                            {maxDispatchTime && (
+                                <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                    Personalizado
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="bg-black/40 p-4 rounded-2xl border border-white/5 shadow-inner space-y-3">
+                            <input
+                                type="datetime-local"
+                                data-testid="bulk-max-dispatch-time-input"
+                                className="w-full bg-transparent outline-none font-bold text-base sm:text-lg text-white placeholder:text-slate-800 cursor-pointer"
+                                value={maxDispatchTime || ''}
+                                onChange={(e) => setMaxDispatchTime && setMaxDispatchTime(e.target.value)}
+                                min={scheduledTime || new Date().toISOString().slice(0, 16)}
+                            />
+                            {maxDispatchTime && (
+                                <button
+                                    type="button"
+                                    data-testid="bulk-clear-max-dispatch-time-btn"
+                                    onClick={() => setMaxDispatchTime && setMaxDispatchTime('')}
+                                    className="w-full py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-950/20 active:scale-98"
+                                    title="Remover prazo limite personalizado para voltar ao padrão de 24h"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                    Limpar Prazo Limite (Usar Padrão 24h)
+                                </button>
+                            )}
+                        </div>
+
+                        {maxDispatchTime ? (
+                            <p className="mt-2 text-[11px] font-bold text-amber-400 flex items-center gap-1.5 px-1">
+                                <span>⏱️</span> Disparo e mensagens na fila serão abortados se ultrapassar esta data/horário.
+                            </p>
+                        ) : (
+                            <p className="mt-2 text-[11px] font-medium text-slate-400 flex items-center gap-1.5 px-1 leading-relaxed">
+                                <span>⚡</span> <strong className="text-slate-300">Fallback Padrão de 24h:</strong> Mensagens retidas na fila da Meta (contato offline/sem internet) ou contatos pendentes após 24h serão abortados automaticamente.
+                            </p>
                         )}
                     </div>
                 </div>

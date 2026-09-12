@@ -17,6 +17,9 @@ const ContactList = ({
     filterBlockedOnly,
     setFilterBlockedOnly,
     blockedCount,
+    filterExcludedOnly,
+    setFilterExcludedOnly,
+    excludedCount = 0,
     addBrazilCode,
     copyToClipboard,
     clearAll,
@@ -77,31 +80,63 @@ const ContactList = ({
                 </div>
             )}
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
-                <div className="flex items-center gap-4 flex-wrap">
-                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">{title}</h3>
-                    <span className="bg-slate-800 text-white text-[10px] px-2.5 py-1 rounded-lg font-black">{contacts.length}</span>
+            {/* Warning Banner for Excluded Contacts */}
+            {excludedCount > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3 animate-in zoom-in-95 duration-300">
+                    <div className="p-2 bg-amber-500/20 text-amber-400 rounded-lg">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>
+                    </div>
+                    <div className="flex-1">
+                        <div className="text-xs font-black text-amber-400 uppercase tracking-widest">Contatos no Filtro de Exclusão Detectados</div>
+                        <div className="text-[10px] text-amber-300/60 font-medium">Existem {excludedCount} contato(s) nesta lista que coincidem com o Filtro de Exclusão e foram removidos do envio.</div>
+                    </div>
+                    <button
+                        onClick={() => setFilterExcludedOnly(!filterExcludedOnly)}
+                        className="text-[10px] font-black text-amber-400 hover:text-amber-300 underline uppercase tracking-widest transition-colors"
+                    >
+                        {filterExcludedOnly ? 'Ver Todos os Destinatários' : 'Ver Contatos Excluídos'}
+                    </button>
+                </div>
+            )}
+
+            {/* Painel Unificado de Destinatários e Filtros */}
+            <div className="bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-[2rem] p-5 shadow-xl space-y-4 animate-in fade-in duration-300">
+                {/* Linha Superior: Título, Contador e Ações da Lista */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-white/5">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                        </div>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.2em]">{title}</h3>
+                            <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] px-2.5 py-0.5 rounded-lg font-black shadow-sm">{contacts.length}</span>
+                        </div>
+                    </div>
+
                     {contacts.length > 0 && (
-                        <>
+                        <div className="flex items-center gap-2 flex-wrap">
                             <button
+                                type="button"
                                 onClick={() => setContacts(prev => [...prev].reverse())}
                                 title="Inverter a ordem da lista (últimos viram primeiros)"
-                                className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/20 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-blue-900/5 group"
+                                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800/80 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 rounded-xl border border-white/10 hover:border-blue-500/30 text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm group cursor-pointer"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="group-hover:rotate-180 transition-transform duration-300"><path d="M7 16V4m0 0L3 8m4-4l4 4"/><path d="M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
                                 Inverter Ordem
                             </button>
                             <button
+                                type="button"
                                 onClick={clearAll}
-                                className="flex items-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl border border-red-500/20 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-900/5 group"
+                                className="flex items-center gap-2 px-3.5 py-2 bg-slate-800/80 hover:bg-red-600/20 text-red-400 hover:text-red-300 rounded-xl border border-white/10 hover:border-red-500/30 text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm group cursor-pointer"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="group-hover:rotate-12 transition-transform"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                 Limpar Lista
                             </button>
-                        </>
+                        </div>
                     )}
                 </div>
 
+                {/* Linha Inferior: Barra de Filtros e Busca */}
                 <Filters 
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
@@ -112,6 +147,9 @@ const ContactList = ({
                     filterBlockedOnly={filterBlockedOnly}
                     setFilterBlockedOnly={setFilterBlockedOnly}
                     blockedCount={blockedCount}
+                    filterExcludedOnly={filterExcludedOnly}
+                    setFilterExcludedOnly={setFilterExcludedOnly}
+                    excludedCount={excludedCount}
                     hasStatus={hasStatus}
                     addBrazilCode={addBrazilCode}
                     copyToClipboard={copyToClipboard}
@@ -146,6 +184,9 @@ const ContactList = ({
                 variableFilters={variableFilters}
                 setVariableFilters={setVariableFilters}
                 exclusionList={exclusionList}
+                filterExcludedOnly={filterExcludedOnly}
+                setFilterExcludedOnly={setFilterExcludedOnly}
+                excludedCount={excludedCount}
             />
 
             {/* Seletor de Modo de Limite de Disparo (Todos os Aptos vs N Primeiros) */}

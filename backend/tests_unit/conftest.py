@@ -23,7 +23,7 @@ if backend_path not in sys.path:
 
 import models.project # IMPORTANTE: Registrar tabela projects antes de instanciar Base
 import pytest
-from sqlalchemy import create_engine, StaticPool
+from sqlalchemy import create_engine, StaticPool, event
 from sqlalchemy.orm import sessionmaker
 
 import database
@@ -40,6 +40,12 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
+
+@event.listens_for(engine, "connect")
+def configure_sqlite_connection(dbapi_connection, connection_record):
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        dbapi_connection.create_function("concat", -1, lambda *args: "".join(str(a) for a in args if a is not None))
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 _active_test_session = None
@@ -59,11 +65,13 @@ class TestSessionWrapper:
         # Executa commit na sessão real
         self._session.commit()
 
+database._active_test_session = None
+
 class SessionProxy:
     def __call__(self, *args, **kwargs):
-        global _active_test_session
-        if _active_test_session is not None:
-            return TestSessionWrapper(_active_test_session)
+        active = getattr(database, "_active_test_session", None)
+        if active is not None:
+            return TestSessionWrapper(active)
         return TestingSessionLocal(*args, **kwargs)
 
 # Redireciona a SessionLocal e a engine do projeto para a nossa SessionLocal e engine de teste
@@ -93,16 +101,15 @@ def setup_test_db():
 
 @pytest.fixture
 def db_session():
-    global _active_test_session
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
 
-    _active_test_session = session
+    database._active_test_session = session
 
     yield session
 
-    _active_test_session = None
+    database._active_test_session = None
     session.close()
     transaction.rollback()
     connection.close()

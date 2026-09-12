@@ -76,7 +76,7 @@ async def test_lead_import_from_csv(db: Session, mock_user: models.User):
         background_tasks=background_tasks,
         file=file,
         mapping=mapping,
-        x_client_id=1,
+        client_id=1,
         db=db,
         current_user=mock_user
     )
@@ -142,7 +142,7 @@ async def test_lead_import_from_xlsx(db: Session, mock_user: models.User):
         background_tasks=background_tasks,
         file=file,
         mapping=mapping,
-        x_client_id=1,
+        client_id=1,
         db=db,
         current_user=mock_user
     )
@@ -161,4 +161,34 @@ async def test_lead_import_from_xlsx(db: Session, mock_user: models.User):
     assert "LabelX" in charlie.tags
 
     print("\n✅ Teste de Importação de Leads via XLSX concluído com sucesso!")
+
+
+def test_get_import_history_pagination_max_limit(db: Session, mock_user: models.User):
+    # Insere 25 registros de histórico
+    for i in range(25):
+        hist = models.ContactImportHistory(
+            client_id=1,
+            filename=f"test_file_{i}.csv",
+            status="completed",
+            total_rows=10,
+            imported_rows=10,
+            error_rows=0
+        )
+        db.add(hist)
+    db.commit()
+
+    from routers.leads_import import get_import_history
+    # Teste 1: requisitando limit=50 (deve travar em no máximo 20)
+    res_large = get_import_history(skip=0, limit=50, client_id=1, db=db, current_user=mock_user)
+    assert res_large["total"] == 25
+    assert len(res_large["items"]) == 20
+
+    # Teste 2: requisitando limit=10 (deve retornar 10)
+    res_10 = get_import_history(skip=0, limit=10, client_id=1, db=db, current_user=mock_user)
+    assert len(res_10["items"]) == 10
+
+    # Teste 3: segunda página com skip=20 e limit=20 (deve retornar os 5 restantes)
+    res_page2 = get_import_history(skip=20, limit=20, client_id=1, db=db, current_user=mock_user)
+    assert len(res_page2["items"]) == 5
+    print("\n✅ Teste de limite máximo de 20 por página no backend concluído com sucesso!")
 
