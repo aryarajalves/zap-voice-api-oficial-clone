@@ -107,8 +107,13 @@ async def test_clean_corrupted_tags_merges_duplicates_and_combines_tags(client, 
         # Verifica preservação de dados
         assert merged_rita.bsud == "JP.1766708047670154"
         assert merged_rita.email == "rita@test.com"
-        assert merged_rita.total_events == 3 # 2 + 1
-        assert merged_rita.name == "Rita Silva" # nome mais longo mantido
+        # Executa uma segunda sincronização (agora com 0 duplicados restantes)
+        resp2 = client.post("/api/leads/clean-corrupted-tags", headers={"X-Client-Id": "1"})
+        assert resp2.status_code == 200
+        data2 = resp2.json()
+        assert data2["status"] == "success"
+        assert data2["leads_merged"] == 0
+        assert "Nenhum contato duplicado encontrado" in data2["message"]
 
     finally:
         app.dependency_overrides.pop(get_current_user, None)

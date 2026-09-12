@@ -469,6 +469,8 @@ def clean_corrupted_tags(
     msg_detail = f"Sincronização concluída. "
     if leads_merged > 0:
         msg_detail += f"{leads_merged} contato(s) duplicado(s) unificado(s) e removido(s). "
+    else:
+        msg_detail += "Nenhum contato duplicado encontrado. "
     msg_detail += f"{names_fixed} nome(s) corrigido(s) e {tags_removed} tag(s) limpa(s)."
 
     return {
