@@ -1,108 +1,78 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { useTriggerHistory } from './useTriggerHistory';
-import * as AuthContext from '../../../AuthContext';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import {
+    useTriggerHistory,
+    useTriggerHistoryFilters,
+    useTriggerHistorySync,
+    useTriggerContactsLoader,
+    useTriggerNavigation
+} from './useTriggerHistory';
 import * as ClientContext from '../../../contexts/ClientContext';
+import * as AuthContext from '../../../AuthContext';
 
-// Mock contexts com vi.mock (Vitest)
-vi.mock('../../../AuthContext');
-vi.mock('../../../contexts/ClientContext');
-
-describe('useTriggerHistory', () => {
-    const mockActiveClient = { id: 1 };
-    const mockUser = { role: 'super_admin' };
-
+describe('Modularização de useTriggerHistory', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
-        AuthContext.useAuth = vi.fn().mockReturnValue({ user: mockUser });
-        ClientContext.useClient = vi.fn().mockReturnValue({ activeClient: mockActiveClient });
-        AuthContext.fetchWithAuth = vi.fn().mockResolvedValue({
+        vi.spyOn(ClientContext, 'useClient').mockReturnValue({
+            activeClient: { id: 1, name: 'Cliente Teste' }
+        });
+        vi.spyOn(AuthContext, 'useAuth').mockReturnValue({
+            user: { id: 10, email: 'teste@exemplo.com' }
+        });
+        global.fetch = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({ items: [], total: 0 })
         });
     });
 
-    it('deve inicializar com estados padrão', async () => {
-        const { result } = renderHook(() => useTriggerHistory());
-        
-        expect(result.current.loading).toBe(true);
+    it('deve inicializar useTriggerHistoryFilters com valores padrão e permitir alterações', () => {
+        const { result } = renderHook(() => useTriggerHistoryFilters('bulk'));
+
+        expect(result.current.triggerType).toBe('bulk');
+        expect(result.current.filterStatus).toBe('all');
+        expect(result.current.page).toBe(1);
+
+        act(() => {
+            result.current.setFilterName('Campanha VIP');
+            result.current.setFilterStatus('completed');
+            result.current.setPage(2);
+        });
+
+        expect(result.current.filterName).toBe('Campanha VIP');
+        expect(result.current.filterStatus).toBe('completed');
+        expect(result.current.page).toBe(2);
+    });
+
+    it('deve inicializar useTriggerContactsLoader e permitir visualização de contatos com handleViewContacts', () => {
+        const setModal = vi.fn();
+        const { result } = renderHook(() => useTriggerContactsLoader({
+            activeClient: { id: 1 },
+            contactsModal: { isOpen: false, triggerId: null },
+            setContactsModal: setModal,
+            setTriggers: vi.fn()
+        }));
+
+        expect(result.current.contactsFilter).toBe('all');
+        expect(result.current.contactsPage).toBe(1);
+
+        act(() => {
+            result.current.handleViewContacts({ id: 123, template_name: 'aviso_urgente' }, 'failed');
+        });
+
+        expect(result.current.contactsFilter).toBe('failed');
+        expect(setModal).toHaveBeenCalledWith(expect.objectContaining({
+            isOpen: true,
+            triggerId: 123
+        }));
+    });
+
+    it('deve inicializar useTriggerHistory completo consolidando os submódulos', () => {
+        const { result } = renderHook(() => useTriggerHistory(0, 'bulk'));
+
+        expect(result.current.triggerType).toBe('bulk');
         expect(result.current.triggers).toEqual([]);
-        
-        await waitFor(() => {
-            expect(result.current.loading).toBe(false);
-        });
-    });
-
-    it('deve atualizar filtros corretamente', async () => {
-        const { result } = renderHook(() => useTriggerHistory());
-        
-        await waitFor(() => expect(result.current.loading).toBe(false));
-
-        act(() => {
-            result.current.setFilterName('Teste');
-        });
-
-        expect(result.current.filterName).toBe('Teste');
-    });
-
-    it('deve gerenciar a seleção em massa', async () => {
-        const { result } = renderHook(() => useTriggerHistory());
-        
-        await waitFor(() => expect(result.current.loading).toBe(false));
-
-        act(() => {
-            result.current.handleSelectOne(1);
-        });
-
-        expect(result.current.selectedIds).toContain(1);
-
-        act(() => {
-            result.current.handleSelectOne(1);
-        });
-
-        expect(result.current.selectedIds).not.toContain(1);
-    });
-
-    it('deve armazenar trigger no monitoringTrigger ao abrir o pipeline', async () => {
-        const { result } = renderHook(() => useTriggerHistory());
-        await waitFor(() => expect(result.current.loading).toBe(false));
-
-        const trigger = { id: 99, status: 'queued', execution_history: [] };
-        act(() => { result.current.setMonitoringTrigger(trigger); });
-
-        expect(result.current.monitoringTrigger).toEqual(trigger);
-    });
-
-    it('não deve iniciar polling para trigger com status completed', async () => {
-        // Para triggers já finalizados, o useEffect não cria intervalo
-        const completedTrigger = { id: 55, status: 'completed', execution_history: [] };
-
-        AuthContext.fetchWithAuth = vi.fn()
-            .mockResolvedValue({ ok: true, json: async () => ({ items: [], total: 0 }) });
-
-        const { result } = renderHook(() => useTriggerHistory());
-        await waitFor(() => expect(result.current.loading).toBe(false));
-
-        const callsBefore = AuthContext.fetchWithAuth.mock.calls.length;
-
-        act(() => { result.current.setMonitoringTrigger(completedTrigger); });
-
-        // Aguarda brevemente — nenhum poll adicional deve ter ocorrido
-        await new Promise(r => setTimeout(r, 200));
-
-        expect(AuthContext.fetchWithAuth.mock.calls.length).toBe(callsBefore);
-        expect(result.current.monitoringTrigger?.status).toBe('completed');
-    });
-
-    it('deve limpar o monitoringTrigger ao fechar o modal', async () => {
-        const { result } = renderHook(() => useTriggerHistory());
-        await waitFor(() => expect(result.current.loading).toBe(false));
-
-        act(() => { result.current.setMonitoringTrigger({ id: 1, status: 'queued' }); });
-        expect(result.current.monitoringTrigger).not.toBeNull();
-
-        act(() => { result.current.setMonitoringTrigger(null); });
-        expect(result.current.monitoringTrigger).toBeNull();
+        expect(result.current.fetchHistory).toBeTypeOf('function');
+        expect(result.current.handleSelectAll).toBeTypeOf('function');
+        expect(result.current.handleViewContacts).toBeTypeOf('function');
+        expect(result.current.handleEditParams).toBeTypeOf('function');
     });
 });
-

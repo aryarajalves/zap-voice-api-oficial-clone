@@ -1,404 +1,90 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { toast } from 'react-hot-toast';
-import { API_URL } from '../../../config';
-import { fetchWithAuth } from '../../../AuthContext';
+import { useRef, useCallback } from 'react';
 import { useClient } from '../../../contexts/ClientContext';
-import { handleMediaUploadHelper, updateTemplateTagsHelper, deleteTemplateTagGlobalHelper } from '../utils/templateCreatorUtils';
-
+import {
+  useTemplateUIState,
+  useTemplateFormData,
+  useTemplateListState
+} from './templateCreator';
 
 export const useTemplateCreator = (onSuccess, refreshKey) => {
-    const { activeClient } = useClient();
-    const [loading, setLoading] = useState(false);
-    const [templates, setTemplates] = useState([]);
-    const [fetchingTemplates, setFetchingTemplates] = useState(false);
-    const [editingId, setEditingId] = useState(null);
-    const [templateToDelete, setTemplateToDelete] = useState(null);
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [buttonIndexToRemove, setButtonIndexToRemove] = useState(null);
-    const [isRemoveButtonModalOpen, setIsRemoveButtonModalOpen] = useState(false);
-    const [isBodyExpanded, setIsBodyExpanded] = useState(false);
-    const [isGuideOpen, setIsGuideOpen] = useState(false);
-    const [templateSearch, setTemplateSearch] = useState('');
-    const [templateCategoryFilter, setTemplateCategoryFilter] = useState('ALL');
-    const [templateStatusFilter, setTemplateStatusFilter] = useState('ALL');
-    const [openFilterDropdown, setOpenFilterDropdown] = useState(null);
-    const [mediaUploading, setMediaUploading] = useState(false);
-    const [mediaCache, setMediaCache] = useState({
-        IMAGE: { url: '', fileName: '', previewUrl: null },
-        VIDEO: { url: '', fileName: '', previewUrl: null },
-        DOCUMENT: { url: '', fileName: '', previewUrl: null }
-    });
-    const fileInputRef = useRef(null);
+  const { activeClient } = useClient();
 
-    // Form State
-    const [formData, setFormData] = useState({
-        name: '',
-        category: 'MARKETING',
-        language: 'pt_BR',
-        header_type: 'NONE',
-        header_text: '',
-        header_media_url: '',
-        body_text: '',
-        footer_text: '',
-        buttons: [] 
-    });
+  const uiState = useTemplateUIState();
 
-    const fetchTemplates = useCallback(async () => {
-        if (!activeClient) return;
-        setFetchingTemplates(true);
-        try {
-            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates?include_archived=true`, {}, activeClient.id);
-            if (res.ok) {
-                const data = await res.json();
-                setTemplates(Array.isArray(data) ? data : []);
-            }
-        } catch (err) {
-            console.error("Error fetching templates:", err);
-        } finally {
-            setFetchingTemplates(false);
-        }
-    }, [activeClient]);
+  const fetchTemplatesRef = useRef(null);
+  const handleFetchTemplates = useCallback(() => {
+    if (fetchTemplatesRef.current) {
+      fetchTemplatesRef.current();
+    }
+  }, []);
 
-    useEffect(() => {
-        fetchTemplates();
-    }, [activeClient, refreshKey, fetchTemplates]);
+  const formState = useTemplateFormData({
+    activeClient,
+    fetchTemplates: handleFetchTemplates,
+    onSuccess
+  });
 
-    const handleAddButton = () => {
-        if (formData.buttons.length >= 10) {
-            toast.error("Máximo de 10 botões permitidos.");
-            return;
-        }
-        setFormData(prev => ({
-            ...prev,
-            buttons: [...prev.buttons, { type: 'QUICK_REPLY', text: '' }]
-        }));
-    };
+  const listState = useTemplateListState({
+    activeClient,
+    refreshKey,
+    editingId: formState.editingId,
+    resetForm: formState.resetForm
+  });
 
-    const removeButton = (index) => {
-        setButtonIndexToRemove(index);
-        setIsRemoveButtonModalOpen(true);
-    };
+  fetchTemplatesRef.current = listState.fetchTemplates;
 
-    const confirmRemoveButton = () => {
-        if (buttonIndexToRemove === null) return;
-        setFormData(prev => ({
-            ...prev,
-            buttons: prev.buttons.filter((_, i) => i !== buttonIndexToRemove)
-        }));
-        setIsRemoveButtonModalOpen(false);
-        setButtonIndexToRemove(null);
-    };
-
-    const updateButton = (index, field, value) => {
-        const newButtons = [...formData.buttons];
-        newButtons[index][field] = value;
-        setFormData(prev => ({ ...prev, buttons: newButtons }));
-    };
-
-    const handleEdit = (tpl) => {
-        setEditingId(tpl.id);
-        const bodyComp = tpl.components?.find(c => c.type === 'BODY');
-        const headerComp = tpl.components?.find(c => c.type === 'HEADER');
-        const footerComp = tpl.components?.find(c => c.type === 'FOOTER');
-        const buttonsComp = tpl.components?.find(c => c.type === 'BUTTONS');
-
-
-        const format = headerComp ? headerComp.format : 'NONE';
-        const url = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) ? (headerComp.example?.header_handle?.[0] || '') : '';
-
-        setFormData({
-            name: tpl.name,
-            category: tpl.category || 'MARKETING',
-            language: tpl.language || 'pt_BR',
-            header_type: format,
-            header_text: headerComp && headerComp.format === 'TEXT' ? headerComp.text : '',
-            header_media_url: url,
-            body_text: bodyComp ? bodyComp.text : '',
-            footer_text: footerComp ? footerComp.text : '',
-            buttons: buttonsComp ? (buttonsComp.buttons || []) : []
-        });
-
-        if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(format)) {
-            setMediaCache(prev => ({
-                ...prev,
-                [format]: { url: url, fileName: 'Arquivo do Template', previewUrl: null }
-            }));
-        }
-
-        const formEl = document.getElementById('templateForm');
-        if (formEl) {
-            formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    };
-
-    const resetForm = () => {
-        setEditingId(null);
-        setFormData({
-            name: '',
-            category: 'MARKETING',
-            language: 'pt_BR',
-            header_type: 'NONE',
-            header_text: '',
-            header_media_url: '',
-            body_text: '',
-            footer_text: '',
-            buttons: []
-        });
-        Object.values(mediaCache).forEach(c => c.previewUrl && URL.revokeObjectURL(c.previewUrl));
-        setMediaCache({
-            IMAGE: { url: '', fileName: '', previewUrl: null },
-            VIDEO: { url: '', fileName: '', previewUrl: null },
-            DOCUMENT: { url: '', fileName: '', previewUrl: null }
-        });
-    };
-
-    const handleDeleteTemplate = async () => {
-        if (!templateToDelete) return;
-
-        const loadingToast = toast.loading("Excluindo template...");
-        try {
-            const res = await fetchWithAuth(`${API_URL}/whatsapp/templates/${templateToDelete}`, {
-                method: 'DELETE'
-            }, activeClient?.id);
-
-            if (res.ok) {
-                toast.dismiss(loadingToast);
-                toast.success("Template excluído com sucesso!");
-                fetchTemplates();
-                if (editingId && templates.find(t => t.id === editingId)?.name === templateToDelete) {
-                    resetForm();
-                }
-            } else {
-                const err = await res.json();
-                toast.dismiss(loadingToast);
-                toast.error(err.detail || "Erro ao excluir template");
-            }
-        } catch (error) {
-            console.error(error);
-            toast.dismiss(loadingToast);
-            toast.error("Erro de conexão ao excluir");
-        } finally {
-            setTemplateToDelete(null);
-            setIsDeleteModalOpen(false);
-        }
-    };
-
-    const handleMediaUpload = async (file) => {
-        await handleMediaUploadHelper(
-            file,
-            formData.header_type,
-            activeClient?.id,
-            setMediaCache,
-            setFormData,
-            setMediaUploading
-        );
-    };
-
-    const handleSubmit = async (e) => {
-        if (e) e.preventDefault();
-
-        // Diagnóstico de Payload
-        console.log("🚀 [TEMPLATE_CREATOR] Submetendo formulário:", formData);
-
-        if (!formData.name) {
-            toast.error("O Nome do Template é obrigatório.");
-            return;
-        }
-        if (!formData.body_text) {
-            toast.error("O Corpo da Mensagem é obrigatório.");
-            return;
-        }
-
-        if (!/^[a-z0-9_]+$/.test(formData.name)) {
-            toast.error("Nome deve conter apenas letras minúsculas, números e sublinhados (_).");
-            return;
-        }
-
-        setLoading(true);
-        const actionText = editingId ? "Atualizando" : "Enviando";
-        const loadingToast = toast.loading(`${actionText} template na Meta...`);
-
-        try {
-            const url = editingId
-                ? `${API_URL}/whatsapp/templates/${editingId}`
-                : `${API_URL}/whatsapp/templates`;
-
-            const method = editingId ? 'PUT' : 'POST';
-
-            const res = await fetchWithAuth(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            }, activeClient?.id);
-
-            if (res.ok) {
-                toast.dismiss(loadingToast);
-                toast.success(editingId ? "Template atualizado com sucesso!" : "Template enviado com sucesso!");
-                fetchTemplates();
-                if (!editingId && onSuccess) onSuccess();
-                resetForm();
-            } else {
-                const err = await res.json();
-                console.error("❌ [TEMPLATE_CREATOR] Erro no servidor:", err);
-                toast.dismiss(loadingToast);
-                toast.error(err.detail || "Erro ao processar template na Meta");
-            }
-        } catch (error) {
-            console.error(error);
-            toast.dismiss(loadingToast);
-            toast.error("Erro de conexão");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fixBodyTextForMeta = () => {
-        let fixed = formData.body_text.trim();
-        if (/^\{\{\d+\}\}/.test(fixed)) {
-            fixed = 'Olá ' + fixed;
-        }
-        fixed = fixed.replace(/(\{\{\d+\}\})[\s\W]*$/, '$1, tudo bem?');
-        setFormData({ ...formData, body_text: fixed });
-        toast.success('Texto corrigido para o formato da Meta!');
-    };
-
-    const updateTemplateTags = async (templateId, tagsList) => {
-        if (!activeClient) return false;
-        return await updateTemplateTagsHelper(templateId, tagsList, activeClient.id, setTemplates);
-    };
-
-    const deleteTemplateTagGlobal = async (tag) => {
-        if (!activeClient) return false;
-        return await deleteTemplateTagGlobalHelper(tag, activeClient.id, fetchTemplates);
-    };
-
-    const archiveTemplate = async (templateName) => {
-        const loadingToast = toast.loading("Arquivando template...");
-        try {
-            const res = await fetchWithAuth(
-                `${API_URL}/whatsapp/templates/${templateName}/archive`,
-                { method: 'POST' },
-                activeClient?.id
-            );
-            if (res.ok) {
-                toast.dismiss(loadingToast);
-                toast.success("Template arquivado com sucesso!");
-                fetchTemplates();
-            } else {
-                const err = await res.json();
-                toast.dismiss(loadingToast);
-                toast.error(err.detail || "Erro ao arquivar template");
-            }
-        } catch (error) {
-            console.error(error);
-            toast.dismiss(loadingToast);
-            toast.error("Erro de conexão ao arquivar");
-        }
-    };
-
-    const unarchiveTemplate = async (templateName) => {
-        const loadingToast = toast.loading("Desarquivando template...");
-        try {
-            const res = await fetchWithAuth(
-                `${API_URL}/whatsapp/templates/${templateName}/unarchive`,
-                { method: 'POST' },
-                activeClient?.id
-            );
-            if (res.ok) {
-                toast.dismiss(loadingToast);
-                toast.success("Template desarquivado com sucesso!");
-                fetchTemplates();
-            } else {
-                const err = await res.json();
-                toast.dismiss(loadingToast);
-                toast.error(err.detail || "Erro ao desarquivar template");
-            }
-        } catch (error) {
-            console.error(error);
-            toast.dismiss(loadingToast);
-            toast.error("Erro de conexão ao desarquivar");
-        }
-    };
-
-    const handlePinTemplate = async (templateId, pinStatus) => {
-        if (!activeClient) return false;
-        const loadingToast = toast.loading(pinStatus ? "Fixando template no topo..." : "Desafixando template...");
-        try {
-            const res = await fetchWithAuth(
-                `${API_URL}/whatsapp/templates/${templateId}/pin`,
-                {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ is_pinned: pinStatus })
-                },
-                activeClient.id
-            );
-
-            if (res.ok) {
-                toast.dismiss(loadingToast);
-                toast.success(pinStatus ? "Template fixado no topo!" : "Template desafixado do topo!");
-                fetchTemplates();
-                return true;
-            } else {
-                const err = await res.json();
-                toast.dismiss(loadingToast);
-                toast.error(err.detail || "Erro ao fixar/desafixar template.");
-                return false;
-            }
-        } catch (error) {
-            console.error("Error pinning template:", error);
-            toast.dismiss(loadingToast);
-            toast.error("Erro de conexão ao fixar template.");
-            return false;
-        }
-    };
-
-    return {
-        activeClient,
-        loading,
-        templates,
-        fetchingTemplates,
-        editingId,
-        templateToDelete,
-        setTemplateToDelete,
-        isDeleteModalOpen,
-        setIsDeleteModalOpen,
-        isRemoveButtonModalOpen,
-        setIsRemoveButtonModalOpen,
-        buttonIndexToRemove,
-        isBodyExpanded,
-        setIsBodyExpanded,
-        isGuideOpen,
-        setIsGuideOpen,
-        templateSearch,
-        setTemplateSearch,
-        templateCategoryFilter,
-        setTemplateCategoryFilter,
-        templateStatusFilter,
-        setTemplateStatusFilter,
-        openFilterDropdown,
-        setOpenFilterDropdown,
-        mediaUploading,
-        mediaCache,
-        setMediaCache,
-        fileInputRef,
-        formData,
-        setFormData,
-        fetchTemplates,
-        handleAddButton,
-        removeButton,
-        confirmRemoveButton,
-        updateButton,
-        handleEdit,
-        resetForm,
-        handleDeleteTemplate,
-        handleMediaUpload,
-        handleSubmit,
-        fixBodyTextForMeta,
-        updateTemplateTags,
-        deleteTemplateTagGlobal,
-        archiveTemplate,
-        unarchiveTemplate,
-        handlePinTemplate
-    };
+  return {
+    activeClient,
+    // UI State
+    isBodyExpanded: uiState.isBodyExpanded,
+    setIsBodyExpanded: uiState.setIsBodyExpanded,
+    isGuideOpen: uiState.isGuideOpen,
+    setIsGuideOpen: uiState.setIsGuideOpen,
+    // Form & Media State
+    loading: formState.loading,
+    editingId: formState.editingId,
+    buttonIndexToRemove: formState.buttonIndexToRemove,
+    isRemoveButtonModalOpen: formState.isRemoveButtonModalOpen,
+    setIsRemoveButtonModalOpen: formState.setIsRemoveButtonModalOpen,
+    mediaUploading: formState.mediaUploading,
+    mediaCache: formState.mediaCache,
+    setMediaCache: formState.setMediaCache,
+    fileInputRef: formState.fileInputRef,
+    formData: formState.formData,
+    setFormData: formState.setFormData,
+    handleAddButton: formState.handleAddButton,
+    removeButton: formState.removeButton,
+    confirmRemoveButton: formState.confirmRemoveButton,
+    updateButton: formState.updateButton,
+    handleEdit: formState.handleEdit,
+    resetForm: formState.resetForm,
+    handleMediaUpload: formState.handleMediaUpload,
+    handleSubmit: formState.handleSubmit,
+    fixBodyTextForMeta: formState.fixBodyTextForMeta,
+    // List & Filter State
+    templates: listState.templates,
+    setTemplates: listState.setTemplates,
+    fetchingTemplates: listState.fetchingTemplates,
+    templateToDelete: listState.templateToDelete,
+    setTemplateToDelete: listState.setTemplateToDelete,
+    isDeleteModalOpen: listState.isDeleteModalOpen,
+    setIsDeleteModalOpen: listState.setIsDeleteModalOpen,
+    templateSearch: listState.templateSearch,
+    setTemplateSearch: listState.setTemplateSearch,
+    templateCategoryFilter: listState.templateCategoryFilter,
+    setTemplateCategoryFilter: listState.setTemplateCategoryFilter,
+    templateStatusFilter: listState.templateStatusFilter,
+    setTemplateStatusFilter: listState.setTemplateStatusFilter,
+    openFilterDropdown: listState.openFilterDropdown,
+    setOpenFilterDropdown: listState.setOpenFilterDropdown,
+    fetchTemplates: listState.fetchTemplates,
+    handleDeleteTemplate: listState.handleDeleteTemplate,
+    updateTemplateTags: listState.updateTemplateTags,
+    deleteTemplateTagGlobal: listState.deleteTemplateTagGlobal,
+    archiveTemplate: listState.archiveTemplate,
+    unarchiveTemplate: listState.unarchiveTemplate,
+    handlePinTemplate: listState.handlePinTemplate
+  };
 };
+
+export default useTemplateCreator;

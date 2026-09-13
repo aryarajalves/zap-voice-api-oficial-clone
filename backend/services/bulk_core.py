@@ -166,18 +166,20 @@ async def send_smart_message(
         effective_components = components
 
         # Se o cliente ou sistema estiver em modo simulação (ou se for teste de estresse), retorna sucesso imediato
-        if getattr(chatwoot, "simulate", False):
+        if getattr(chatwoot, "simulate", False) is True:
             import random
             sim_id = f"wamid.HBgL{phone}{random.randint(100000, 999999)}"
             logger.info(f"🤖 [MOCK Smart Send] Disparo simulado para {phone} (ID: {sim_id})")
             return {"result": {"messages": [{"id": sim_id}]}, "type": "TEMPLATE", "success": True}
 
         # 0. Verificação Global de 24h (Bloqueio Total do Template/Conteúdo nas últimas 24h)
-        if template_name and getattr(chatwoot, "client_id", None):
+        c_id_raw = getattr(chatwoot, "client_id", None)
+        c_id = int(c_id_raw) if isinstance(c_id_raw, (int, float)) else None
+        if template_name and c_id:
             from database import SessionLocal
             from services.template_history_service import is_template_sent_in_last_24h, record_template_dispatch
             with SessionLocal() as db_chk:
-                if is_template_sent_in_last_24h(db_chk, chatwoot.client_id, phone, template_name):
+                if is_template_sent_in_last_24h(db_chk, c_id, phone, template_name):
                     logger.info(f"⏭️ [24h Check] Ignorado para {phone}: Template '{template_name}' já enviado nas últimas 24h.")
                     return {"error": True, "detail": "Pulado: Template já enviado nas últimas 24h", "skipped_24h": True, "success": False}
 

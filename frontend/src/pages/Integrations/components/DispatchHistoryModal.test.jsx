@@ -117,4 +117,69 @@ describe('DispatchHistoryModal Component', () => {
 
     expect(handlePlayDispatchMock).toHaveBeenCalledWith(101);
   });
+
+  it('exibe estado de carregamento quando loadingDispatchHistory for verdadeiro', () => {
+    render(
+      <DispatchHistoryModal
+        isOpen={true}
+        onClose={() => {}}
+        integration={mockIntegration}
+        dispatchHistory={[]}
+        loadingDispatchHistory={true}
+        dispatchSearch=""
+        setDispatchSearch={() => {}}
+        dispatchEventFilter=""
+        setDispatchEventFilter={() => {}}
+        dispatchTypeFilter=""
+        setDispatchTypeFilter={() => {}}
+        dispatchStartDate=""
+        setDispatchStartDate={() => {}}
+        dispatchEndDate=""
+        setDispatchEndDate={() => {}}
+        dispatchPage={1}
+        setDispatchPage={() => {}}
+        dispatchLimit={20}
+        setDispatchLimit={() => {}}
+        dispatchTotal={0}
+        selectedDispatchIds={[]}
+        setSelectedDispatchIds={() => {}}
+        fetchDispatches={() => {}}
+      />
+    );
+
+    expect(screen.getByText(/CARREGANDO FILA/i)).toBeInTheDocument();
+  });
+
+  it('exibe mensagem quando nenhum disparo for encontrado', () => {
+    render(
+      <DispatchHistoryModal
+        isOpen={true}
+        onClose={() => {}}
+        integration={mockIntegration}
+        dispatchHistory={[]}
+        loadingDispatchHistory={false}
+        dispatchSearch=""
+        setDispatchSearch={() => {}}
+        dispatchEventFilter=""
+        setDispatchEventFilter={() => {}}
+        dispatchTypeFilter=""
+        setDispatchTypeFilter={() => {}}
+        dispatchStartDate=""
+        setDispatchStartDate={() => {}}
+        dispatchEndDate=""
+        setDispatchEndDate={() => {}}
+        dispatchPage={1}
+        setDispatchPage={() => {}}
+        dispatchLimit={20}
+        setDispatchLimit={() => {}}
+        dispatchTotal={0}
+        selectedDispatchIds={[]}
+        setSelectedDispatchIds={() => {}}
+        fetchDispatches={() => {}}
+      />
+    );
+
+    expect(screen.getByText(/Nenhum disparo encontrado/i)).toBeInTheDocument();
+  });
 });
+

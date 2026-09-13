@@ -113,9 +113,9 @@ async def test_process_bulk_send_blocked(mock_db, mock_chatwoot, mock_rabbitmq):
 
     contacts = ["5585999999991"]
     
-    def mock_update_stats(db, trigger_id, sent=0, failed=0, blocked=0, total=None):
-        if failed:
-            mock_trigger.total_failed += failed
+    def mock_update_stats(db, trigger_id, sent=0, failed=0, blocked=0, total=None, **kwargs):
+        if failed or blocked:
+            mock_trigger.total_failed += (failed or blocked)
             
     with patch("services.bulk.update_trigger_stats", side_effect=mock_update_stats):
         await process_bulk_send(

@@ -2,6 +2,9 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import MediaHeaderUploader from './MediaHeaderUploader';
+import MediaHeaderUploaderTitle from './MediaHeaderUploader/MediaHeaderUploaderTitle';
+import MediaModeTabs from './MediaHeaderUploader/MediaModeTabs';
+import MediaStatusIndicator from './MediaHeaderUploader/MediaStatusIndicator';
 
 // Mocks
 vi.mock('../../../contexts/ClientContext', () => ({
@@ -118,5 +121,50 @@ describe('MediaHeaderUploader', () => {
             fireEvent.click(removeBtn);
             expect(handleParamChange).toHaveBeenCalledWith('HEADER_0', '');
         }
+    });
+
+    it('permite alternar entre as abas Fazer Novo Upload e Mídias Salvas', () => {
+        render(<MediaHeaderUploader {...defaultProps} />);
+
+        const savedTabBtn = screen.getByRole('button', { name: /Mídias Salvas \(S3\/MinIO\)/i });
+        fireEvent.click(savedTabBtn);
+
+        // Verifica que o alternador mudou e busca mídias
+        expect(savedTabBtn.className).toContain('bg-amber-500/10');
+
+        const uploadTabBtn = screen.getByRole('button', { name: /Fazer Novo Upload/i });
+        fireEvent.click(uploadTabBtn);
+        expect(uploadTabBtn.className).toContain('bg-amber-500/10');
+    });
+
+    describe('Subcomponentes Isolados', () => {
+        it('renderiza MediaHeaderUploaderTitle com ícone e rótulo', () => {
+            render(<MediaHeaderUploaderTitle mediaIcon="🎬" mediaTypeLabel="Vídeo" />);
+            expect(screen.getByText('🎬')).toBeInTheDocument();
+            expect(screen.getByText('Vídeo do Cabeçalho — Obrigatório')).toBeInTheDocument();
+        });
+
+        it('renderiza MediaStatusIndicator em estado de upload', () => {
+            render(<MediaStatusIndicator isUploading={true} currentUrl="" mediaTypeLabel="Imagem" />);
+            expect(screen.getByText(/Aguarde... finalizando otimização da mídia no servidor/i)).toBeInTheDocument();
+        });
+
+        it('renderiza MediaModeTabs e dispara eventos de clique', () => {
+            const setShowPastSelector = vi.fn();
+            const onSelectPastMedias = vi.fn();
+
+            render(
+                <MediaModeTabs
+                    showPastSelector={false}
+                    setShowPastSelector={setShowPastSelector}
+                    onSelectPastMedias={onSelectPastMedias}
+                />
+            );
+
+            const savedBtn = screen.getByRole('button', { name: /Mídias Salvas/i });
+            fireEvent.click(savedBtn);
+            expect(setShowPastSelector).toHaveBeenCalledWith(true);
+            expect(onSelectPastMedias).toHaveBeenCalledTimes(1);
+        });
     });
 });

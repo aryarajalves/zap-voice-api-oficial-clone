@@ -121,6 +121,8 @@ def get_validated_client_id(
                 resolved_client_id = current_user.accessible_clients[0].id
         else:
             allowed_ids = {c.id for c in (current_user.accessible_clients or [])}
+            if getattr(current_user, "client_id", None):
+                allowed_ids.add(current_user.client_id)
             if getattr(current_user, "client_id", None) and current_user.client_id in allowed_ids:
                 resolved_client_id = current_user.client_id
             elif len(allowed_ids) == 1:

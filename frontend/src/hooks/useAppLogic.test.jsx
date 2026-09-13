@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useAppLogic } from './useAppLogic';
 import { fetchWithAuth } from '../AuthContext';
@@ -21,7 +21,7 @@ vi.mock('react-hot-toast', () => ({
     }
 }));
 
-describe('useAppLogic Hook', () => {
+describe('useAppLogic Hook Modularizado', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorage.clear();
@@ -29,7 +29,6 @@ describe('useAppLogic Hook', () => {
     });
 
     it('should set document.title and save branding to localStorage when settings are fetched', async () => {
-        // Mock fetchWithAuth for settings and funnels
         fetchWithAuth.mockImplementation((url) => {
             if (url.includes('/settings/')) {
                 return Promise.resolve({
@@ -53,12 +52,10 @@ describe('useAppLogic Hook', () => {
 
         const { result } = renderHook(() => useAppLogic());
 
-        // Wait for the settings to load and title to update
         await waitFor(() => {
             expect(document.title).toBe('MyWhitelabelCompany');
         });
 
-        // Verify it stored it in localStorage
         const storedBranding = JSON.parse(localStorage.getItem('appBranding'));
         expect(storedBranding).toBeDefined();
         expect(storedBranding.name).toBe('MyWhitelabelCompany');
@@ -68,12 +65,38 @@ describe('useAppLogic Hook', () => {
         const cachedBranding = { name: 'CachedCompany', logo: null, logoSize: 'small' };
         localStorage.setItem('appBranding', JSON.stringify(cachedBranding));
 
-        // Mock fetchWithAuth to not resolve yet (keeps it in loading state)
         fetchWithAuth.mockReturnValue(new Promise(() => {}));
 
         const { result } = renderHook(() => useAppLogic());
 
         expect(result.current.appBranding.name).toBe('CachedCompany');
         expect(result.current.appBranding.logoSize).toBe('small');
+    });
+
+    it('deve alternar a visualização atual e persistir no localStorage', () => {
+        fetchWithAuth.mockReturnValue(new Promise(() => {}));
+        const { result } = renderHook(() => useAppLogic());
+
+        act(() => {
+            result.current.handleViewChange('integrations');
+        });
+
+        expect(result.current.currentView).toBe('integrations');
+        expect(localStorage.getItem('currentView')).toBe('integrations');
+    });
+
+    it('deve gerenciar seleção múltipla de funis com toggleFunnelSelection e toggleSelectAll', () => {
+        fetchWithAuth.mockReturnValue(new Promise(() => {}));
+        const { result } = renderHook(() => useAppLogic());
+
+        act(() => {
+            result.current.toggleFunnelSelection('f1');
+        });
+        expect(result.current.selectedFunnelIds).toContain('f1');
+
+        act(() => {
+            result.current.toggleFunnelSelection('f1');
+        });
+        expect(result.current.selectedFunnelIds).not.toContain('f1');
     });
 });

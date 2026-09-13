@@ -315,13 +315,14 @@ async def debug_meta(
 @router.post("/assistant/chat")
 async def assistant_chat(
     payload: dict,
-    client_id: int = Depends(get_validated_client_id),
+    client_id: Optional[int] = Depends(get_validated_client_id),
     current_user: models.User = Depends(require_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    x_client_id: Optional[int] = None
 ):
     import os
     import json
-    target_client_id = client_id
+    target_client_id = client_id or x_client_id
     messages = payload.get("messages", [])
     
     active_templates = []

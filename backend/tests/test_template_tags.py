@@ -142,7 +142,7 @@ class TestTemplateTags(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["tags"], ["nova_tag", "outra_tag"])
 
         # Verificar no banco de dados
-        db_tpl = self.db.query(models.WhatsAppTemplateCache).get(1111111111)
+        db_tpl = self.db.query(models.WhatsAppTemplateCache).filter_by(id=1111111111, client_id=self.client_id).first()
         self.assertEqual(db_tpl.tags, "nova_tag,outra_tag")
 
     async def test_update_template_tags_not_found(self):

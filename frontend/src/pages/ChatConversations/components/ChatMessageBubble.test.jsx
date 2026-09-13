@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ChatMessageBubble from './ChatMessageBubble';
 
 describe('ChatMessageBubble Unit Tests', () => {
@@ -132,5 +132,124 @@ describe('ChatMessageBubble Unit Tests', () => {
 
         expect(screen.queryByText('⚡ IA:')).not.toBeInTheDocument();
         expect(screen.queryByText('Gratuito')).not.toBeInTheDocument();
+    });
+
+    it('renderiza corretamente mensagens do tipo WhatsApp Template com botões e badge', () => {
+        const templateMsg = {
+            id: 6,
+            sender_type: 'user',
+            content: 'Boas-vindas ao nosso atendimento!',
+            timestamp: new Date().toISOString(),
+            meta_data: {
+                is_template: true,
+                template_name: 'boas_vindas_v1',
+                buttons: ['Falar com Consultor', 'Ver Catálogo']
+            }
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={templateMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[templateMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '14:30'}
+            />
+        );
+
+        expect(screen.getByText('WhatsApp Template: boas_vindas_v1')).toBeInTheDocument();
+        expect(screen.getByText('Falar com Consultor')).toBeInTheDocument();
+        expect(screen.getByText('Ver Catálogo')).toBeInTheDocument();
+    });
+
+    it('renderiza citação (quoted message) com autor e conteúdo original', () => {
+        const originalMsg = {
+            id: 100,
+            wa_message_id: 'wamid.HBgLMTIzNDU2',
+            sender_type: 'contact',
+            content: 'Qual o valor da mensalidade?',
+            timestamp: new Date().toISOString()
+        };
+
+        const replyMsg = {
+            id: 101,
+            sender_type: 'user',
+            content: 'Custa R$ 97/mês no plano PRO.',
+            quoted_message_id: 'wamid.HBgLMTIzNDU2',
+            timestamp: new Date().toISOString()
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={replyMsg}
+                selectedConvo={{ id: 10, contact_name: 'Carlos Silva', phone: '5585996123586' }}
+                allMessages={[originalMsg, replyMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '15:00'}
+            />
+        );
+
+        expect(screen.getByText('Carlos Silva')).toBeInTheDocument();
+        expect(screen.getByText('Qual o valor da mensalidade?')).toBeInTheDocument();
+        expect(screen.getByText('Custa R$ 97/mês no plano PRO.')).toBeInTheDocument();
+    });
+
+    it('renderiza cartão de contato com telefone e link do WhatsApp', () => {
+        const contactMsg = {
+            id: 7,
+            sender_type: 'contact',
+            message_type: 'contact',
+            content: '👤 Maria Santos\n+55 11 98888-7777',
+            timestamp: new Date().toISOString(),
+            meta_data: {
+                contact_name: 'Maria Santos',
+                contact_phone: '+55 11 98888-7777'
+            }
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={contactMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[contactMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '16:10'}
+            />
+        );
+
+        expect(screen.getByText('Maria Santos')).toBeInTheDocument();
+        expect(screen.getByText('+55 11 98888-7777')).toBeInTheDocument();
+        const talkBtn = screen.getByRole('link', { name: /Conversar/i });
+        expect(talkBtn).toHaveAttribute('href', 'https://wa.me/5511988887777');
+    });
+
+    it('permite interagir com reações e invocar sendReaction no engine', () => {
+        const sendReactionMock = vi.fn();
+        const reactionMsg = {
+            id: 8,
+            wa_message_id: 'wamid.12345',
+            sender_type: 'user',
+            content: 'Mensagem com reação',
+            timestamp: new Date().toISOString(),
+            meta_data: {
+                reactions: [{ sender: 'user', emoji: '❤️' }]
+            }
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={reactionMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[reactionMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '16:20'}
+                engine={{ sendReaction: sendReactionMock }}
+            />
+        );
+
+        const reactionBadge = screen.getByTitle('Clique para remover sua reação');
+        expect(reactionBadge).toBeInTheDocument();
+        fireEvent.click(reactionBadge);
+        expect(sendReactionMock).toHaveBeenCalledWith('wamid.12345', '');
     });
 });

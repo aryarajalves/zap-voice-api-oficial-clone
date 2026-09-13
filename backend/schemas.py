@@ -1,815 +1,137 @@
-from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Any, Union, Dict
-from datetime import datetime
-from uuid import UUID
-import json
-
-# --- Enums & Sub-models ---
-
-class FunnelStep(BaseModel):
-    type: str = Field(..., description="Tipo do passo (message, audio, video, image, delay)", example="message")
-    content: Optional[str] = Field(None, description="Conteúdo da mensagem ou URL da mídia", example="Olá! Como posso ajudar?")
-    # Delay options
-    delay: Optional[int] = Field(0, description="Tempo de espera (se type=delay)", example=5)
-    timeUnit: Optional[str] = Field("seconds", description="Unidade de tempo (seconds, minutes, hours, days)", example="seconds")
-    # Typing options
-    simulate_typing: Optional[bool] = Field(False, description="Simular 'digitando...' antes de enviar")
-    typing_time: Optional[int] = Field(3, description="Tempo simulando digitação (segundos)")
-    # Interactive options
-    interactive: Optional[bool] = Field(False, description="Se verdadeiro, envia botões interativos (Meta API)")
-    buttons: Optional[List[str]] = Field(None, description="Lista de textos para botões", example=["Sim", "Não"])
-    # Private options
-    privateMessageEnabled: Optional[bool] = Field(False, description="Enviar nota interna no Chatwoot após este passo")
-    privateMessageContent: Optional[str] = Field(None, description="Conteúdo da nota interna")
-    # File options
-    fileName: Optional[str] = Field(None, description="Nome personalizado para o arquivo enviado", example="comprovante.pdf")
-
-# --- Funnel Schemas ---
-
-class FunnelBase(BaseModel):
-    name: str = Field(..., description="Nome de identificação do funil", example="Funil de Boas Vindas")
-    description: Optional[str] = Field(None, description="Descrição opcional para uso interno")
-    trigger_phrase: Optional[str] = Field(None, description="Palavra(s)-chave que disparam este funil", example="VALIDAR, AULA")
-    trigger_match_type: Optional[str] = Field("contains", description="Tipo de correspondência: 'contains' ou 'exact'")
-    trigger_limit_type: Optional[str] = Field("none", description="Limite de reativação por contato: 'none', 'once_per_day', 'once_24h', 'once_lifetime'")
-    is_trigger_active: Optional[bool] = Field(True, description="Se o gatilho por palavra-chave está ativo")
-    allowed_phones: Optional[List[str]] = Field(None, description="Lista de telefones permitidos (Whitelist)")
-    blocked_phones: Optional[List[str]] = Field(None, description="Lista de telefones bloqueados (Blacklist)")
-    allowed_phone: Optional[str] = Field(None, description="Legado: apenas este número pode disparar", example="5511999999999")
-    steps: Union[List[Any], dict] = Field(..., description="Lista sequencial de passos ou Grafo do Flow Builder")
-    # Horário Comercial (para filtro nos nós com onlyBusinessHours=true)
-    business_hours_start: Optional[str] = Field("08:00", description="Horário de início do período comercial (HH:MM, America/Sao_Paulo)", example="08:00")
-    business_hours_end: Optional[str] = Field("18:00", description="Horário de fim do período comercial (HH:MM, America/Sao_Paulo)", example="18:00")
-    business_hours_days: Optional[List[int]] = Field(default=[0,1,2,3,4], description="Dias da semana com horário comercial (0=Seg, 6=Dom)")
-    is_archived: Optional[bool] = Field(False, description="Se verdadeiro, o funil está arquivado")
-    tag: Optional[str] = Field(None, description="Etiqueta para classificar o funil")
-    is_pinned: Optional[bool] = Field(False, description="Se verdadeiro, o funil está fixado no topo")
-    is_active: Optional[bool] = Field(True, description="Se verdadeiro, o funil está ativo e pronto para uso")
-
-class FunnelCreate(FunnelBase):
-    pass
-
-class Funnel(FunnelBase):
-    id: int = Field(..., description="ID único do funil no banco de dados")
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-class FunnelBulkDelete(BaseModel):
-    funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para excluir")
-
-class FunnelBulkArchive(BaseModel):
-    funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para arquivar/desarquivar")
-    is_archived: bool = Field(True, description="Status de arquivamento a ser aplicado")
-
-class FunnelBulkTag(BaseModel):
-    funnel_ids: List[int] = Field(..., description="Lista de IDs de funis para atualizar a etiqueta")
-    tag: Optional[str] = Field(None, description="Etiqueta a ser aplicada (null para remover)")
-
-# --- Trigger Folder Schemas ---
-
-class TriggerFolderBase(BaseModel):
-    name: str = Field(..., description="Nome da pasta")
-    color: Optional[str] = Field("#6366f1", description="Cor de identificação da pasta (hex)")
-
-class TriggerFolderCreate(TriggerFolderBase):
-    pass
-
-class TriggerFolderUpdate(BaseModel):
-    name: Optional[str] = None
-    color: Optional[str] = None
-
-class TriggerFolder(TriggerFolderBase):
-    id: int
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    trigger_count: Optional[int] = Field(0, description="Quantidade de disparos nesta pasta")
-
-    class Config:
-        from_attributes = True
-
-class TriggerFolderMove(BaseModel):
-    folder_id: Optional[int] = Field(None, description="ID da pasta destino, ou null para remover da pasta")
-
-class TriggerFolderBulkMove(BaseModel):
-    ids: List[int] = Field(..., description="Lista de IDs de disparos a mover")
-    folder_id: Optional[int] = Field(None, description="ID da pasta destino, ou null para remover da pasta")
-
-# --- Trigger Schemas ---
-
-class ScheduledTriggerBase(BaseModel):
-    funnel_id: Optional[int] = Field(None, description="ID do funil a ser executado")
-    conversation_id: Optional[int] = Field(None, description="ID da conversa no Chatwoot")
-    scheduled_time: Optional[datetime] = Field(None, description="Data/Hora agendada para execução")
-    max_dispatch_time: Optional[datetime] = Field(None, description="Data/Hora limite para envio/expiração do disparo")
-    status: str = Field("pending", description="Status do agendamento (pending, queued, processing, completed, cancelled, failed)")
-    contact_name: Optional[str] = None
-    contact_phone: Optional[str] = None
-
-class ScheduledTrigger(ScheduledTriggerBase):
-    id: int
-    created_at: datetime
-    funnel: Optional[Funnel] = None
-    interaction_funnel_id: Optional[int] = None
-    block_funnel_id: Optional[int] = None
-    interaction_funnel: Optional[Funnel] = None
-    block_funnel: Optional[Funnel] = None
-    waba_card_last4: Optional[str] = Field(None, description="Últimos 4 dígitos do cartão de crédito WABA vinculado")
-    
-    # Bulk send fields
-    is_bulk: bool = Field(False, description="Indica se faz parte de um envio em massa")
-    template_name: Optional[str] = Field(None, description="Nome do template WhatsApp (se aplicável)")
-    template_category: Optional[str] = Field(None, description="Categoria do template: MARKETING, UTILITY ou AUTHENTICATION")
-    private_message: Optional[str] = Field(None, description="Mensagem privada para o Chatwoot")
-    private_message_delay: int = 5
-    private_message_concurrency: int = 1
-    total_sent: int = 0
-    total_failed: int = 0
-    total_contacts: int = 0
-    contacts_list: Optional[List[Union[dict, str]]] = Field(None, description="Lista de contatos alvo (para validação)")
-    delay_seconds: int = Field(5, description="Intervalo entre envios (bulk)")
-    concurrency_limit: int = 1
-    cost_per_unit: float = 0.0
-    total_cost: float = 0.0
-    total_delivered: int = 0
-    total_read: int = 0
-    total_interactions: int = 0
-    total_blocked: int = 0
-    total_skipped: int = 0
-    queue_count: Optional[int] = 0
-    total_memory_sent: int = 0
-    
-    # New Field
-    current_step_index: Optional[int] = Field(0, description="Índice do último passo executado no funil")
-    current_node_id: Optional[str] = Field(None, description="ID do nó atual no grafo")
-    label_added: bool = False
-    publish_external_event: bool = False
-    processed_contacts: Optional[List[str]] = []
-    pending_contacts: Optional[List[str]] = []
-    failure_reason: Optional[str] = None
-    event_type: Optional[str] = None
-    integration_id: Optional[str] = None
-    is_free_message: bool = False
-    is_interaction: bool = False
-    skip_block_check: bool = False
-    is_followup: bool = Field(False, description="Indica se é um disparo de follow-up")
-    followup_status: Optional[str] = Field(None, description="Status do disparo de follow-up associado")
-    followup_scheduled_time: Optional[datetime] = Field(None, description="Horário de disparo do follow-up associado")
-    sent_as: Optional[str] = None  # Resultado real: 'FREE_MESSAGE' (grátis) ou 'TEMPLATE' (pago)
-    is_recurring: bool = Field(False, description="Indica se faz parte de uma recorrência")
-    recurring_trigger_id: Optional[int] = Field(None, description="ID da recorrência de origem")
-    chatwoot_label: Optional[List[str]] = Field(default_factory=list)
-    button_actions: Optional[Dict[str, Any]] = None
-    funnel_snapshot: Optional[Union[dict, list]] = None
-    processed_data: Optional[Dict[str, Any]] = None
-    is_stress_test: bool = Field(False, description="Indica se é um disparo de teste de escala (dry-run)")
-    is_pinned: Optional[bool] = Field(False, description="Fixado no topo do histórico de disparos")
-    folder_id: Optional[int] = Field(None, description="ID da pasta em que o disparo está organizado")
-    folder: Optional[TriggerFolder] = Field(None, description="Pasta em que o disparo está organizado")
-    chatwoot_contact_id: Optional[int] = Field(None, description="ID do contato no Chatwoot")
-    chatwoot_account_id: Optional[int] = Field(None, description="ID da conta no Chatwoot")
-    chatwoot_inbox_id: Optional[int] = Field(None, description="ID do inbox no Chatwoot")
-    is_dynamic_label: Optional[bool] = Field(False, description="Indica se o agendamento re-consulta contatos da etiqueta no momento do disparo")
-    dynamic_label_name: Optional[str] = Field(None, description="Nome da etiqueta a ser re-consultada no disparo")
-
-
-    @field_validator('is_pinned', 'is_dynamic_label', mode='before')
-    @classmethod
-    def parse_boolean_fields(cls, v):
-        if v is None:
-            return False
-        return bool(v)
-
-
-    @field_validator('button_actions', mode='before')
-    @classmethod
-    def parse_button_actions(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return v
-        if isinstance(v, list):
-            if not v:
-                return {}
-            return {}
-        if isinstance(v, str):
-            v_trimmed = v.strip()
-            if not v_trimmed:
-                return {}
-            try:
-                parsed = json.loads(v_trimmed)
-                if isinstance(parsed, dict):
-                    return parsed
-            except:
-                pass
-            return {}
-        return {}
-
-    @field_validator('chatwoot_label', mode='before')
-    @classmethod
-    def parse_chatwoot_label(cls, v):
-        from core.utils import robust_extract_labels
-        return robust_extract_labels(v)
-
-    @field_validator('processed_data', mode='before')
-    @classmethod
-    def parse_processed_data(cls, v):
-        if v is None:
-            return {}
-        if isinstance(v, dict):
-            return v
-        if isinstance(v, list):
-            # Corrige o caso do SQLite ou PostgreSQL retornar listas vazias [] para JSON em colunas nulas ou vazias
-            return {}
-        if isinstance(v, str):
-            v_trimmed = v.strip()
-            if not v_trimmed:
-                return {}
-            try:
-                parsed = json.loads(v_trimmed)
-                if isinstance(parsed, dict):
-                    return parsed
-            except:
-                pass
-            return {}
-        return {}
-
-    updated_at: Optional[datetime] = None
-    
-    # Nested Funnels
-    parent_id: Optional[int] = None
-    child_count: Optional[int] = 0
-    interaction_child_count: Optional[int] = 0
-    block_child_count: Optional[int] = 0
-    total_private_notes: Optional[int] = 0
-    total_paid_templates: int = 0
-    chatwoot_account_id: Optional[int] = None
-    chatwoot_contact_id: Optional[int] = None
-    chatwoot_inbox_id: Optional[int] = None
-    chatwoot_url: Optional[str] = None
-    execution_history: Optional[List[dict]] = []
-    queue_count: Optional[int] = None
-
-    @field_validator('integration_id', mode='before')
-    @classmethod
-    def coerce_integration_id(cls, v):
-        return str(v) if v is not None else None
-
-    class Config:
-        from_attributes = True
-
-class BulkDeleteRequest(BaseModel):
-    ids: List[int] = Field(..., description="Lista de IDs para exclusão em massa")
-
-class UpdateTriggerParamsRequest(BaseModel):
-    delay_seconds: Optional[int] = None
-    concurrency_limit: Optional[int] = None
-    contacts_list: Optional[List[Any]] = None
-    scheduled_time: Optional[datetime] = None
-
-class MessageStatus(BaseModel):
-    id: int
-    trigger_id: int
-    message_id: Optional[str] = None
-    phone_number: str
-    status: str
-    failure_reason: Optional[str] = None
-    is_interaction: bool = False
-    message_type: Optional[str] = None
-    meta_price_category: Optional[str] = None
-    meta_price_brl: Optional[float] = None
-    content: Optional[str] = None
-    timestamp: datetime
-    updated_at: Optional[datetime] = None
-    
-    # AI Memory Status
-    memory_webhook_status: Optional[str] = None
-    memory_webhook_error: Optional[str] = None
-    
-    # Redirecionamento Chatwoot
-    chatwoot_conversation_id: Optional[int] = None
-    chatwoot_account_id: Optional[int] = None
-    chatwoot_inbox_id: Optional[int] = None
-    chatwoot_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-# --- Recurring Trigger Schemas ---
-
-class RecurringEventListResponse(BaseModel):
-    items: List['RecurringTrigger']
-    total: int
-
-class RecurringTriggerBase(BaseModel):
-    frequency: str = Field(..., description="'weekly' or 'monthly'", example="weekly")
-    days_of_week: Optional[List[dict]] = Field(None, description="e.g. [{'day': 0, 'time': '09:00'}]")
-    day_of_month: Optional[List[Any]] = Field(None, description="e.g. [1, 15] ou [{'day': 1, 'time': '10:00'}]")
-    scheduled_time: Optional[str] = Field(None, description="HH:mm em UTC (fallback)", example="09:00")
-    
-    funnel_id: Optional[int] = None
-    template_name: Optional[str] = None
-    template_language: str = "pt_BR"
-    template_components: Optional[List[dict]] = None
-    
-    contacts_list: Optional[List[Any]] = None
-    tag: Optional[str] = None
-    exclusion_list: Optional[List[str]] = None
-    exclusion_tags: Optional[List[str]] = None
-    exclusion_tag_mode: Optional[str] = "OR"
-    
-    delay_seconds: int = 5
-    concurrency_limit: int = 1
-    
-    private_message: Optional[str] = None
-    private_message_delay: int = 5
-    private_message_concurrency: int = 1
- 
-    direct_message: Optional[str] = None
-    direct_message_params: Optional[List[dict]] = None
- 
-    is_active: bool = True
-    button_actions: Optional[Dict[str, Any]] = None
-
-    @field_validator('button_actions', mode='before')
-    @classmethod
-    def parse_button_actions(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return v
-        if isinstance(v, list):
-            if not v:
-                return {}
-            return {}
-        if isinstance(v, str):
-            v_trimmed = v.strip()
-            if not v_trimmed:
-                return {}
-            try:
-                import json
-                parsed = json.loads(v_trimmed)
-                if isinstance(parsed, dict):
-                    return parsed
-            except:
-                pass
-            return {}
-        return {}
-
-class RecurringTriggerUpdate(BaseModel):
-    frequency: Optional[str] = None
-    days_of_week: Optional[List[dict]] = None
-    day_of_month: Optional[List[Any]] = None
-    scheduled_time: Optional[str] = None
-    is_active: Optional[bool] = None
-    direct_message: Optional[str] = None
-    direct_message_params: Optional[List[dict]] = None
-    
-    # Novos campos para suportar a troca de template/funnel
-    template_name: Optional[str] = None
-    template_language: Optional[str] = None
-    template_components: Optional[List[dict]] = None
-    funnel_id: Optional[int] = None
-    exclusion_list: Optional[List[str]] = None
-    exclusion_tags: Optional[List[str]] = None
-    exclusion_tag_mode: Optional[str] = None
-    button_actions: Optional[Dict[str, Any]] = None
-
-class RecurringTriggerCreate(RecurringTriggerBase):
-    pass
-
-class RecurringTrigger(RecurringTriggerBase):
-    id: int
-    client_id: int
-    last_run_at: Optional[datetime] = None
-    next_run_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class TriggerStats(BaseModel):
-    total_dispatches: int
-    delivered: int
-    delivered_pct: float
-    read: int
-    read_pct: float
-    interactions: int
-    interactions_pct: float
-    total_cost: float
-
-class TriggerListResponse(BaseModel):
-    items: List[ScheduledTrigger]
-    total: int
-    stats: Optional[TriggerStats] = None
-    distinct_templates: Optional[List[str]] = None
-
-# --- WhatsApp Schemas ---
-
-class WhatsAppTemplateRequest(BaseModel):
-    phone_number: str = Field(..., description="Número de destino (formato internacional sem +)", example="5511999999999")
-    template_name: str = Field(..., description="Nome do template aprovado na Meta", example="hello_world")
-    language: Optional[str] = Field("pt_BR", description="Código do idioma", example="pt_BR")
-    components: Optional[List[dict]] = Field(
-        default=[], 
-        description="Componentes para substituir variáveis {{1}}, {{2}}...", 
-        example=[
-            {
-                "type": "body", 
-                "parameters": [
-                    {"type": "text", "text": "João"},
-                    {"type": "text", "text": "1234"}
-                ]
-            }
-        ]
-    )
-class WhatsAppTemplateCreate(BaseModel):
-    name: str = Field(..., description="Nome do template (apenas letras minúsculas e underscores)", example="boas_vindas_campanha")
-    category: str = Field("MARKETING", description="Categoria (MARKETING ou UTILITY)", example="MARKETING")
-    language: str = Field("pt_BR", description="Idioma do template", example="pt_BR")
-    header_type: Optional[str] = Field("NONE", description="Tipo de cabeçalho: NONE, TEXT, IMAGE, VIDEO, DOCUMENT")
-    header_text: Optional[str] = Field(None, description="Texto do cabeçalho (se header_type=TEXT)")
-    header_media_url: Optional[str] = Field(None, description="Link de exemplo para mídia (IMAGE, VIDEO, DOCUMENT)")
-    body_text: str = Field(..., description="Texto do corpo da mensagem (suporta variáveis {{1}}, {{2}}...)")
-    footer_text: Optional[str] = Field(None, description="Texto do rodapé")
-    buttons: Optional[List[dict]] = Field(default=[], description="Lista de botões [{type: 'QUICK_REPLY', text: 'Sim'}]")
-
-class TemplateTagsUpdate(BaseModel):
-    tags: List[str] = Field(..., description="Lista de tags/etiquetas para o template")
-
-# --- Global Variable Schemas ---
-
-class GlobalVariableBase(BaseModel):
-    name: str = Field(..., description="Nome da variável", example="preco_produto")
-    value: str = Field(..., description="Valor da variável", example="R$ 97,00")
-
-class GlobalVariableCreate(GlobalVariableBase):
-    pass
-
-class GlobalVariable(GlobalVariableBase):
-    id: int
-    client_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-# --- Webhook Integration Schemas ---
-
-class WebhookEventMappingBase(BaseModel):
-    event_type: str = Field(..., description="Tipo do evento (ex: pix_gerado, compra_aprovada)")
-    product_name: Optional[str] = Field(None, description="Filtrar por nome do produto / curso")
-    template_id: Optional[Union[str, int]] = Field(None, description="ID do template (BigInt da Meta)")
-    template_name: Optional[str] = Field(None, description="Nome do template")
-    delay_minutes: Optional[int] = Field(0, description="Minutos de atraso")
-    delay_seconds: Optional[int] = Field(0, description="Segundos de atraso")
-    variables_mapping: Optional[Union[dict, list]] = Field(default_factory=list, description="Mapeamento de variáveis {{1}}: 'nome' ou lista de objetos")
-    private_note: Optional[str] = Field(None, description="Nota interna para criação na conversa (Chatwoot)")
-    cancel_events: Optional[List[str]] = Field(None, description="Eventos a cancelar quando este dispara (Legado)")
-    cancel_pending_on_trigger: Optional[bool] = Field(False, description="Ativar interrupção inteligente")
-    cancel_event_types: Optional[List[str]] = Field(None, description="Tipos de eventos a cancelar")
-    chatwoot_label: Optional[List[str]] = Field(default_factory=list, description="Lista de etiquetas a serem adicionadas na conversa (Chatwoot)")
-    internal_tags: Optional[str] = Field(None, description="Etiquetas internas do contato (ZapVoice)")
-    publish_external_event: Optional[bool] = Field(False, description="Publicar evento externo (RabbitMQ) no ato da entrega")
-    send_as_free_message: Optional[bool] = Field(False, description="Se verdadeiro, envia como mensagem livre (sessão)")
-    funnel_id: Optional[int] = Field(None, description="ID do funil a ser disparado")
-    template_language: Optional[str] = Field("pt_BR", description="Idioma do template")
-    template_components: Optional[List[dict]] = Field(None, description="Componentes dinâmicos do template")
-    trigger_once: Optional[bool] = Field(False, description="Disparar apenas uma vez por contato/integração/evento")
-    manychat_active: Optional[bool] = Field(False, description="Sincronizar contato com ManyChat")
-    manychat_name: Optional[str] = Field(None, description="Campo dinâmico nome ManyChat")
-    manychat_phone: Optional[str] = Field(None, description="Campo dinâmico telefone ManyChat")
-    manychat_tag: Optional[str] = Field(None, description="Tag para adicionar no ManyChat")
-    manychat_start_date: Optional[datetime] = Field(None, description="Data de início para a etiqueta alternativa")
-    manychat_tag_alternative: Optional[str] = Field(None, description="Etiqueta alternativa a aplicar a partir da data de início")
-    manychat_tag_automation: Optional[bool] = Field(False, description="Ativar automação de tag dinâmica")
-    manychat_tag_include_date: Optional[bool] = Field(True, description="Incluir data DD-MM-YYYY na etiqueta")
-    manychat_tag_prefix: Optional[str] = Field(None, description="Prefixo da tag dinâmica")
-    manychat_tag_rotation_time: Optional[str] = Field("08:00", description="Horário de rotação (HH:mm)")
-    manychat_tag_rotation_day: Optional[int] = Field(4, description="Dia da semana da rotação (0-6)")
-    
-    followup_active: Optional[bool] = Field(False, description="Ativar mensagem de follow-up")
-    followup_template_name: Optional[str] = Field(None, description="Nome do template de follow-up")
-    followup_template_id: Optional[Union[str, int]] = Field(None, description="ID do template de follow-up")
-    followup_delay_value: Optional[int] = Field(0, description="Valor do atraso do follow-up")
-    followup_delay_unit: Optional[str] = Field("minutes", description="Unidade do atraso do follow-up (minutes, hours)")
-    followup_variables_mapping: Optional[Union[dict, list]] = Field(default_factory=list, description="Mapeamento de variáveis do template de follow-up")
-    followup_business_hours_active: Optional[bool] = Field(False, description="Ativar restrição de horário comercial para o follow-up")
-    followup_business_hours_start: Optional[str] = Field("08:00", description="Horário inicial comercial do follow-up")
-    followup_business_hours_end: Optional[str] = Field("18:00", description="Horário final comercial do follow-up")
-    followup_business_hours_days: Optional[List[int]] = Field(default_factory=lambda: [0, 1, 2, 3, 4], description="Dias da semana permitidos para o follow-up")
-    
-    update_contact_on_trigger: Optional[bool] = Field(True, description="Atualizar/criar contato na aba Contatos quando o gatilho disparar")
-    contact_save_fields: Optional[List[str]] = Field(None, description="Campos a salvar no contato (None = padrão)")
-    button_actions: Optional[Dict[str, Any]] = Field(None, description="Ações de botões do template")
-
-    is_active: Optional[bool] = Field(True, description="Indica se o mapeamento está ativo")
-
-    @field_validator('button_actions', mode='before')
-    @classmethod
-    def parse_button_actions_mapping(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return v
-        if isinstance(v, list):
-            return {}
-        if isinstance(v, str):
-            try:
-                import json
-                return json.loads(v)
-            except Exception:
-                return {}
-        return v
-
-    @field_validator('funnel_id', 'template_id', 'followup_template_id', mode='before')
-    @classmethod
-    def coerce_empty_string_to_none(cls, v):
-        if v == "" or str(v).strip().lower() in ["none", "null", "undefined"]:
-            return None
-        return v
-
-    @field_validator('chatwoot_label', mode='before')
-    @classmethod
-    def validate_list_or_string(cls, v):
-        from core.utils import robust_extract_labels
-        return robust_extract_labels(v)
-
-    @field_validator('cancel_event_types', mode='before')
-    @classmethod
-    def validate_cancel_event_types(cls, v):
-        if v is None:
-            return []
-        if isinstance(v, list):
-            return v
-        if isinstance(v, str):
-            v_trimmed = v.strip()
-            if not v_trimmed:
-                return []
-            if v_trimmed.startswith('['):
-                try:
-                    return json.loads(v_trimmed)
-                except:
-                    return [v_trimmed]
-            return [v_trimmed]
-        return []
-
-    @field_validator('cancel_events', mode='before')
-    @classmethod
-    def validate_cancel_events(cls, v):
-        if v is None:
-            return []
-        if isinstance(v, list):
-            return v
-        if isinstance(v, str):
-            v_trimmed = v.strip()
-            if not v_trimmed:
-                return []
-            if v_trimmed.startswith('['):
-                try:
-                    return json.loads(v_trimmed)
-                except:
-                    return [v_trimmed]
-            return [v_trimmed]
-        return []
-
-class WebhookEventMappingCreate(WebhookEventMappingBase):
-    pass
-
-class WebhookEventMapping(WebhookEventMappingBase):
-    id: int
-    integration_id: UUID
-    
-    class Config:
-        from_attributes = True
-
-class WebhookIntegrationBase(BaseModel):
-    name: str = Field(..., description="Nome da integração")
-    platform: str = Field(..., description="Plataforma (hotmart, eduzz, etc)")
-    status: Optional[str] = Field("active")
-    custom_fields_mapping: Optional[dict] = Field({}, description="Mapeamento de campos customizados {nome_campo: caminho_json}")
-    custom_slug: Optional[str] = Field(None, description="Slug personalizado para a URL do webhook (ex: minha-loja-hotmart)")
-    product_filtering: Optional[bool] = Field(False, description="Ativar filtragem por produto")
-    product_whitelist: Optional[List[str]] = Field(default_factory=list, description="Lista de produtos permitidos")
-    discovered_products: Optional[List[str]] = Field(default_factory=list, description="Lista de produtos descobertos no histórico")
-    upsell_products: Optional[List[str]] = Field(default_factory=list, description="Lista de produtos que devem ser tratados como Upsell")
-
-class WebhookIntegrationCreate(WebhookIntegrationBase):
-    mappings: Optional[List[WebhookEventMappingCreate]] = []
-
-class WebhookIntegration(WebhookIntegrationBase):
-    id: UUID
-    client_id: int
-    created_at: datetime
-    mappings: List[WebhookEventMapping] = []
-    history_count: Optional[int] = 0
-
-    class Config:
-        from_attributes = True
-
-class WebhookHistoryBase(BaseModel):
-    payload: dict
-    event_type: Optional[str] = None
-    status: str
-    error_message: Optional[str] = None
-    processed_data: Optional[dict] = None
-    duplicate_count: int = 0
-    created_at: datetime
-
-class WebhookHistory(WebhookHistoryBase):
-    id: int
-    integration_id: UUID
-    
-    class Config:
-        from_attributes = True
-
-# --- Webhook Lead Schemas ---
-
-class WebhookLeadBase(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    bsud: Optional[str] = None
-    email: Optional[str] = None
-    last_event_type: Optional[str] = None
-    last_event_at: Optional[datetime] = None
-    product_name: Optional[str] = None
-    platform: Optional[str] = None
-    payment_method: Optional[str] = None
-    price: Optional[str] = None
-    tags: Optional[str] = None
-    total_events: int = 1
-    last_template_name: Optional[str] = None
-    last_template_dispatched_at: Optional[datetime] = None
-    is_locked: bool = False
-    variables: Optional[Dict[str, Any]] = None
-    google_calendar_link: Optional[str] = None
-    event_datetime: Optional[datetime] = None
-    google_calendar_reminder_sent: Optional[bool] = False
-    imported_by_client_id: Optional[int] = None
-    imported_by_name: Optional[str] = None
-    project_id: Optional[int] = None
-
-    # Bloqueio real (BlockedContact) e repouso temporário (RestingContact) —
-    # não confundir com is_locked, que é só proteção contra exclusão.
-    is_really_blocked: bool = False
-    resting_expires_at: Optional[datetime] = None
-    reminder_dispatch_status: Optional[str] = None
-    reminder_dispatch_interaction: Optional[bool] = False
-    reminder_dispatch_failure_reason: Optional[str] = None
-
-    @field_validator('variables', mode='before')
-    @classmethod
-    def parse_variables(cls, v):
-        if v is None:
-            return {}
-        if isinstance(v, dict):
-            return v
-        if isinstance(v, (list, str)):
-            if not v:
-                return {}
-            if isinstance(v, str):
-                try:
-                    parsed = json.loads(v)
-                    if isinstance(parsed, dict):
-                        return parsed
-                except:
-                    pass
-            return {}
-        return {}
-
-    # Redirecionamento Chatwoot
-    chatwoot_conversation_id: Optional[int] = None
-    chatwoot_account_id: Optional[int] = None
-    chatwoot_inbox_id: Optional[int] = None
-    chatwoot_url: Optional[str] = None
-
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-class WebhookLead(WebhookLeadBase):
-    id: int
-    client_id: int
-
-    class Config:
-        from_attributes = True
-
-class WebhookLeadCreate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: str = Field(..., description="Telefone do contato (apenas números)")
-    tags: Optional[str] = None
-
-class WebhookLeadUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    tags: Optional[str] = None
-    is_locked: Optional[bool] = None
-    variables: Optional[Dict[str, Any]] = None
-    google_calendar_link: Optional[str] = None
-    event_datetime: Optional[datetime] = None
-    google_calendar_reminder_sent: Optional[bool] = None
-    product_name: Optional[str] = None
-    payment_method: Optional[str] = None
-    price: Optional[str] = None
-    platform: Optional[str] = None
-
-class WebhookLeadPublicUpsert(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    google_calendar_link: Optional[str] = None
-    event_datetime: Optional[datetime] = None
-    google_calendar_reminder_sent: Optional[bool] = False
-    tags: Optional[str] = None
-    product_name: Optional[str] = None
-    payment_method: Optional[str] = None
-    price: Optional[str] = None
-    platform: Optional[str] = "public_api"
-    variables: Optional[Dict[str, Any]] = None
-
-    class Config:
-        extra = "ignore"
-
-class WebhookLeadListResponse(BaseModel):
-    items: List[WebhookLead]
-    total: int
-
-
-class HotLead(BaseModel):
-    id: int
-    client_id: int
-    contact_name: Optional[str] = None
-    contact_phone: str
-    alert_name: str
-    priority: str
-    context_message: Optional[str] = None
-    assigned_user_id: Optional[int] = None
-    assigned_user_name: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class HotLeadUpdate(BaseModel):
-    priority: Optional[str] = None
-    assigned_user_id: Optional[int] = None
-
-
-class HotLeadListResponse(BaseModel):
-    items: List[HotLead]
-    total: int
-
-# --- Checkout Presell Schemas ---
-
-class CheckoutConfigBase(BaseModel):
-    slug: str = Field(..., example="mentoria-vip")
-    title: str = Field(default="Aplicação Mentoria", example="Aplicação Mentoria")
-    description: Optional[str] = Field(default="Preencha seus dados para continuar com sua aplicação", example="Preencha seus dados para continuar com sua aplicação")
-    badge_text: Optional[str] = Field(default="⚡ Vagas Limitadas", example="⚡ Vagas Limitadas")
-    destination_url: str = Field(..., example="https://pay.kiwify.com.br/sample")
-    tag_name: Optional[str] = Field(default="Checkout Presell", example="Lead Mentoria")
-    page_tab_title: Optional[str] = Field(default="Aplicação Mentoria", example="Aplicação Mentoria VIP")
-    button_text: Optional[str] = Field(default="Continuar com Aplicação →", example="Continuar com Aplicação →")
-
-class CheckoutConfigCreate(CheckoutConfigBase):
-    pass
-
-class CheckoutConfigResponse(CheckoutConfigBase):
-    id: int
-    client_id: int
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-class CheckoutLeadCreate(BaseModel):
-    name: str = Field(..., example="João Silva")
-    email: str = Field(..., example="joao@exemplo.com")
-    phone: str = Field(..., example="5511999999999")
-
-class CheckoutLeadResponse(BaseModel):
-    id: int
-    client_id: int
-    config_id: int
-    name: str
-    email: str
-    phone: str
-    tag_name: Optional[str] = None
-    has_chat: Optional[bool] = False
-    conversation_id: Optional[int] = None
-    created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-class CheckoutLeadListResponse(BaseModel):
-    items: List[CheckoutLeadResponse]
-    total: int
-
+"""
+ZapVoice - Central de Schemas Pydantic.
+Módulo orquestrador e ponto de entrada compatível para validação de dados da API.
+A lógica detalhada de cada domínio está dividida em `schemas_domain/`.
+"""
+
+from schemas_domain import (
+    # Funnels
+    FunnelStep,
+    FunnelBase,
+    FunnelCreate,
+    Funnel,
+    FunnelBulkDelete,
+    FunnelBulkArchive,
+    FunnelBulkTag,
+    # Folders
+    TriggerFolderBase,
+    TriggerFolderCreate,
+    TriggerFolderUpdate,
+    TriggerFolder,
+    TriggerFolderMove,
+    TriggerFolderBulkMove,
+    # Triggers
+    ScheduledTriggerBase,
+    ScheduledTrigger,
+    BulkDeleteRequest,
+    UpdateTriggerParamsRequest,
+    MessageStatus,
+    TriggerStats,
+    TriggerListResponse,
+    # Recurring
+    RecurringTriggerBase,
+    RecurringTriggerUpdate,
+    RecurringTriggerCreate,
+    RecurringTrigger,
+    RecurringEventListResponse,
+    # WhatsApp
+    WhatsAppTemplateRequest,
+    WhatsAppTemplateCreate,
+    TemplateTagsUpdate,
+    # Globals
+    GlobalVariableBase,
+    GlobalVariableCreate,
+    GlobalVariable,
+    # Webhooks
+    WebhookEventMappingBase,
+    WebhookEventMappingCreate,
+    WebhookEventMapping,
+    WebhookIntegrationBase,
+    WebhookIntegrationCreate,
+    WebhookIntegration,
+    WebhookHistoryBase,
+    WebhookHistory,
+    # Leads
+    WebhookLeadBase,
+    WebhookLead,
+    WebhookLeadCreate,
+    WebhookLeadUpdate,
+    WebhookLeadPublicUpsert,
+    WebhookLeadListResponse,
+    HotLead,
+    HotLeadUpdate,
+    HotLeadListResponse,
+    # Checkout
+    CheckoutConfigBase,
+    CheckoutConfigCreate,
+    CheckoutConfigResponse,
+    CheckoutLeadCreate,
+    CheckoutLeadResponse,
+    CheckoutLeadListResponse,
+)
+
+__all__ = [
+    # Funnels
+    "FunnelStep",
+    "FunnelBase",
+    "FunnelCreate",
+    "Funnel",
+    "FunnelBulkDelete",
+    "FunnelBulkArchive",
+    "FunnelBulkTag",
+    # Folders
+    "TriggerFolderBase",
+    "TriggerFolderCreate",
+    "TriggerFolderUpdate",
+    "TriggerFolder",
+    "TriggerFolderMove",
+    "TriggerFolderBulkMove",
+    # Triggers
+    "ScheduledTriggerBase",
+    "ScheduledTrigger",
+    "BulkDeleteRequest",
+    "UpdateTriggerParamsRequest",
+    "MessageStatus",
+    "TriggerStats",
+    "TriggerListResponse",
+    # Recurring
+    "RecurringTriggerBase",
+    "RecurringTriggerUpdate",
+    "RecurringTriggerCreate",
+    "RecurringTrigger",
+    "RecurringEventListResponse",
+    # WhatsApp
+    "WhatsAppTemplateRequest",
+    "WhatsAppTemplateCreate",
+    "TemplateTagsUpdate",
+    # Globals
+    "GlobalVariableBase",
+    "GlobalVariableCreate",
+    "GlobalVariable",
+    # Webhooks
+    "WebhookEventMappingBase",
+    "WebhookEventMappingCreate",
+    "WebhookEventMapping",
+    "WebhookIntegrationBase",
+    "WebhookIntegrationCreate",
+    "WebhookIntegration",
+    "WebhookHistoryBase",
+    "WebhookHistory",
+    # Leads
+    "WebhookLeadBase",
+    "WebhookLead",
+    "WebhookLeadCreate",
+    "WebhookLeadUpdate",
+    "WebhookLeadPublicUpsert",
+    "WebhookLeadListResponse",
+    "HotLead",
+    "HotLeadUpdate",
+    "HotLeadListResponse",
+    # Checkout
+    "CheckoutConfigBase",
+    "CheckoutConfigCreate",
+    "CheckoutConfigResponse",
+    "CheckoutLeadCreate",
+    "CheckoutLeadResponse",
+    "CheckoutLeadListResponse",
+]

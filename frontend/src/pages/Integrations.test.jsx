@@ -216,22 +216,22 @@ describe('Integrations Page Interactions', () => {
     expect(mappingDropdown).toBeDefined();
 
     await waitFor(() => {
-      expect(screen.getByText(/compra_aprovada|compra aprovada/i)).toBeInTheDocument();
-      expect(screen.getAllByText(/evento_desconhecido|evento não detectado/i)[0]).toBeInTheDocument();
+      expect(screen.getAllByText(/compra_aprovada|compra aprovada/i).length).toBeGreaterThan(1);
+      expect(screen.getAllByText(/evento_desconhecido|evento não detectado/i).length).toBeGreaterThan(1);
     }, { timeout: 20000 });
 
     fireEvent.change(mappingDropdown, { target: { value: 'mapped' } });
 
     await waitFor(() => {
-      expect(screen.getByText(/compra_aprovada|compra aprovada/i)).toBeInTheDocument();
-      expect(screen.queryByText(/evento_desconhecido|evento não detectado/i)).not.toBeInTheDocument();
+      expect(screen.getAllByText(/compra_aprovada|compra aprovada/i).length).toBeGreaterThan(1);
+      expect(screen.getAllByText(/evento_desconhecido|evento não detectado/i).length).toBe(1);
     });
 
     fireEvent.change(mappingDropdown, { target: { value: 'unmapped' } });
 
     await waitFor(() => {
-      expect(screen.queryByText(/compra_aprovada|compra aprovada/i)).not.toBeInTheDocument();
-      expect(screen.getAllByText(/evento_desconhecido|evento não detectado/i)[0]).toBeInTheDocument();
+      expect(screen.getAllByText(/compra_aprovada|compra aprovada/i).length).toBe(1);
+      expect(screen.getAllByText(/evento_desconhecido|evento não detectado/i).length).toBeGreaterThan(1);
     });
 
   });
