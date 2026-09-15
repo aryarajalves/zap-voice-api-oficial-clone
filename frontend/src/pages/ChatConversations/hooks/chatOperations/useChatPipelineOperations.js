@@ -51,10 +51,33 @@ export function useChatPipelineOperations({ selectedConvo, activeClient }) {
         }
     };
 
+    const handleOpenPipelineByTriggerId = async (triggerId) => {
+        if (!triggerId) {
+            toast.error("Identificador do funil não encontrado.");
+            return;
+        }
+        setIsLoadingPipeline(true);
+        try {
+            const res = await fetchWithAuth(`${API_URL}/triggers/${triggerId}`, {}, activeClient?.id);
+            if (res.ok) {
+                const data = await res.json();
+                setPipelineTrigger(data);
+                return;
+            }
+            setPipelineTrigger({ id: triggerId });
+        } catch (err) {
+            console.error("Erro ao carregar pipeline por ID:", err);
+            setPipelineTrigger({ id: triggerId });
+        } finally {
+            setIsLoadingPipeline(false);
+        }
+    };
+
     return {
         pipelineTrigger,
         setPipelineTrigger,
         isLoadingPipeline,
-        handleOpenActiveFunnelPipeline
+        handleOpenActiveFunnelPipeline,
+        handleOpenPipelineByTriggerId
     };
 }

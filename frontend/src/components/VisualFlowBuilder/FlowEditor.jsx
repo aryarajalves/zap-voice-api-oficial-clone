@@ -21,6 +21,10 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
         showKeywords, setShowKeywords,
         triggerPhrase, setTriggerPhrase, triggerMatchType, setTriggerMatchType,
         triggerLimitType, setTriggerLimitType, isTriggerActive, setIsTriggerActive,
+        triggerOnNewConversation, setTriggerOnNewConversation,
+        triggerNewConversationMode, setTriggerNewConversationMode,
+        showNewConversation, setShowNewConversation,
+        currentFunnelId, otherActiveFunnel,
         globalVars, nodeToDelete, menu, setMenu, reactFlowWrapper,
         onNodesChange, onEdgesChange, onConnect, onConnectStart, onConnectEnd,
         onPaneContextMenu, onPaneClick, handleAddNode, handleSave, confirmDelete, cancelDelete
@@ -65,6 +69,11 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
                         triggerMatchType={triggerMatchType} setTriggerMatchType={setTriggerMatchType}
                         triggerLimitType={triggerLimitType} setTriggerLimitType={setTriggerLimitType}
                         isTriggerActive={isTriggerActive} setIsTriggerActive={setIsTriggerActive}
+                        triggerOnNewConversation={triggerOnNewConversation} setTriggerOnNewConversation={setTriggerOnNewConversation}
+                        triggerNewConversationMode={triggerNewConversationMode} setTriggerNewConversationMode={setTriggerNewConversationMode}
+                        showNewConversation={showNewConversation} setShowNewConversation={setShowNewConversation}
+                        currentFunnelId={currentFunnelId}
+                        otherActiveFunnel={otherActiveFunnel}
                     />
 
                     <ControlsPanel

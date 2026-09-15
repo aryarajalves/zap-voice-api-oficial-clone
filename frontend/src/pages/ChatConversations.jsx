@@ -276,6 +276,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     handleToggleStarMessage={chatOps.handleToggleStarMessage}
                                     handleCopyMessageContent={chatOps.handleCopyMessageContent}
                                     handleDeleteMessage={noteAndAi.handleDeleteNoteMsg}
+                                    onOpenPipelineByTriggerId={chatOps.handleOpenPipelineByTriggerId}
+                                    onRetryTemplateMessage={chatOps.handleRetryTemplateMessage}
                                 />
 
                                 <ActiveChatInput

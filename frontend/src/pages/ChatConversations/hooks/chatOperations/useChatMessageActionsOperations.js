@@ -96,10 +96,45 @@ export function useChatMessageActionsOperations({ selectedConvo, setSelectedConv
         }
     };
 
+    const handleRetryTemplateMessage = async (msg) => {
+        if (!selectedConvo || !msg || !activeClient) return false;
+        try {
+            const res = await fetchWithAuth(
+                `${API_URL}/chat/conversations/${selectedConvo.id}/messages/${msg.id}/retry-template`,
+                { method: 'POST' },
+                activeClient.id
+            );
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message || 'Template redisparado com sucesso!');
+                engine.setMessages(prev => prev.map(m => {
+                    if (m.id === msg.id) {
+                        const curMeta = { ...(m.meta_data || {}) };
+                        curMeta.status = 'sent';
+                        delete curMeta.failure_reason;
+                        curMeta.can_retry = false;
+                        return { ...m, meta_data: curMeta, wa_message_id: data.wa_message_id || m.wa_message_id };
+                    }
+                    return m;
+                }));
+                return true;
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                toast.error(errData.detail || 'Erro ao redisparar template.');
+                return false;
+            }
+        } catch (err) {
+            console.error('Erro ao redisparar template:', err);
+            toast.error('Falha de rede ao redisparar template.');
+            return false;
+        }
+    };
+
     return {
         handleTogglePinMessage,
         handleToggleStarMessage,
         handleCopyMessageContent,
-        handleResendToAgentFlow
+        handleResendToAgentFlow,
+        handleRetryTemplateMessage
     };
 }

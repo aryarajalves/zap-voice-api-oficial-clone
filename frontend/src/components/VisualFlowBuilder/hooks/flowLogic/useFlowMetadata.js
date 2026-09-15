@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 
 export const useFlowMetadata = () => {
     // Funnel Metadata State
@@ -20,6 +20,11 @@ export const useFlowMetadata = () => {
     const [businessHoursDays, setBusinessHoursDays] = useState([0, 1, 2, 3, 4]);
     const [showBusinessHours, setShowBusinessHours] = useState(false);
 
+    // New Conversation Trigger State
+    const [triggerOnNewConversation, setTriggerOnNewConversation] = useState(false);
+    const [triggerNewConversationMode, setTriggerNewConversationMode] = useState('all');
+    const [showNewConversation, setShowNewConversation] = useState(false);
+
     return {
         funnelName, setFunnelName,
         allowedPhones, setAllowedPhones,
@@ -33,6 +38,9 @@ export const useFlowMetadata = () => {
         businessHoursStart, setBusinessHoursStart,
         businessHoursEnd, setBusinessHoursEnd,
         businessHoursDays, setBusinessHoursDays,
-        showBusinessHours, setShowBusinessHours
+        showBusinessHours, setShowBusinessHours,
+        triggerOnNewConversation, setTriggerOnNewConversation,
+        triggerNewConversationMode, setTriggerNewConversationMode,
+        showNewConversation, setShowNewConversation
     };
 };

@@ -16,6 +16,8 @@ class Funnel(Base):
     trigger_match_type = Column(String, nullable=True, default="contains")
     trigger_limit_type = Column(String, nullable=True, default="none")
     is_trigger_active = Column(Boolean, default=True, nullable=False)
+    trigger_on_new_conversation = Column(Boolean, default=False, nullable=False)
+    trigger_new_conversation_mode = Column(String, default="all", nullable=True)
     allowed_phone = Column(String, nullable=True)
     allowed_phones = Column(JSON, nullable=True)
     blocked_phones = Column(JSON, nullable=True)

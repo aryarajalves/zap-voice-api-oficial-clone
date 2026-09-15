@@ -53,6 +53,21 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 - **Filtro de Visibilidade**: A aba/calendário de Agendamentos exibe **exclusivamente** os disparos em massa agendados e os agendamentos diretos de funis principais criados pelo usuário.
 - **Ocultação de Nós de Delay de Funil**: Execuções individuais de contatos navegando em nós de delay dentro de um funil (`current_node_id`, `contact_phone`, `parent_id` ou `HIDDEN_CHILD`) **não são exibidas no calendário de agendamentos** para evitar poluição visual e manter a clareza da agenda.
 
+### 10. Unicidade do Gatilho de Nova Conversa no Chat
+- **Regra de Exclusividade**: Apenas **1 único funil** por cliente (`client_id`) pode ter o gatilho `trigger_on_new_conversation = True` ativo simultaneamente.
+- **Prevenção de Duplicações**: Para evitar conflitos de automação, disparos concorrentes ou loops de mensagens para o mesmo lead quando uma conversa nova for iniciada ou reaberta no Chat:
+  - O painel do editor (`MetadataPanel`) desabilita a opção em outros funis e exibe aviso de bloqueio informando o nome do funil atualmente ativo.
+  - A API (`routers/funnels.py`) valida e rejeita (`HTTP 400`) qualquer tentativa de criação ou atualização que tente ativar o gatilho caso outro funil já o detenha.
+  - Para transferir o gatilho para outro funil, o usuário deve primeiro desmarcar e salvar no funil atualmente ativo.
+
+### 11. Notificação de Início de Funil e Visualização de Pipeline no Chat
+- **Registro Automático na Conversa**: Sempre que um funil for iniciado para um contato (por Nova Conversa, Palavra-chave ou Disparo Manual), uma mensagem de sistema (`message_type='funnel_event'`) é criada na conversa com os metadados do disparo (`trigger_id`, `funnel_id`, `funnel_name`).
+- **Botão "Ver Pipeline do Funil"**: A notificação no chat conta com um botão de ação rápida que abre o modal da Pipeline (`AutomationPipelineModal`), permitindo ao operador auditar visualmente a árvore de execução, os nós processados e as etiquetas atribuídas ao lead.
+
+### 12. Redisparo Imediato de Templates com Falha na Conversa
+- **Identificação Visual de Falhas**: Se a Meta rejeitar o envio do template ou reportar status `failed` (ex: serviço temporariamente indisponível), o balão da mensagem no chat exibe o alerta de erro detalhado.
+- **Botão "▶ Disparar Novamente"**: Disponibiliza um botão de reenvio com feedback em tempo real. O backend limpa o histórico restritivo de 24 horas para aquele template e contato e realiza uma nova tentativa de envio via Meta API, atualizando o status da mensagem sem necessidade de recarregar a tela.
+
 ---
 
 ## 🖥️ Detalhamento das Telas e UX

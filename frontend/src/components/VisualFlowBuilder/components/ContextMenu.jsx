@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     FiMessageSquare, FiImage, FiMic, FiClock, FiCpu, 
     FiShuffle, FiLink, FiTag, FiUser, FiCalendar, 
-    FiGlobe, FiGift, FiTarget, FiSearch, FiSliders, FiZap, FiFileText, FiDatabase
+    FiGlobe, FiGift, FiTarget, FiSearch, FiSliders, FiZap, FiFileText, FiDatabase, FiGitBranch
 } from 'react-icons/fi';
 import { useAuth } from '../../../AuthContext';
 
@@ -115,6 +115,15 @@ const ContextMenu = ({ top, left, onClose, onAddNode }) => {
         },
 
         // --- LÓGICA E DIRECIONAMENTO ---
+        {
+            type: 'newConversationNode',
+            label: 'Gatilho: Nova Conversa (Switch)',
+            category: 'Lógica',
+            icon: FiGitBranch,
+            colorClass: 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-200',
+            hoverBg: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600',
+            keywords: ['gatilho', 'nova conversa', 'switch', 'swatch', 'primeira mensagem', 'chat', 'inicio', 'roteamento']
+        },
         {
             type: 'conditionNode',
             label: 'Condição',

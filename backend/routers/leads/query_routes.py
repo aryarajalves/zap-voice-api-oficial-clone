@@ -121,6 +121,9 @@ def list_leads(
             query = query.filter(or_(*(models.WebhookLead.phone.like(f"%{s}") for s in resting_suffix_map.keys())))
         else:
             query = query.filter(models.WebhookLead.id == -1)
+    elif block_status in ('unblocked', 'not_blocked'):
+        if blocked_suffixes:
+            query = query.filter(~or_(*(models.WebhookLead.phone.like(f"%{s}") for s in blocked_suffixes)))
 
     total = query.count()
     items = query.order_by(desc(models.WebhookLead.updated_at)).offset(skip).limit(limit).all()
@@ -473,6 +476,8 @@ def export_leads_csv(
                 is_resting = suffix in resting_suffix_map
 
                 if block_status == 'normal' and not is_blocked and not is_resting:
+                    matching_ids.append(lead_obj.id)
+                elif block_status in ('unblocked', 'not_blocked') and not is_blocked:
                     matching_ids.append(lead_obj.id)
                 elif block_status == 'blocked' and is_blocked:
                     matching_ids.append(lead_obj.id)

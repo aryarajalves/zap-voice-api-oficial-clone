@@ -36,8 +36,9 @@ export default function Filters({
   const hasDateFilter = !!datePreset;
 
   const blockStatusOptions = [
-    ...(hasBlockedLeads ? [{ value: 'blocked', label: '🚫 Bloqueados' }] : []),
-    ...(hasRestingLeads ? [{ value: 'resting', label: '😴 Em Repouso' }] : []),
+    { value: 'blocked', label: '🚫 Bloqueados' },
+    { value: 'unblocked', label: '✅ Não Bloqueados' },
+    { value: 'resting', label: '😴 Em Repouso' },
   ];
 
   // Calcular filtros avançados ativos

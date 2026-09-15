@@ -385,6 +385,216 @@ async def evaluate_keyword_triggers(
                 "contact_phone": from_phone
             })
             logger.info(f"🚀 [KEYWORD_TRIGGER] Funil {funnel.id} ('{funnel.name}') ativado para {from_phone} via palavra-chave '{matched_keyword}' (Trigger ID: {new_trigger.id})")
+
+            # Se houver conversa no chat, registrar o evento com pipeline
+            try:
+                clean_p = ''.join(filter(str.isdigit, from_phone))
+                p_suffix = clean_p[-8:] if len(clean_p) >= 8 else clean_p
+                kw_convo = db.query(models.ChatConversation).filter(
+                    models.ChatConversation.client_id == target_cid,
+                    models.ChatConversation.phone.like(f"%{p_suffix}")
+                ).first()
+                if kw_convo:
+                    await record_funnel_started_event_in_chat(
+                        db=db,
+                        client_id=target_cid,
+                        chat_convo_id=kw_convo.id,
+                        funnel_id=funnel.id,
+                        funnel_name=funnel.name,
+                        trigger_id=new_trigger.id
+                    )
+            except Exception as e_kw_c:
+                logger.warning(f"Aviso ao registrar evento de funil no chat por palavra-chave: {e_kw_c}")
+
             break
     except Exception as e_kw:
         logger.error(f"❌ [KEYWORD_TRIGGER] Erro ao processar gatilho de palavra-chave: {e_kw}")
+
+
+async def evaluate_new_conversation_triggers(
+    db,
+    target_cid: int,
+    from_phone: str,
+    raw_from: str,
+    user_input: Optional[str],
+    chat_convo: Optional[models.ChatConversation],
+    resolved_convo_id: Optional[int],
+    contacts_map: dict
+):
+    """
+    Avalia e aciona funis configurados para iniciar em Nova Conversa (trigger_on_new_conversation=True).
+    É disparado quando uma conversa nova é criada ou quando uma conversa resolvida/fechada é reaberta.
+    """
+    if not chat_convo or not getattr(chat_convo, "_is_new_convo", False):
+        return
+
+    try:
+        candidate_funnels = db.query(models.Funnel).filter(
+            models.Funnel.client_id == target_cid,
+            models.Funnel.status == "active",
+            models.Funnel.trigger_on_new_conversation == True
+        ).all()
+
+        if not candidate_funnels:
+            return
+
+        logger.info(f"✨ [NEW_CONVO_TRIGGER] Conversa nova detectada para {from_phone}. Avaliando {len(candidate_funnels)} funis.")
+
+        now_utc = datetime.now(timezone.utc)
+
+        for funnel in candidate_funnels:
+            # 1. Validação de Whitelist / Blacklist se houver
+            if funnel.allowed_phones and isinstance(funnel.allowed_phones, list) and len(funnel.allowed_phones) > 0:
+                allowed_list = ["".join(filter(str.isdigit, str(p))) for p in funnel.allowed_phones if str(p).strip()]
+                if allowed_list and from_phone not in allowed_list:
+                    logger.info(f"🚫 [NEW_CONVO_TRIGGER] Contato {from_phone} fora da Whitelist do Funil {funnel.id}.")
+                    continue
+
+            if funnel.blocked_phones and isinstance(funnel.blocked_phones, list) and len(funnel.blocked_phones) > 0:
+                blocked_list = ["".join(filter(str.isdigit, str(p))) for p in funnel.blocked_phones if str(p).strip()]
+                if blocked_list and from_phone in blocked_list:
+                    logger.info(f"🚫 [NEW_CONVO_TRIGGER] Contato {from_phone} na Blacklist do Funil {funnel.id}.")
+                    continue
+
+            # 2. Validação de Frequência / Trava
+            limit_type = funnel.trigger_limit_type or "none"
+            skip_by_limit = False
+
+            if limit_type == "once_per_day":
+                tz_sp = zoneinfo.ZoneInfo("America/Sao_Paulo")
+                now_sp = datetime.now(tz_sp)
+                start_of_day_sp = now_sp.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_of_day_utc = start_of_day_sp.astimezone(timezone.utc)
+
+                existing_trigger_today = db.query(models.ScheduledTrigger).filter(
+                    models.ScheduledTrigger.client_id == target_cid,
+                    models.ScheduledTrigger.funnel_id == funnel.id,
+                    models.ScheduledTrigger.contact_phone == from_phone,
+                    models.ScheduledTrigger.created_at >= start_of_day_utc,
+                    models.ScheduledTrigger.status.notin_(["failed", "aborted", "error"])
+                ).first()
+                if existing_trigger_today:
+                    logger.info(f"🚫 [NEW_CONVO_LIMIT] Contato {from_phone} já ativou Funil {funnel.id} hoje. Trava diária.")
+                    skip_by_limit = True
+
+            elif limit_type == "once_24h":
+                cutoff_24h = now_utc - timedelta(hours=24)
+                existing_trigger_24h = db.query(models.ScheduledTrigger).filter(
+                    models.ScheduledTrigger.client_id == target_cid,
+                    models.ScheduledTrigger.funnel_id == funnel.id,
+                    models.ScheduledTrigger.contact_phone == from_phone,
+                    models.ScheduledTrigger.created_at >= cutoff_24h,
+                    models.ScheduledTrigger.status.notin_(["failed", "aborted", "error"])
+                ).first()
+                if existing_trigger_24h:
+                    logger.info(f"🚫 [NEW_CONVO_LIMIT] Contato {from_phone} já ativou Funil {funnel.id} nas últimas 24h.")
+                    skip_by_limit = True
+
+            elif limit_type == "once_lifetime":
+                existing_trigger_ever = db.query(models.ScheduledTrigger).filter(
+                    models.ScheduledTrigger.client_id == target_cid,
+                    models.ScheduledTrigger.funnel_id == funnel.id,
+                    models.ScheduledTrigger.contact_phone == from_phone,
+                    models.ScheduledTrigger.status.notin_(["failed", "aborted", "error"])
+                ).first()
+                if existing_trigger_ever:
+                    logger.info(f"🚫 [NEW_CONVO_LIMIT] Contato {from_phone} já ativou Funil {funnel.id} antes. Trava vitalícia.")
+                    skip_by_limit = True
+
+            if skip_by_limit:
+                continue
+
+            # 3. Disparar Funil com contexto da primeira mensagem
+            contact_name_val = contacts_map.get(raw_from, "Contato")
+            first_msg_text = user_input or ""
+            new_trigger = models.ScheduledTrigger(
+                client_id=target_cid,
+                funnel_id=funnel.id,
+                conversation_id=resolved_convo_id,
+                contact_phone=from_phone,
+                contact_name=contact_name_val,
+                status='processing',
+                scheduled_time=now_utc,
+                is_bulk=False,
+                is_interaction=True,
+                processed_data={
+                    "trigger_source": "new_conversation",
+                    "first_message": first_msg_text,
+                    "input": first_msg_text,
+                    "chat_conversation_id": chat_convo.id
+                }
+            )
+            db.add(new_trigger)
+            db.commit()
+            db.refresh(new_trigger)
+
+            await wah.rabbitmq.publish("zapvoice_funnel_executions", {
+                "trigger_id": new_trigger.id,
+                "funnel_id": funnel.id,
+                "conversation_id": resolved_convo_id,
+                "contact_phone": from_phone
+            })
+            logger.info(f"🚀 [NEW_CONVO_TRIGGER] Funil {funnel.id} ('{funnel.name}') ativado para {from_phone} por Nova Conversa (Trigger ID: {new_trigger.id})")
+
+            # Registrar evento de início do funil com acesso à pipeline na conversa
+            await record_funnel_started_event_in_chat(
+                db=db,
+                client_id=target_cid,
+                chat_convo_id=chat_convo.id,
+                funnel_id=funnel.id,
+                funnel_name=funnel.name,
+                trigger_id=new_trigger.id
+            )
+            break
+    except Exception as e_nc:
+        logger.error(f"❌ [NEW_CONVO_TRIGGER] Erro ao processar gatilho de nova conversa: {e_nc}")
+
+
+async def record_funnel_started_event_in_chat(
+    db,
+    client_id: int,
+    chat_convo_id: int,
+    funnel_id: int,
+    funnel_name: str,
+    trigger_id: int
+):
+    """
+    Grava mensagem de sistema na conversa do chat informando o início do funil
+    com os metadados do trigger para possibilitar a visualização da pipeline.
+    """
+    try:
+        now_dt = datetime.now(timezone.utc)
+        chat_msg = models.ChatMessage(
+            conversation_id=chat_convo_id,
+            sender_type="system",
+            message_type="funnel_event",
+            content=f"🚀 Funil \"{funnel_name}\" foi iniciado",
+            meta_data={
+                "is_funnel_event": True,
+                "funnel_id": funnel_id,
+                "funnel_name": funnel_name,
+                "trigger_id": trigger_id,
+                "status": "started"
+            },
+            timestamp=now_dt
+        )
+        db.add(chat_msg)
+        db.commit()
+        db.refresh(chat_msg)
+
+        from rabbitmq_client import rabbitmq
+        payload_ws = {
+            "id": chat_msg.id,
+            "conversation_id": chat_msg.conversation_id,
+            "sender_type": chat_msg.sender_type,
+            "message_type": chat_msg.message_type,
+            "content": chat_msg.content,
+            "meta_data": chat_msg.meta_data,
+            "timestamp": chat_msg.timestamp.isoformat() if chat_msg.timestamp else now_dt.isoformat(),
+            "client_id": client_id
+        }
+        await rabbitmq.publish_event("new_message", payload_ws)
+        logger.info(f"📢 [CHAT-FUNNEL-EVENT] Notificação de funil iniciada registrada na conversa #{chat_convo_id} (Trigger #{trigger_id})")
+    except Exception as e_ev:
+        logger.error(f"❌ [CHAT-FUNNEL-EVENT] Erro ao registrar evento de funil no chat: {e_ev}")
+

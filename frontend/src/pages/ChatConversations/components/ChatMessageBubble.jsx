@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { FiSend } from 'react-icons/fi';
 import { BsPinAngleFill, BsStarFill } from 'react-icons/bs';
 import { renderLinkedText } from '../utils/linkifyText';
@@ -10,6 +10,7 @@ import {
     MessageTemplateHeaderMedia,
     MessageTemplateNotice,
     MessageTemplateButtons,
+    MessageTemplateFailureBanner,
     MessageMediaContent,
     MessageReactionsBadge,
     getReactionsList
@@ -33,12 +34,24 @@ export default function ChatMessageBubble({
     chatInputRef,
     engine,
     highlightedMsgId,
-    onOpenContextMenu
+    onOpenContextMenu,
+    onOpenPipelineByTriggerId,
+    onRetryTemplateMessage
 }) {
     const isSystem = msg.sender_type === 'system';
     const isMe = msg.sender_type === 'user';
     const isHighlighted = highlightedMsgId === msg.id;
     const touchTimerRef = useRef(null);
+    const [isRetryingTemplate, setIsRetryingTemplate] = useState(false);
+
+    const handleRetry = async (targetMsg) => {
+        setIsRetryingTemplate(true);
+        try {
+            await onRetryTemplateMessage?.(targetMsg);
+        } finally {
+            setIsRetryingTemplate(false);
+        }
+    };
 
     if (isSystem) {
         return (
@@ -56,6 +69,7 @@ export default function ChatMessageBubble({
                 formatMessageTimestamp={formatMessageTimestamp}
                 engine={engine}
                 selectedConvo={selectedConvo}
+                onOpenPipelineByTriggerId={onOpenPipelineByTriggerId}
             />
         );
     }
@@ -151,6 +165,15 @@ export default function ChatMessageBubble({
                 {/* Botões interativos do Template */}
                 {isTemplate && (
                     <MessageTemplateButtons buttons={msg.meta_data?.buttons} />
+                )}
+
+                {/* Banner de Falha com Botão para Disparar Novamente o mesmo Template */}
+                {isTemplate && (
+                    <MessageTemplateFailureBanner
+                        msg={msg}
+                        onRetry={handleRetry}
+                        isRetrying={isRetryingTemplate}
+                    />
                 )}
 
                 {/* Rodapé da mensagem: reenvio ao AgentFlow, fixação, estrela e timestamp */}

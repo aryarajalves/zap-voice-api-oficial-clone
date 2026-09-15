@@ -1,4 +1,4 @@
-﻿import { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 
 // Sub-hooks Modulares
 import { useChatConversationsFetch } from './hooks/useChatConversationsFetch';
@@ -172,6 +172,7 @@ export function useChatEngine({
   useChatWebSocketSync({
     activeClient,
     selectedConvo,
+    setSelectedConvo,
     setConversations,
     setMessages,
     setShouldScrollToBottom,

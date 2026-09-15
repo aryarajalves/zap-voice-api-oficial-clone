@@ -56,17 +56,20 @@ export function useChatDeletionOperations({
                 engine.setSelectedConvoIds(prev => prev.filter(id => id !== convoId));
                 if (selectedConvo?.id === convoId) setSelectedConvo(null);
                 toast.success('Conversa deletada.');
+                return true;
+            } else {
+                const data = await res.json().catch(() => ({}));
+                toast.error(data.detail || 'Erro ao deletar.');
+                return false;
             }
         } catch {
             toast.error('Erro ao deletar.');
-        } finally {
-            engine.setConfirmDeleteConvos(null);
-            engine.setDeletingConvoId(null);
+            return false;
         }
     };
 
     const handleDeleteSelectedConversations = async () => {
-        if (!engine.selectedConvoIds.length && !selectAllPages) return;
+        if (!engine.selectedConvoIds.length && !selectAllPages) return false;
         
         const payload = selectAllPages ? {
             select_all_pages: true,
@@ -105,14 +108,15 @@ export function useChatDeletionOperations({
                     engine.setSelectedConvoIds([]);
                 }
                 toast.success('Conversas deletadas com sucesso!', { id: toastId });
+                return true;
             } else {
-                const errData = await res.json();
+                const errData = await res.json().catch(() => ({}));
                 toast.error(errData.detail || 'Erro ao deletar conversas.', { id: toastId });
+                return false;
             }
         } catch {
             toast.error('Erro ao deletar.', { id: toastId });
-        } finally {
-            engine.setConfirmDeleteConvos(null);
+            return false;
         }
     };
 

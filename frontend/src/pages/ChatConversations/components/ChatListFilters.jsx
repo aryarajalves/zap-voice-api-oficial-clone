@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { FiSearch, FiTag, FiRefreshCw, FiSlash, FiCalendar, FiClock, FiSliders, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiSearch, FiTag, FiRefreshCw, FiSlash, FiCalendar, FiClock, FiSliders, FiChevronLeft, FiChevronRight, FiCheckCircle } from 'react-icons/fi';
 import ChatLabelFilterDropdown from './ChatLabelFilterDropdown';
 
 export default function ChatListFilters({
@@ -150,7 +150,12 @@ export default function ChatListFilters({
                         {[
                             { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!selectedLabelFilter },
                             { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterTemplate24h || filterUnread || filterHasNote || filterUrgent || filterHasReplied || filterHasActiveFunnel },
-                            { key: 'bloqueio', label: 'Bloqueio', icon: FiSlash, active: !!filterBlockStatus },
+                            { 
+                                key: 'bloqueio', 
+                                label: filterBlockStatus === 'unblocked' ? 'Não Bloqueados' : filterBlockStatus === 'blocked' ? 'Bloqueados' : filterBlockStatus === 'resting' ? 'Em Repouso' : 'Bloqueio', 
+                                icon: filterBlockStatus === 'unblocked' ? FiCheckCircle : FiSlash, 
+                                active: !!filterBlockStatus 
+                            },
                             { key: 'data', label: 'Data', icon: FiCalendar, active: !!filterStartDate || !!filterEndDate },
                             { key: 'ordem', label: 'Ordem', icon: FiSliders, active: !!orderBy && orderBy !== 'recent' }
                         ].map(f => (
@@ -247,8 +252,20 @@ export default function ChatListFilters({
                 {activeFilterTab === 'bloqueio' && (
                     <div className="px-4 pb-3 flex gap-2">
                         <button
+                            onClick={() => setFilterBlockStatus(v => v === 'unblocked' ? null : 'unblocked')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                                filterBlockStatus === 'unblocked'
+                                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                                    : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-emerald-500/40 hover:text-emerald-400'
+                            }`}
+                        >
+                            <FiCheckCircle size={12} />
+                            Não bloqueados
+                        </button>
+
+                        <button
                             onClick={() => setFilterBlockStatus(v => v === 'blocked' ? null : 'blocked')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                                 filterBlockStatus === 'blocked'
                                     ? 'bg-red-500/20 border-red-500/40 text-red-400'
                                     : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-red-500/40 hover:text-red-400'
@@ -260,7 +277,7 @@ export default function ChatListFilters({
 
                         <button
                             onClick={() => setFilterBlockStatus(v => v === 'resting' ? null : 'resting')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                                 filterBlockStatus === 'resting'
                                     ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
                                     : 'bg-transparent border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-orange-500/40 hover:text-orange-400'

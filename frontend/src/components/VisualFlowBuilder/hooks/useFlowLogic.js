@@ -1,4 +1,4 @@
-﻿import { useClient } from '../../../contexts/ClientContext';
+import { useClient } from '../../../contexts/ClientContext';
 import { useFlowCanvas } from './flowLogic/useFlowCanvas';
 import { useFlowMetadata } from './flowLogic/useFlowMetadata';
 import { useFlowStorage } from './flowLogic/useFlowStorage';
@@ -78,9 +78,17 @@ export const useFlowLogic = (funnelId, onSave, refreshKey) => {
         setTriggerLimitType: metadata.setTriggerLimitType,
         isTriggerActive: metadata.isTriggerActive,
         setIsTriggerActive: metadata.setIsTriggerActive,
+        triggerOnNewConversation: metadata.triggerOnNewConversation,
+        setTriggerOnNewConversation: metadata.setTriggerOnNewConversation,
+        triggerNewConversationMode: metadata.triggerNewConversationMode,
+        setTriggerNewConversationMode: metadata.setTriggerNewConversationMode,
+        showNewConversation: metadata.showNewConversation,
+        setShowNewConversation: metadata.setShowNewConversation,
 
         // Storage & Globais
         saving: storage.saving,
+        currentFunnelId: storage.currentFunnelId,
+        otherActiveFunnel: storage.otherActiveFunnel,
         globalVars: storage.globalVars,
         handleSave: storage.handleSave
     };

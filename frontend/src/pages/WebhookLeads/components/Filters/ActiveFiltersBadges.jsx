@@ -63,12 +63,18 @@ export default function ActiveFiltersBadges({
       <span className="text-xs text-gray-400 font-medium">Filtros ativos:</span>
 
       {blockStatusFilter && (
-        <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700/50">
-          {blockStatusFilter === 'blocked' ? '🚫 Bloqueados' : '😴 Em Repouso'}
+        <span className={`inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold border ${
+          blockStatusFilter === 'blocked'
+            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700/50'
+            : blockStatusFilter === 'unblocked'
+            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/50'
+            : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700/50'
+        }`}>
+          {blockStatusFilter === 'blocked' ? '🚫 Bloqueados' : blockStatusFilter === 'unblocked' ? '✅ Não Bloqueados' : '😴 Em Repouso'}
           <button
             type="button"
             onClick={() => setBlockStatusFilter('')}
-            className="ml-0.5 text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+            className="ml-0.5 opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
           >
             <FiX size={11} />
           </button>

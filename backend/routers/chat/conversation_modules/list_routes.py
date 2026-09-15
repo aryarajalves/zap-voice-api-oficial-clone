@@ -130,8 +130,12 @@ async def list_conversations(
     for c in conversations:
         block_type, resting_until = get_block_info(c.phone, blocked_suffixes, resting_map)
 
-        if block_status and block_type != block_status:
-            continue
+        if block_status:
+            if block_status in ('unblocked', 'not_blocked'):
+                if block_type == 'blocked':
+                    continue
+            elif block_type != block_status:
+                continue
 
         digits = "".join(filter(str.isdigit, c.phone or ""))
         suffix_key = digits[-8:] if len(digits) >= 8 else None

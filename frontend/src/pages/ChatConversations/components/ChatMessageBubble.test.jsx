@@ -252,4 +252,73 @@ describe('ChatMessageBubble Unit Tests', () => {
         fireEvent.click(reactionBadge);
         expect(sendReactionMock).toHaveBeenCalledWith('wamid.12345', '');
     });
+
+    it('renderiza evento de funil iniciado com botão Ver Pipeline do Funil e dispara onOpenPipelineByTriggerId', () => {
+        const onOpenPipelineMock = vi.fn();
+        const funnelMsg = {
+            id: 9,
+            sender_type: 'system',
+            message_type: 'funnel_event',
+            content: '🚀 Funil "Funil Recuperação VIP" foi iniciado',
+            timestamp: new Date().toISOString(),
+            meta_data: {
+                is_funnel_event: true,
+                funnel_id: 55,
+                funnel_name: 'Funil Recuperação VIP',
+                trigger_id: 888
+            }
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={funnelMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[funnelMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '16:30'}
+                onOpenPipelineByTriggerId={onOpenPipelineMock}
+            />
+        );
+
+        expect(screen.getByText('Funil em Execução')).toBeInTheDocument();
+        expect(screen.getByText('Funil Recuperação VIP')).toBeInTheDocument();
+        const pipelineBtn = screen.getByRole('button', { name: /Ver Pipeline do Funil/i });
+        expect(pipelineBtn).toBeInTheDocument();
+        fireEvent.click(pipelineBtn);
+        expect(onOpenPipelineMock).toHaveBeenCalledWith(888);
+    });
+
+    it('renderiza card de erro e botão Disparar Novamente quando template falha', () => {
+        const onRetryMock = vi.fn();
+        const failedTplMsg = {
+            id: 10,
+            sender_type: 'user',
+            message_type: 'template',
+            content: '[Template: compra_aprovada_bussula]',
+            timestamp: new Date().toISOString(),
+            meta_data: {
+                is_template: true,
+                template_name: 'compra_aprovada_bussula',
+                status: 'failed',
+                failure_reason: 'Erro Meta 2: Service temporarily unavailable'
+            }
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={failedTplMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[failedTplMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '16:40'}
+                onRetryTemplateMessage={onRetryMock}
+            />
+        );
+
+        expect(screen.getByText(/Service temporarily unavailable/i)).toBeInTheDocument();
+        const retryBtn = screen.getByRole('button', { name: /Disparar Novamente/i });
+        expect(retryBtn).toBeInTheDocument();
+        fireEvent.click(retryBtn);
+        expect(onRetryMock).toHaveBeenCalledWith(failedTplMsg);
+    });
 });

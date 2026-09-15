@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { fetchWithAuth } from '../../../../AuthContext';
 import { API_URL } from '../../../../config';
@@ -17,6 +17,22 @@ export const useFlowStorage = ({
     const [saving, setSaving] = useState(false);
     const [currentFunnelId, setCurrentFunnelId] = useState(funnelId);
     const [globalVars, setGlobalVars] = useState([]);
+    const [otherActiveFunnel, setOtherActiveFunnel] = useState(null);
+
+    // Consultar funil que possui o gatilho de nova conversa ativo
+    useEffect(() => {
+        if (!activeClient?.id) return;
+        fetchWithAuth(`${API_URL}/funnels/new-conversation-trigger`, {}, activeClient.id)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.funnel_id) {
+                    setOtherActiveFunnel(data);
+                } else {
+                    setOtherActiveFunnel(null);
+                }
+            })
+            .catch(err => console.error("Erro ao buscar gatilho de nova conversa ativo:", err));
+    }, [activeClient?.id, currentFunnelId, saving]);
 
     const {
         funnelName = '', setFunnelName,
@@ -28,7 +44,9 @@ export const useFlowStorage = ({
         isTriggerActive = true, setIsTriggerActive,
         businessHoursStart = '08:00', setBusinessHoursStart,
         businessHoursEnd = '18:00', setBusinessHoursEnd,
-        businessHoursDays = [0, 1, 2, 3, 4], setBusinessHoursDays
+        businessHoursDays = [0, 1, 2, 3, 4], setBusinessHoursDays,
+        triggerOnNewConversation = false, setTriggerOnNewConversation,
+        triggerNewConversationMode = 'all', setTriggerNewConversationMode
     } = metadata;
 
     const {
@@ -90,6 +108,8 @@ export const useFlowStorage = ({
                 business_hours_start: businessHoursStart,
                 business_hours_end: businessHoursEnd,
                 business_hours_days: businessHoursDays,
+                trigger_on_new_conversation: triggerOnNewConversation,
+                trigger_new_conversation_mode: triggerNewConversationMode,
                 steps: stepsPayload
             };
 
@@ -155,6 +175,8 @@ export const useFlowStorage = ({
                 if (setBusinessHoursStart) setBusinessHoursStart(data.business_hours_start || '08:00');
                 if (setBusinessHoursEnd) setBusinessHoursEnd(data.business_hours_end || '18:00');
                 if (setBusinessHoursDays) setBusinessHoursDays(data.business_hours_days || [0, 1, 2, 3, 4]);
+                if (setTriggerOnNewConversation) setTriggerOnNewConversation(Boolean(data.trigger_on_new_conversation));
+                if (setTriggerNewConversationMode) setTriggerNewConversationMode(data.trigger_new_conversation_mode || 'all');
 
                 if (data.steps && data.steps.nodes && setNodes) {
                     const loadedNodes = data.steps.nodes.map((n, index) => {
@@ -186,6 +208,7 @@ export const useFlowStorage = ({
     return {
         saving,
         currentFunnelId,
+        otherActiveFunnel,
         globalVars,
         handleSave
     };

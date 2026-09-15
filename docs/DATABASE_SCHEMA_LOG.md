@@ -207,22 +207,24 @@ docker exec zapvoice_app python /app/scripts/add_email_marketing_tables.py
 
 ---
 
-## 📋 Migração: Prazo Limite de Disparo em Massa (2026-09-11)
+## 📋 Migração: Gatilho de Nova Conversa em Funis (2026-09-15)
 
-**Tabela afetada:** `scheduled_triggers`
+**Tabela afetada:** `funnels`
 
-**Script:** `backend/scripts/database/add_max_dispatch_time_column.py`
+**Script:** `backend/scripts/add_funnel_new_conversation_trigger_columns.py`
 
 **Novas colunas:**
 
 | Coluna | Tipo | Default | Descrição |
 |--------|------|---------|-----------|
-| `max_dispatch_time` | `TIMESTAMPTZ` | `NULL` | Data e horário limite para envio/expiração do disparo e aborto de mensagens não entregues |
+| `trigger_on_new_conversation` | `BOOLEAN` | `FALSE` | Indica se o funil deve iniciar automaticamente em nova conversa no chat |
+| `trigger_new_conversation_mode` | `VARCHAR` | `'all'` | Modo de ativação: `'all'` (novos contatos e reaberturas) ou `'only_new_contacts'` |
 
-**Contexto:** Permite definir data e hora limite para abortar o envio de templates para contatos restantes e abortar mensagens retidas na fila da Meta (usuário sem internet).
+**Contexto:** Permite que funis sejam iniciados automaticamente quando uma nova conversa no chat é iniciada, integrando-se com o nó de gatilho switch de primeira mensagem.
 
 **Como aplicar em produção:**
 ```bash
-docker exec zapvoice_app python /app/scripts/database/add_max_dispatch_time_column.py
+docker exec zapvoice_app python /app/scripts/add_funnel_new_conversation_trigger_columns.py
 ```
+
 

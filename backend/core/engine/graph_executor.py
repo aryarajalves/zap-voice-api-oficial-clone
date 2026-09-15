@@ -24,6 +24,7 @@ from .nodes.send_template import handle_send_template_node
 from .nodes.check_window import handle_check_window_node
 from .nodes.wait_event import handle_wait_event_node
 from .nodes.input_data import handle_input_data_node
+from .nodes.new_conversation import handle_new_conversation_node
 
 
 logger = setup_logger("FunnelEngine.GraphExecutor")
@@ -42,8 +43,8 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
         # e que faça sentido começar (ex: mensagem, áudio, mídia)
         if not start_node and nodes:
             logger.warning(f"⚠️ [GRAPH] Nenhum nó de início (start) encontrado para o Funil {funnel.id}. Usando fallback para o primeiro nó disponível.")
-            # Priorizar tipos de conteúdo
-            priority_nodes = [n for n in nodes.values() if n.get("type") in ["message", "messageNode", "audioNode", "mediaNode", "templateNode", "delayNode", "delay", "httpRequestNode", "http_request", "conditionNode", "condition", "businessHoursNode"]]
+            # Priorizar tipos de conteúdo e gatilhos de nova conversa
+            priority_nodes = [n for n in nodes.values() if n.get("type") in ["newConversationNode", "new_conversation", "message", "messageNode", "audioNode", "mediaNode", "templateNode", "delayNode", "delay", "httpRequestNode", "http_request", "conditionNode", "condition", "businessHoursNode"]]
             if priority_nodes:
                 start_node = priority_nodes[0]
             else:
@@ -197,6 +198,8 @@ async def execute_graph_funnel(trigger, graph_data, chatwoot, conversation_id, c
                     log_node_execution(db, trigger, current_node_id, "failed", f"Nó {node_type} ({current_node_id}) falhou durante a execução.")
                     return
                 source_handle = res
+            elif node_type in ["newConversationNode", "new_conversation"]:
+                source_handle = await handle_new_conversation_node(db, trigger, node, contact_phone, conversation_id)
         except Exception as node_err:
             logger.error(f"❌ [GRAPH] Erro ao executar Nó {current_node_id} (Tipo: {node_type}): {node_err}")
             log_node_execution(db, trigger, current_node_id, "failed", f"Erro no nó {node_type}: {node_err}")

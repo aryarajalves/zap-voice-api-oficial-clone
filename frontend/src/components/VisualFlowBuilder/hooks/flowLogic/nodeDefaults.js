@@ -1,4 +1,4 @@
-﻿export const createNodeDefaultData = (type, callbacks = {}) => {
+export const createNodeDefaultData = (type, callbacks = {}) => {
     const defaultData = {
         onChange: callbacks.onChange,
         onDelete: callbacks.onDelete,
@@ -78,6 +78,11 @@
         defaultData.timeoutValue = 2;
         defaultData.timeoutUnit = 'hours';
         defaultData.errorMessage = '';
+    } else if (type === 'newConversationNode') {
+        defaultData.routes = [
+            { id: 'route_1', label: 'Suporte / Dúvidas', phrases: 'ajuda, suporte, duvida, problema', matchType: 'contains' },
+            { id: 'route_2', label: 'Vendas / Preço', phrases: 'comprar, preco, valor, plano, assinar', matchType: 'contains' }
+        ];
     }
 
     return defaultData;

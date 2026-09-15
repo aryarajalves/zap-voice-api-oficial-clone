@@ -132,5 +132,19 @@ describe('Filters Subcomponents', () => {
       fireEvent.click(toggleBtn);
       expect(setTagMode).toHaveBeenCalledWith('AND');
     });
+
+    it('renderiza badge de Não Bloqueados quando blockStatusFilter for unblocked', () => {
+      const setBlockStatus = vi.fn();
+
+      render(
+        <ActiveFiltersBadges
+          blockStatusFilter="unblocked"
+          setBlockStatusFilter={setBlockStatus}
+          total={15}
+        />
+      );
+
+      expect(screen.getByText('✅ Não Bloqueados')).toBeDefined();
+    });
   });
 });

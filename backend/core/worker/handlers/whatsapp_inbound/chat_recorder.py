@@ -10,15 +10,24 @@ from config_loader import get_setting
 logger = setup_logger("Worker.WhatsAppInbound.ChatRecorder")
 
 
-def handle_reaction_message(db, chat_convo: models.ChatConversation, msg: dict) -> bool:
+async def handle_reaction_message(db, chat_convo: models.ChatConversation, msg: dict) -> bool:
     """
     Processa mensagens do tipo 'reaction', atualizando o meta_data da mensagem alvo.
+    Conforme política oficial da Meta (WhatsApp Business API), qualquer reação enviada pelo
+    contato reseta a janela de 24 horas (Customer Care Window).
     Retorna True para indicar que o processamento do evento reaction foi concluído.
     """
     emoji = msg.get("reaction", {}).get("emoji", "")
     reacted_msg_id = msg.get("reaction", {}).get("message_id", "")
     if not reacted_msg_id:
         return True
+
+    now = datetime.now(timezone.utc)
+    # Se o contato enviou um emoji, renova a janela de 24h e reabre a conversa
+    if emoji:
+        chat_convo.last_contact_message_at = now
+        chat_convo.last_message_at = now
+        chat_convo.status = "open"
 
     clean_reacted_id = reacted_msg_id.replace("wamid.", "")
     wamid_reacted_id = f"wamid.{clean_reacted_id}"
@@ -30,6 +39,7 @@ def handle_reaction_message(db, chat_convo: models.ChatConversation, msg: dict) 
         )
     ).first()
 
+    existing_meta = {}
     if target_msg:
         existing_meta = dict(target_msg.meta_data or {})
         reactions = existing_meta.get("reactions", [])
@@ -40,31 +50,36 @@ def handle_reaction_message(db, chat_convo: models.ChatConversation, msg: dict) 
         existing_meta["reactions"] = reactions
         target_msg.meta_data = existing_meta
         flag_modified(target_msg, "meta_data")
-        db.commit()
         logger.info(f"❤️ [CHAT-REACTION] Reação '{emoji}' associada à mensagem ID {target_msg.id} ({reacted_msg_id})")
-
-        # Transmitir atualização via WebSocket
-        try:
-            from rabbitmq_client import rabbitmq
-            payload_ws = {
-                "event": "message_reaction_updated",
-                "data": {
-                    "conversation_id": chat_convo.id,
-                    "message_id": target_msg.id,
-                    "wa_message_id": target_msg.wa_message_id,
-                    "meta_data": existing_meta
-                }
-            }
-            asyncio.create_task(rabbitmq.publish_event("message_reaction_updated", payload_ws))
-        except Exception as e_ws:
-            logger.error(f"Erro ao transmitir evento de reação WebSocket: {e_ws}")
     else:
         logger.info(f"⚠️ [CHAT-REACTION] Mensagem alvo {reacted_msg_id} não encontrada para conversa {chat_convo.id}")
+
+    db.commit()
+
+    # Transmitir atualização via WebSocket
+    try:
+        from rabbitmq_client import rabbitmq
+        payload_ws = {
+            "event": "message_reaction_updated",
+            "data": {
+                "client_id": chat_convo.client_id,
+                "conversation_id": chat_convo.id,
+                "message_id": target_msg.id if target_msg else None,
+                "wa_message_id": target_msg.wa_message_id if target_msg else reacted_msg_id,
+                "meta_data": existing_meta,
+                "last_contact_message_at": chat_convo.last_contact_message_at.isoformat() if chat_convo.last_contact_message_at else None,
+                "last_message_at": chat_convo.last_message_at.isoformat() if chat_convo.last_message_at else None,
+                "status": chat_convo.status
+            }
+        }
+        await rabbitmq.publish_event("message_reaction_updated", payload_ws)
+    except Exception as e_ws:
+        logger.error(f"Erro ao transmitir evento de reação WebSocket: {e_ws}")
 
     return True
 
 
-def save_inbound_chat_message(
+async def save_inbound_chat_message(
     db,
     target_cid: int,
     from_phone: str,
@@ -81,7 +96,9 @@ def save_inbound_chat_message(
         models.ChatConversation.phone.like(f"%{suffix_inb}")
     ).first()
 
+    is_new_convo = False
     if not chat_convo:
+        is_new_convo = True
         chat_convo = models.ChatConversation(
             client_id=target_cid,
             phone=from_phone,
@@ -91,10 +108,14 @@ def save_inbound_chat_message(
         )
         db.add(chat_convo)
         db.flush()
+    elif chat_convo.status in ["resolved", "closed"]:
+        is_new_convo = True
+
+    chat_convo._is_new_convo = is_new_convo
 
     m_type = msg.get("type", "text")
     if m_type == "reaction":
-        handle_reaction_message(db, chat_convo, msg)
+        await handle_reaction_message(db, chat_convo, msg)
         return None
 
     content_text = user_input
@@ -152,6 +173,25 @@ def save_inbound_chat_message(
 
     db.commit()
     logger.info(f"💾 [CHAT-LOCAL] Mensagem de {from_phone} salva localmente (Convo ID: {chat_convo.id})")
+
+    # Broadcast em tempo real via WebSocket
+    try:
+        from rabbitmq_client import rabbitmq
+        payload_ws = {
+            "id": chat_message.id,
+            "conversation_id": chat_message.conversation_id,
+            "sender_type": chat_message.sender_type,
+            "message_type": chat_message.message_type,
+            "content": chat_message.content,
+            "media_url": chat_message.media_url,
+            "timestamp": chat_message.timestamp.isoformat() if chat_message.timestamp else datetime.now(timezone.utc).isoformat(),
+            "wa_message_id": chat_message.wa_message_id,
+            "client_id": target_cid
+        }
+        await rabbitmq.publish_event("new_message", payload_ws)
+    except Exception as e_ws:
+        logger.error(f"Erro ao transmitir evento new_message WebSocket: {e_ws}")
+
     return chat_convo
 
 

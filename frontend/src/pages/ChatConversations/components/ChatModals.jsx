@@ -52,6 +52,13 @@ export default function ChatModals({
                 isBulk={engine.confirmDeleteConvos === 'bulk'}
                 selectedCount={selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}
                 selectAllPages={selectAllPages}
+                contactName={
+                    engine.confirmDeleteConvos === 'single'
+                        ? (engine.conversations?.find(c => c.id === engine.deletingConvoId)?.contact_name ||
+                           engine.conversations?.find(c => c.id === engine.deletingConvoId)?.phone ||
+                           (selectedConvo?.id === engine.deletingConvoId ? (selectedConvo.contact_name || selectedConvo.phone) : null))
+                        : null
+                }
                 onClose={() => { engine.setConfirmDeleteConvos(null); engine.setDeletingConvoId(null); }}
                 onConfirm={engine.confirmDeleteConvos === 'bulk' ? chatOps.handleDeleteSelectedConversations : () => chatOps.handleDeleteConversation(engine.deletingConvoId)}
             />

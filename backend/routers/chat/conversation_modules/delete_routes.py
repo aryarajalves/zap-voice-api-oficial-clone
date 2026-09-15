@@ -95,40 +95,64 @@ async def delete_conversations_bulk(
             has_note=payload.get("has_note")
         )
 
-        conversations = query.all()
-
         label = payload.get("label")
-        if label:
-            clean_label = label.strip().lower()
-            conversations = [
-                c for c in conversations
-                if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
-            ]
-
         block_status = payload.get("block_status")
-        if block_status:
-            blocked_suffixes, resting_map = get_blocked_and_resting_data(db, client_id)
-            filtered_conversations = []
-            for c in conversations:
-                block_type, _ = get_block_info(c.phone, blocked_suffixes, resting_map)
-                if block_type == block_status:
-                    filtered_conversations.append(c)
-            conversations = filtered_conversations
 
-        deleted = conversations
+        if not label and not block_status:
+            # Otimização: busca diretamente apenas a coluna id do banco de dados
+            convo_ids = [r[0] for r in query.with_entities(models.ChatConversation.id).all()]
+        else:
+            conversations = query.all()
+            if label:
+                clean_label = label.strip().lower()
+                conversations = [
+                    c for c in conversations
+                    if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
+                ]
+
+            if block_status:
+                blocked_suffixes, resting_map = get_blocked_and_resting_data(db, client_id)
+                conversations = [
+                    c for c in conversations
+                    if get_block_info(c.phone, blocked_suffixes, resting_map)[0] == block_status
+                ]
+
+            convo_ids = [c.id for c in conversations]
     else:
         ids = payload.get("ids", [])
         if not ids:
             raise HTTPException(status_code=400, detail="Nenhum ID fornecido.")
-        deleted = db.query(models.ChatConversation).filter(
-            models.ChatConversation.id.in_(ids),
-            models.ChatConversation.client_id == client_id
-        ).all()
+        convo_ids = [
+            r[0] for r in db.query(models.ChatConversation.id).filter(
+                models.ChatConversation.id.in_(ids),
+                models.ChatConversation.client_id == client_id
+            ).all()
+        ]
 
-    count = len(deleted)
-    for convo in deleted:
-        db.delete(convo)
-    db.commit()
+    count = len(convo_ids)
+    if count > 0:
+        # Deletar em chunks de 500 IDs para máxima performance e respeito a limites de parâmetros SQL
+        CHUNK_SIZE = 500
+        for i in range(0, count, CHUNK_SIZE):
+            chunk = convo_ids[i:i + CHUNK_SIZE]
+
+            # 1. Desvincula pinned_message_id para evitar bloqueio circular de Foreign Key
+            db.query(models.ChatConversation).filter(
+                models.ChatConversation.id.in_(chunk)
+            ).update({models.ChatConversation.pinned_message_id: None}, synchronize_session=False)
+
+            # 2. Deleta as mensagens em lote diretamente via SQL
+            db.query(models.ChatMessage).filter(
+                models.ChatMessage.conversation_id.in_(chunk)
+            ).delete(synchronize_session=False)
+
+            # 3. Deleta as conversas do lote diretamente via SQL
+            db.query(models.ChatConversation).filter(
+                models.ChatConversation.id.in_(chunk)
+            ).delete(synchronize_session=False)
+
+        db.commit()
+
     return {"status": "ok", "deleted_count": count}
 
 

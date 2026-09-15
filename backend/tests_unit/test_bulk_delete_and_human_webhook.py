@@ -85,6 +85,38 @@ def test_delete_conversations_bulk_select_all_pages(db_session):
     assert 11 in left_ids
     assert 13 in left_ids
 
+
+def test_delete_conversations_bulk_by_ids_and_messages(db_session):
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_current_user] = mock_get_current_user
+    
+    # Cria uma mensagem para a conversa 11
+    msg = models.ChatMessage(
+        id=999,
+        conversation_id=11,
+        sender_type="contact",
+        content="Mensagem de teste em lote",
+        message_type="text"
+    )
+    db_session.add(msg)
+    # Define como pinned na conversa 11
+    c11 = db_session.query(models.ChatConversation).filter_by(id=11).first()
+    if c11:
+        c11.pinned_message_id = 999
+    db_session.commit()
+    
+    client = TestClient(app)
+    response = client.request("DELETE", "/api/chat/conversations", json={"ids": [11]})
+    assert response.status_code == 200
+    res_data = response.json()
+    assert res_data["deleted_count"] == 1
+    
+    # Garante que a conversa foi deletada
+    assert db_session.query(models.ChatConversation).filter_by(id=11).first() is None
+    # Garante que a mensagem foi limpa
+    assert db_session.query(models.ChatMessage).filter_by(id=999).first() is None
+
+
 @pytest.mark.anyio
 @patch("services.ai_memory.rabbitmq")
 @patch("services.ai_memory.get_setting")

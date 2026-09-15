@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Panel } from 'reactflow';
-import { FiFlag, FiUser, FiChevronUp, FiChevronDown, FiCalendar, FiKey, FiShield, FiX } from 'react-icons/fi';
+import { FiFlag, FiUser, FiChevronUp, FiChevronDown, FiCalendar, FiKey, FiShield, FiX, FiMessageSquare, FiAlertTriangle, FiCheck } from 'react-icons/fi';
 
 const MetadataPanel = ({
     funnelName, setFunnelName,
@@ -15,7 +15,12 @@ const MetadataPanel = ({
     triggerPhrase, setTriggerPhrase,
     triggerMatchType, setTriggerMatchType,
     triggerLimitType, setTriggerLimitType,
-    isTriggerActive, setIsTriggerActive
+    isTriggerActive, setIsTriggerActive,
+    triggerOnNewConversation, setTriggerOnNewConversation,
+    triggerNewConversationMode, setTriggerNewConversationMode,
+    showNewConversation, setShowNewConversation,
+    currentFunnelId,
+    otherActiveFunnel
 }) => {
     const [keywordInput, setKeywordInput] = useState('');
 
@@ -151,6 +156,77 @@ const MetadataPanel = ({
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Gatilho por Nova Conversa no Chat */}
+                <div>
+                    <button
+                        onClick={() => setShowNewConversation(!showNewConversation)}
+                        className={`w-full flex items-center justify-between text-[10px] font-bold uppercase transition mb-1 ${showNewConversation ? 'text-indigo-500' : 'text-gray-500 hover:text-indigo-500'}`}
+                    >
+                        <span className="flex items-center gap-1.5 align-middle">
+                            <FiMessageSquare size={12} className={triggerOnNewConversation ? "text-indigo-500" : ""} /> 
+                            Nova Conversa no Chat
+                            {triggerOnNewConversation && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
+                        </span>
+                        {showNewConversation ? <FiChevronUp /> : <FiChevronDown />}
+                    </button>
+
+                    {showNewConversation && (() => {
+                        const isTriggerLockedByOther = Boolean(
+                            otherActiveFunnel &&
+                            otherActiveFunnel.funnel_id &&
+                            currentFunnelId &&
+                            Number(otherActiveFunnel.funnel_id) !== Number(currentFunnelId)
+                        );
+
+                        return (
+                            <div className="mt-2 space-y-2.5 animate-fade-in bg-indigo-50/40 dark:bg-indigo-950/20 p-2.5 rounded-lg border border-indigo-200/50 dark:border-indigo-900/40">
+                                <div className="flex items-center justify-between">
+                                    <label className={`flex items-center gap-2 select-none ${isTriggerLockedByOther ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                                        <input
+                                            type="checkbox"
+                                            disabled={isTriggerLockedByOther}
+                                            className={`w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 focus:ring-indigo-500 ${isTriggerLockedByOther ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-indigo-600 cursor-pointer'}`}
+                                            checked={isTriggerLockedByOther ? false : triggerOnNewConversation}
+                                            onChange={(e) => {
+                                                if (!isTriggerLockedByOther) {
+                                                    setTriggerOnNewConversation(e.target.checked);
+                                                }
+                                            }}
+                                        />
+                                        <span className={`text-[10px] font-bold uppercase ${isTriggerLockedByOther ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                                            Disparar ao Iniciar Conversa
+                                        </span>
+                                    </label>
+                                </div>
+
+                                {isTriggerLockedByOther ? (
+                                    <div className="mt-1 p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 space-y-1 animate-fade-in">
+                                        <div className="flex items-center gap-1.5 font-bold text-[10px]">
+                                            <FiAlertTriangle className="shrink-0 text-amber-500" size={13} />
+                                            <span>Ativo em outro funil: "{otherActiveFunnel.funnel_name}"</span>
+                                        </div>
+                                        <p className="text-[9px] leading-relaxed text-gray-600 dark:text-gray-300">
+                                            Apenas <strong>1 único funil</strong> pode ter este gatilho ativo para evitar duplicações de fluxo. Desative no funil original para poder ativar neste.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="text-[9px] text-gray-500 dark:text-gray-400 leading-snug">
+                                            Dispara este funil automaticamente quando um lead enviar uma mensagem iniciando ou reabrindo um atendimento no Chat. A primeira mensagem pode ser filtrada com o nó <strong>Gatilho: Nova Conversa (Switch)</strong>.
+                                        </p>
+                                        {triggerOnNewConversation && (
+                                            <div className="mt-1 p-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center gap-1 text-[9px] font-semibold animate-fade-in">
+                                                <FiCheck size={12} className="shrink-0 text-emerald-500" />
+                                                <span>Único funil ativo para novas conversas no Chat.</span>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Restrições de Contato */}

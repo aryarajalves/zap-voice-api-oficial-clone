@@ -105,4 +105,72 @@ describe('MetadataPanel', () => {
         fireEvent.click(toggleBtn);
         expect(mockProps.setShowKeywords).toHaveBeenCalledWith(true);
     });
+
+    test('permite ativar gatilho de Nova Conversa quando nenhum outro funil está ativo', () => {
+        const setTriggerOnNewConversation = vi.fn();
+        render(
+            <ReactFlowProvider>
+                <MetadataPanel
+                    {...mockProps}
+                    showNewConversation={true}
+                    triggerOnNewConversation={false}
+                    setTriggerOnNewConversation={setTriggerOnNewConversation}
+                    currentFunnelId={1}
+                    otherActiveFunnel={null}
+                />
+            </ReactFlowProvider>
+        );
+
+        const checkbox = screen.getByLabelText(/Disparar ao Iniciar Conversa/i);
+        expect(checkbox).not.toBeDisabled();
+        expect(checkbox).not.toBeChecked();
+
+        fireEvent.click(checkbox);
+        expect(setTriggerOnNewConversation).toHaveBeenCalledWith(true);
+    });
+
+    test('bloqueia o checkbox e exibe alerta quando outro funil já detém o gatilho ativo', () => {
+        const setTriggerOnNewConversation = vi.fn();
+        render(
+            <ReactFlowProvider>
+                <MetadataPanel
+                    {...mockProps}
+                    showNewConversation={true}
+                    triggerOnNewConversation={false}
+                    setTriggerOnNewConversation={setTriggerOnNewConversation}
+                    currentFunnelId={2}
+                    otherActiveFunnel={{ funnel_id: 1, funnel_name: 'Funil Alfa Original' }}
+                />
+            </ReactFlowProvider>
+        );
+
+        const checkbox = screen.getByLabelText(/Disparar ao Iniciar Conversa/i);
+        expect(checkbox).toBeDisabled();
+        expect(screen.getByText(/Ativo em outro funil: "Funil Alfa Original"/i)).toBeInTheDocument();
+        expect(screen.getByText(/1 único funil/i)).toBeInTheDocument();
+        expect(screen.getByText(/Desative no funil original para poder ativar neste/i)).toBeInTheDocument();
+
+        // Clicar não deve chamar setTriggerOnNewConversation
+        fireEvent.click(checkbox);
+        expect(setTriggerOnNewConversation).not.toHaveBeenCalled();
+    });
+
+    test('exibe badge de confirmação quando este funil é o funil ativo', () => {
+        render(
+            <ReactFlowProvider>
+                <MetadataPanel
+                    {...mockProps}
+                    showNewConversation={true}
+                    triggerOnNewConversation={true}
+                    currentFunnelId={1}
+                    otherActiveFunnel={{ funnel_id: 1, funnel_name: 'Este Funil' }}
+                />
+            </ReactFlowProvider>
+        );
+
+        const checkbox = screen.getByLabelText(/Disparar ao Iniciar Conversa/i);
+        expect(checkbox).not.toBeDisabled();
+        expect(checkbox).toBeChecked();
+        expect(screen.getByText(/Único funil ativo para novas conversas no Chat/i)).toBeInTheDocument();
+    });
 });

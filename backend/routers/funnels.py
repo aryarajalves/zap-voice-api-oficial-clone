@@ -36,6 +36,24 @@ def list_funnels(
     funnels = query.order_by(models.Funnel.is_pinned.desc(), models.Funnel.id.desc()).offset(skip).limit(limit).all()
     return funnels
 
+@router.get("/funnels/new-conversation-trigger", summary="Obter funil atualmente ativo para nova conversa")
+def get_active_new_conversation_trigger(
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_feature("funnels"))
+):
+    """
+    Retorna o funil que está configurado como gatilho de nova conversa para este cliente.
+    """
+    funnel = db.query(models.Funnel).filter(
+        models.Funnel.client_id == x_client_id,
+        models.Funnel.trigger_on_new_conversation == True
+    ).first()
+    
+    if not funnel:
+        return {"funnel_id": None, "funnel_name": None}
+    return {"funnel_id": funnel.id, "funnel_name": funnel.name}
+
 @router.patch("/funnels/bulk/archive", summary="Arquivar/Desarquivar múltiplos funis")
 def archive_funnels_bulk(
     payload: schemas.FunnelBulkArchive,
@@ -213,6 +231,18 @@ def create_funnel(
             if node_type in blocked_nodes:
                 raise HTTPException(status_code=403, detail=f"Você não tem permissão para usar o nó do tipo '{node_type}'.")
 
+    # Validar unicidade do gatilho de Nova Conversa
+    if funnel.trigger_on_new_conversation:
+        existing_trigger = db.query(models.Funnel).filter(
+            models.Funnel.client_id == x_client_id,
+            models.Funnel.trigger_on_new_conversation == True
+        ).first()
+        if existing_trigger:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Apenas 1 único funil pode ter o gatilho de Nova Conversa ativo. O funil '{existing_trigger.name}' já está configurado com esse gatilho."
+            )
+
     db_funnel = models.Funnel(
         name=funnel.name, 
         description=funnel.description, 
@@ -221,6 +251,8 @@ def create_funnel(
         trigger_match_type=funnel.trigger_match_type or "contains",
         trigger_limit_type=funnel.trigger_limit_type or "none",
         is_trigger_active=funnel.is_trigger_active if funnel.is_trigger_active is not None else True,
+        trigger_on_new_conversation=bool(funnel.trigger_on_new_conversation),
+        trigger_new_conversation_mode=funnel.trigger_new_conversation_mode or "all",
         allowed_phones=funnel.allowed_phones,
         blocked_phones=funnel.blocked_phones,
         allowed_phone=funnel.allowed_phone,
@@ -264,6 +296,25 @@ def update_funnel(
     if existing:
         raise HTTPException(status_code=400, detail="Já existe um funil com este nome.")
     
+    # Validar unicidade do gatilho de Nova Conversa
+    if funnel_update.trigger_on_new_conversation:
+        existing_trigger = db.query(models.Funnel).filter(
+            models.Funnel.client_id == x_client_id,
+            models.Funnel.id != funnel_id,
+            models.Funnel.trigger_on_new_conversation == True
+        ).first()
+        if existing_trigger:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Apenas 1 único funil pode ter o gatilho de Nova Conversa ativo. O funil '{existing_trigger.name}' já está configurado com esse gatilho."
+            )
+        db_funnel.trigger_on_new_conversation = True
+    else:
+        db_funnel.trigger_on_new_conversation = False
+
+    if funnel_update.trigger_new_conversation_mode is not None:
+        db_funnel.trigger_new_conversation_mode = funnel_update.trigger_new_conversation_mode
+
     db_funnel.name = funnel_update.name
     db_funnel.description = funnel_update.description
     db_funnel.trigger_phrase = funnel_update.trigger_phrase

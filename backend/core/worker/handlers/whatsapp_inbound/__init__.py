@@ -24,6 +24,7 @@ from .trigger_evaluator import (
     evaluate_suspended_funnel_resume,
     evaluate_auto_reply,
     evaluate_keyword_triggers,
+    evaluate_new_conversation_triggers,
 )
 
 logger = setup_logger("Worker.WhatsAppInbound")
@@ -145,7 +146,7 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
                     btn_activate_agent = False
 
             # 7. Salvar mensagem no chat local do ZapVoice
-            chat_convo = save_inbound_chat_message(
+            chat_convo = await save_inbound_chat_message(
                 db, target_cid, from_phone, raw_from, msg, user_input, btn_activate_agent, contacts_map
             )
             if msg_type == "reaction":
@@ -184,6 +185,12 @@ async def handle_whatsapp_inbound_messages(db, messages: list, value: dict, meta
             if user_input:
                 await evaluate_keyword_triggers(
                     db, target_cid, from_phone, raw_from, user_input, resolved_convo_id, contacts_map
+                )
+
+            # 14. Gatilhos por Nova Conversa (Trigger on New Conversation)
+            if chat_convo and getattr(chat_convo, "_is_new_convo", False):
+                await evaluate_new_conversation_triggers(
+                    db, target_cid, from_phone, raw_from, user_input, chat_convo, resolved_convo_id, contacts_map
                 )
 
         except Exception as e_inner:

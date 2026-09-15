@@ -78,6 +78,41 @@ async def trigger_funnel_for_conversation(
         })
         trigger.status = 'processing'
         db.commit()
+
+        # Registrar evento de início do funil com acesso à pipeline na conversa
+        try:
+            now_dt = datetime.now(timezone.utc)
+            chat_msg = models.ChatMessage(
+                conversation_id=convo.id,
+                sender_type="system",
+                message_type="funnel_event",
+                content=f"🚀 Funil \"{funnel.name}\" foi iniciado",
+                meta_data={
+                    "is_funnel_event": True,
+                    "funnel_id": funnel.id,
+                    "funnel_name": funnel.name,
+                    "trigger_id": trigger.id,
+                    "status": "started"
+                },
+                timestamp=now_dt
+            )
+            db.add(chat_msg)
+            db.commit()
+            db.refresh(chat_msg)
+
+            payload_ws = {
+                "id": chat_msg.id,
+                "conversation_id": chat_msg.conversation_id,
+                "sender_type": chat_msg.sender_type,
+                "message_type": chat_msg.message_type,
+                "content": chat_msg.content,
+                "meta_data": chat_msg.meta_data,
+                "timestamp": chat_msg.timestamp.isoformat() if chat_msg.timestamp else now_dt.isoformat(),
+                "client_id": client_id
+            }
+            await rabbitmq.publish_event("new_message", payload_ws)
+        except Exception as e_ev:
+            logger.error(f"Erro ao registrar evento de início de funil no chat: {e_ev}")
     except Exception as e:
         logger.error(f"Erro ao publicar execução manual de funil: {e}")
         pass

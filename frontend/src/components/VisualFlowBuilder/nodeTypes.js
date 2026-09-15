@@ -20,6 +20,7 @@ import SendTemplateNode from './nodes/SendTemplateNode';
 import CheckWindowNode from './nodes/CheckWindowNode';
 import WaitEventNode from './nodes/WaitEventNode';
 import InputDataNode from './nodes/InputDataNode';
+import NewConversationNode from './nodes/NewConversationNode';
 
 const nodeTypes = {
     messageNode: MessageNode,
@@ -43,7 +44,8 @@ const nodeTypes = {
     sendTemplateNode: SendTemplateNode,
     checkWindowNode: CheckWindowNode,
     waitEventNode: WaitEventNode,
-    inputDataNode: InputDataNode
+    inputDataNode: InputDataNode,
+    newConversationNode: NewConversationNode
 };
 
 export default nodeTypes;

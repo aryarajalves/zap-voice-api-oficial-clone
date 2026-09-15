@@ -119,5 +119,24 @@ describe('ChatListFilters - Ordenação de Conversas', () => {
         fireEvent.click(screen.getByText('compra-aprovada'));
         expect(setSelectedLabelFilterMock).toHaveBeenCalledWith('compra-aprovada');
     });
+
+    it('renderiza opções de bloqueio incluindo "Não bloqueados" e permite selecionar', () => {
+        const setFilterBlockStatusMock = vi.fn();
+        render(
+            <ChatListFilters
+                {...defaultProps}
+                activeFilterTab="bloqueio"
+                setFilterBlockStatus={setFilterBlockStatusMock}
+            />
+        );
+
+        const btnUnblocked = screen.getByText('Não bloqueados');
+        expect(btnUnblocked).toBeInTheDocument();
+        expect(screen.getByText('Bloqueados')).toBeInTheDocument();
+        expect(screen.getByText('Em repouso')).toBeInTheDocument();
+
+        fireEvent.click(btnUnblocked);
+        expect(setFilterBlockStatusMock).toHaveBeenCalled();
+    });
 });
 

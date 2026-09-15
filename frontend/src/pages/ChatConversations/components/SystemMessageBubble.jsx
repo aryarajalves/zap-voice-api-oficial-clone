@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiTag, FiMaximize2, FiEdit2, FiCheck, FiTrash2, FiRefreshCw } from 'react-icons/fi';
+import { FiTag, FiMaximize2, FiEdit2, FiCheck, FiTrash2, FiRefreshCw, FiZap, FiLayers } from 'react-icons/fi';
 import { BsJournalText } from 'react-icons/bs';
 import { renderConvoMentions } from '../utils/convoMentionUtils';
 import MentionTextarea from './MentionTextarea';
@@ -17,8 +17,69 @@ export default function SystemMessageBubble({
     setDeleteNoteConfirmMsgId,
     formatMessageTimestamp,
     engine,
-    selectedConvo
+    selectedConvo,
+    onOpenPipelineByTriggerId
 }) {
+    const isFunnelEvent = Boolean(
+        msg.meta_data?.is_funnel_event ||
+        msg.message_type === 'funnel_event' ||
+        (msg.content && (msg.content.includes("Funil") || msg.content.includes("funil")) && (msg.content.includes("iniciado") || msg.content.includes("ativado")))
+    );
+
+    if (isFunnelEvent) {
+        const funnelName = msg.meta_data?.funnel_name || selectedConvo?.active_funnel?.name || 'Automação';
+        const triggerId = msg.meta_data?.trigger_id || selectedConvo?.active_funnel?.trigger_id;
+
+        return (
+            <div id={`msg-${msg.id}`} key={msg.id} className="flex justify-center my-3 animate-in fade-in duration-300">
+                <div className={`border rounded-2xl p-3.5 shadow-md text-xs max-w-md w-full transition-all duration-300 backdrop-blur-sm ${
+                    isHighlighted
+                        ? 'ring-2 ring-emerald-400 bg-emerald-500/20 border-emerald-500/40 text-emerald-800 dark:text-emerald-200'
+                        : 'bg-gradient-to-r from-emerald-950/40 via-slate-900/50 to-indigo-950/40 border-emerald-500/30 text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.08)]'
+                }`}>
+                    <div className="flex items-center justify-between font-bold mb-1 uppercase tracking-wider text-[10px] text-emerald-400">
+                        <div className="flex items-center gap-1.5">
+                            <FiZap size={13} className="text-emerald-400 animate-pulse" />
+                            <span>Funil em Execução</span>
+                        </div>
+                        <span className="text-[9px] opacity-70 font-medium normal-case">
+                            {formatMessageTimestamp(msg.timestamp)}
+                        </span>
+                    </div>
+
+                    <div className="mt-1 flex items-start gap-2.5">
+                        <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 shrink-0 mt-0.5">
+                            <FiLayers size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm text-emerald-300 truncate">
+                                {funnelName}
+                            </h4>
+                            <p className="text-[11px] text-emerald-200/80 mt-0.5 leading-snug">
+                                {msg.content || `O funil "${funnelName}" foi iniciado para este contato.`}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between">
+                        <span className="text-[10px] text-emerald-300/70 font-medium">
+                            Acompanhe os nós e etiquetas
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => onOpenPipelineByTriggerId?.(triggerId)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold transition-all shadow-sm hover:shadow-[0_0_12px_rgba(16,185,129,0.4)] flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                            title="Ver a árvore de execução deste funil"
+                        >
+                            <FiLayers size={12} />
+                            <span>Ver Pipeline do Funil</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const isPrivateNote = msg.content && msg.content.startsWith("🔒 Anotação Privada:");
 
     if (isPrivateNote) {

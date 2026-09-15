@@ -110,6 +110,7 @@ export function useChatOperations({
         setPipelineTrigger: pipelineOps.setPipelineTrigger,
         isLoadingPipeline: pipelineOps.isLoadingPipeline,
         handleOpenActiveFunnelPipeline: pipelineOps.handleOpenActiveFunnelPipeline,
+        handleOpenPipelineByTriggerId: pipelineOps.handleOpenPipelineByTriggerId,
 
         // Tags individuais
         handleAddTagWithName: tagsOps.handleAddTagWithName,
@@ -127,6 +128,7 @@ export function useChatOperations({
         handleToggleStarMessage: messageActionsOps.handleToggleStarMessage,
         handleCopyMessageContent: messageActionsOps.handleCopyMessageContent,
         handleResendToAgentFlow: messageActionsOps.handleResendToAgentFlow,
+        handleRetryTemplateMessage: messageActionsOps.handleRetryTemplateMessage,
 
         // Exclusão e limpeza
         handleClearConversationMessages: deletionOps.handleClearConversationMessages,

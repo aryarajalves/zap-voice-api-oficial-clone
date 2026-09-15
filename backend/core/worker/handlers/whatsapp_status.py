@@ -304,6 +304,80 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                             del_history.delete(synchronize_session=False)
                         except Exception as e_clean_hist:
                             logger.warning(f"⚠️ [FAILED_CLEANUP] Erro ao limpar histórico de template na falha: {e_clean_hist}")
+
+                        # Sincronizar falha com o Chat local para exibir alerta e botão de redisparo
+                        try:
+                            clean_p_fail = ''.join(filter(str.isdigit, str(message_record.phone_number)))
+                            p_suffix_fail = clean_p_fail[-8:] if len(clean_p_fail) >= 8 else clean_p_fail
+                            target_cid_fail = trigger.client_id if trigger else (int(message_record.var1) if message_record.var1 else client_id)
+
+                            chat_msg_fail = db.query(models.ChatMessage).filter(
+                                models.ChatMessage.wa_message_id == msg_id
+                            ).first()
+
+                            if chat_msg_fail:
+                                cur_meta = dict(chat_msg_fail.meta_data or {})
+                                cur_meta["status"] = "failed"
+                                cur_meta["failure_reason"] = reason
+                                cur_meta["can_retry"] = True
+                                if message_record.template_name:
+                                    cur_meta["template_name"] = message_record.template_name
+                                chat_msg_fail.meta_data = cur_meta
+                                db.commit()
+
+                                from rabbitmq_client import rabbitmq
+                                payload_fail_ws = {
+                                    "id": chat_msg_fail.id,
+                                    "conversation_id": chat_msg_fail.conversation_id,
+                                    "sender_type": chat_msg_fail.sender_type,
+                                    "message_type": chat_msg_fail.message_type,
+                                    "content": chat_msg_fail.content,
+                                    "meta_data": chat_msg_fail.meta_data,
+                                    "timestamp": chat_msg_fail.timestamp.isoformat() if chat_msg_fail.timestamp else datetime.now(timezone.utc).isoformat(),
+                                    "client_id": target_cid_fail
+                                }
+                                await rabbitmq.publish_event("new_message", payload_fail_ws)
+                            else:
+                                fail_convo = db.query(models.ChatConversation).filter(
+                                    models.ChatConversation.client_id == target_cid_fail,
+                                    models.ChatConversation.phone.like(f"%{p_suffix_fail}")
+                                ).first()
+                                if fail_convo:
+                                    fail_meta = {
+                                        "is_template": True,
+                                        "template_name": message_record.template_name or "Template",
+                                        "status": "failed",
+                                        "failure_reason": reason,
+                                        "can_retry": True
+                                    }
+                                    new_fail_msg = models.ChatMessage(
+                                        conversation_id=fail_convo.id,
+                                        sender_type="user",
+                                        message_type="template",
+                                        content=message_record.content or f"[Template: {message_record.template_name}]",
+                                        wa_message_id=msg_id,
+                                        meta_data=fail_meta
+                                    )
+                                    db.add(new_fail_msg)
+                                    fail_convo.last_message_content = new_fail_msg.content
+                                    fail_convo.last_message_at = datetime.now(timezone.utc)
+                                    db.commit()
+                                    db.refresh(new_fail_msg)
+
+                                    from rabbitmq_client import rabbitmq
+                                    payload_new_fail_ws = {
+                                        "id": new_fail_msg.id,
+                                        "conversation_id": new_fail_msg.conversation_id,
+                                        "sender_type": new_fail_msg.sender_type,
+                                        "message_type": new_fail_msg.message_type,
+                                        "content": new_fail_msg.content,
+                                        "meta_data": new_fail_msg.meta_data,
+                                        "timestamp": new_fail_msg.timestamp.isoformat() if new_fail_msg.timestamp else datetime.now(timezone.utc).isoformat(),
+                                        "client_id": target_cid_fail
+                                    }
+                                    await rabbitmq.publish_event("new_message", payload_new_fail_ws)
+                        except Exception as e_fail_chat:
+                            logger.error(f"❌ [CHAT-FAIL-SYNC] Erro ao sincronizar falha de template no chat: {e_fail_chat}")
                         if trigger:
                             is_bsud = str(message_record.phone_number).startswith("BR.")
                             if not is_bsud:

@@ -24,6 +24,8 @@ class FunnelBase(BaseModel):
     trigger_match_type: Optional[str] = Field("contains", description="Tipo de correspondência: 'contains' ou 'exact'")
     trigger_limit_type: Optional[str] = Field("none", description="Limite de reativação por contato: 'none', 'once_per_day', 'once_24h', 'once_lifetime'")
     is_trigger_active: Optional[bool] = Field(True, description="Se o gatilho por palavra-chave está ativo")
+    trigger_on_new_conversation: Optional[bool] = Field(False, description="Se o funil deve iniciar automaticamente em nova conversa no chat")
+    trigger_new_conversation_mode: Optional[str] = Field("all", description="Modo de disparo em nova conversa: 'all' ou 'only_new_contacts'")
     allowed_phones: Optional[List[str]] = Field(None, description="Lista de telefones permitidos (Whitelist)")
     blocked_phones: Optional[List[str]] = Field(None, description="Lista de telefones bloqueados (Blacklist)")
     allowed_phone: Optional[str] = Field(None, description="Legado: apenas este número pode disparar", example="5511999999999")

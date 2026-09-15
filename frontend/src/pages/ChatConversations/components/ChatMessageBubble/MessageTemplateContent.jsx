@@ -84,3 +84,43 @@ export function MessageTemplateButtons({ buttons = [] }) {
         </div>
     );
 }
+
+export function MessageTemplateFailureBanner({ msg, onRetry, isRetrying }) {
+    const isFailed = msg.meta_data?.status === 'failed' || msg.status === 'failed' || Boolean(msg.meta_data?.failure_reason);
+    if (!isFailed) return null;
+
+    const reason = msg.meta_data?.failure_reason || 'Falha no envio da Meta';
+
+    return (
+        <div className="mt-2.5 p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-xs shadow-sm">
+            <div className="flex items-center gap-1.5 font-bold text-red-400 text-[11px]">
+                <span>⚠️</span>
+                <span className="truncate">{reason}</span>
+            </div>
+            <div className="mt-2 flex justify-end">
+                <button
+                    type="button"
+                    disabled={isRetrying}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onRetry?.(msg);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-md hover:shadow-[0_0_12px_rgba(16,185,129,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    title="Disparar novamente o mesmo template para este contato"
+                >
+                    {isRetrying ? (
+                        <>
+                            <span className="animate-spin inline-block">🔄</span>
+                            <span>Disparando...</span>
+                        </>
+                    ) : (
+                        <>
+                            <span>▶</span>
+                            <span>Disparar Novamente</span>
+                        </>
+                    )}
+                </button>
+            </div>
+        </div>
+    );
+}

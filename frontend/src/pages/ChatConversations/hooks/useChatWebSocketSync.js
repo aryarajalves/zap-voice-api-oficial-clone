@@ -1,10 +1,11 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { WS_URL } from '../../../config';
 import { appendOrUpdateMessage } from '../utils/messageDeduplicator';
 
 export function useChatWebSocketSync({
   activeClient,
   selectedConvo,
+  setSelectedConvo,
   setConversations,
   setMessages,
   setShouldScrollToBottom,
@@ -72,6 +73,63 @@ export function useChatWebSocketSync({
 
                 if (isMediaMsg || isNoteMsg) {
                   loadConversationMedia(selectedConvo.id);
+                }
+              }
+            } else if (evtName === 'message_reaction_updated' || data.event === 'message_reaction_updated') {
+              const convoId = Number(payload.conversation_id);
+              const targetMsgId = payload.message_id;
+              const targetWaId = payload.wa_message_id;
+              const metaData = payload.meta_data;
+              const newLastContactAt = payload.last_contact_message_at;
+              const newLastMessageAt = payload.last_message_at;
+              const newStatus = payload.status;
+
+              // 1. Atualiza lista de conversas com o novo timestamp da janela de 24h
+              setConversations(prev => {
+                const index = prev.findIndex(c => Number(c.id) === convoId);
+                if (index !== -1) {
+                  const updated = [...prev];
+                  const target = { ...updated[index] };
+                  if (newLastContactAt) target.last_contact_message_at = newLastContactAt;
+                  if (newLastMessageAt) target.last_message_at = newLastMessageAt;
+                  if (newStatus) target.status = newStatus;
+                  updated[index] = target;
+                  return updated;
+                }
+                return prev;
+              });
+
+              // 2. Se a conversa recebida for a selecionada atualmente
+              if (selectedConvo?.id && Number(selectedConvo.id) === convoId) {
+                // Atualiza last_contact_message_at para resetar o timer da janela de 24h imediatamente na interface
+                if (newLastContactAt && setSelectedConvo) {
+                  setSelectedConvo(prev => prev ? ({
+                    ...prev,
+                    last_contact_message_at: newLastContactAt,
+                    ...(newStatus ? { status: newStatus } : {})
+                  }) : prev);
+                }
+
+                // Atualiza as reações da mensagem na listagem de mensagens
+                if (metaData && (targetMsgId || targetWaId)) {
+                  setMessages(prev => prev.map(m => {
+                    const matchId = targetMsgId && Number(m.id) === Number(targetMsgId);
+                    const matchWaId = targetWaId && (
+                      m.wa_message_id === targetWaId ||
+                      m.wa_message_id === String(targetWaId).replace('wamid.', '') ||
+                      `wamid.${m.wa_message_id}` === targetWaId
+                    );
+                    if (matchId || matchWaId) {
+                      return {
+                        ...m,
+                        meta_data: {
+                          ...(m.meta_data || {}),
+                          reactions: metaData.reactions || []
+                        }
+                      };
+                    }
+                    return m;
+                  }));
                 }
               }
             }
