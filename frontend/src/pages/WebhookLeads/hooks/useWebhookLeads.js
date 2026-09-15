@@ -44,6 +44,11 @@ export function useWebhookLeads(activeClient) {
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
 
+  // Filtros de interação no chat
+  const [interactionPreset, setInteractionPreset] = useState('');
+  const [customInteractionFrom, setCustomInteractionFrom] = useState('');
+  const [customInteractionTo, setCustomInteractionTo] = useState('');
+
   // Sub-hooks modulares
   const {
     selectedLeads, setSelectedLeads,
@@ -84,6 +89,9 @@ export function useWebhookLeads(activeClient) {
     datePreset: overrides.datePreset !== undefined ? overrides.datePreset : datePreset,
     customDateFrom: overrides.customDateFrom !== undefined ? overrides.customDateFrom : customDateFrom,
     customDateTo: overrides.customDateTo !== undefined ? overrides.customDateTo : customDateTo,
+    interactionPreset: overrides.interactionPreset !== undefined ? overrides.interactionPreset : interactionPreset,
+    customInteractionFrom: overrides.customInteractionFrom !== undefined ? overrides.customInteractionFrom : customInteractionFrom,
+    customInteractionTo: overrides.customInteractionTo !== undefined ? overrides.customInteractionTo : customInteractionTo,
     importedByClientId: overrides.importedByClientId !== undefined ? overrides.importedByClientId : importedByClientId,
     origin: overrides.origin !== undefined ? overrides.origin : origin,
     lockedFilter: overrides.lockedFilter !== undefined ? overrides.lockedFilter : lockedFilter,
@@ -91,7 +99,7 @@ export function useWebhookLeads(activeClient) {
     filterDdi: overrides.filterDdi !== undefined ? overrides.filterDdi : filterDdi,
     filterDdd: overrides.filterDdd !== undefined ? overrides.filterDdd : filterDdd,
     blockStatusFilter: overrides.blockStatusFilter !== undefined ? overrides.blockStatusFilter : blockStatusFilter,
-  }), [debouncedSearch, eventType, selectedTags, tagMode, excludedTags, page, limit, datePreset, customDateFrom, customDateTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
+  }), [debouncedSearch, eventType, selectedTags, tagMode, excludedTags, page, limit, datePreset, customDateFrom, customDateTo, interactionPreset, customInteractionFrom, customInteractionTo, importedByClientId, origin, lockedFilter, bsudFilter, filterDdi, filterDdd, blockStatusFilter]);
 
   const fetchLeads = useCallback(async (overrides = {}) => {
     if (!activeClient?.id) return;
@@ -250,6 +258,17 @@ export function useWebhookLeads(activeClient) {
     setPage(0);
   };
 
+  const handleSetInteractionPreset = (val) => { setInteractionPreset(val); setPage(0); };
+  const handleSetCustomInteractionFrom = (val) => { setCustomInteractionFrom(val); setPage(0); };
+  const handleSetCustomInteractionTo = (val) => { setCustomInteractionTo(val); setPage(0); };
+
+  const handleClearInteractionFilters = () => {
+    setInteractionPreset('');
+    setCustomInteractionFrom('');
+    setCustomInteractionTo('');
+    setPage(0);
+  };
+
   const updateLeadInPlace = useCallback((leadId, updates) => {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
   }, []);
@@ -270,6 +289,10 @@ export function useWebhookLeads(activeClient) {
     customDateFrom, setCustomDateFrom: handleSetCustomDateFrom,
     customDateTo, setCustomDateTo: handleSetCustomDateTo,
     handleClearDateFilters,
+    interactionPreset, setInteractionPreset: handleSetInteractionPreset,
+    customInteractionFrom, setCustomInteractionFrom: handleSetCustomInteractionFrom,
+    customInteractionTo, setCustomInteractionTo: handleSetCustomInteractionTo,
+    handleClearInteractionFilters,
     selectedLeads, setSelectedLeads, isDeleteModalOpen, setIsDeleteModalOpen, leadToDelete, setLeadToDelete, isDeleting,
     isImportModalOpen, setIsImportModalOpen, isCreateModalOpen, setIsCreateModalOpen,
     isEditModalOpen, setIsEditModalOpen, leadToEdit, setLeadToEdit,

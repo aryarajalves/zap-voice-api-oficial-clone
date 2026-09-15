@@ -1,6 +1,7 @@
 import React from 'react';
 import { FiX, FiTag } from 'react-icons/fi';
 import { formatDddOption, formatDdiOption } from '../../../../utils/dddInfo';
+import { getInteractionPresetLabel } from './ChatInteractionFilter';
 
 const MONTHS = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -31,6 +32,8 @@ export default function ActiveFiltersBadges({
   hasDateFilter,
   datePreset,
   handleClearDateFilters,
+  interactionPreset,
+  handleClearInteractionFilters,
   filterDdi,
   setFilterDdi,
   filterDdd,
@@ -45,7 +48,7 @@ export default function ActiveFiltersBadges({
   setExcludedTags,
   total
 }) {
-  const hasActiveBadges = hasDateFilter || filterDdi || filterDdd || blockStatusFilter || (selectedTags && selectedTags.length > 0) || (excludedTags && excludedTags.length > 0);
+  const hasActiveBadges = hasDateFilter || !!interactionPreset || filterDdi || filterDdd || blockStatusFilter || (selectedTags && selectedTags.length > 0) || (excludedTags && excludedTags.length > 0);
 
   if (!hasActiveBadges) {
     return (
@@ -106,6 +109,21 @@ export default function ActiveFiltersBadges({
             type="button"
             onClick={handleClearDateFilters}
             className="ml-0.5 text-blue-400 hover:text-blue-600 transition-colors cursor-pointer"
+          >
+            <FiX size={11} />
+          </button>
+        </span>
+      )}
+
+      {interactionPreset && (
+        <span className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50">
+          {getInteractionPresetLabel(interactionPreset)}
+          <button
+            id="contacts-interaction-badge-remove"
+            type="button"
+            onClick={handleClearInteractionFilters}
+            className="ml-0.5 text-indigo-400 hover:text-indigo-600 transition-colors cursor-pointer"
+            title="Remover filtro de interação"
           >
             <FiX size={11} />
           </button>

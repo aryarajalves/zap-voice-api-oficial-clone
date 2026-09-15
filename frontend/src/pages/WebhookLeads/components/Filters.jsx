@@ -27,6 +27,10 @@ export default function Filters({
   customDateFrom, setCustomDateFrom,
   customDateTo, setCustomDateTo,
   handleClearDateFilters,
+  interactionPreset, setInteractionPreset,
+  customInteractionFrom, setCustomInteractionFrom,
+  customInteractionTo, setCustomInteractionTo,
+  handleClearInteractionFilters,
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const hasDateFilter = !!datePreset;
@@ -44,7 +48,8 @@ export default function Filters({
     (blockStatusFilter ? 1 : 0) + 
     (bsudFilter !== '' ? 1 : 0) + 
     (filterDdi ? 1 : 0) + 
-    (filterDdd ? 1 : 0);
+    (filterDdd ? 1 : 0) +
+    (interactionPreset ? 1 : 0);
 
   return (
     <div className="space-y-4 mb-6">
@@ -163,6 +168,13 @@ export default function Filters({
             dddOptions={dddOptions}
             blockStatusOptions={blockStatusOptions}
             availableFilters={availableFilters}
+            interactionPreset={interactionPreset}
+            setInteractionPreset={setInteractionPreset}
+            customInteractionFrom={customInteractionFrom}
+            setCustomInteractionFrom={setCustomInteractionFrom}
+            customInteractionTo={customInteractionTo}
+            setCustomInteractionTo={setCustomInteractionTo}
+            handleClearInteractionFilters={handleClearInteractionFilters}
           />
         )}
 
@@ -173,6 +185,8 @@ export default function Filters({
         hasDateFilter={hasDateFilter}
         datePreset={datePreset}
         handleClearDateFilters={handleClearDateFilters}
+        interactionPreset={interactionPreset}
+        handleClearInteractionFilters={handleClearInteractionFilters}
         filterDdi={filterDdi}
         setFilterDdi={setFilterDdi}
         filterDdd={filterDdd}

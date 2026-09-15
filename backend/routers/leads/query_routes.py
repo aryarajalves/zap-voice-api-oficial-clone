@@ -40,6 +40,9 @@ def list_leads(
     exclude_tag: Optional[List[str]] = Query(None),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    interaction_preset: Optional[str] = None,
+    interaction_from: Optional[str] = None,
+    interaction_to: Optional[str] = None,
     imported_by_client_id: Optional[int] = None,
     origin: Optional[str] = None,
     is_locked: Optional[str] = None,  # 'true' | 'false' | None (todos)
@@ -73,7 +76,10 @@ def list_leads(
     query = _apply_common_lead_filters(
         query, search, event_type, product_name, tag, tag_mode,
         is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin,
-        exclude_tag=exclude_tag
+        exclude_tag=exclude_tag,
+        interaction_preset=interaction_preset,
+        interaction_from=interaction_from,
+        interaction_to=interaction_to
     )
 
     # Filtro de Agendamentos
@@ -174,6 +180,21 @@ def list_leads(
             item.reminder_dispatch_interaction = False
             item.reminder_dispatch_failure_reason = None
 
+    # Enriquecer com a data da última interação registrada no chat
+    item_phones = [it.phone for it in items if it.phone]
+    if item_phones:
+        convos = db.query(models.ChatConversation.phone, models.ChatConversation.last_contact_message_at).filter(
+            models.ChatConversation.client_id == client_id,
+            models.ChatConversation.phone.in_(item_phones),
+            models.ChatConversation.last_contact_message_at.isnot(None)
+        ).all()
+        convo_map = {c[0]: c[1] for c in convos}
+        for item in items:
+            item.last_interaction_at = convo_map.get(item.phone)
+    else:
+        for item in items:
+            item.last_interaction_at = None
+
     return {
         "items": items,
         "total": total
@@ -189,6 +210,9 @@ def get_lead_ddi_ddd_filters(
     tag_mode: Optional[str] = "OR",
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    interaction_preset: Optional[str] = None,
+    interaction_from: Optional[str] = None,
+    interaction_to: Optional[str] = None,
     imported_by_client_id: Optional[int] = None,
     origin: Optional[str] = None,
     is_locked: Optional[str] = None,
@@ -213,7 +237,10 @@ def get_lead_ddi_ddd_filters(
 
     query = _apply_common_lead_filters(
         query, search, event_type, product_name, tag, tag_mode,
-        is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin
+        is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin,
+        interaction_preset=interaction_preset,
+        interaction_from=interaction_from,
+        interaction_to=interaction_to
     )
 
     related_client_ids = _get_related_client_ids(db, client_id)
@@ -378,6 +405,9 @@ def export_leads_csv(
     ids: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    interaction_preset: Optional[str] = None,
+    interaction_from: Optional[str] = None,
+    interaction_to: Optional[str] = None,
     imported_by_client_id: Optional[int] = None,
     origin: Optional[str] = None,
     is_locked: Optional[str] = None,
@@ -412,7 +442,10 @@ def export_leads_csv(
         query = _apply_common_lead_filters(
             query, search, event_type, product_name, tag, tag_mode,
             is_locked, has_bsud, date_from, date_to, imported_by_client_id, origin,
-            exclude_tag=exclude_tag
+            exclude_tag=exclude_tag,
+            interaction_preset=interaction_preset,
+            interaction_from=interaction_from,
+            interaction_to=interaction_to
         )
 
         # Filtros de DDI/DDD

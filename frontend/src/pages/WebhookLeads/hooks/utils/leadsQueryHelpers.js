@@ -22,6 +22,9 @@ export function buildLeadsQueryParams(filters) {
     datePreset,
     customDateFrom,
     customDateTo,
+    interactionPreset,
+    customInteractionFrom,
+    customInteractionTo,
     selectedLeads,
     selectAllPages
   } = filters;
@@ -60,6 +63,14 @@ export function buildLeadsQueryParams(filters) {
     }
     if (from) params.push(`date_from=${from}`);
     if (to) params.push(`date_to=${to}`);
+
+    if (interactionPreset) {
+      params.push(`interaction_preset=${encodeURIComponent(interactionPreset)}`);
+      if (interactionPreset === 'custom') {
+        if (customInteractionFrom) params.push(`interaction_from=${encodeURIComponent(customInteractionFrom)}`);
+        if (customInteractionTo) params.push(`interaction_to=${encodeURIComponent(customInteractionTo)}`);
+      }
+    }
   }
 
   return params.join('&');
@@ -78,6 +89,9 @@ export function buildCommonFilterPayload(filters) {
     datePreset,
     customDateFrom,
     customDateTo,
+    interactionPreset,
+    customInteractionFrom,
+    customInteractionTo,
     importedByClientId,
     origin,
     lockedFilter,
@@ -97,6 +111,9 @@ export function buildCommonFilterPayload(filters) {
     exclude_tag: excludedTags?.length > 0 ? excludedTags : null,
     date_from: from || null,
     date_to: to || null,
+    interaction_preset: interactionPreset || null,
+    interaction_from: (interactionPreset === 'custom' && customInteractionFrom) ? customInteractionFrom : null,
+    interaction_to: (interactionPreset === 'custom' && customInteractionTo) ? customInteractionTo : null,
     importedByClientId: importedByClientId || null,
     origin: origin || null,
     is_locked: (lockedFilter !== '' && lockedFilter !== undefined && lockedFilter !== null) ? lockedFilter : null,

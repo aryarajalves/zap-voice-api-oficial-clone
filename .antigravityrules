@@ -55,7 +55,7 @@
 ---
 
 ## 8. Integridade de Esquema (Banco de Dados)
-- **Rastreabilidade:** Toda coluna ou tabela nova deve ser registrada no `DATABASE_SCHEMA_LOG.md`.
+- **Rastreabilidade:** Toda coluna ou tabela nova deve ser registrada no `docs/DATABASE_SCHEMA_LOG.md`.
 - **Migração:** Crie sempre um script `.py` de migração para qualquer alteração no `models.py`.
 - **Automação:** Garanta que o `auto_migrate` no `database.py` seja chamado no startup do sistema.
 

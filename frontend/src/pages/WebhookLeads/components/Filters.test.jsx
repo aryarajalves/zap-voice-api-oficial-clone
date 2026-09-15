@@ -12,6 +12,7 @@ vi.mock('react-icons/fi', () => ({
   FiFilter: () => <span data-testid="icon-filter" />,
   FiSliders: () => <span data-testid="icon-sliders" />,
   FiCalendar: () => <span data-testid="icon-calendar" />,
+  FiMessageSquare: () => <span data-testid="icon-message" />,
 }));
 
 // Mock sub-components

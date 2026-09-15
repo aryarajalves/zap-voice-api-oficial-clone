@@ -76,6 +76,13 @@ export default function WebhookLeads({ onNavigateToImportHistory, onNavigateToIn
         customDateTo={logic.customDateTo}
         setCustomDateTo={logic.setCustomDateTo}
         handleClearDateFilters={logic.handleClearDateFilters}
+        interactionPreset={logic.interactionPreset}
+        setInteractionPreset={logic.setInteractionPreset}
+        customInteractionFrom={logic.customInteractionFrom}
+        setCustomInteractionFrom={logic.setCustomInteractionFrom}
+        customInteractionTo={logic.customInteractionTo}
+        setCustomInteractionTo={logic.setCustomInteractionTo}
+        handleClearInteractionFilters={logic.handleClearInteractionFilters}
       />
 
       <Table

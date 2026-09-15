@@ -30,6 +30,7 @@ class WebhookLeadBase(BaseModel):
 
     is_really_blocked: bool = False
     resting_expires_at: Optional[datetime] = None
+    last_interaction_at: Optional[datetime] = None
     reminder_dispatch_status: Optional[str] = None
     reminder_dispatch_interaction: Optional[bool] = False
     reminder_dispatch_failure_reason: Optional[str] = None

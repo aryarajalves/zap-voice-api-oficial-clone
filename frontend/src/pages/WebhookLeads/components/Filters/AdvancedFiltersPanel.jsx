@@ -2,6 +2,7 @@ import React from 'react';
 import { FiFilter } from 'react-icons/fi';
 import { formatDddOption, formatDdiOption } from '../../../../utils/dddInfo';
 import FilterSelect from '../FilterSelect';
+import ChatInteractionFilter from './ChatInteractionFilter';
 
 export default function AdvancedFiltersPanel({
   importedByClientId,
@@ -21,7 +22,14 @@ export default function AdvancedFiltersPanel({
   ddiOptions = [],
   dddOptions = [],
   blockStatusOptions = [],
-  availableFilters = {}
+  availableFilters = {},
+  interactionPreset,
+  setInteractionPreset,
+  customInteractionFrom,
+  setCustomInteractionFrom,
+  customInteractionTo,
+  setCustomInteractionTo,
+  handleClearInteractionFilters,
 }) {
   return (
     <div className="mt-5 pt-5 border-t border-gray-100 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-fadeIn">
@@ -144,6 +152,22 @@ export default function AdvancedFiltersPanel({
           color="green"
           disabled={dddOptions.length === 0}
           options={dddOptions.map(ddd => ({ value: ddd, label: formatDddOption(ddd) }))}
+        />
+      </div>
+
+      {/* Última Interação no Chat */}
+      <div className="space-y-1.5">
+        <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider pl-1">
+          Interação no Chat
+        </label>
+        <ChatInteractionFilter
+          interactionPreset={interactionPreset}
+          setInteractionPreset={setInteractionPreset}
+          customInteractionFrom={customInteractionFrom}
+          setCustomInteractionFrom={setCustomInteractionFrom}
+          customInteractionTo={customInteractionTo}
+          setCustomInteractionTo={setCustomInteractionTo}
+          handleClearInteractionFilters={handleClearInteractionFilters}
         />
       </div>
     </div>

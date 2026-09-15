@@ -4,8 +4,27 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, func
+from sqlalchemy import or_, and_, func, select
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import FunctionElement
 import models
+
+
+class sql_right(FunctionElement):
+    name = "sql_right"
+    inherit_cache = True
+
+
+@compiles(sql_right)
+def _default_right(element, compiler, **kw):
+    args = list(element.clauses)
+    return f"right({compiler.process(args[0], **kw)}, {compiler.process(args[1], **kw)})"
+
+
+@compiles(sql_right, "sqlite")
+def _sqlite_right(element, compiler, **kw):
+    args = list(element.clauses)
+    return f"substr({compiler.process(args[0], **kw)}, -{compiler.process(args[1], **kw)})"
 
 
 class BulkDeleteRequest(BaseModel):
@@ -46,9 +65,49 @@ def escape_sql_like(val: str) -> str:
     return str(val).replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
 
 
+def _resolve_interaction_range(interaction_preset: Optional[str], interaction_from: Optional[str], interaction_to: Optional[str]):
+    """Calcula (dt_from, dt_to) para o filtro de interação no chat."""
+    now = datetime.utcnow()
+    dt_from = None
+    dt_to = None
+
+    if interaction_preset == "last7":
+        dt_from = now - timedelta(days=7)
+        dt_to = now
+    elif interaction_preset == "last14":
+        dt_from = now - timedelta(days=14)
+        dt_to = now
+    elif interaction_preset == "last30":
+        dt_from = now - timedelta(days=30)
+        dt_to = now
+    elif interaction_preset == "this_month":
+        dt_from = datetime(now.year, now.month, 1)
+        dt_to = now
+    elif interaction_preset == "last_month":
+        first_of_this_month = datetime(now.year, now.month, 1)
+        last_of_last_month = first_of_this_month - timedelta(seconds=1)
+        first_of_last_month = datetime(last_of_last_month.year, last_of_last_month.month, 1)
+        dt_from = first_of_last_month
+        dt_to = last_of_last_month
+
+    if interaction_from:
+        try:
+            dt_from = datetime.strptime(interaction_from, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de interaction_from inválido. Use YYYY-MM-DD.")
+    if interaction_to:
+        try:
+            dt_to = datetime.strptime(interaction_to, "%Y-%m-%d") + timedelta(days=1, seconds=-1)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de interaction_to inválido. Use YYYY-MM-DD.")
+
+    return dt_from, dt_to
+
+
 def _apply_common_lead_filters(query, search, event_type, product_name,
                                 tag, tag_mode, is_locked, has_bsud, date_from, date_to,
-                                imported_by_client_id, origin, exclude_tag=None):
+                                imported_by_client_id, origin, exclude_tag=None,
+                                interaction_preset=None, interaction_from=None, interaction_to=None):
     """Filtros compartilhados entre /leads, /leads/ddi-ddd-filters e afins."""
     if tag and not isinstance(tag, (list, str)):
         tag = None
@@ -193,6 +252,35 @@ def _apply_common_lead_filters(query, search, event_type, product_name,
             query = query.filter(models.WebhookLead.created_at <= dt_to)
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de date_to inválido. Use YYYY-MM-DD.")
+
+    # Filtro de Interação no Chat (Última mensagem enviada pelo contato)
+    if interaction_preset == "never":
+        subq = select(models.ChatConversation.id).where(
+            models.ChatConversation.client_id == models.WebhookLead.client_id,
+            or_(
+                models.ChatConversation.phone == models.WebhookLead.phone,
+                sql_right(func.replace(models.ChatConversation.phone, '+', ''), 8) == sql_right(func.replace(models.WebhookLead.phone, '+', ''), 8)
+            ),
+            models.ChatConversation.last_contact_message_at.isnot(None)
+        )
+        query = query.filter(~subq.exists())
+    elif interaction_preset or interaction_from or interaction_to:
+        dt_int_from, dt_int_to = _resolve_interaction_range(interaction_preset, interaction_from, interaction_to)
+        where_clauses = [
+            models.ChatConversation.client_id == models.WebhookLead.client_id,
+            or_(
+                models.ChatConversation.phone == models.WebhookLead.phone,
+                sql_right(func.replace(models.ChatConversation.phone, '+', ''), 8) == sql_right(func.replace(models.WebhookLead.phone, '+', ''), 8)
+            ),
+            models.ChatConversation.last_contact_message_at.isnot(None)
+        ]
+        if dt_int_from:
+            where_clauses.append(models.ChatConversation.last_contact_message_at >= dt_int_from)
+        if dt_int_to:
+            where_clauses.append(models.ChatConversation.last_contact_message_at <= dt_int_to)
+
+        subq = select(models.ChatConversation.id).where(*where_clauses)
+        query = query.filter(subq.exists())
 
     return query
 
