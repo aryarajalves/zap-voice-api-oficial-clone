@@ -180,7 +180,7 @@ export function useChatEngine({
   });
 
   // 6. Sub-hook de Abertura de Conversa por ID
-  const { openConversationById } = useChatConversationOpen({
+  const { openConversationById, openConversationByPhone } = useChatConversationOpen({
     activeClient,
     conversations,
     setConversations,
@@ -191,6 +191,7 @@ export function useChatEngine({
 
   return {
     openConversationById,
+    openConversationByPhone,
     sendReaction,
     conversations,
     setConversations,

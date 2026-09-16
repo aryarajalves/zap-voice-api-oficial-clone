@@ -10,9 +10,29 @@ const NodeStatsDetailsModal = ({
     setStatsPage,
     activeClient,
     trigger,
-    onStopContact
+    onStopContact,
+    onClosePipeline
 }) => {
     if (!selectedNodeStats) return null;
+
+    const handleOpenZapVoiceChat = (contact) => {
+        if (onClose) onClose();
+        if (onClosePipeline) onClosePipeline();
+
+        // 1. Navega para a tela de Atendimento / Chat do ZapVoice
+        window.dispatchEvent(new CustomEvent('navigate-view', { detail: 'chat_conversations' }));
+
+        // 2. Notifica o ChatConversations para abrir e selecionar esta conversa
+        const convoPayload = {
+            id: contact.convoId,
+            phone: contact.phone,
+            contact_name: contact.name,
+            name: contact.name
+        };
+        setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('select-chat-convo', { detail: convoPayload }));
+        }, 150);
+    };
 
     return (
         <div className="fixed inset-0 z-[21000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -100,29 +120,15 @@ const NodeStatsDetailsModal = ({
                                         </button>
                                     )}
                                     
-                                    {c.convoId && c.accountId && (activeClient?.chatwoot_url || trigger.chatwoot_url) && (
-                                        (() => {
-                                            let baseUrl = activeClient?.chatwoot_url || '';
-                                            if (!baseUrl && trigger.chatwoot_url) {
-                                                const idx = trigger.chatwoot_url.indexOf('/app/accounts/');
-                                                if (idx !== -1) {
-                                                    baseUrl = trigger.chatwoot_url.substring(0, idx);
-                                                }
-                                            }
-                                            if (baseUrl) {
-                                                return (
-                                                    <a 
-                                                        href={`${baseUrl}/app/accounts/${c.accountId}/conversations/${c.convoId}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-md shadow-blue-500/20 active:scale-95 shrink-0 flex items-center gap-1"
-                                                    >
-                                                        <FiMessageSquare size={10} /> Chat
-                                                    </a>
-                                                );
-                                            }
-                                            return null;
-                                        })()
+                                    {(c.convoId || c.phone) && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => handleOpenZapVoiceChat(c)}
+                                            title="Abrir conversa no Chat do ZapVoice"
+                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-md shadow-blue-500/20 active:scale-95 shrink-0 flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <FiMessageSquare size={10} /> Chat
+                                        </button>
                                     )}
                                 </div>
                             </div>

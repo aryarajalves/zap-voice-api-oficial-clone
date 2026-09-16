@@ -431,7 +431,9 @@ async def evaluate_new_conversation_triggers(
     try:
         candidate_funnels = db.query(models.Funnel).filter(
             models.Funnel.client_id == target_cid,
-            models.Funnel.status == "active",
+            models.Funnel.is_active == True,
+            models.Funnel.is_archived == False,
+            models.Funnel.is_trigger_active == True,
             models.Funnel.trigger_on_new_conversation == True
         ).all()
 

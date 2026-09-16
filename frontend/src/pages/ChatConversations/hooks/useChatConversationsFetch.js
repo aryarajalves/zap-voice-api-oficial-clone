@@ -98,7 +98,8 @@ export function useChatConversationsFetch({
           if (
             updated.last_contact_message_at !== prev.last_contact_message_at ||
             updated.last_message_content !== prev.last_message_content ||
-            updated.status !== prev.status
+            updated.status !== prev.status ||
+            JSON.stringify(updated.labels || []) !== JSON.stringify(prev.labels || [])
           ) {
             return { ...prev, ...updated };
           }

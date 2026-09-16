@@ -86,11 +86,18 @@ export function useChatEffects({
     useEffect(() => {
         const handleSelectConvo = (event) => {
             const convo = event.detail;
-            if (convo) setSelectedConvo(convo);
+            if (!convo) return;
+            if (convo.id && engine.openConversationById) {
+                engine.openConversationById(convo.id);
+            } else if (convo.phone && engine.openConversationByPhone) {
+                engine.openConversationByPhone(convo.phone, convo.contact_name || convo.name || '');
+            } else {
+                setSelectedConvo(convo);
+            }
         };
         window.addEventListener('select-chat-convo', handleSelectConvo);
         return () => window.removeEventListener('select-chat-convo', handleSelectConvo);
-    }, []);
+    }, [engine.openConversationById, engine.openConversationByPhone]);
 
     // Timer da Janela de 24 horas
     useEffect(() => {

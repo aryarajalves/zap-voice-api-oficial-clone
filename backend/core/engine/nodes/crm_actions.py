@@ -167,7 +167,7 @@ async def handle_crm_actions_node(db, trigger, node, chatwoot, contact_phone, co
                 "id": current_node_id,
                 "data": {
                     "action": action,
-                    "tagName": value
+                    "tagName": value or data.get("tagName", "")
                 }
             }
             return await handle_local_segment_node(db, trigger, fake_node, contact_phone)

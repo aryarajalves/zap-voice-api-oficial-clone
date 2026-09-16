@@ -74,6 +74,60 @@ export function useChatWebSocketSync({
                 if (isMediaMsg || isNoteMsg) {
                   loadConversationMedia(selectedConvo.id);
                 }
+
+                // Se for mensagem de sistema adicionando marcadores, extrai e atualiza badges de etiquetas imediatamente
+                const isLabelSystemMsg = msg.sender_type === 'system' &&
+                  typeof msg.content === 'string' &&
+                  (msg.content.includes('adicionado(s)') || msg.content.includes('adicionou marcador'));
+
+                if (isLabelSystemMsg) {
+                  const matches = msg.content.match(/'([^']+)'/g);
+                  if (matches) {
+                    const newTags = matches.map(m => m.replace(/'/g, '').trim()).filter(Boolean);
+                    if (newTags.length > 0) {
+                      setSelectedConvo(prev => {
+                        if (!prev) return prev;
+                        const current = prev.labels || [];
+                        const merged = Array.from(new Set([...current, ...newTags]));
+                        return { ...prev, labels: merged };
+                      });
+                      setConversations(prev => {
+                        const index = prev.findIndex(c => Number(c.id) === convoId);
+                        if (index !== -1) {
+                          const updated = [...prev];
+                          const curLabels = updated[index].labels || [];
+                          updated[index] = {
+                            ...updated[index],
+                            labels: Array.from(new Set([...curLabels, ...newTags]))
+                          };
+                          return updated;
+                        }
+                        return prev;
+                      });
+                    }
+                  }
+                }
+              }
+            } else if (evtName === 'conversation_updated' || data.event === 'conversation_updated') {
+              const convoId = Number(payload.id || payload.conversation_id);
+              if (convoId) {
+                setConversations(prev => {
+                  const index = prev.findIndex(c => Number(c.id) === convoId);
+                  if (index !== -1) {
+                    const updated = [...prev];
+                    updated[index] = { ...updated[index], ...payload };
+                    return updated;
+                  }
+                  return prev;
+                });
+
+                if (selectedConvo?.id && Number(selectedConvo.id) === convoId) {
+                  setSelectedConvo(prev => prev ? ({
+                    ...prev,
+                    ...payload,
+                    labels: payload.labels || prev.labels
+                  }) : prev);
+                }
               }
             } else if (evtName === 'message_reaction_updated' || data.event === 'message_reaction_updated') {
               const convoId = Number(payload.conversation_id);

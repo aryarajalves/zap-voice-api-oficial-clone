@@ -178,6 +178,83 @@ export default function SystemMessageBubble({
     }
 
     const isLabelNotice = msg.content && (msg.content.includes("Etiqueta") || msg.content.includes("etiqueta") || msg.content.includes("Marcador") || msg.content.includes("marcador"));
+
+    const renderLabelNoticeContent = (content, getLabelColor) => {
+        if (!content || typeof content !== 'string') return content;
+
+        if (content.includes("'")) {
+            const regex = /'([^']+)'/g;
+            const parts = [];
+            let lastIndex = 0;
+            let match;
+
+            while ((match = regex.exec(content)) !== null) {
+                if (match.index > lastIndex) {
+                    parts.push(content.substring(lastIndex, match.index));
+                }
+                const rawTags = match[1];
+                const tags = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+
+                tags.forEach((tag, idx) => {
+                    const tagColor = typeof getLabelColor === 'function' ? getLabelColor(tag) : '#3B82F6';
+                    parts.push(
+                        <span
+                            key={`${match.index}-${idx}`}
+                            style={{
+                                color: tagColor,
+                                borderColor: `${tagColor}50`,
+                                backgroundColor: `${tagColor}20`
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 mx-0.5 rounded-md border shadow-xs align-middle"
+                        >
+                            <FiTag size={9} />
+                            <span>{tag}</span>
+                        </span>
+                    );
+                });
+                lastIndex = regex.lastIndex;
+            }
+
+            if (lastIndex < content.length) {
+                parts.push(content.substring(lastIndex));
+            }
+
+            return <div className="font-medium font-sans leading-relaxed">{parts}</div>;
+        }
+
+        const colonIdx = content.indexOf(':');
+        if (colonIdx !== -1 && (content.toLowerCase().includes('marcador') || content.toLowerCase().includes('etiqueta'))) {
+            const prefix = content.slice(0, colonIdx + 1);
+            const tagsPart = content.slice(colonIdx + 1).trim();
+            const tags = tagsPart.split(',').map(t => t.trim()).filter(Boolean);
+
+            return (
+                <div className="font-medium font-sans leading-relaxed">
+                    {prefix}{' '}
+                    {tags.map((tag, idx) => {
+                        const tagColor = typeof getLabelColor === 'function' ? getLabelColor(tag) : '#3B82F6';
+                        return (
+                            <span
+                                key={idx}
+                                style={{
+                                    color: tagColor,
+                                    borderColor: `${tagColor}50`,
+                                    backgroundColor: `${tagColor}20`
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 mx-0.5 rounded-md border shadow-xs align-middle"
+                            >
+                                <FiTag size={9} />
+                                <span>{tag}</span>
+                            </span>
+                        );
+                    })}
+                </div>
+            );
+        }
+
+        return <p className="font-medium font-sans leading-relaxed">{content}</p>;
+    };
+
     return (
         <div key={msg.id} className="flex justify-center my-2 animate-in fade-in duration-300">
             <div className={`border rounded-lg px-3.5 py-1.5 shadow-sm text-[11px] max-w-md text-center flex items-center justify-center gap-2 ${
@@ -187,7 +264,9 @@ export default function SystemMessageBubble({
             }`}>
                 {isLabelNotice && <FiTag size={13} className="text-blue-500 shrink-0" />}
                 <div>
-                    <p className="font-medium font-sans leading-relaxed">{msg.content}</p>
+                    {isLabelNotice ? renderLabelNoticeContent(msg.content, engine?.getLabelColor) : (
+                        <p className="font-medium font-sans leading-relaxed">{msg.content}</p>
+                    )}
                     <div className="text-[9px] opacity-60 mt-0.5">
                         {formatMessageTimestamp(msg.timestamp)}
                     </div>

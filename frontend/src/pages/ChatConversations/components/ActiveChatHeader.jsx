@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiX, FiCheckCircle, FiSidebar, FiSlash, FiLayers, FiFileText, FiRefreshCw, FiSearch, FiArchive } from 'react-icons/fi';
+import { FiX, FiCheckCircle, FiSidebar, FiSlash, FiLayers, FiFileText, FiRefreshCw, FiSearch, FiArchive, FiTag } from 'react-icons/fi';
 import { BsPinAngle, BsPinAngleFill, BsExclamationCircle, BsExclamationCircleFill, BsStars } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
 
@@ -51,6 +51,27 @@ export default function ActiveChatHeader({
                         </span>
                     )}
                 </div>
+                {selectedConvo.labels && selectedConvo.labels.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5" data-testid="chat-header-labels">
+                        {selectedConvo.labels.map(label => {
+                            const labelColor = typeof engine?.getLabelColor === 'function' ? engine.getLabelColor(label) : '#3B82F6';
+                            return (
+                                <span
+                                    key={label}
+                                    style={{
+                                        color: labelColor,
+                                        borderColor: `${labelColor}40`,
+                                        backgroundColor: `${labelColor}18`
+                                    }}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-xs"
+                                >
+                                    <FiTag size={10} />
+                                    <span>{label}</span>
+                                </span>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
             <div className="flex items-center gap-2">
                 <button

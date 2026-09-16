@@ -126,4 +126,53 @@ describe('AutomationPipelineModal', () => {
     // 8. O toast de sucesso deve ter sido exibido
     expect(toast.success).toHaveBeenCalledWith('Funil parado para o contato Aryaraj');
   });
+
+  it('deve disparar evento navigate-view e select-chat-convo para o Chat do ZapVoice ao clicar no botão Chat', async () => {
+    const mockOnClose = vi.fn();
+    const navigateListener = vi.fn();
+    const selectChatListener = vi.fn();
+
+    window.addEventListener('navigate-view', navigateListener);
+    window.addEventListener('select-chat-convo', selectChatListener);
+
+    render(
+      <AutomationPipelineModal 
+        trigger={mockTrigger} 
+        onClose={mockOnClose} 
+        onStop={vi.fn()} 
+        onDelete={vi.fn()} 
+        hideTabs={true} 
+      />
+    );
+
+    // 1. Abrir lista de contatos do nó
+    const openBtn = screen.getByTestId('trigger-stat-click');
+    fireEvent.click(openBtn);
+
+    // 2. Localizar o botão de Chat do ZapVoice
+    const chatBtn = screen.getByTitle('Abrir conversa no Chat do ZapVoice');
+    expect(chatBtn).toBeInTheDocument();
+
+    // 3. Clicar no botão Chat
+    fireEvent.click(chatBtn);
+
+    // 4. Deve fechar a pipeline
+    expect(mockOnClose).toHaveBeenCalled();
+
+    // 5. Deve disparar navegação para o chat do ZapVoice
+    expect(navigateListener).toHaveBeenCalled();
+    const navEvent = navigateListener.mock.calls[0][0];
+    expect(navEvent.detail).toBe('chat_conversations');
+
+    // 6. Deve despachar o evento de seleção de conversa
+    await waitFor(() => {
+      expect(selectChatListener).toHaveBeenCalled();
+      const selectEvent = selectChatListener.mock.calls[0][0];
+      expect(selectEvent.detail.phone).toBe('5585996123586');
+      expect(selectEvent.detail.contact_name).toBe('Aryaraj');
+    });
+
+    window.removeEventListener('navigate-view', navigateListener);
+    window.removeEventListener('select-chat-convo', selectChatListener);
+  });
 });

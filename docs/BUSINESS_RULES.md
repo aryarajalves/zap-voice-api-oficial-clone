@@ -68,6 +68,10 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 - **Identificação Visual de Falhas**: Se a Meta rejeitar o envio do template ou reportar status `failed` (ex: serviço temporariamente indisponível), o balão da mensagem no chat exibe o alerta de erro detalhado.
 - **Botão "▶ Disparar Novamente"**: Disponibiliza um botão de reenvio com feedback em tempo real. O backend limpa o histórico restritivo de 24 horas para aquele template e contato e realiza uma nova tentativa de envio via Meta API, atualizando o status da mensagem sem necessidade de recarregar a tela.
 
+### 13. Distinção entre Segmentação Local (Leads) e Atendimento (Chat)
+- **Segmentação Local (ZapVoice)**: Atua exclusivamente sobre o banco de contatos e leads do ZapVoice (`WebhookLead`). É utilizada para adicionar/remover tags de segmentação de contatos (usadas para filtros, listas e disparos em massa) ou gerenciar a Blacklist local (bloquear/desbloquear número). **Não altera marcadores/etiquetas da conversa no Chat.**
+- **Atendimento (Chat Local)**: Opção específica para o módulo de Atendimento/Chat. É a responsável por adicionar e remover etiquetas/marcadores diretamente na conversa do contato (`ChatConversation.labels`), além de permitir atualizar nome, notas privadas e responsável da conversa no Chat local.
+
 ---
 
 ## 🖥️ Detalhamento das Telas e UX

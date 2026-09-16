@@ -325,6 +325,7 @@ const AutomationPipelineModal = ({ trigger: initialTrigger, onClose, onStop, onD
             <NodeStatsDetailsModal
                 selectedNodeStats={selectedNodeStats}
                 onClose={() => setSelectedNodeStats(null)}
+                onClosePipeline={onClose}
                 statsPerPage={statsPerPage}
                 setStatsPerPage={setStatsPerPage}
                 statsPage={statsPage}

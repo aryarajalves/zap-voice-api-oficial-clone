@@ -29,8 +29,17 @@ export function useAppNavigationModals(user, onResetFunnelState) {
     const handleOpenSettings = () => {
       setIsSettingsModalOpen(true);
     };
+    const handleNavigateView = (event) => {
+      if (event.detail) {
+        handleViewChange(event.detail);
+      }
+    };
     window.addEventListener('open-settings', handleOpenSettings);
-    return () => window.removeEventListener('open-settings', handleOpenSettings);
+    window.addEventListener('navigate-view', handleNavigateView);
+    return () => {
+      window.removeEventListener('open-settings', handleOpenSettings);
+      window.removeEventListener('navigate-view', handleNavigateView);
+    };
   }, []);
 
   useEffect(() => {
