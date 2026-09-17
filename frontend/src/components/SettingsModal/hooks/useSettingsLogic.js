@@ -139,9 +139,18 @@ export const useSettingsLogic = (isOpen, onClose, onSaved) => {
             return;
         }
         try {
+            const profileToSend = { ...profile.profileData };
+            if (!profileToSend.password || !profileToSend.password.trim()) {
+                delete profileToSend.password;
+            } else if (profileToSend.password.length < 12) {
+                toast.error("A nova senha deve ter no mínimo 12 caracteres.");
+                general.setLoading(false);
+                return;
+            }
+
             const pRes = await fetchWithAuth(`${API_URL}/auth/me`, {
                 method: 'PUT',
-                body: JSON.stringify(profile.profileData)
+                body: JSON.stringify(profileToSend)
             });
             if (!pRes.ok) {
                 const errData = await pRes.json();

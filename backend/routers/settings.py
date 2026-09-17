@@ -453,8 +453,11 @@ def fetch_chat_logs(
     from models import ChatMessage, ChatConversation
     
     try:
-        # Join com ChatConversation para filtrar pelo client_id
-        query = db.query(ChatMessage).join(ChatConversation).filter(
+        # Join com ChatConversation para filtrar pelo client_id (especificando onclause explicitamente)
+        query = db.query(ChatMessage).join(
+            ChatConversation,
+            ChatMessage.conversation_id == ChatConversation.id
+        ).filter(
             ChatConversation.client_id == x_client_id,
             ChatMessage.agentflow_webhook_status.isnot(None)
         )

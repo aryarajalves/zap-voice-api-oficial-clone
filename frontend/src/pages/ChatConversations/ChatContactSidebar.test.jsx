@@ -102,6 +102,14 @@ describe('ChatContactSidebar and Subcomponents', () => {
             fireEvent.click(screen.getByText('Mídia, links e docs'));
             expect(setIsMediaModalOpen).toHaveBeenCalledWith(true);
         });
+
+        it('opens NewTagModal when submitting an unknown tag', () => {
+            render(<ChatContactSidebar {...defaultProps} tagSearchQuery="tag_nova" isTagDropdownOpen={true} />);
+            const addBtn = screen.getByText('Adicionar');
+            fireEvent.mouseDown(addBtn);
+            expect(screen.getByText('Escolher Cor para Novo Marcador')).toBeInTheDocument();
+            expect(screen.getAllByDisplayValue('tag_nova')).toHaveLength(2);
+        });
     });
 
     describe('ContactProfileCard', () => {

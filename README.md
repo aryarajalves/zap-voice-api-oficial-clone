@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.9.2 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.9.3 — Versão Estável)
 
-Versão estável com **Badges Dinâmicos de Etiquetas no Cabeçalho e Balões de Mensagem do Chat**, **Navegação do Botão de Chat da Pipeline para o Atendimento Nativo**, **Correção de Disparo de Funil em Novas Conversas**, **Formalização de Regra de Negócio para Segmentação Local vs Atendimento**, **Gatilho Único Exclusivo de Primeira Mensagem no Funil**, **Acompanhamento de Pipeline de Funil Direto no Chat**, **Botão de Redisparo de Template em Falha**, **Filtro Permanente de Contatos Não Bloqueados**, **Novo Modal de Deleção com Feedback em Etapas**, **Otimização Extrema de Deleção em Massa com Bulk Delete SQL em Lote (Redução de Minutos para Menos de 2s)**, **Filtro de Interação no Chat do WhatsApp na Base de Contatos**, **Barra de Pesquisa Ampla no Histórico de Integrações**, **Centralização de Documentações em `docs/`**, **Modularização Completa de Clean Code e Eliminação de Monólitos**, **Domínios Especializados de Schemas Pydantic (`schemas_domain/`)**, **Auditoria de Segurança Integrada (pip-audit + npm audit)** e **Resiliência do Worker com Sincronização em Tempo Real**.
+Versão estável com **Transferência de Contatos entre Marcadores no Chat**, **Seletor Pesquisável de Etiquetas em Tempo Real (`SearchableLabelSelect`)**, **Filtro de Busca e Paginação nos Marcadores Cadastrados (20 por página)**, **Contagem Dinâmica de Conversas por Etiqueta**, **Ajuste de Altura e Scroll no `BulkTagModal`**, **Guia de Integração de APIs de Conversas e Mensagens (`docs/`)**, **Auditoria de Segurança Integrada (pip-audit + npm audit 100% seguros)** e **Modularização Completa de Clean Code**.
 
 
 
@@ -186,6 +186,15 @@ Content-Type: application/json
 
 ### v1.7.1 — Versão Estável (2026-08-11)
 - ✅ **Correção na Aplicação de Etiquetas em Lote (`TagContactsModal`)**: Ajustada a correspondência de telefones na adição de etiquetas para utilizar sanitização apenas de dígitos numéricos (`replace(/\D/g, '')`). Isso impede falhas na vinculação de etiquetas quando os telefones possuem formatações de string ligeiramente distintas.
+
+### v1.9.3 — Versão Estável (2026-09-17)
+- ✅ **Transferência de Contatos/Conversas entre Marcadores (`POST /api/chat/labels/transfer`)**: Ferramenta completa para transferir em massa conversas de uma etiqueta para outra, com suporte aos modos "Mover (Substituir)" e "Copiar (Adicionar)" e sincronização atômica nas conversas do Chat (`ChatConversation.labels`) e nos contatos/leads do CRM (`WebhookLead.tags`).
+- ✅ **Seletor Pesquisável de Etiquetas (`SearchableLabelSelect`)**: Dropdown inteligente customizado no padrão Dark/Glassmorphism com busca instantânea no topo, foco automático, exibição de cores, contagem de conversas e opção dinâmica de criar novas etiquetas diretamente pelo termo pesquisado.
+- ✅ **Busca em Tempo Real na Lista de Marcadores Cadastrados**: Campo de pesquisa dinâmico no cabeçalho de marcadores para encontrar rapidamente qualquer etiqueta cadastrada com recalculo automático da paginação.
+- ✅ **Paginação de Marcadores (Máximo 20 por página)**: Navegação limpa com botões de página e contadores claros, evitando overflow e poluição visual quando há dezenas de marcadores.
+- ✅ **Contagem Dinâmica de Conversas por Etiqueta**: Cálculo dinâmico em tempo real de quantas conversas utilizam cada etiqueta no chat, com suporte a plural/singular e contagem correta para marcadores cadastrados e legados.
+- ✅ **Ajuste de Altura e Scroll Suave no `BulkTagModal`**: Correção da invasão das bordas da tela ao adicionar etiquetas em massa, com `max-h-[85vh]`, cabeçalho e rodapé fixos e scroll interno suave.
+- ✅ **Documentação Técnica de APIs de Chat (`docs/API_CHAT_CONVERSAS_MENSAGENS.md`)**: Guia detalhado de consumo para integração com sistemas externos, documentando os endpoints de conversas e mensagens com exemplos práticos em cURL, Python e Node.js.
 
 ### v1.9.1 — Versão Estável (2026-09-15)
 - ✅ **Gatilho Exclusivo de "Primeira Mensagem / Nova Conversa" no Funil**: Trava rígida a nível de banco e interface que garante que apenas um único funil por cliente possa ter o nó de gatilho de início de conversa ativo, prevenindo duplicação de fluxos e conflito de mensagens.

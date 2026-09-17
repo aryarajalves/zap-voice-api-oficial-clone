@@ -18,7 +18,7 @@ export default function BulkTagModalFooter({
   };
 
   return (
-    <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
+    <div className="flex justify-end items-center gap-3">
       <button
         type="button"
         onClick={onClose}

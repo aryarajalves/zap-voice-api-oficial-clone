@@ -9,7 +9,7 @@ from core.deps import get_current_user, get_db
 from core.permissions import require_super_admin
 from core.logger import logger
 from websocket_manager import manager
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 
 import uuid
@@ -24,9 +24,17 @@ class Token(BaseModel):
 class UserCreate(BaseModel):
     email: str
     password: str = Field(..., min_length=12, max_length=128, description="Senha do usuário com no mínimo 12 caracteres")
+    role: str = "user"
     full_name: Optional[str] = None
-    role: Optional[str] = "user"
     client_ids: Optional[List[int]] = []
+    seller_weight: Optional[int] = 1
+    blocked_features: Optional[List[str]] = []
+    blocked_nodes: Optional[List[str]] = []
+
+class UserUpdate(BaseModel):
+    role: Optional[str] = None
+    full_name: Optional[str] = None
+    client_ids: Optional[List[int]] = None
     seller_weight: Optional[int] = 1
     blocked_features: Optional[List[str]] = []
     blocked_nodes: Optional[List[str]] = []
@@ -35,6 +43,13 @@ class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
     password: Optional[str] = Field(None, min_length=12, max_length=128, description="Nova senha com no mínimo 12 caracteres")
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
 
 

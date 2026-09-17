@@ -299,14 +299,9 @@ export default function ChatContactSidebar({
             {/* Modal de Nova Tag */}
             {newTagModalData?.isOpen && (
                 <NewTagModal
-                    isOpen={newTagModalData.isOpen}
-                    onClose={() => setNewTagModalData(null)}
-                    tagName={newTagModalData.name}
-                    initialColor={newTagModalData.color}
-                    onSave={(color) => {
-                        handleAddTagWithName(newTagModalData.name, color);
-                        setNewTagModalData(null);
-                    }}
+                    newTagModalData={newTagModalData}
+                    setNewTagModalData={setNewTagModalData}
+                    handleAddTagWithName={handleAddTagWithName}
                 />
             )}
         </div>

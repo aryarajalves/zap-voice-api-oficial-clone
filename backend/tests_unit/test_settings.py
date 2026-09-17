@@ -129,9 +129,18 @@ def test_get_settings_masks_token(app_client, auth_headers, db, client_obj):
         assert "****" in data["WA_ACCESS_TOKEN"] or data["WA_ACCESS_TOKEN"].count("*") > 0
 
 
-def test_get_settings_without_client_id(app_client, auth_headers):
-    headers = {"Authorization": auth_headers["Authorization"]}
-    resp = app_client.get("/api/settings/", headers=headers)
+def test_get_settings_without_client_id(app_client, db):
+    user_no_client = User(
+        email="no_client_settings@test.com",
+        hashed_password=get_password_hash("pass"),
+        role="admin",
+        is_active=True,
+        client_id=None
+    )
+    db.add(user_no_client)
+    db.commit()
+    token = create_access_token({"sub": user_no_client.email, "role": user_no_client.role})
+    resp = app_client.get("/api/settings/", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 400
 
 
@@ -166,12 +175,21 @@ def test_update_settings_ignores_disallowed_keys(mock_ws, app_client, auth_heade
 
 
 @patch("websocket_manager.manager.broadcast", new_callable=AsyncMock)
-def test_update_settings_without_client_id(mock_ws, app_client, auth_headers):
-    headers = {"Authorization": auth_headers["Authorization"]}
+def test_update_settings_without_client_id(mock_ws, app_client, db):
+    user_no_client = User(
+        email="no_client_update@test.com",
+        hashed_password=get_password_hash("pass"),
+        role="admin",
+        is_active=True,
+        client_id=None
+    )
+    db.add(user_no_client)
+    db.commit()
+    token = create_access_token({"sub": user_no_client.email, "role": user_no_client.role})
     resp = app_client.post(
         "/api/settings/",
         json={"settings": {"APP_NAME": "Test"}},
-        headers=headers,
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 400
 
@@ -186,3 +204,60 @@ def test_update_settings_syncs_client_name(mock_ws, app_client, auth_headers, db
     assert resp.status_code == 200
     db.refresh(client_obj)
     assert client_obj.name == "Novo Nome"
+
+
+def test_fetch_chat_logs_query_success(app_client, auth_headers, db, client_obj):
+    from models import ChatConversation, ChatMessage
+    from datetime import datetime, timezone
+
+    convo = ChatConversation(
+        client_id=client_obj.id,
+        phone="5511999990000",
+        contact_name="Lead Logs Test",
+        status="open"
+    )
+    db.add(convo)
+    db.commit()
+    db.refresh(convo)
+
+    msg = ChatMessage(
+        conversation_id=convo.id,
+        sender_type="contact",
+        message_type="text",
+        content="Olá teste",
+        timestamp=datetime.now(timezone.utc),
+        agentflow_webhook_status="success"
+    )
+    db.add(msg)
+    db.commit()
+
+    resp = app_client.get("/api/settings/chat-logs?skip=0&limit=20", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+    assert data["total"] == 1
+    assert data["items"][0]["content"] == "Olá teste"
+    # O hook after_insert de ChatMessage define "not_configured" quando CHAT_MESSAGES_WEBHOOK_URL não está configurado
+    assert data["items"][0]["status"] == "not_configured"
+
+
+def test_update_profile_empty_password_allowed(app_client, auth_headers):
+    # Enviar senha vazia não deve disparar erro 422 de min_length
+    resp = app_client.put(
+        "/api/auth/me",
+        json={"full_name": "Nome Atualizado", "password": ""},
+        headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert resp.json()["user"]["full_name"] == "Nome Atualizado"
+
+
+def test_update_profile_short_password_rejected(app_client, auth_headers):
+    # Enviar senha com menos de 12 caracteres deve falhar com 400 ou 422
+    resp = app_client.put(
+        "/api/auth/me",
+        json={"password": "123456"},
+        headers=auth_headers
+    )
+    assert resp.status_code in (400, 422)
+

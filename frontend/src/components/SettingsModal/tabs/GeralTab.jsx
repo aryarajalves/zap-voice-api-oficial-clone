@@ -158,14 +158,14 @@ const GeralTab = ({
                         />
                     </div>
                     <div className="space-y-1 md:col-span-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nova Senha (deixe em branco para manter)</label>
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nova Senha (mínimo 12 caracteres — deixe em branco para manter)</label>
                         <div className="relative">
                             <input
                                 type={showPassword ? "text" : "password"}
                                 name="password"
                                 value={profileData.password}
                                 onChange={handleProfileChange}
-                                placeholder="••••••••"
+                                placeholder="••••••••••••"
                                 className="w-full p-2.5 pr-10 border border-gray-100 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white dark:bg-[#1f2937]/50 text-gray-900 dark:text-white"
                                 autoComplete="new-password"
                             />
@@ -178,6 +178,11 @@ const GeralTab = ({
                                 {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
                             </button>
                         </div>
+                        {profileData.password && profileData.password.length > 0 && profileData.password.length < 12 && (
+                            <p className="text-[11px] text-amber-500 dark:text-amber-400 font-medium">
+                                A senha deve conter no mínimo 12 caracteres ({profileData.password.length}/12)
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>

@@ -311,4 +311,34 @@ describe('BulkTagModal Unit Tests', () => {
         expect(screen.getByText('suporte-vip')).toBeDefined();
         expect(screen.queryByText('compra-aprovada')).toBeNull();
     });
+
+    it('mantém estrutura de layout com header/footer fixos e corpo scrollável dentro de max-h-[85vh]', () => {
+        const chatLabels = ['tag1', 'tag2', 'tag3', 'tag4', 'tag5', 'tag6'];
+        const { container } = render(
+            <BulkTagModal
+                isOpen={true}
+                onClose={vi.fn()}
+                chatLabels={chatLabels}
+                contactLabels={[]}
+                selectedBulkTag=""
+                setSelectedBulkTag={vi.fn()}
+                customBulkTag=""
+                setCustomBulkTag={vi.fn()}
+                onApply={vi.fn()}
+                isApplying={false}
+                selectedCount={2}
+            />
+        );
+
+        // Verifica que o modal tem max-h-[85vh], flex e overflow-hidden para não vazar da tela
+        const modalPanel = container.querySelector('.max-h-\\[85vh\\]');
+        expect(modalPanel).not.toBeNull();
+        expect(modalPanel.className).toContain('flex-col');
+        expect(modalPanel.className).toContain('overflow-hidden');
+
+        // Verifica que o corpo intermediário possui scroll interno
+        const scrollableBody = container.querySelector('.overflow-y-auto.custom-scrollbar');
+        expect(scrollableBody).not.toBeNull();
+        expect(scrollableBody.className).toContain('flex-1');
+    });
 });

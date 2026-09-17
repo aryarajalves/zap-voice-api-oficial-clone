@@ -31,6 +31,7 @@ vi.mock('react-icons/fi', () => ({
   FiZap: () => <span data-testid="icon-zap" />,
   FiFileText: () => <span data-testid="icon-filetext" />,
   FiDatabase: () => <span data-testid="icon-database" />,
+  FiGitBranch: () => <span data-testid="icon-gitbranch" />,
 }));
 
 const defaultProps = {

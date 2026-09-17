@@ -18,7 +18,7 @@ export default function BulkTagAvailableList({
       <span className="text-[11px] font-semibold text-slate-400">
         Etiquetas disponíveis ({filteredLabels.length}):
       </span>
-      <div className="max-h-48 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-800 bg-slate-950/40 p-1 divide-y divide-slate-800/40 custom-scrollbar">
+      <div className="max-h-36 sm:max-h-40 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-800 bg-slate-950/40 p-1 divide-y divide-slate-800/40 custom-scrollbar">
         {/* Opção de criar nova se digitou algo que não existe exatamente */}
         {searchTerm.trim() && !isExactMatch && (
           <button

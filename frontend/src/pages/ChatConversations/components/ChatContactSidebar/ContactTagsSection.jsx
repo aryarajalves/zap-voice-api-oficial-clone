@@ -46,7 +46,7 @@ export default function ContactTagsSection({
                             className="text-xs px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 border font-semibold break-words max-w-full leading-tight"
                         >
                             <span className="break-words font-semibold">
-                                {tag} <span className="text-[10px] opacity-70 font-normal">({tag.length})</span>
+                                {tag}
                             </span>
                             <button
                                 type="button"
@@ -138,7 +138,7 @@ export default function ContactTagsSection({
                                         style={{ backgroundColor: labelColor }}
                                     />
                                     <span className="break-words flex-1">
-                                        {label} <span className="text-[10px] opacity-60 font-normal">({label.length})</span>
+                                        {label}
                                     </span>
                                 </button>
                             );
