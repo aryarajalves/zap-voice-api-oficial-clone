@@ -27,12 +27,27 @@ export function useChatBulkTagOperations({
     const [isApplyingBulkTag, setIsApplyingBulkTag] = useState(false);
 
     const getBulkPayloadExtra = () => {
+        const inc = selectedLabelFilter?.include_labels || (selectedLabelFilter?.items?.filter(i => i.mode === 'has').map(i => i.name)) || [];
+        const exc = selectedLabelFilter?.exclude_labels || (selectedLabelFilter?.items?.filter(i => i.mode === 'has_not').map(i => i.name)) || [];
+
+        const labelPayload = typeof selectedLabelFilter === 'string'
+            ? { label: selectedLabelFilter || undefined }
+            : (inc.length > 0 || exc.length > 0 ? {
+                include_labels: inc.length > 0 ? inc : undefined,
+                exclude_labels: exc.length > 0 ? exc : undefined,
+                label_op: selectedLabelFilter?.op || 'or'
+            } : (selectedLabelFilter?.labels?.length > 0 ? {
+                labels: selectedLabelFilter.labels,
+                label_mode: selectedLabelFilter.mode || 'has',
+                label_op: selectedLabelFilter.op || 'or'
+            } : {}));
+
         return selectAllPages ? {
             select_all_pages: true,
             tab: activeTab,
             status: statusFilter,
             search: searchQuery || undefined,
-            label: selectedLabelFilter || undefined,
+            ...labelPayload,
             block_status: filterBlockStatus || undefined,
             has_note: filterHasNote || undefined,
             start_date: filterStartDate || undefined,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FiTag, FiRefreshCw, FiArchive, FiZap } from 'react-icons/fi';
 import { BsStars } from 'react-icons/bs';
 import ChatListFilters from './ChatListFilters';
@@ -48,6 +48,7 @@ export default function ChatListSidebar({
     handleAnalyzeBulkChatsDoubts,
     formatTime
 }) {
+    const [isLabelFilterOpen, setIsLabelFilterOpen] = useState(false);
     const visibleConversations = engine.conversations;
 
     return (
@@ -61,6 +62,7 @@ export default function ChatListSidebar({
                 setSearchQuery={setSearchQuery}
                 selectedLabelFilter={selectedLabelFilter}
                 setSelectedLabelFilter={setSelectedLabelFilter}
+                onLabelDropdownOpenChange={setIsLabelFilterOpen}
                 availableLabels={engine.availableLabels}
                 availableLabelsDetails={engine.availableLabelsDetails}
                 getLabelColor={engine.getLabelColor}
@@ -150,12 +152,26 @@ export default function ChatListSidebar({
                                 id="bulk-archive-btn"
                                 onClick={() => {
                                     const willArchive = statusFilter !== 'archived';
+                                    const inc = selectedLabelFilter?.include_labels || (selectedLabelFilter?.items?.filter(i => i.mode === 'has').map(i => i.name)) || [];
+                                    const exc = selectedLabelFilter?.exclude_labels || (selectedLabelFilter?.items?.filter(i => i.mode === 'has_not').map(i => i.name)) || [];
+
+                                    const labelPayload = typeof selectedLabelFilter === 'string'
+                                        ? { label: selectedLabelFilter || undefined }
+                                        : (inc.length > 0 || exc.length > 0 ? {
+                                            include_labels: inc.length > 0 ? inc : undefined,
+                                            exclude_labels: exc.length > 0 ? exc : undefined,
+                                            label_op: selectedLabelFilter?.op || 'or'
+                                        } : (selectedLabelFilter?.labels?.length > 0 ? {
+                                            labels: selectedLabelFilter.labels,
+                                            label_mode: selectedLabelFilter.mode || 'has',
+                                            label_op: selectedLabelFilter.op || 'or'
+                                        } : {}));
                                     const payloadExtra = selectAllPages ? {
                                         select_all_pages: true,
                                         tab: activeTab,
                                         status: statusFilter,
                                         search: searchQuery || undefined,
-                                        label: selectedLabelFilter || undefined,
+                                        ...labelPayload,
                                         block_status: filterBlockStatus || undefined,
                                         has_note: filterHasNote || undefined,
                                         start_date: filterStartDate || undefined,
@@ -229,8 +245,15 @@ export default function ChatListSidebar({
                 </div>
             )}
 
-            {/* Lista com scroll */}
-            <div className="relative flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-white/5">
+            {/* Lista com scroll - quando o filtro de marcadores estiver aberto, o scroll é ocultado e desativado */}
+            <div
+                id="chat-conversations-list-scroll-container"
+                className={`relative flex-1 divide-y divide-gray-100 dark:divide-white/5 ${
+                    isLabelFilterOpen
+                        ? 'overflow-hidden pointer-events-none select-none'
+                        : 'overflow-y-auto custom-scrollbar'
+                }`}
+            >
                 {engine.isLoadingConvos && (
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center gap-3 transition-opacity">
                         <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />

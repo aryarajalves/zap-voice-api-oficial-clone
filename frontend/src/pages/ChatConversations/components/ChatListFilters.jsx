@@ -38,7 +38,8 @@ export default function ChatListFilters({
     setFilterEndDate,
     orderBy = 'recent',
     setOrderBy,
-    visibleCount = 0
+    visibleCount = 0,
+    onLabelDropdownOpenChange
 }) {
     const filtersContainerRef = useRef(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -148,7 +149,7 @@ export default function ChatListFilters({
                         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     >
                         {[
-                            { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!selectedLabelFilter },
+                            { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!(selectedLabelFilter && (typeof selectedLabelFilter === 'string' ? selectedLabelFilter : selectedLabelFilter.labels?.length > 0)) },
                             { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterTemplate24h || filterUnread || filterHasNote || filterUrgent || filterHasReplied || filterHasActiveFunnel },
                             { 
                                 key: 'bloqueio', 
@@ -195,6 +196,7 @@ export default function ChatListFilters({
                             availableLabels={availableLabels}
                             availableLabelsDetails={availableLabelsDetails}
                             getLabelColor={getLabelColor}
+                            onOpenChange={onLabelDropdownOpenChange}
                         />
                     </div>
                 )}

@@ -70,6 +70,12 @@ async def list_conversations(
     status: str = "open",
     search: Optional[str] = None,
     label: Optional[str] = None,
+    labels: Optional[str] = None,
+    include_labels: Optional[str] = None,
+    label_mode: str = "has",
+    label_op: str = "or",
+    exclude_labels: Optional[str] = None,
+    exclude_label_op: str = "or",
     block_status: Optional[str] = None,
     has_note: Optional[bool] = None,
     start_date: Optional[str] = None,
@@ -116,12 +122,17 @@ async def list_conversations(
 
     conversations = query.all()
 
-    if label:
-        clean_label = label.strip().lower()
-        conversations = [
-            c for c in conversations
-            if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
-        ]
+    from services.chat_label_service import filter_conversations_by_labels
+    conversations = filter_conversations_by_labels(
+        conversations=conversations,
+        label=label,
+        labels=labels,
+        include_labels=include_labels,
+        label_mode=label_mode,
+        label_op=label_op,
+        exclude_labels=exclude_labels,
+        exclude_label_op=exclude_label_op
+    )
 
     blocked_suffixes, resting_map = get_blocked_and_resting_data(db, client_id)
     active_funnels_map = get_active_funnels_map(db, client_id)

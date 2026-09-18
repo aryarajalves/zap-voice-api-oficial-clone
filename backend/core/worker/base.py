@@ -35,7 +35,7 @@ async def start_worker():
     await rabbitmq.consume("zapvoice_bulk_sends", handle_bulk_send, prefetch_count=BULK_PREFETCH_COUNT)
     
     logger.info("📡 Configurando consumidor: agent_memory_webhook_queue")
-    await rabbitmq.consume("agent_memory_webhook_queue", handle_agent_memory_webhook, prefetch_count=1)
+    await rabbitmq.consume("agent_memory_webhook_queue", handle_agent_memory_webhook, prefetch_count=1, requeue_on_error=True, max_retries=5)
     
     logger.info("📡 Configurando consumidor: whatsapp_events")
     await rabbitmq.consume("whatsapp_events", handle_whatsapp_event, prefetch_count=EVENTS_PREFETCH_COUNT)

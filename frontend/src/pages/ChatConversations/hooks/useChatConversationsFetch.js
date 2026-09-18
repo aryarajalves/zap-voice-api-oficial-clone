@@ -70,7 +70,21 @@ export function useChatConversationsFetch({
       url.searchParams.append('page', page);
       url.searchParams.append('limit', limit);
       if (searchQuery) url.searchParams.append('search', searchQuery);
-      if (selectedLabelFilter) url.searchParams.append('label', selectedLabelFilter);
+      if (selectedLabelFilter) {
+        if (typeof selectedLabelFilter === 'string') {
+          url.searchParams.append('label', selectedLabelFilter);
+        } else {
+          const inc = selectedLabelFilter.include_labels || (selectedLabelFilter.items?.filter(i => i.mode === 'has').map(i => i.name)) || [];
+          const exc = selectedLabelFilter.exclude_labels || (selectedLabelFilter.items?.filter(i => i.mode === 'has_not').map(i => i.name)) || [];
+          if (inc.length > 0) url.searchParams.append('include_labels', inc.join(','));
+          if (exc.length > 0) url.searchParams.append('exclude_labels', exc.join(','));
+          if (inc.length === 0 && exc.length === 0 && Array.isArray(selectedLabelFilter.labels) && selectedLabelFilter.labels.length > 0) {
+            url.searchParams.append('labels', selectedLabelFilter.labels.join(','));
+            if (selectedLabelFilter.mode) url.searchParams.append('label_mode', selectedLabelFilter.mode);
+          }
+          if (selectedLabelFilter.op) url.searchParams.append('label_op', selectedLabelFilter.op);
+        }
+      }
       if (filterBlockStatus) url.searchParams.append('block_status', filterBlockStatus);
       if (filterHasNote) url.searchParams.append('has_note', 'true');
       if (filterStartDate) url.searchParams.append('start_date', filterStartDate);

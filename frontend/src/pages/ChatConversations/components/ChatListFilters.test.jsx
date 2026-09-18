@@ -117,7 +117,11 @@ describe('ChatListFilters - Ordenação de Conversas', () => {
         expect(screen.queryByText('suporte')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByText('compra-aprovada'));
-        expect(setSelectedLabelFilterMock).toHaveBeenCalledWith('compra-aprovada');
+        expect(setSelectedLabelFilterMock).toHaveBeenCalledWith(expect.objectContaining({
+            labels: ['compra-aprovada'],
+            mode: 'has',
+            op: 'or'
+        }));
     });
 
     it('renderiza opções de bloqueio incluindo "Não bloqueados" e permite selecionar', () => {

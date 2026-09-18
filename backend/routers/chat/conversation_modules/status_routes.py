@@ -100,13 +100,17 @@ async def bulk_archive_conversations(
 
         convos = query.all()
 
-        label = payload.get("label")
-        if label:
-            clean_label = label.strip().lower()
-            convos = [
-                c for c in convos
-                if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
-            ]
+        from services.chat_label_service import filter_conversations_by_labels
+        convos = filter_conversations_by_labels(
+            conversations=convos,
+            label=payload.get("label"),
+            labels=payload.get("labels"),
+            include_labels=payload.get("include_labels"),
+            label_mode=payload.get("label_mode", "has"),
+            label_op=payload.get("label_op", "or"),
+            exclude_labels=payload.get("exclude_labels"),
+            exclude_label_op=payload.get("exclude_label_op", "or")
+        )
     else:
         ids = payload.get("ids", [])
         if not ids:

@@ -96,19 +96,29 @@ async def delete_conversations_bulk(
         )
 
         label = payload.get("label")
+        labels = payload.get("labels")
         block_status = payload.get("block_status")
 
-        if not label and not block_status:
+        include_labels = payload.get("include_labels")
+        exclude_labels = payload.get("exclude_labels")
+
+        if not label and not labels and not include_labels and not exclude_labels and not block_status:
             # Otimização: busca diretamente apenas a coluna id do banco de dados
             convo_ids = [r[0] for r in query.with_entities(models.ChatConversation.id).all()]
         else:
             conversations = query.all()
-            if label:
-                clean_label = label.strip().lower()
-                conversations = [
-                    c for c in conversations
-                    if isinstance(c.labels, list) and clean_label in [l.lower() for l in c.labels]
-                ]
+            if label or labels or include_labels or exclude_labels:
+                from services.chat_label_service import filter_conversations_by_labels
+                conversations = filter_conversations_by_labels(
+                    conversations=conversations,
+                    label=label,
+                    labels=labels,
+                    include_labels=include_labels,
+                    label_mode=payload.get("label_mode", "has"),
+                    label_op=payload.get("label_op", "or"),
+                    exclude_labels=exclude_labels,
+                    exclude_label_op=payload.get("exclude_label_op", "or")
+                )
 
             if block_status:
                 blocked_suffixes, resting_map = get_blocked_and_resting_data(db, client_id)

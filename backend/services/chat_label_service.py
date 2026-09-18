@@ -211,3 +211,103 @@ def apply_webhook_labels(
         pass
 
     return convo
+
+
+def normalize_label_filter_list(raw: Optional[Union[str, List[str]]]) -> List[str]:
+    """Normaliza entrada de etiquetas (strings separadas por vírgula ou lista de strings) para lista em lowercase."""
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        parts = [p.strip().lower() for p in raw.split(",") if p.strip()]
+        return parts
+    if isinstance(raw, (list, tuple, set)):
+        result = []
+        for item in raw:
+            if isinstance(item, str):
+                for p in item.split(","):
+                    clean = p.strip().lower()
+                    if clean:
+                        result.append(clean)
+        return list(dict.fromkeys(result))
+    return []
+
+
+def filter_conversations_by_labels(
+    conversations: list,
+    label: Optional[str] = None,
+    labels: Optional[Union[str, List[str]]] = None,
+    label_mode: str = "has",
+    label_op: str = "or",
+    exclude_labels: Optional[Union[str, List[str]]] = None,
+    exclude_label_op: Optional[str] = None,
+    include_labels: Optional[Union[str, List[str]]] = None,
+) -> list:
+    """
+    Filtra uma lista de conversas com base em marcadores, suportando:
+    - Seleção individual por etiqueta de 'Possui' (include_labels) ou 'Não possui' (exclude_labels).
+    - Operadores lógicos 'or' (qualquer uma) e 'and' (todas).
+    - Suporte retroativo aos parâmetros 'label', 'labels' e 'label_mode'.
+    """
+    if not conversations:
+        return []
+
+    inc_targets = normalize_label_filter_list(include_labels)
+    exc_targets = normalize_label_filter_list(exclude_labels)
+
+    raw_labels = normalize_label_filter_list(labels)
+    if label:
+        legacy_labels = normalize_label_filter_list(label)
+        for lbl in legacy_labels:
+            if lbl not in raw_labels:
+                raw_labels.append(lbl)
+
+    mode = (label_mode or "has").strip().lower()
+    if raw_labels:
+        if mode == "has_not":
+            for lbl in raw_labels:
+                if lbl not in exc_targets:
+                    exc_targets.append(lbl)
+        else:
+            for lbl in raw_labels:
+                if lbl not in inc_targets:
+                    inc_targets.append(lbl)
+
+    if not inc_targets and not exc_targets:
+        return conversations
+
+    op = (label_op or "or").strip().lower()
+
+    filtered = []
+    for c in conversations:
+        convo_labels = [
+            l.strip().lower()
+            for l in (c.labels or [])
+            if isinstance(l, str) and l.strip()
+        ]
+
+        if op == "and":
+            passes_inc = all(l in convo_labels for l in inc_targets) if inc_targets else True
+            if exc_targets:
+                if not inc_targets:
+                    passes_exc = not all(l in convo_labels for l in exc_targets)
+                else:
+                    passes_exc = all(l not in convo_labels for l in exc_targets)
+            else:
+                passes_exc = True
+
+            if passes_inc and passes_exc:
+                filtered.append(c)
+        else:  # 'or'
+            if exc_targets and not inc_targets:
+                if all(l not in convo_labels for l in exc_targets):
+                    filtered.append(c)
+            elif inc_targets and not exc_targets:
+                if any(l in convo_labels for l in inc_targets):
+                    filtered.append(c)
+            else:
+                cond_inc = any(l in convo_labels for l in inc_targets) if inc_targets else False
+                cond_exc = any(l not in convo_labels for l in exc_targets) if exc_targets else False
+                if cond_inc or cond_exc:
+                    filtered.append(c)
+
+    return filtered
