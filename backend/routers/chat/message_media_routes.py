@@ -369,6 +369,7 @@ async def send_chat_media_message(
             "media_url": new_message.media_url,
             "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
             "wa_message_id": new_message.wa_message_id,
+            "status": "sent",
             "client_id": client_id
         }
         await rabbitmq.publish_event("new_message", payload_ws)
@@ -385,5 +386,6 @@ async def send_chat_media_message(
         "media_url": new_message.media_url,
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
         "wa_message_id": new_message.wa_message_id,
+        "status": "sent",
         "quoted_message_id": new_message.quoted_message_id
     }

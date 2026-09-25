@@ -55,7 +55,7 @@ export default function ActiveChatInput({
     };
 
     return (
-        <>
+        <div className="shrink-0 flex flex-col w-full">
             {/* Barra de Preview de Resposta (quando replyingTo está ativo) */}
             {replyingTo && (
                 <div className="w-full min-w-0 px-4 py-2 bg-blue-500/10 border-t border-blue-500/20 flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-2 duration-200">
@@ -299,6 +299,6 @@ export default function ActiveChatInput({
                     </button>
                 )}
             </form>
-        </>
+        </div>
     );
 }

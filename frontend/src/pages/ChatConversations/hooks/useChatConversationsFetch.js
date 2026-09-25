@@ -19,6 +19,8 @@ export function useChatConversationsFetch({
   filterUrgent,
   filterHasReplied,
   filterHasActiveFunnel,
+  filterLastMessageRead,
+  filterLastMessageUnread,
   orderBy = 'recent',
   selectedConvo,
   setSelectedConvo
@@ -56,6 +58,8 @@ export function useChatConversationsFetch({
     filterUrgent,
     filterHasReplied,
     filterHasActiveFunnel,
+    filterLastMessageRead,
+    filterLastMessageUnread,
     orderBy
   ]);
 
@@ -95,6 +99,8 @@ export function useChatConversationsFetch({
       if (filterUrgent) url.searchParams.append('urgent_only', 'true');
       if (filterHasReplied) url.searchParams.append('has_replied', 'true');
       if (filterHasActiveFunnel) url.searchParams.append('has_active_funnel', 'true');
+      if (filterLastMessageRead) url.searchParams.append('last_message_read_only', 'true');
+      if (filterLastMessageUnread) url.searchParams.append('last_message_unread_only', 'true');
       if (orderBy) url.searchParams.append('order_by', orderBy);
 
       const res = await fetchWithAuth(url.toString(), {}, activeClient.id);
@@ -211,7 +217,7 @@ export function useChatConversationsFetch({
 
       const nextChat = Array.from(chatLabelSet).sort((a, b) => a.localeCompare(b));
       const nextContact = Array.from(contactLabelSet).sort((a, b) => a.localeCompare(b));
-      const nextAvailable = Array.from(combinedSet).sort((a, b) => a.localeCompare(b));
+      const nextAvailable = nextChat;
 
       setChatLabels(prev => (prev.length === nextChat.length && prev.every((v, i) => v === nextChat[i])) ? prev : nextChat);
       setContactLabels(prev => (prev.length === nextContact.length && prev.every((v, i) => v === nextContact[i])) ? prev : nextContact);

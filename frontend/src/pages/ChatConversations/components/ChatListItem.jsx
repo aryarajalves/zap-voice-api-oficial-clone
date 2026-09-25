@@ -2,6 +2,7 @@ import React from 'react';
 import { FiUser, FiSlash, FiClock, FiArchive, FiTag } from 'react-icons/fi';
 import { BsPinAngleFill, BsExclamationCircleFill } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
+import ConversationLabelsList from './ConversationLabelsList';
 
 export default function ChatListItem({
     convo,
@@ -84,26 +85,12 @@ export default function ChatListItem({
                     )}
 
                     {/* Marcadores/Etiquetas coloridas do card */}
-                    {convo.labels && convo.labels.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                            {convo.labels.map(label => {
-                                const labelColor = getLabelColor(label);
-                                return (
-                                    <span
-                                        key={label}
-                                        style={{
-                                            color: labelColor,
-                                            borderColor: labelColor + '33',
-                                            backgroundColor: labelColor + '15'
-                                        }}
-                                        className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
-                                    >
-                                        {label} <span className="opacity-70 font-normal">({label ? label.length : 0})</span>
-                                    </span>
-                                );
-                            })}
-                        </div>
-                    )}
+                    <ConversationLabelsList
+                        labels={convo.labels}
+                        getLabelColor={getLabelColor}
+                        contactName={convo.contact_name || convo.phone}
+                        variant="card"
+                    />
                 </div>
                 {convo.unread_count > 0 && <span className="bg-emerald-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">{convo.unread_count}</span>}
             </div>

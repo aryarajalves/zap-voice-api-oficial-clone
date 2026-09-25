@@ -45,12 +45,15 @@ export default function ChatConversations({ onClose, onNavigate }) {
         filterUrgent, setFilterUrgent,
         filterHasReplied, setFilterHasReplied,
         filterHasActiveFunnel, setFilterHasActiveFunnel,
+        filterLastMessageRead, setFilterLastMessageRead,
+        filterLastMessageUnread, setFilterLastMessageUnread,
         filterBlockStatus, setFilterBlockStatus,
         filterStartDate, setFilterStartDate,
         filterEndDate, setFilterEndDate,
         orderBy, setOrderBy,
         activeFilterTab, setActiveFilterTab,
-        selectAllPages, setSelectAllPages
+        selectAllPages, setSelectAllPages,
+        excludedConvoIds, setExcludedConvoIds
     } = filterState;
 
     // 2. Modais e estados visuais auxiliares
@@ -64,6 +67,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
         isCancelFunnelModalOpen, setIsCancelFunnelModalOpen,
         isCancelingFunnel, setIsCancelingFunnel,
         isSearchMode, setIsSearchMode,
+        isChatMaximized, setIsChatMaximized,
         highlightedMsgId, setHighlightedMsgId,
         exportModal, setExportModal,
         handleExportConversation
@@ -74,6 +78,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
         activeClient, activeTab, statusFilter, searchQuery, selectedLabelFilter,
         filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread,
         filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel,
+        filterLastMessageRead, filterLastMessageUnread,
         orderBy, selectedConvo, setSelectedConvo
     });
 
@@ -82,7 +87,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
     const chatOps = useChatOperations({
         engine, selectedConvo, setSelectedConvo, activeClient, activeTab, statusFilter, searchQuery,
         selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate,
-        filterUnread, filterWindowOpen, filterTemplate24h, filterHasReplied, selectAllPages, setSelectAllPages
+        filterUnread, filterWindowOpen, filterTemplate24h, filterHasReplied,
+        selectAllPages, setSelectAllPages, excludedConvoIds, setExcludedConvoIds
     });
 
     // 4. Scroll de mensagens e busca interna
@@ -101,6 +107,9 @@ export default function ChatConversations({ onClose, onNavigate }) {
         setSelectedConvo,
         chatInputRef,
         setSelectAllPages,
+        selectAllPages,
+        excludedConvoIds,
+        setExcludedConvoIds,
         activeTab,
         statusFilter,
         searchQuery,
@@ -115,6 +124,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
         filterUrgent,
         filterHasReplied,
         filterHasActiveFunnel,
+        filterLastMessageRead,
+        filterLastMessageUnread,
         orderBy,
         activeClient,
         setIsSearchMode,
@@ -151,6 +162,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
                 isCancelingFunnel={isCancelingFunnel}
                 setIsCancelingFunnel={setIsCancelingFunnel}
                 selectAllPages={selectAllPages}
+                excludedConvoIds={excludedConvoIds}
+                setExcludedConvoIds={setExcludedConvoIds}
                 exportModal={exportModal}
                 setExportModal={setExportModal}
             />
@@ -164,6 +177,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                 />
 
                 <div className="flex flex-1 min-h-0 bg-white dark:bg-[#1e293b] overflow-hidden">
+                {!isChatMaximized && (
                     <ChatListSidebar
                         activeTab={activeTab}
                         setActiveTab={setActiveTab}
@@ -189,6 +203,10 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         setFilterHasReplied={setFilterHasReplied}
                         filterHasActiveFunnel={filterHasActiveFunnel}
                         setFilterHasActiveFunnel={setFilterHasActiveFunnel}
+                        filterLastMessageRead={filterLastMessageRead}
+                        setFilterLastMessageRead={setFilterLastMessageRead}
+                        filterLastMessageUnread={filterLastMessageUnread}
+                        setFilterLastMessageUnread={setFilterLastMessageUnread}
                         filterBlockStatus={filterBlockStatus}
                         setFilterBlockStatus={setFilterBlockStatus}
                         filterStartDate={filterStartDate}
@@ -202,12 +220,15 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         setSelectedConvo={setSelectedConvo}
                         selectAllPages={selectAllPages}
                         setSelectAllPages={setSelectAllPages}
+                        excludedConvoIds={excludedConvoIds}
+                        setExcludedConvoIds={setExcludedConvoIds}
                         setIsBulkTagModalOpen={chatOps.setIsBulkTagModalOpen}
                         isOpenAiConfigured={noteAndAi.isOpenAiConfigured}
                         isAnalyzingAi={noteAndAi.isAnalyzingAi}
                         handleAnalyzeBulkChatsDoubts={noteAndAi.handleAnalyzeBulkChatsDoubts}
                         formatTime={formatTime}
                     />
+                )}
 
                     <div 
                         className="flex-1 flex flex-col h-full bg-white dark:bg-[#0f172a] relative"
@@ -246,6 +267,8 @@ export default function ChatConversations({ onClose, onNavigate }) {
                                     handleAnalyzeSingleChatDoubts={noteAndAi.handleAnalyzeSingleChatDoubts}
                                     isSearchMode={isSearchMode}
                                     setIsSearchMode={setIsSearchMode}
+                                    isChatMaximized={isChatMaximized}
+                                    setIsChatMaximized={setIsChatMaximized}
                                 />
 
                                 <ActiveChatBanner
@@ -308,7 +331,7 @@ export default function ChatConversations({ onClose, onNavigate }) {
                         )}
                     </div>
 
-                    {selectedConvo && showRightSidebar && (
+                    {selectedConvo && showRightSidebar && !isChatMaximized && (
                         <ChatContactSidebar
                             selectedConvo={selectedConvo}
                             setSelectedConvo={setSelectedConvo}

@@ -95,7 +95,8 @@ async def bulk_archive_conversations(
             start_date=payload.get("start_date"),
             end_date=payload.get("end_date"),
             search=payload.get("search"),
-            has_note=payload.get("has_note")
+            has_note=payload.get("has_note"),
+            excluded_ids=payload.get("excluded_ids")
         )
 
         convos = query.all()

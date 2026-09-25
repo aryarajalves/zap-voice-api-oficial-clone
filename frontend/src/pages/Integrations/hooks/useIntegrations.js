@@ -51,7 +51,11 @@ export function useIntegrations(activeClient) {
     try {
       const res = await fetchWithAuth(`${API_URL}/whatsapp/templates?include_paused=false`, {}, activeClient.id);
       if (res.ok) {
-        setTemplates(await res.json());
+        const data = await res.json();
+        const approvedOnly = (Array.isArray(data) ? data : []).filter(
+          (t) => !t.status || String(t.status).toUpperCase() === 'APPROVED'
+        );
+        setTemplates(approvedOnly);
       }
     } catch (err) {
       console.error(err);

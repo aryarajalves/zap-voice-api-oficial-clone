@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiCheck, FiPlus } from 'react-icons/fi';
+import { toast } from 'react-hot-toast';
 
 const InternalTagsInput = ({ value, onChange, existingTags = [], placeholder = "Digite uma tag e aperte Enter..." }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,8 +11,38 @@ const InternalTagsInput = ({ value, onChange, existingTags = [], placeholder = "
   const [coords, setCoords] = useState({ top: 0, bottom: 0, left: 0, width: 0 });
   const [direction, setDirection] = useState('down');
 
+  // Lista canônica de tags existentes deduplicada case-insensitivamente
+  const uniqueExistingTags = React.useMemo(() => {
+    const list = existingTags || [];
+    const seen = new Set();
+    const result = [];
+    list.forEach(t => {
+      if (!t) return;
+      const clean = String(t).trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(clean);
+      }
+    });
+    return result;
+  }, [existingTags]);
+
+  // Lista de tags selecionadas deduplicada case-insensitivamente
   const tags = React.useMemo(() => {
-    return value ? value.split(',').map(t => t.trim()).filter(Boolean) : [];
+    if (!value) return [];
+    const list = String(value).split(',').map(t => t.trim()).filter(Boolean);
+    const seen = new Set();
+    const result = [];
+    list.forEach(t => {
+      const key = t.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(t);
+      }
+    });
+    return result;
   }, [value]);
 
   useEffect(() => {
@@ -30,39 +61,45 @@ const InternalTagsInput = ({ value, onChange, existingTags = [], placeholder = "
   }, [isOpen]);
 
   const handleAddTag = (tagToAdd) => {
-    const cleanedTag = tagToAdd.trim().replace(/,/g, '');
+    const cleanedTag = tagToAdd.trim().replace(/,/g, '').slice(0, 25);
     if (!cleanedTag) return;
+    const lower = cleanedTag.toLowerCase();
     
-    if (!tags.includes(cleanedTag)) {
-      const newTags = [...tags, cleanedTag];
-      onChange(newTags.join(', '));
+    // Se já estiver selecionada, não adiciona e avisa
+    if (tags.some(t => t.toLowerCase() === lower)) {
+      toast.error('Esta etiqueta já foi adicionada.');
+      setInputValue("");
+      return;
     }
+
+    // Se já existir no banco/histórico com outro casing, adota a versão canônica
+    const existingMatch = uniqueExistingTags.find(t => t.toLowerCase() === lower);
+    const finalTag = existingMatch || cleanedTag;
+    
+    const newTags = [...tags, finalTag];
+    onChange(newTags.join(', '));
     setInputValue("");
   };
 
   const handleRemoveTag = (tagToRemove) => {
-    const newTags = tags.filter(t => t !== tagToRemove);
+    const lower = String(tagToRemove).toLowerCase();
+    const newTags = tags.filter(t => t.toLowerCase() !== lower);
     onChange(newTags.join(', '));
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleAddTag(inputValue);
-    } else if (e.key === ',' || e.key === ';') {
+    if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
       e.preventDefault();
       e.stopPropagation();
       handleAddTag(inputValue);
     }
   };
 
-  const filteredOptions = (existingTags || [])
-    .filter(tag => {
-      const isAlreadySelected = tags.includes(tag);
-      const matchesSearch = tag.toLowerCase().includes(inputValue.toLowerCase());
-      return !isAlreadySelected && matchesSearch;
-    });
+  const filteredOptions = uniqueExistingTags.filter(tag => {
+    const isAlreadySelected = tags.some(t => t.toLowerCase() === tag.toLowerCase());
+    const matchesSearch = tag.toLowerCase().includes(inputValue.toLowerCase().trim());
+    return !isAlreadySelected && matchesSearch;
+  });
 
   const handleToggleOption = (tag) => {
     handleAddTag(tag);
@@ -107,6 +144,7 @@ const InternalTagsInput = ({ value, onChange, existingTags = [], placeholder = "
           <input
             ref={inputRef}
             type="text"
+            maxLength={25}
             className="flex-1 bg-transparent border-none p-0 text-xs font-bold text-gray-900 dark:text-white placeholder-gray-400 focus:ring-0 outline-none"
             placeholder={tags.length === 0 ? placeholder : "Adicione outra tag..."}
             value={inputValue}

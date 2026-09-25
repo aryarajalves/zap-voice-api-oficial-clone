@@ -114,6 +114,43 @@
 }
 
 /* -------------------------------------------------------------
+   CONTROLE DE REDIMENSIONAMENTO DO REACT FLOW (NODE RESIZER)
+   Garante que os controles e alças de resize sempre recebam o mouse com pointer-events auto
+   ------------------------------------------------------------- */
+.react-flow__resize-control {
+    pointer-events: auto !important;
+}
+
+.react-flow__resize-control.handle {
+    pointer-events: auto !important;
+    z-index: 50 !important;
+}
+
+.react-flow__resize-control.line {
+    pointer-events: auto !important;
+    z-index: 40 !important;
+}
+
+/* -------------------------------------------------------------
+   CONTROLE DE PROFUNDIDADE (Z-INDEX) DE NÓS DO FUNIL
+   Garante que o nó de pasta/seção fique SEMPRE no fundo, atrás de qualquer outro nó,
+   mas acima do fundo do canvas do ReactFlow
+   ------------------------------------------------------------- */
+.react-flow__node-folderNode {
+    z-index: 1 !important;
+}
+.react-flow__node-folderNode.selected {
+    z-index: 2 !important;
+}
+
+.react-flow__node:not(.react-flow__node-folderNode) {
+    z-index: 10 !important;
+}
+.react-flow__node:not(.react-flow__node-folderNode).selected {
+    z-index: 1000 !important;
+}
+
+/* -------------------------------------------------------------
    CORES PERSONALIZADAS DOS HANDLES (Para realce visual e diferenciação)
    Dá cores e sombras brilhantes específicas baseadas nas classes aplicadas aos nós
    ------------------------------------------------------------- */
@@ -225,4 +262,84 @@
 /* Trava de scroll para modais e popups */
 body.no-scroll, body.no-scroll main {
     overflow: hidden !important;
+}
+
+/* -------------------------------------------------------------
+   REDIMENSIONAMENTO FACILITADO DE PASTAS / SEÇÕES (FolderNode)
+   Garante hitbox ampla (20px) e cursores responsivos em hover/drag
+   ------------------------------------------------------------- */
+.folder-resizer-line {
+    pointer-events: auto !important;
+    z-index: 30 !important;
+}
+
+.folder-resizer-line.left,
+.folder-resizer-line.right {
+    width: 20px !important;
+    transform: translate(-50%, 0) !important;
+    cursor: ew-resize !important;
+}
+
+.folder-resizer-line.top,
+.folder-resizer-line.bottom {
+    height: 20px !important;
+    transform: translate(0, -50%) !important;
+    cursor: ns-resize !important;
+}
+
+.folder-resizer-line:not(.is-selected) {
+    border-color: transparent !important;
+}
+
+.folder-resizer-handle {
+    width: 18px !important;
+    height: 18px !important;
+    border-radius: 9999px !important;
+    pointer-events: auto !important;
+    z-index: 40 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+    transition: transform 0.15s ease, opacity 0.2s ease !important;
+}
+
+.folder-resizer-handle.left,
+.folder-resizer-handle.right {
+    cursor: ew-resize !important;
+}
+
+.folder-resizer-handle.top,
+.folder-resizer-handle.bottom {
+    cursor: ns-resize !important;
+}
+
+.folder-resizer-handle.top.left,
+.folder-resizer-handle.bottom.right {
+    cursor: nwse-resize !important;
+}
+
+.folder-resizer-handle.bottom.left,
+.folder-resizer-handle.top.right {
+    cursor: nesw-resize !important;
+}
+
+.folder-resizer-handle:not(.is-selected) {
+    opacity: 0 !important;
+}
+
+/* Revelar alças ao passar o mouse perto das bordas ou alças da pasta */
+.folder-resizer-line:hover,
+.folder-resizer-line:hover ~ .folder-resizer-handle,
+.folder-resizer-handle:hover {
+    opacity: 0.85 !important;
+}
+
+.folder-resizer-handle:hover {
+    transform: translate(-50%, -50%) scale(1.3) !important;
+}
+
+.folder-resizer-handle.is-selected {
+    opacity: 1 !important;
+}
+
+.folder-resizer-line.is-selected {
+    opacity: 0.9 !important;
 }

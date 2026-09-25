@@ -186,6 +186,33 @@ export function useChatWebSocketSync({
                   }));
                 }
               }
+            } else if (evtName === 'message_status_updated' || data.event === 'message_status_updated') {
+              const convoId = Number(payload.conversation_id);
+              const targetMsgId = payload.message_id;
+              const targetWaId = payload.wa_message_id;
+              const newStatus = payload.status;
+
+              if (selectedConvo?.id && Number(selectedConvo.id) === convoId) {
+                setMessages(prev => prev.map(m => {
+                  const matchId = targetMsgId && Number(m.id) === Number(targetMsgId);
+                  const matchWaId = targetWaId && (
+                    m.wa_message_id === targetWaId ||
+                    m.wa_message_id === String(targetWaId).replace('wamid.', '') ||
+                    `wamid.${m.wa_message_id}` === targetWaId
+                  );
+                  if (matchId || matchWaId) {
+                    return {
+                      ...m,
+                      status: newStatus,
+                      meta_data: {
+                        ...(m.meta_data || {}),
+                        status: newStatus
+                      }
+                    };
+                  }
+                  return m;
+                }));
+              }
             }
           } catch (err) {
             console.error('Erro ao processar mensagem do WebSocket no Chat:', err);

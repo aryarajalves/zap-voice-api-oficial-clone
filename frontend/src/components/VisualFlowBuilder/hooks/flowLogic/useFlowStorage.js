@@ -184,8 +184,11 @@ export const useFlowStorage = ({
                             ? n.position
                             : { x: 150 * (index + 1), y: 150 };
 
+                        const isFolder = n.type === 'folderNode';
+
                         return {
                             ...n,
+                            zIndex: isFolder ? -10 : (n.zIndex ?? 10),
                             position,
                             data: {
                                 ...n.data,
@@ -196,6 +199,14 @@ export const useFlowStorage = ({
                             }
                         };
                     });
+
+                    // Pastas organizadoras sempre no início do array (renderizadas no fundo no DOM)
+                    loadedNodes.sort((a, b) => {
+                        const aFolder = a.type === 'folderNode' ? -1 : 1;
+                        const bFolder = b.type === 'folderNode' ? -1 : 1;
+                        return aFolder - bFolder;
+                    });
+
                     setNodes(loadedNodes);
                     if (setEdges) setEdges(data.steps.edges || []);
                 }

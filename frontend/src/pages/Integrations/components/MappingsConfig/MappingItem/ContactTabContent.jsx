@@ -13,6 +13,24 @@ export default function ContactTabContent({
 }) {
   const shouldUpdateContact = mapping.update_contact_on_trigger !== false;
 
+  const formattedChatLabels = React.useMemo(() => {
+    const list = chatwootLabels || [];
+    const seen = new Set();
+    const result = [];
+    list.forEach(l => {
+      const raw = typeof l === 'object' ? (l.title || l.name || l.label) : l;
+      if (!raw) return;
+      const clean = String(raw).trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push({ value: clean, label: clean });
+      }
+    });
+    return result;
+  }, [chatwootLabels]);
+
   return (
     <div className="p-5 space-y-4">
       {/* Toggle: Atualizar contato */}
@@ -44,7 +62,7 @@ export default function ContactTabContent({
           </label>
           <SearchableSelect
             isMulti={true}
-            options={[...new Set((chatwootLabels || []).map(l => typeof l === 'object' ? (l.title || l.name || l.label) : l))].filter(Boolean).map(l => ({ value: l, label: l }))}
+            options={formattedChatLabels}
             value={mapping.chatwoot_label || []}
             onChange={(val) => updateMapping(mIndex, 'chatwoot_label', val)}
             placeholder="Adicione etiquetas..."

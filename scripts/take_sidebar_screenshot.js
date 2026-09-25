@@ -6,7 +6,7 @@ async function run() {
   
   try {
     console.log('Navegando para o ZapVoice...');
-    await page.goto('http://localhost:5176', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto('http://127.0.0.1:5176', { timeout: 60000 });
     
     // Login
     console.log('Realizando login...');
@@ -33,8 +33,8 @@ async function run() {
     
     // Tirar print da tela com a sidebar atualizada
     console.log('Tirando screenshot...');
-    await page.screenshot({ path: 'scripts/screenshots/sidebar_categorizada.png' });
-    console.log('Screenshot tirado com sucesso: scripts/screenshots/sidebar_categorizada.png');
+    await page.screenshot({ path: 'scripts/screenshots/sidebar_depois.png' });
+    console.log('Screenshot tirado com sucesso: scripts/screenshots/sidebar_depois.png');
     
   } catch (err) {
     console.error('Erro ao tirar screenshot da sidebar:', err);

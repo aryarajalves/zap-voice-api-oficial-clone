@@ -29,6 +29,10 @@ export default function ChatListSidebar({
     setFilterHasReplied,
     filterHasActiveFunnel,
     setFilterHasActiveFunnel,
+    filterLastMessageRead,
+    setFilterLastMessageRead,
+    filterLastMessageUnread,
+    setFilterLastMessageUnread,
     filterBlockStatus,
     setFilterBlockStatus,
     filterStartDate,
@@ -42,6 +46,8 @@ export default function ChatListSidebar({
     setSelectedConvo,
     selectAllPages,
     setSelectAllPages,
+    excludedConvoIds = [],
+    setExcludedConvoIds,
     setIsBulkTagModalOpen,
     isOpenAiConfigured,
     isAnalyzingAi,
@@ -50,6 +56,9 @@ export default function ChatListSidebar({
 }) {
     const [isLabelFilterOpen, setIsLabelFilterOpen] = useState(false);
     const visibleConversations = engine.conversations;
+    const totalSelectedCount = selectAllPages
+        ? Math.max(0, engine.totalConvos - excludedConvoIds.length)
+        : engine.selectedConvoIds.length;
 
     return (
         <div className="w-96 border-r border-gray-200 dark:border-white/5 flex flex-col h-full bg-gray-50/50 dark:bg-[#111827]/40 shrink-0">
@@ -82,6 +91,10 @@ export default function ChatListSidebar({
                 setFilterHasReplied={setFilterHasReplied}
                 filterHasActiveFunnel={filterHasActiveFunnel}
                 setFilterHasActiveFunnel={setFilterHasActiveFunnel}
+                filterLastMessageRead={filterLastMessageRead}
+                setFilterLastMessageRead={setFilterLastMessageRead}
+                filterLastMessageUnread={filterLastMessageUnread}
+                setFilterLastMessageUnread={setFilterLastMessageUnread}
                 filterBlockStatus={filterBlockStatus}
                 setFilterBlockStatus={setFilterBlockStatus}
                 filterStartDate={filterStartDate}
@@ -100,12 +113,21 @@ export default function ChatListSidebar({
                         <button
                             onClick={() => {
                                 const allIds = visibleConversations.map(c => c.id);
-                                const allSelected = allIds.every(id => engine.selectedConvoIds.includes(id));
-                                if (allSelected) {
-                                    engine.setSelectedConvoIds(prev => prev.filter(id => !allIds.includes(id)));
-                                    setSelectAllPages(false);
+                                if (selectAllPages) {
+                                    const allVisibleSelected = allIds.every(id => !excludedConvoIds.includes(id));
+                                    if (allVisibleSelected) {
+                                        setExcludedConvoIds(prev => [...new Set([...prev, ...allIds])]);
+                                    } else {
+                                        setExcludedConvoIds(prev => prev.filter(id => !allIds.includes(id)));
+                                    }
                                 } else {
-                                    engine.setSelectedConvoIds(prev => [...new Set([...prev, ...allIds])]);
+                                    const allSelected = allIds.every(id => engine.selectedConvoIds.includes(id));
+                                    if (allSelected) {
+                                        engine.setSelectedConvoIds(prev => prev.filter(id => !allIds.includes(id)));
+                                        setSelectAllPages(false);
+                                    } else {
+                                        engine.setSelectedConvoIds(prev => [...new Set([...prev, ...allIds])]);
+                                    }
                                 }
                             }}
                             className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 font-medium transition-colors cursor-pointer shrink-0"
@@ -113,20 +135,24 @@ export default function ChatListSidebar({
                             <input
                                 type="checkbox"
                                 readOnly
-                                checked={visibleConversations.length > 0 && (selectAllPages || visibleConversations.every(c => engine.selectedConvoIds.includes(c.id)))}
+                                checked={visibleConversations.length > 0 && (
+                                    selectAllPages
+                                        ? visibleConversations.every(c => !excludedConvoIds.includes(c.id))
+                                        : visibleConversations.every(c => engine.selectedConvoIds.includes(c.id))
+                                )}
                                 className="rounded border-gray-300 text-blue-600 pointer-events-none cursor-pointer"
                             />
                             <span>Selecionar todas</span>
                         </button>
 
-                        {(selectAllPages || engine.selectedConvoIds.length > 0) && (
+                        {(selectAllPages ? totalSelectedCount > 0 : engine.selectedConvoIds.length > 0) && (
                             <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 dark:bg-blue-500/20 px-2 py-0.5 rounded-full border border-blue-500/20 shrink-0">
-                                {selectAllPages ? `${engine.totalConvos} selecionados` : `${engine.selectedConvoIds.length} selecionado(s)`}
+                                {selectAllPages ? `${totalSelectedCount} selecionados` : `${engine.selectedConvoIds.length} selecionado(s)`}
                             </span>
                         )}
                     </div>
 
-                    {(selectAllPages || engine.selectedConvoIds.length > 0) && (
+                    {(selectAllPages ? totalSelectedCount > 0 : engine.selectedConvoIds.length > 0) && (
                         <div className="flex items-center gap-1 mt-2 overflow-x-auto no-scrollbar py-0.5">
                             <button
                                 id="bulk-tag-btn"
@@ -150,7 +176,7 @@ export default function ChatListSidebar({
 
                             <button
                                 id="bulk-archive-btn"
-                                onClick={() => {
+                                onClick={async () => {
                                     const willArchive = statusFilter !== 'archived';
                                     const inc = selectedLabelFilter?.include_labels || (selectedLabelFilter?.items?.filter(i => i.mode === 'has').map(i => i.name)) || [];
                                     const exc = selectedLabelFilter?.exclude_labels || (selectedLabelFilter?.items?.filter(i => i.mode === 'has_not').map(i => i.name)) || [];
@@ -166,8 +192,9 @@ export default function ChatListSidebar({
                                             label_mode: selectedLabelFilter.mode || 'has',
                                             label_op: selectedLabelFilter.op || 'or'
                                         } : {}));
-                                    const payloadExtra = selectAllPages ? {
+                                     const payloadExtra = selectAllPages ? {
                                         select_all_pages: true,
+                                        excluded_ids: excludedConvoIds.length > 0 ? excludedConvoIds : undefined,
                                         tab: activeTab,
                                         status: statusFilter,
                                         search: searchQuery || undefined,
@@ -182,7 +209,12 @@ export default function ChatListSidebar({
                                     } : {
                                         ids: engine.selectedConvoIds
                                     };
-                                    engine.handleBulkArchive(willArchive, payloadExtra);
+                                    await engine.handleBulkArchive(willArchive, payloadExtra);
+                                    if (selectAllPages) {
+                                        engine.setSelectedConvoIds([]);
+                                        setSelectAllPages(false);
+                                        setExcludedConvoIds([]);
+                                    }
                                 }}
                                 className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition border shrink-0 whitespace-nowrap cursor-pointer shadow-sm ${
                                     statusFilter === 'archived'
@@ -222,10 +254,19 @@ export default function ChatListSidebar({
                 </div>
             )}
 
-            {visibleConversations.length > 0 && (selectAllPages || visibleConversations.every(c => engine.selectedConvoIds.includes(c.id))) && engine.totalConvos > visibleConversations.length && (
+            {visibleConversations.length > 0 && (
+                (selectAllPages && totalSelectedCount > 0) ||
+                visibleConversations.every(c => engine.selectedConvoIds.includes(c.id))
+            ) && engine.totalConvos > visibleConversations.length && (
                 <div className="px-4 py-2 border-b border-blue-500/20 bg-blue-500/10 dark:bg-blue-500/5 text-xs text-gray-700 dark:text-gray-300 flex items-center justify-between shrink-0">
                     {selectAllPages ? (
-                        <span>Todos os <strong>{engine.totalConvos}</strong> contatos de todas as páginas estão selecionados.</span>
+                        <span>
+                            {excludedConvoIds.length > 0 ? (
+                                <>Todos os contatos de todas as páginas estão selecionados (<strong>{totalSelectedCount}</strong> contatos, <strong>{excludedConvoIds.length}</strong> desmarcado{excludedConvoIds.length > 1 ? 's' : ''}).</>
+                            ) : (
+                                <>Todos os <strong>{engine.totalConvos}</strong> contatos de todas as páginas estão selecionados.</>
+                            )}
+                        </span>
                     ) : (
                         <span>Todos os <strong>{visibleConversations.length}</strong> contatos desta página estão selecionados.</span>
                     )}
@@ -234,11 +275,13 @@ export default function ChatListSidebar({
                             if (selectAllPages) {
                                 engine.setSelectedConvoIds([]);
                                 setSelectAllPages(false);
+                                if (setExcludedConvoIds) setExcludedConvoIds([]);
                             } else {
                                 setSelectAllPages(true);
+                                if (setExcludedConvoIds) setExcludedConvoIds([]);
                             }
                         }}
-                        className="text-blue-500 hover:text-blue-600 font-semibold transition"
+                        className="text-blue-500 hover:text-blue-600 font-semibold transition cursor-pointer"
                     >
                         {selectAllPages ? `Deselecionar todos os ${engine.totalConvos} contatos` : `Selecionar todos os ${engine.totalConvos} contatos`}
                     </button>
@@ -264,7 +307,9 @@ export default function ChatListSidebar({
                 )}
                 {visibleConversations.map(convo => {
                     const isSelected = selectedConvo?.id === convo.id;
-                    const isChecked = selectAllPages || engine.selectedConvoIds.includes(convo.id);
+                    const isChecked = selectAllPages
+                        ? !excludedConvoIds.includes(convo.id)
+                        : engine.selectedConvoIds.includes(convo.id);
 
                     return (
                         <ChatListItem
@@ -276,9 +321,11 @@ export default function ChatListSidebar({
                             onToggleCheck={(e) => {
                                 e.stopPropagation();
                                 if (selectAllPages) {
-                                    setSelectAllPages(false);
-                                    const pageIdsExceptThis = visibleConversations.map(c => c.id).filter(id => id !== convo.id);
-                                    engine.setSelectedConvoIds(pageIdsExceptThis);
+                                    if (isChecked) {
+                                        setExcludedConvoIds(prev => [...new Set([...prev, convo.id])]);
+                                    } else {
+                                        setExcludedConvoIds(prev => prev.filter(id => id !== convo.id));
+                                    }
                                 } else {
                                     engine.setSelectedConvoIds(prev => isChecked ? prev.filter(id => id !== convo.id) : [...prev, convo.id]);
                                 }

@@ -27,8 +27,6 @@ describe('Controle de Acesso — Cargo Vendedor', () => {
         { id: 'recurring_schedules',     roles: ['super_admin', 'admin', 'premium'] },
         { id: 'schedules',               roles: ['super_admin', 'admin', 'premium', 'user'] },
         { id: 'history',                 roles: ['super_admin', 'admin', 'premium', 'user'] },
-        { id: 'capture_page',            roles: ['super_admin', 'admin', 'premium'] },
-        { id: 'pagina_captura',          roles: ['super_admin', 'admin', 'premium'] },
         { id: 'hot_leads',               roles: ['super_admin', 'admin', 'premium'] },
         { id: 'templates',               roles: ['super_admin', 'admin', 'premium'] },
         { id: 'funnels',                 roles: ['super_admin', 'admin', 'premium'] },

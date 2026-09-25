@@ -51,6 +51,7 @@ from schemas_domain import (
     WebhookIntegration,
     WebhookHistoryBase,
     WebhookHistory,
+    BussolaPdfPreviewRequest,
     # Leads
     WebhookLeadBase,
     WebhookLead,

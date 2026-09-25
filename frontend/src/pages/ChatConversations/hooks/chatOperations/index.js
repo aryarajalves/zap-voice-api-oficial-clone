@@ -37,7 +37,9 @@ export function useChatOperations({
     filterTemplate24h,
     filterHasReplied,
     selectAllPages,
-    setSelectAllPages
+    setSelectAllPages,
+    excludedConvoIds,
+    setExcludedConvoIds
 }) {
     const pipelineOps = useChatPipelineOperations({
         selectedConvo,
@@ -82,11 +84,15 @@ export function useChatOperations({
         filterWindowOpen,
         filterHasReplied,
         selectAllPages,
-        setSelectAllPages
+        setSelectAllPages,
+        excludedConvoIds,
+        setExcludedConvoIds
     });
 
     const bulkTagOps = useChatBulkTagOperations({
         engine,
+        selectedConvo,
+        setSelectedConvo,
         activeClient,
         activeTab,
         statusFilter,
@@ -101,7 +107,9 @@ export function useChatOperations({
         filterTemplate24h,
         filterHasReplied,
         selectAllPages,
-        setSelectAllPages
+        setSelectAllPages,
+        excludedConvoIds,
+        setExcludedConvoIds
     });
 
     return {

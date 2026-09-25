@@ -8,6 +8,13 @@ import { useChatMessageActionsOperations } from './chatOperations/useChatMessage
 import { useChatDeletionOperations } from './chatOperations/useChatDeletionOperations.js';
 import { useChatBulkTagOperations } from './chatOperations/useChatBulkTagOperations.js';
 
+vi.mock('../../../AuthContext', () => ({
+    fetchWithAuth: vi.fn(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: 'ok', updated_count: 1 })
+    }))
+}));
+
 describe('Modularização de useChatOperations', () => {
     const mockEngine = {
         setTagSearchQuery: vi.fn(),
@@ -110,5 +117,28 @@ describe('Modularização de useChatOperations', () => {
         expect(result.current.isBulkTagModalOpen).toBe(true);
         expect(result.current.selectedBulkTag).toBe('VIP');
         expect(result.current.customBulkTag).toBe('Urgente');
+    });
+
+    it('deve atualizar selectedConvo e chamar loadMessages ao aplicar tag com sucesso na conversa ativa', async () => {
+        const mockSetSelectedConvo = vi.fn();
+        const mockLoadMessages = vi.fn();
+        const props = {
+            ...defaultProps,
+            setSelectedConvo: mockSetSelectedConvo,
+            engine: {
+                ...mockEngine,
+                loadMessages: mockLoadMessages,
+                selectedConvoIds: [10] // mesmo id do mockConvo
+            }
+        };
+
+        const { result } = renderHook(() => useChatOperations(props));
+
+        await act(async () => {
+            await result.current.handleBulkTagConversations(['NovaEtiquetaChat'], 'chat');
+        });
+
+        expect(mockSetSelectedConvo).toHaveBeenCalled();
+        expect(mockLoadMessages).toHaveBeenCalledWith(10);
     });
 });

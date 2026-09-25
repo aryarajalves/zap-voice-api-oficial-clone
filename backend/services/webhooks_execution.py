@@ -100,6 +100,42 @@ async def execute_webhook_resend_logic(
         if not template_name and not funnel_id:
              # Permitir continuar se houver label ou nota privada
              pass
+
+        # Geração automática de PDF para a Bússola Quiz se configurado
+        integration_platform = getattr(integration, "platform", "").lower() if integration else ""
+        has_bussola_pdf = False
+        v_map = mapping.variables_mapping or []
+        if isinstance(v_map, list):
+            for v in v_map:
+                if v.get("value") in ["bussola_pdf_auto", "bussola_pdf_url"] or v.get("custom_value") == "bussola_pdf_auto":
+                    has_bussola_pdf = True
+                    break
+        elif isinstance(v_map, dict):
+            if any(str(val) in ["bussola_pdf_auto", "bussola_pdf_url"] for val in v_map.values()):
+                has_bussola_pdf = True
+
+        if has_bussola_pdf or (integration_platform in ["bussola_quiz", "quiz_bussola", "landing_page_bussola_quiz"] and header_format == "DOCUMENT"):
+            bussola_msg = (
+                parsed_data.get("mensagem")
+                or payload.get("mensagem")
+                or payload.get("variables", {}).get("mensagem")
+                or (payload.get("data", {}).get("variables", {}).get("mensagem") if isinstance(payload.get("data"), dict) else None)
+            )
+            if bussola_msg:
+                try:
+                    from services.bussola_pdf_service import generate_and_upload_bussola_pdf
+                    lead_name = parsed_data.get("name") or parsed_data.get("first_name") or "Consulente"
+                    birth_date = parsed_data.get("nascimento_completo") or parsed_data.get("nascimento_data") or ""
+                    pdf_url, display_filename = generate_and_upload_bussola_pdf(
+                        lead_name=lead_name,
+                        birth_date=birth_date,
+                        message_text=bussola_msg
+                    )
+                    parsed_data["bussola_pdf_url"] = pdf_url
+                    parsed_data["bussola_pdf_filename"] = display_filename
+                    logger.info(f"📄 [RESEND_AUTO_PDF] PDF da Bússola gerado com sucesso: {pdf_url} ({display_filename})")
+                except Exception as pdf_err:
+                    logger.error(f"❌ [RESEND_AUTO_PDF] Erro ao gerar PDF da Bússola no resend: {pdf_err}")
             
         components = extract_mapped_variables(payload, parsed_data, mapping.variables_mapping or {}, header_format)
         
@@ -207,7 +243,8 @@ async def execute_webhook_resend_logic(
             funnel_id=funnel_id,
             is_bulk=False,
             skip_block_check=True, # Forçar envio manual ignorando travas de supressão
-            button_actions=mapping.button_actions
+            button_actions=mapping.button_actions,
+            processed_data=parsed_data
         )
         db.add(st)
         db.commit()

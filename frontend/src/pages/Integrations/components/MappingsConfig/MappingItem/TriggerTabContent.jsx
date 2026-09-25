@@ -1,8 +1,9 @@
-import React from 'react';
-import { FiZap, FiSettings, FiInfo } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiZap, FiSettings, FiInfo, FiFileText, FiEye } from 'react-icons/fi';
 import SearchableSelect from '../../SearchableSelect';
 import TemplatePreview from '../../../../../components/BulkSender/common/TemplatePreview';
 import { EVENT_HINTS } from './eventHints';
+import BussolaPdfPreviewModal from '../../BussolaPdfPreviewModal';
 
 export default function TriggerTabContent({
   mapping,
@@ -15,8 +16,40 @@ export default function TriggerTabContent({
   allowedEvents,
   selectedTpl,
   templateButtons,
+  integrationId,
   onGoToButtonsTab,
 }) {
+  const [isBussolaPdfModalOpen, setIsBussolaPdfModalOpen] = useState(false);
+
+  const isBussolaPlatform = ['bussola_quiz', 'quiz_bussola', 'landing_page_bussola_quiz'].includes(platform);
+  const isBussolaPdfActive = (mapping.variables_mapping || []).some(
+    v =>
+      (v.type === 'header' || !v.type) &&
+      ['bussola_pdf_auto', 'bussola_cover_auto'].includes(v.value || v.custom_value)
+  );
+
+  const handleToggleBussolaPdf = () => {
+    const newVars = [...(mapping.variables_mapping || [])];
+    const existingIdx = newVars.findIndex(
+      v =>
+        (v.type === 'header' || !v.type) &&
+        ['bussola_pdf_auto', 'bussola_cover_auto'].includes(v.value || v.custom_value)
+    );
+
+    if (existingIdx !== -1) {
+      newVars.splice(existingIdx, 1);
+    } else {
+      const headerIdx = newVars.findIndex(v => v.type === 'header');
+      const newEntry = { type: 'header', key: '0', value: 'bussola_pdf_auto', custom_value: 'bussola_pdf_auto' };
+      if (headerIdx !== -1) {
+        newVars[headerIdx] = newEntry;
+      } else {
+        newVars.push(newEntry);
+      }
+    }
+    updateMapping(mIndex, 'variables_mapping', newVars);
+  };
+
   return (
     <div className="p-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -129,6 +162,57 @@ export default function TriggerTabContent({
                 placeholder="0 para envio imediato"
               />
             </div>
+
+            {/* Card Especial da Bússola Quiz: Geração de PDF e Visualizador */}
+            {isBussolaPlatform && (
+              <div className="pt-3 border-t border-gray-100 dark:border-white/5 space-y-3">
+                <div className="p-3.5 rounded-xl bg-blue-500/[0.04] border border-blue-500/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                        <FiFileText size={15} />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-bold text-gray-900 dark:text-white">
+                          Gerar PDF da Leitura Astrológica
+                        </h5>
+                        <p className="text-[10px] text-gray-400">
+                          Cria um PDF minimalista usando a 'mensagem' do JSON e anexa ao template
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Alternar geração de PDF da Bússola"
+                      onClick={handleToggleBussolaPdf}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        isBussolaPdfActive ? 'bg-blue-600' : 'bg-gray-700'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          isBussolaPdfActive ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-blue-500/10">
+                    <span className="text-[10px] text-blue-400 font-semibold">
+                      {isBussolaPdfActive ? '✅ PDF ativo para envio no template' : 'Ative para anexar o PDF automaticamente'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsBussolaPdfModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
+                    >
+                      <FiEye size={12} />
+                      <span>Visualizar PDF</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -171,9 +255,30 @@ export default function TriggerTabContent({
                 <p className="text-[10px] text-gray-500 mt-1">Selecione um template para ver a prévia</p>
               </div>
             )}
+
+            {isBussolaPlatform && (
+              <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-between text-xs text-blue-300">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <FiFileText size={14} className="text-blue-400" /> PDF Bússola Quiz
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsBussolaPdfModalOpen(true)}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Ver Renderização →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      <BussolaPdfPreviewModal
+        isOpen={isBussolaPdfModalOpen}
+        onClose={() => setIsBussolaPdfModalOpen(false)}
+        integrationId={integrationId}
+      />
     </div>
   );
 }

@@ -75,7 +75,15 @@ const ConditionNode = ({ id, data }) => {
                 {conditionType === 'tag' && (
                     <ConditionTagSelector
                         selectedTag={data.tag || ''}
-                        onSelectTag={(tag) => data.onChange(id, { tag })}
+                        selectedTags={data.tags || (data.tag ? [data.tag] : [])}
+                        tagOperator={data.tagOperator || 'any'}
+                        onSelectTags={(tags) => data.onChange(id, { 
+                            tags, 
+                            tag: tags[0] || '',
+                            tagOperator: data.tagOperator || 'any' 
+                        })}
+                        onChangeOperator={(tagOperator) => data.onChange(id, { tagOperator })}
+                        onSelectTag={(tag) => data.onChange(id, { tag, tags: tag ? [tag] : [] })}
                     />
                 )}
 

@@ -221,4 +221,8 @@ export const PLATFORM_EVENT_OPTIONS = {
     zapgroup: [
         { value: 'lead_extraido', label: 'Lead Extraído de Grupo' },
     ],
+    bussola_quiz: [
+        { value: 'leitura_concluida', label: 'Leitura Concluída (Quiz)' },
+        { value: 'checkout_pre_populado', label: 'Checkout Pré-populado' },
+    ],
 };

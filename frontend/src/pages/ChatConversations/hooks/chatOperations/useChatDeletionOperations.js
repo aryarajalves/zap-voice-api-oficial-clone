@@ -19,7 +19,9 @@ export function useChatDeletionOperations({
     filterWindowOpen,
     filterHasReplied,
     selectAllPages,
-    setSelectAllPages
+    setSelectAllPages,
+    excludedConvoIds,
+    setExcludedConvoIds
 }) {
     const handleClearConversationMessages = async (convoId) => {
         if (!convoId || !activeClient) return;
@@ -88,6 +90,7 @@ export function useChatDeletionOperations({
 
         const payload = selectAllPages ? {
             select_all_pages: true,
+            excluded_ids: excludedConvoIds?.length > 0 ? excludedConvoIds : undefined,
             tab: activeTab,
             status: statusFilter,
             search: searchQuery || undefined,
@@ -116,6 +119,7 @@ export function useChatDeletionOperations({
                     setSelectedConvo(null);
                     engine.setSelectedConvoIds([]);
                     setSelectAllPages(false);
+                    if (setExcludedConvoIds) setExcludedConvoIds([]);
                     engine.loadConversations(true);
                 } else {
                     engine.setConversations(prev => prev.filter(c => !engine.selectedConvoIds.includes(c.id)));

@@ -301,12 +301,46 @@ describe('PipelineFlowViewer Component', () => {
     expect(screen.getByText(/Limite Atraso/i)).toBeInTheDocument();
     expect(screen.getByText(/5 Minutos/i)).toBeInTheDocument();
 
-    const handles = screen.getAllByTestId('handle-source-bottom');
+    const targetHandle = screen.getByTestId('handle-target-left');
+    expect(targetHandle).toBeInTheDocument();
+
+    const handles = screen.getAllByTestId('handle-source-right');
     expect(handles.length).toBe(2);
 
     const handleIds = handles.map(h => h.getAttribute('data-handleid'));
     expect(handleIds).toContain('default');
     expect(handleIds).toContain('late');
   });
+
+  it('não deve renderizar nós organizacionais como folderNode e groupNode como passos de execução', () => {
+    const triggerWithFolder = {
+      id: 20,
+      is_bulk: false,
+      execution_history: [],
+      funnel: {
+        steps: {
+          nodes: [
+            { id: 'node-msg', type: 'messageNode', data: { content: 'Olá!', isStart: true } },
+            { id: 'node-folder', type: 'folderNode', data: { title: 'Minha Pasta Organizacional' } }
+          ],
+          edges: [
+            { id: 'edge-folder', source: 'node-folder', target: 'node-msg' }
+          ]
+        }
+      }
+    };
+
+    render(<PipelineFlowViewer trigger={triggerWithFolder} />);
+
+    // Nó de mensagem real deve existir
+    expect(screen.getByTestId('node-wrapper-node-msg')).toBeInTheDocument();
+    expect(screen.getByText(/Olá!/i)).toBeInTheDocument();
+
+    // Nó de pasta organizacional NÃO deve ser renderizado
+    expect(screen.queryByTestId('node-wrapper-node-folder')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Minha Pasta Organizacional/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Passo do Funil')).not.toBeInTheDocument();
+  });
 });
+
 

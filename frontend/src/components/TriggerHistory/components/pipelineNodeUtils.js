@@ -142,6 +142,25 @@ const TYPE_DISPLAY_NAMES = {
 
 export const getDisplayName = (type, data) => {
     const label = data.label || data.name || '';
-    if (label && label.toLowerCase() !== 'passo') return label;
+    if (label && label.toLowerCase() !== 'passo' && label.toLowerCase() !== 'condição') return label;
+
+    if (type === 'conditionNode' || type === 'condition') {
+        const cType = data.conditionType || 'text';
+        if (cType === 'tag') {
+            const tags = Array.isArray(data.tags) ? data.tags : (data.tag ? [data.tag] : []);
+            return tags.length > 0 ? `Verificar: ${tags.join(', ')}` : 'Verificar Etiquetas';
+        }
+        if (cType === 'text') {
+            return data.condition ? `Buscar: "${data.condition}"` : 'Busca por Texto';
+        }
+        if (cType === 'ai_question') {
+            const q = data.aiQuestion || '';
+            return q ? `IA: ${q.length > 25 ? q.substring(0, 22) + '...' : q}` : 'Análise de Resposta (IA)';
+        }
+        if (cType === 'datetime_range') return 'Período Data/Hora';
+        if (cType === 'weekday') return 'Dias da Semana';
+        return 'Condição Inteligente';
+    }
+
     return TYPE_DISPLAY_NAMES[type] || 'Passo';
 };

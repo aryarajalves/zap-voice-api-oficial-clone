@@ -69,6 +69,7 @@ class ChatMessage(Base):
     media_url = Column(String, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     wa_message_id = Column(String, nullable=True, index=True)
+    status = Column(String, default="sent", nullable=True, index=True)  # sent, delivered, read, failed
     meta_data = Column(JSON, nullable=True)
     quoted_message_id = Column(String, nullable=True)  # wamid da mensagem citada (quote reply)
     is_starred = Column(Boolean, default=False, nullable=True)

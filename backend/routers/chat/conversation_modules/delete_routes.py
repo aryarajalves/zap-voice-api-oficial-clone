@@ -92,7 +92,8 @@ async def delete_conversations_bulk(
             start_date=payload.get("start_date"),
             end_date=payload.get("end_date"),
             search=payload.get("search"),
-            has_note=payload.get("has_note")
+            has_note=payload.get("has_note"),
+            excluded_ids=payload.get("excluded_ids")
         )
 
         label = payload.get("label")

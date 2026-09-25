@@ -26,7 +26,28 @@ export default function MessageHoverActions({
             sender_type: msg.sender_type,
             wa_message_id: msg.wa_message_id || msg.wamid || msg.message_id || String(msg.id)
         });
-        if (chatInputRef?.current) chatInputRef.current.focus();
+        // Captura a distância do fundo ANTES de o React re-renderizar a barra de reply
+        const container = engine?.messagesContainerRef?.current;
+        const distFromBottom = container
+            ? container.scrollHeight - container.scrollTop - container.clientHeight
+            : null;
+
+        // Foco sem deslocar o scroll da página
+        if (chatInputRef?.current) {
+            try {
+                chatInputRef.current.focus({ preventScroll: true });
+            } catch {
+                chatInputRef.current.focus();
+            }
+        }
+
+        // Após o React re-renderizar com a barra de reply (que reduz a altura do container),
+        // restaura a posição relativa ao fundo para que as mensagens visíveis não se movam.
+        if (container && distFromBottom !== null) {
+            requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight - container.clientHeight - distFromBottom;
+            });
+        }
     };
 
     const handleContextMenuTrigger = (e) => {

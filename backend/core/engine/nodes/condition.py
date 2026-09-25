@@ -16,16 +16,26 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
     source_handle = 'no'
     
     if condition_type == "tag":
-        required_tag = normalize_text(data.get("tag", ""))
-        if not required_tag:
+        raw_tags = data.get("tags")
+        if not raw_tags and data.get("tag"):
+            raw_tags = [data.get("tag")]
+        elif isinstance(raw_tags, str):
+            raw_tags = [raw_tags]
+        elif not isinstance(raw_tags, list):
+            raw_tags = []
+
+        required_tags = [normalize_text(t) for t in raw_tags if t and str(t).strip()]
+        tag_operator = data.get("tagOperator", data.get("tagMatchMode", "any"))
+
+        if not required_tags:
             source_handle = 'no'
         else:
             clean_phone = ''.join(filter(str.isdigit, str(contact_phone or '')))
             suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-            matched = False
             client_id = getattr(trigger, "client_id", None)
-            
-            # 1. Prioridade: Verificar na conversa do Chat Local do ZapVoice (ChatConversation)
+            contact_all_tags = set()
+
+            # 1. Prioridade: Coletar etiquetas da conversa do Chat Local do ZapVoice (ChatConversation)
             if client_id and suffix:
                 import models
                 chat_convo = db.query(models.ChatConversation).filter(
@@ -33,39 +43,45 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
                     models.ChatConversation.phone.like(f"%{suffix}")
                 ).first()
                 if chat_convo and chat_convo.labels and isinstance(chat_convo.labels, list):
-                    convo_labels = [normalize_text(t) for t in chat_convo.labels if isinstance(t, str)]
-                    if required_tag in convo_labels:
-                        matched = True
-                        logger.info(f"✅ [CONDITION_TAG] Etiqueta '{required_tag}' encontrada no Chat do ZapVoice para {contact_phone}.")
+                    for t in chat_convo.labels:
+                        if isinstance(t, str):
+                            contact_all_tags.add(normalize_text(t))
 
-            # 2. Fallback: verificar se o lead possui a tag no ZapVoice (WebhookLead.tags)
-            if not matched and client_id and suffix:
+            # 2. Fallback: Coletar etiquetas do lead no ZapVoice (WebhookLead.tags)
+            if client_id and suffix:
                 import models
                 lead = db.query(models.WebhookLead).filter(
                     models.WebhookLead.client_id == client_id,
                     models.WebhookLead.phone.like(f"%{suffix}")
                 ).first()
                 if lead and lead.tags:
-                    lead_tags = [normalize_text(t.strip()) for t in lead.tags.split(',') if t.strip()]
-                    if required_tag in lead_tags:
-                        matched = True
-                        logger.info(f"✅ [CONDITION_TAG] Etiqueta '{required_tag}' encontrada nas tags do Lead ZapVoice para {contact_phone}.")
+                    for t in lead.tags.split(','):
+                        if t.strip():
+                            contact_all_tags.add(normalize_text(t.strip()))
 
-            # 3. Fallback legado: se ainda não encontrou e chatwoot estiver disponível
-            if not matched and chatwoot:
+            # 3. Fallback legado: Coletar etiquetas do Chatwoot legado se disponível
+            if chatwoot and clean_phone:
                 try:
                     contact_res = await chatwoot.search_contact(clean_phone)
                     if contact_res and contact_res.get("payload"):
                         contact_id = contact_res["payload"][0]["id"]
                         contact_labels = await chatwoot.get_contact_labels(contact_id)
-                        if required_tag in [normalize_text(t) for t in contact_labels]:
-                            matched = True
-                            logger.info(f"✅ [CONDITION_TAG] Etiqueta '{required_tag}' encontrada no Chatwoot legado para {contact_phone}.")
+                        for t in contact_labels:
+                            contact_all_tags.add(normalize_text(t))
                 except Exception as cw_err:
                     logger.warning(f"⚠️ [CONDITION_TAG] Erro ao consultar Chatwoot legado: {cw_err}")
 
+            # Avaliar de acordo com o operador lógico (all = E, any = OU)
+            if tag_operator == "all":
+                matched = all(req_tag in contact_all_tags for req_tag in required_tags)
+            else:
+                matched = any(req_tag in contact_all_tags for req_tag in required_tags)
+
             if matched:
+                logger.info(f"✅ [CONDITION_TAG] Validação de etiquetas atendida (Operador: {tag_operator}, Exigidas: {required_tags}) para {contact_phone}.")
                 source_handle = 'yes'
+            else:
+                logger.info(f"ℹ️ [CONDITION_TAG] Validação de etiquetas NÃO atendida (Operador: {tag_operator}, Exigidas: {required_tags}) para {contact_phone}.")
 
     elif condition_type == "datetime_range":
         tz = zoneinfo.ZoneInfo('America/Sao_Paulo')
@@ -289,9 +305,20 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
             log_node_execution(db, trigger, current_node_id, "failed", f"Erro no parse do JSON retornado pela OpenAI: {parse_err}")
             return "error"
 
-    else:
-        condition_text = data.get("condition", "").lower()
-        if not any(neg in condition_text for neg in ['não', 'nao', 'false', 'no', '0']):
-            source_handle = 'yes'
-            
+    if condition_type != "ai_question":
+        if condition_type == "tag":
+            status_msg = f"Validação de etiquetas: {'Atendida (Sim)' if source_handle == 'yes' else 'Não atendida (Não)'}."
+        elif condition_type == "datetime_range":
+            status_msg = f"Validação de período: Caminho '{source_handle}' selecionado."
+        elif condition_type == "weekday":
+            status_msg = f"Validação de dia da semana: {'Permitido (Sim)' if source_handle == 'yes' else 'Não permitido (Não)'}."
+        else:
+            status_msg = f"Condição avaliada: {'Sim' if source_handle == 'yes' else 'Não'}."
+
+        log_node_execution(
+            db, trigger, current_node_id, "completed",
+            status_msg,
+            {"source_handle": source_handle, "condition_type": condition_type}
+        )
+
     return source_handle

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { FiSend } from 'react-icons/fi';
 import { BsPinAngleFill, BsStarFill } from 'react-icons/bs';
+import { IoCheckmarkDone } from 'react-icons/io5';
 import { renderLinkedText } from '../utils/linkifyText';
 import SystemMessageBubble from './SystemMessageBubble';
 import {
@@ -207,6 +208,15 @@ export default function ChatMessageBubble({
                         <span className="text-[9px] opacity-75 font-medium tracking-wide">
                             {formatMessageTimestamp?.(msg.timestamp)}
                         </span>
+                        {isMe && (msg.status === 'read' || msg.meta_data?.status === 'read') && (
+                            <span
+                                data-testid="message-read-status"
+                                title="Lida pelo contato"
+                                className="flex items-center text-[#53bdeb] drop-shadow-[0_0_3px_rgba(83,189,235,0.9)] ml-1"
+                            >
+                                <IoCheckmarkDone size={18} className="stroke-[2.5]" />
+                            </span>
+                        )}
                     </div>
                 </div>
 

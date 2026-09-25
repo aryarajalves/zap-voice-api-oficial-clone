@@ -24,6 +24,8 @@ export function useChatEngine({
   filterUrgent,
   filterHasReplied,
   filterHasActiveFunnel,
+  filterLastMessageRead,
+  filterLastMessageUnread,
   orderBy = 'recent',
   selectedConvo,
   setSelectedConvo
@@ -103,6 +105,8 @@ export function useChatEngine({
     filterUrgent,
     filterHasReplied,
     filterHasActiveFunnel,
+    filterLastMessageRead,
+    filterLastMessageUnread,
     orderBy,
     selectedConvo,
     setSelectedConvo
@@ -149,6 +153,7 @@ export function useChatEngine({
     selectedConvo,
     setSelectedConvo,
     loadConversations,
+    loadMessages,
     isSending,
     setIsSending: () => {},
     setTimeLeft24h

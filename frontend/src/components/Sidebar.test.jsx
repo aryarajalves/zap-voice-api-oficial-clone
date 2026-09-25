@@ -104,11 +104,12 @@ describe('Sidebar', () => {
     expect(screen.getByText('Monitoramento')).toBeInTheDocument();
   });
 
-  it('exibe a categoria "Criação de Páginas" com os itens Checkout Prepopulado e Leads Quentes', () => {
+  it('exibe a categoria "Criação de Páginas" apenas com Leads Quentes e sem Página de Captura nem Checkout Prepopulado', () => {
     render(<Sidebar {...baseProps} user={{ role: 'super_admin' }} />);
     expect(screen.getByText('Criação de Páginas')).toBeInTheDocument();
-    expect(screen.getByText('Checkout Prepopulado')).toBeInTheDocument();
     expect(screen.getByText('Leads Quentes')).toBeInTheDocument();
+    expect(screen.queryByText('Checkout Prepopulado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Página de Captura')).not.toBeInTheDocument();
   });
 
   it('chama onViewChange ao clicar em item de menu', () => {

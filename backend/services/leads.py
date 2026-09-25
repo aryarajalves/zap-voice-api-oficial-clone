@@ -191,6 +191,8 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
                 current_vars["document"] = document
             if extra_custom:
                 current_vars.update({k: v for k, v in extra_custom.items() if v is not None})
+            if parsed_data.get("variables") and isinstance(parsed_data["variables"], dict):
+                current_vars.update({k: v for k, v in parsed_data["variables"].items() if v is not None})
             lead.variables = current_vars
 
             current_meta = dict(lead.metadata_payload or {})
@@ -237,6 +239,8 @@ def upsert_webhook_lead(db: Session, client_id: int, platform: str, parsed_data:
                 lead_vars["document"] = document
             if extra_custom:
                 lead_vars.update({k: v for k, v in extra_custom.items() if v is not None})
+            if parsed_data.get("variables") and isinstance(parsed_data["variables"], dict):
+                lead_vars.update({k: v for k, v in parsed_data["variables"].items() if v is not None})
 
             lead_meta = dict(parsed_data.get("metadata") or {})
             if parsed_data.get("raw_payload") and "raw_payload" not in lead_meta:

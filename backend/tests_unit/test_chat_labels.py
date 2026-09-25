@@ -215,3 +215,107 @@ def test_chat_labels_transfer_flow(client, db_session):
     # conversa neutra inalterada
     db_session.refresh(convo_sem)
     assert convo_sem.labels == ["neutro"]
+
+
+def test_chat_labels_duplicate_prevention_case_insensitive(client, db_session):
+    test_client = Client(name="Cliente Dup Teste", is_active=True)
+    db_session.add(test_client)
+    db_session.commit()
+    db_session.refresh(test_client)
+
+    test_user = User(
+        email="dup_labels@zapvoice.com.br",
+        hashed_password=get_password_hash("password123"),
+        role="admin",
+        is_active=True,
+        client_id=test_client.id
+    )
+    test_user.accessible_clients.append(test_client)
+    db_session.add(test_user)
+    db_session.commit()
+    db_session.refresh(test_user)
+
+    jwt_token = create_access_token(data={"sub": test_user.email})
+    headers = {
+        "Authorization": f"Bearer {jwt_token}",
+        "X-Client-ID": str(test_client.id)
+    }
+
+    # 1. Criar etiqueta "compra_aprovada"
+    res1 = client.post("/api/chat/labels", json={"name": "compra_aprovada", "color": "#10B981"}, headers=headers)
+    assert res1.status_code == 200
+
+    # 2. Tentar criar etiqueta com mesmo nome mas letras maiúsculas e espaços extras
+    res_dup1 = client.post("/api/chat/labels", json={"name": "Compra_Aprovada", "color": "#3B82F6"}, headers=headers)
+    assert res_dup1.status_code == 400
+    assert "Já existe um marcador com este nome" in res_dup1.json()["detail"]
+
+    res_dup2 = client.post("/api/chat/labels", json={"name": "  compra_aprovada  ", "color": "#EF4444"}, headers=headers)
+    assert res_dup2.status_code == 400
+    assert "Já existe um marcador com este nome" in res_dup2.json()["detail"]
+
+    # 3. Adicionar conversa com variação de case da mesma etiqueta
+    convo = ChatConversation(
+        client_id=test_client.id,
+        phone="5511999990001",
+        labels=["Compra_Aprovada", "outra_tag", "outra_tag "]
+    )
+    db_session.add(convo)
+    db_session.commit()
+
+    # 4. Listar etiquetas GET /chat/labels - não pode conter duplicatas
+    res_list = client.get("/api/chat/labels", headers=headers)
+    assert res_list.status_code == 200
+    labels = res_list.json()
+    # Deve conter apenas 1 ocorrência de compra_aprovada e 1 de outra_tag
+    assert len([l for l in labels if l.lower() == "compra_aprovada"]) == 1
+    assert len([l for l in labels if l.lower() == "outra_tag"]) == 1
+
+    # 5. Listar detalhes GET /chat/labels/details - não pode conter duplicatas
+    res_details = client.get("/api/chat/labels/details", headers=headers)
+    assert res_details.status_code == 200
+    details = res_details.json()
+    names = [d["name"].lower() for d in details]
+    assert len(names) == len(set(names))
+
+
+def test_chat_labels_max_length_25(client, db_session):
+    test_client = Client(name="Cliente Max Length 25", is_active=True)
+    db_session.add(test_client)
+    db_session.commit()
+    db_session.refresh(test_client)
+
+    test_user = User(
+        email="max25_labels@zapvoice.com.br",
+        hashed_password=get_password_hash("password123"),
+        role="admin",
+        is_active=True,
+        client_id=test_client.id
+    )
+    test_user.accessible_clients.append(test_client)
+    db_session.add(test_user)
+    db_session.commit()
+    db_session.refresh(test_user)
+
+    jwt_token = create_access_token(data={"sub": test_user.email})
+    headers = {
+        "Authorization": f"Bearer {jwt_token}",
+        "X-Client-ID": str(test_client.id)
+    }
+
+    # 1. Nome com exatamente 25 caracteres deve ser aceito
+    name_25 = "A" * 25
+    res25 = client.post("/api/chat/labels", json={"name": name_25, "color": "#3B82F6"}, headers=headers)
+    assert res25.status_code == 200
+    created_id = res25.json()["id"]
+    assert res25.json()["name"] == name_25
+
+    # 2. Nome com 26 caracteres deve ser rejeitado no POST
+    name_26 = "B" * 26
+    res26 = client.post("/api/chat/labels", json={"name": name_26, "color": "#3B82F6"}, headers=headers)
+    assert res26.status_code in [400, 422]
+
+    # 3. Nome com 26 caracteres deve ser rejeitado no PUT
+    res26_update = client.put(f"/api/chat/labels/{created_id}", json={"name": name_26, "color": "#10B981"}, headers=headers)
+    assert res26_update.status_code in [400, 422]
+

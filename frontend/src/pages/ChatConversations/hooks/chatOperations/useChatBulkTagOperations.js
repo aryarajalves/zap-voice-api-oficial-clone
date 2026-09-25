@@ -5,6 +5,8 @@ import { API_URL } from '../../../../config';
 
 export function useChatBulkTagOperations({
     engine,
+    selectedConvo,
+    setSelectedConvo,
     activeClient,
     activeTab,
     statusFilter,
@@ -19,7 +21,9 @@ export function useChatBulkTagOperations({
     filterTemplate24h,
     filterHasReplied,
     selectAllPages,
-    setSelectAllPages
+    setSelectAllPages,
+    excludedConvoIds,
+    setExcludedConvoIds
 }) {
     const [isBulkTagModalOpen, setIsBulkTagModalOpen] = useState(false);
     const [selectedBulkTag, setSelectedBulkTag] = useState('');
@@ -44,6 +48,7 @@ export function useChatBulkTagOperations({
 
         return selectAllPages ? {
             select_all_pages: true,
+            excluded_ids: excludedConvoIds?.length > 0 ? excludedConvoIds : undefined,
             tab: activeTab,
             status: statusFilter,
             search: searchQuery || undefined,
@@ -61,7 +66,7 @@ export function useChatBulkTagOperations({
         };
     };
 
-    const handleBulkTagConversations = async (tagToApply, target = 'chat') => {
+    const handleBulkTagConversations = async (tagToApply, target = 'chat', options = {}) => {
         let labels = [];
         if (Array.isArray(tagToApply)) {
             labels = tagToApply.map(t => (t || '').trim()).filter(Boolean);
@@ -72,7 +77,12 @@ export function useChatBulkTagOperations({
             if (fallback) labels = [fallback];
         }
 
-        if (labels.length === 0) {
+        const initialTags = Array.isArray(options?.initialTags) ? options.initialTags : [];
+        const removedLabels = initialTags.filter(
+            t => !labels.some(l => l.toLowerCase() === String(t).toLowerCase())
+        );
+
+        if (labels.length === 0 && removedLabels.length === 0) {
             toast.error('Informe ou selecione ao menos uma etiqueta.');
             return;
         }
@@ -82,12 +92,23 @@ export function useChatBulkTagOperations({
         const payload = {
             ...getBulkPayloadExtra(),
             labels,
+            remove_labels: removedLabels,
+            mode: 'sync',
             target
         };
 
         const targetLabel = target === 'contacts' ? 'na Aba de Contatos' : 'no Chat';
-        const labelDisplay = labels.length === 1 ? `etiqueta "${labels[0]}"` : `${labels.length} etiquetas`;
-        const toastId = toast.loading(`Aplicando ${labelDisplay} ${targetLabel}...`);
+        let actionDescription = '';
+        if (removedLabels.length > 0 && labels.length === 0) {
+            actionDescription = `Removendo etiqueta(s) ${targetLabel}...`;
+        } else if (removedLabels.length > 0 && labels.length > 0) {
+            actionDescription = `Atualizando etiquetas ${targetLabel}...`;
+        } else {
+            const labelDisplay = labels.length === 1 ? `etiqueta "${labels[0]}"` : `${labels.length} etiquetas`;
+            actionDescription = `Aplicando ${labelDisplay} ${targetLabel}...`;
+        }
+
+        const toastId = toast.loading(actionDescription);
         try {
             const res = await fetchWithAuth(`${API_URL}/chat/conversations/bulk-tag`, {
                 method: 'POST',
@@ -98,20 +119,52 @@ export function useChatBulkTagOperations({
             if (res.ok) {
                 const data = await res.json();
                 const unitName = target === 'contacts' ? 'contato(s) na Aba de Contatos' : 'conversa(s) no Chat';
-                toast.success(`${labelDisplay} aplicada(s) em ${data.updated_count || 0} ${unitName}!`, { id: toastId });
+                let successMsg = '';
+                if (removedLabels.length > 0 && labels.length === 0) {
+                    successMsg = `Etiqueta(s) removida(s) de ${data.updated_count || 0} ${unitName}!`;
+                } else if (removedLabels.length > 0) {
+                    successMsg = `Etiquetas atualizadas em ${data.updated_count || 0} ${unitName}!`;
+                } else {
+                    const labelDisplay = labels.length === 1 ? `etiqueta "${labels[0]}"` : `${labels.length} etiquetas`;
+                    successMsg = `${labelDisplay} aplicada(s) em ${data.updated_count || 0} ${unitName}!`;
+                }
+                toast.success(successMsg, { id: toastId });
                 setIsBulkTagModalOpen(false);
                 setSelectedBulkTag('');
                 setCustomBulkTag('');
+
+                if (selectedConvo && target !== 'contacts') {
+                    const isSelectedAffected = selectAllPages
+                        ? (!excludedConvoIds || !excludedConvoIds.includes(selectedConvo.id))
+                        : (engine.selectedConvoIds.includes(selectedConvo.id) || !engine.selectedConvoIds.length);
+
+                    if (isSelectedAffected) {
+                        if (typeof setSelectedConvo === 'function') {
+                            setSelectedConvo(prev => {
+                                if (!prev) return prev;
+                                return {
+                                    ...prev,
+                                    labels: [...labels]
+                                };
+                            });
+                        }
+                        if (typeof engine.loadMessages === 'function') {
+                            engine.loadMessages(selectedConvo.id);
+                        }
+                    }
+                }
+
                 engine.setSelectedConvoIds([]);
                 setSelectAllPages(false);
+                if (setExcludedConvoIds) setExcludedConvoIds([]);
                 engine.loadConversations(true);
                 engine.loadAvailableLabels();
             } else {
                 const errData = await res.json().catch(() => ({}));
-                toast.error(errData.detail || 'Erro ao aplicar etiqueta.', { id: toastId });
+                toast.error(errData.detail || 'Erro ao processar etiquetas.', { id: toastId });
             }
         } catch {
-            toast.error('Erro de conexão ao aplicar etiqueta.', { id: toastId });
+            toast.error('Erro de conexão ao processar etiquetas.', { id: toastId });
         } finally {
             setIsApplyingBulkTag(false);
         }

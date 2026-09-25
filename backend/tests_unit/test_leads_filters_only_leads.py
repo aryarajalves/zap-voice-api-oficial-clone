@@ -26,9 +26,15 @@ def db_session():
         yield db
     finally:
         db.close()
-        Base.metadata.drop_all(bind=engine)
+        try:
+            Base.metadata.drop_all(bind=engine)
+        except Exception:
+            pass
         if os.path.exists("./test_filters_leads.db"):
-            os.remove("./test_filters_leads.db")
+            try:
+                os.remove("./test_filters_leads.db")
+            except Exception:
+                pass
 
 def test_get_lead_filters_only_leads(db_session):
     # Setup mock dependencies

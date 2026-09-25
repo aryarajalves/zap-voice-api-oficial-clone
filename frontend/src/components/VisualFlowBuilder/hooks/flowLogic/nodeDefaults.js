@@ -83,6 +83,10 @@ export const createNodeDefaultData = (type, callbacks = {}) => {
             { id: 'route_1', label: 'Suporte / Dúvidas', phrases: 'ajuda, suporte, duvida, problema', matchType: 'contains' },
             { id: 'route_2', label: 'Vendas / Preço', phrases: 'comprar, preco, valor, plano, assinar', matchType: 'contains' }
         ];
+    } else if (type === 'folderNode') {
+        defaultData.title = 'Nova Pasta / Seção';
+        defaultData.description = '';
+        defaultData.color = 'purple';
     }
 
     return defaultData;

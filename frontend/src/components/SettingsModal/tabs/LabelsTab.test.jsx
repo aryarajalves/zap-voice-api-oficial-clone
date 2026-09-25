@@ -301,5 +301,25 @@ describe('LabelsTab Unit Tests', () => {
         // Valida que o trigger agora exibe 'whatsapp_suporte'
         expect(trigger).toHaveTextContent('whatsapp_suporte');
     });
+
+    it('exibe contador de 25 caracteres e possui maxLength 25 no input de nome', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => []
+        });
+
+        render(<LabelsTab user={mockUser} activeClient={mockActiveClient} />);
+
+        await waitFor(() => {
+            expect(screen.getByText('0/25 caracteres')).toBeInTheDocument();
+        });
+
+        const input = screen.getByPlaceholderText('Ex: Suporte, Lead Quente...');
+        expect(input).toHaveAttribute('maxLength', '25');
+
+        // Digita nome com 25 caracteres
+        fireEvent.change(input, { target: { value: 'A'.repeat(25) } });
+        expect(screen.getByText('25/25 caracteres')).toBeInTheDocument();
+    });
 });
 

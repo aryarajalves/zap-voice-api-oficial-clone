@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { fetchWithAuth } from '../../../../../AuthContext';
+import { API_URL } from '../../../../../config';
 
 export function useBulkTagModal({
   isOpen,
@@ -13,18 +15,40 @@ export function useBulkTagModal({
   customBulkTag,
   setCustomBulkTag,
   onApply,
-  loadAvailableLabels
+  loadAvailableLabels,
+  activeClientId,
+  initialChatLabels = [],
+  initialContactLabels = []
 }) {
   const [targetCategory, setTargetCategory] = useState('chat'); // 'chat' | 'contacts'
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTags, setSelectedTags] = useState(() => {
+
+  const getInitialForCategory = (cat) => {
+    const list = cat === 'contacts' ? initialContactLabels : initialChatLabels;
+    const arr = Array.isArray(list) ? list : [];
     const initial = [];
-    if (selectedBulkTag && selectedBulkTag.trim()) initial.push(selectedBulkTag.trim());
-    if (customBulkTag && customBulkTag.trim() && !initial.includes(customBulkTag.trim())) {
+    arr.forEach(t => {
+      const clean = String(t || '').trim();
+      if (clean && !initial.some(x => x.toLowerCase() === clean.toLowerCase())) {
+        initial.push(clean);
+      }
+    });
+    if (selectedBulkTag && selectedBulkTag.trim() && !initial.some(x => x.toLowerCase() === selectedBulkTag.trim().toLowerCase())) {
+      initial.push(selectedBulkTag.trim());
+    }
+    if (customBulkTag && customBulkTag.trim() && !initial.some(x => x.toLowerCase() === customBulkTag.trim().toLowerCase())) {
       initial.push(customBulkTag.trim());
     }
     return initial;
-  });
+  };
+
+  const [selectedTags, setSelectedTags] = useState(() => getInitialForCategory('chat'));
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createTagName, setCreateTagName] = useState('');
+  const [createTagColor, setCreateTagColor] = useState('#3B82F6');
+  const [isCreatingLabel, setIsCreatingLabel] = useState(false);
+  const [customColorsMap, setCustomColorsMap] = useState({});
 
   const searchInputRef = useRef(null);
   const prevIsOpenRef = useRef(false);
@@ -32,12 +56,18 @@ export function useBulkTagModal({
   loadLabelsRef.current = loadAvailableLabels;
 
   const resolveColor = (label) => {
+    if (!label) return '#3B82F6';
+    const key = String(label).toLowerCase();
+    if (customColorsMap[key]) {
+      return customColorsMap[key];
+    }
     if (typeof getLabelColor === 'function') {
-      return getLabelColor(label);
+      const col = getLabelColor(label);
+      if (col && col !== '#3B82F6') return col;
     }
     if (Array.isArray(availableLabelsDetails)) {
       const found = availableLabelsDetails.find(
-        (l) => l.name?.toLowerCase() === label?.toLowerCase()
+        (l) => l.name?.toLowerCase() === key
       );
       if (found && found.color) return found.color;
     }
@@ -48,14 +78,7 @@ export function useBulkTagModal({
     if (isOpen && !prevIsOpenRef.current) {
       prevIsOpenRef.current = true;
       setSearchTerm('');
-      setSelectedTags(() => {
-        const initial = [];
-        if (selectedBulkTag && selectedBulkTag.trim()) initial.push(selectedBulkTag.trim());
-        if (customBulkTag && customBulkTag.trim() && !initial.includes(customBulkTag.trim())) {
-          initial.push(customBulkTag.trim());
-        }
-        return initial;
-      });
+      setSelectedTags(getInitialForCategory(targetCategory));
       if (typeof loadLabelsRef.current === 'function') {
         loadLabelsRef.current();
       }
@@ -66,13 +89,23 @@ export function useBulkTagModal({
     } else if (!isOpen) {
       prevIsOpenRef.current = false;
     }
-  }, [isOpen, selectedBulkTag, customBulkTag]);
+  }, [isOpen, selectedBulkTag, customBulkTag, targetCategory, initialChatLabels, initialContactLabels]);
 
   const currentCategoryLabels = targetCategory === 'chat'
     ? (chatLabels && chatLabels.length > 0 ? chatLabels : availableLabels)
     : (contactLabels && contactLabels.length > 0 ? contactLabels : []);
 
-  const uniqueLabels = Array.from(new Set((currentCategoryLabels || []).filter(Boolean)));
+  const uniqueLabels = (currentCategoryLabels || []).reduce((acc, l) => {
+    if (!l) return acc;
+    const clean = String(l).trim();
+    if (!clean) return acc;
+    const key = clean.toLowerCase();
+    if (!acc.some(existing => existing.toLowerCase() === key)) {
+      acc.push(clean);
+    }
+    return acc;
+  }, []);
+
   const filteredLabels = uniqueLabels.filter((label) =>
     label.toLowerCase().includes(searchTerm.trim().toLowerCase())
   );
@@ -103,18 +136,60 @@ export function useBulkTagModal({
     setSearchTerm('');
   };
 
-  const handleCreateCustomTag = (tag) => {
-    const clean = tag.trim();
+  const handleOpenCreateModal = (initialName) => {
+    const raw = (initialName || searchTerm || '').trim();
+    const clean = raw.slice(0, 25);
     if (!clean) return;
-    setSelectedTags(prev => {
-      const exists = prev.some(t => t.toLowerCase() === clean.toLowerCase());
-      if (exists) return prev;
-      const next = [...prev, clean];
-      if (typeof setCustomBulkTag === 'function') {
-        setCustomBulkTag(clean);
+
+    const existing = uniqueLabels.find(l => l.toLowerCase() === clean.toLowerCase());
+    if (existing) {
+      handleToggleTag(existing);
+      return;
+    }
+
+    setCreateTagName(clean);
+    setCreateTagColor(targetCategory === 'contacts' ? '#6366F1' : '#3B82F6');
+    setIsCreateModalOpen(true);
+  };
+
+  const handleConfirmCreateLabel = async () => {
+    const finalName = createTagName.trim().slice(0, 25);
+    if (!finalName) return;
+
+    setIsCreatingLabel(true);
+    try {
+      if (activeClientId) {
+        await fetchWithAuth(`${API_URL}/chat/labels`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: finalName, color: createTagColor })
+        }, activeClientId);
       }
+    } catch (err) {
+      console.error('Erro ao registrar nova etiqueta:', err);
+    } finally {
+      setIsCreatingLabel(false);
+    }
+
+    setCustomColorsMap(prev => ({
+      ...prev,
+      [finalName.toLowerCase()]: createTagColor
+    }));
+
+    if (typeof loadLabelsRef.current === 'function') {
+      loadLabelsRef.current();
+    }
+
+    setSelectedTags(prev => {
+      const exists = prev.some(t => t.toLowerCase() === finalName.toLowerCase());
+      if (exists) return prev;
+      const next = [...prev, finalName];
+      if (typeof setCustomBulkTag === 'function') setCustomBulkTag(finalName);
+      if (typeof setSelectedBulkTag === 'function') setSelectedBulkTag(next[0] || '');
       return next;
     });
+
+    setIsCreateModalOpen(false);
     setSearchTerm('');
   };
 
@@ -139,7 +214,7 @@ export function useBulkTagModal({
 
   const handleSwitchCategory = (category) => {
     setTargetCategory(category);
-    handleClearAllTags();
+    setSelectedTags(getInitialForCategory(category));
     setSearchTerm('');
   };
 
@@ -148,12 +223,16 @@ export function useBulkTagModal({
       onClose();
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (filteredLabels.length > 0) {
+      if (filteredLabels.length > 0 && isExactMatch) {
         handleToggleTag(filteredLabels[0]);
       } else if (searchTerm.trim()) {
-        handleCreateCustomTag(searchTerm);
-      } else if (selectedTags.length > 0) {
-        onApply && onApply(selectedTags, targetCategory);
+        handleOpenCreateModal(searchTerm);
+      } else {
+        const currentInitialTags = targetCategory === 'contacts' ? initialContactLabels : initialChatLabels;
+        const hasInitial = currentInitialTags && currentInitialTags.length > 0;
+        if (selectedTags.length > 0 || hasInitial) {
+          onApply && onApply(selectedTags, targetCategory, { initialTags: currentInitialTags });
+        }
       }
     }
   };
@@ -169,7 +248,16 @@ export function useBulkTagModal({
     isExactMatch,
     resolveColor,
     handleToggleTag,
-    handleCreateCustomTag,
+    handleCreateCustomTag: handleOpenCreateModal,
+    handleOpenCreateModal,
+    handleConfirmCreateLabel,
+    isCreateModalOpen,
+    setIsCreateModalOpen,
+    createTagName,
+    setCreateTagName,
+    createTagColor,
+    setCreateTagColor,
+    isCreatingLabel,
     handleRemoveTag,
     handleClearAllTags,
     handleSwitchCategory,

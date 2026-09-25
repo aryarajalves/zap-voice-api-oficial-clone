@@ -196,12 +196,15 @@ async def trigger_bulk_funnel_for_conversations(
 
     select_all_pages = payload.get("select_all_pages", False)
     ids = payload.get("ids", [])
+    excluded_ids = payload.get("excluded_ids", [])
 
     if not select_all_pages and not ids:
         raise HTTPException(status_code=400, detail="Nenhuma conversa selecionada para disparar funil.")
 
     if select_all_pages:
         query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
+        if excluded_ids:
+            query = query.filter(~models.ChatConversation.id.in_(excluded_ids))
 
         tab = payload.get("tab", "todos")
         status = payload.get("status", "open")
@@ -294,7 +297,7 @@ async def trigger_bulk_funnel_for_conversations(
     trigger = models.ScheduledTrigger(
         client_id=client_id,
         funnel_id=funnel_id,
-        status='queued',
+        status='processing',
         is_bulk=True,
         contacts_list=contacts,
         total_contacts=len(contacts),
@@ -303,10 +306,56 @@ async def trigger_bulk_funnel_for_conversations(
         concurrency_limit=payload.get("concurrency_limit", 1)
     )
     db.add(trigger)
+    db.flush()
+
+    # 1. Registrar eventos de início de funil no chat com acesso à pipeline para cada conversa
+    now_dt = datetime.now(timezone.utc)
+    ws_events_to_publish = []
+    for c in convos:
+        try:
+            chat_msg = models.ChatMessage(
+                conversation_id=c.id,
+                sender_type="system",
+                message_type="funnel_event",
+                content=f"🚀 Funil \"{funnel.name}\" foi iniciado",
+                meta_data={
+                    "is_funnel_event": True,
+                    "funnel_id": funnel.id,
+                    "funnel_name": funnel.name,
+                    "trigger_id": trigger.id,
+                    "status": "started"
+                },
+                timestamp=now_dt
+            )
+            db.add(chat_msg)
+            db.flush()
+
+            ws_events_to_publish.append({
+                "id": chat_msg.id,
+                "conversation_id": chat_msg.conversation_id,
+                "sender_type": chat_msg.sender_type,
+                "message_type": chat_msg.message_type,
+                "content": chat_msg.content,
+                "meta_data": chat_msg.meta_data,
+                "timestamp": chat_msg.timestamp.isoformat() if chat_msg.timestamp else now_dt.isoformat(),
+                "client_id": client_id
+            })
+        except Exception as e_ev:
+            logger.error(f"Erro ao registrar evento de início de funil no chat da conversa {c.id}: {e_ev}")
+
+    # 2. Finalizar e comitar toda a transação no banco antes de enviar para a fila (libera locks do Postgres)
     db.commit()
     db.refresh(trigger)
 
+    # 3. Emitir eventos de WebSocket para atualizar a conversa no frontend
     from rabbitmq_client import rabbitmq
+    for payload_ws in ws_events_to_publish:
+        try:
+            await rabbitmq.publish_event("new_message", payload_ws)
+        except Exception as e_ws:
+            logger.error(f"Erro ao publicar websocket new_message: {e_ws}")
+
+    # 4. Publicar disparo de funil na fila do worker com o banco já 100% comitado e desbloqueado
     try:
         await rabbitmq.publish("zapvoice_bulk_sends", {
             "trigger_id": trigger.id,
@@ -316,8 +365,6 @@ async def trigger_bulk_funnel_for_conversations(
             "concurrency": trigger.concurrency_limit,
             "type": "funnel_bulk"
         })
-        trigger.status = 'processing'
-        db.commit()
     except Exception as e:
         logger.error(f"Erro ao publicar disparo de funil em massa: {e}")
 

@@ -11,24 +11,29 @@ export function useIntegrationsTableFilter(integrations = [], leadTags = []) {
   const [filterHasTriggers, setFilterHasTriggers] = useState(false);
   const [filterHasHistory, setFilterHasHistory] = useState(false);
 
-  // Extração de tags internas consolidadas
+  // Extração de tags internas consolidadas (deduplicada case-insensitivamente)
   const existingInternalTags = useMemo(() => {
-    const tagsSet = new Set();
+    const seen = new Set();
+    const result = [];
+    const addTag = (raw) => {
+      if (!raw) return;
+      const clean = String(raw).trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(clean);
+      }
+    };
     (integrations || []).forEach(integration => {
       (integration.mappings || []).forEach(m => {
         if (m.internal_tags) {
-          m.internal_tags.split(',').forEach(t => {
-            const clean = t.trim();
-            if (clean) tagsSet.add(clean);
-          });
+          m.internal_tags.split(',').forEach(t => addTag(t));
         }
       });
     });
-    (leadTags || []).forEach(t => {
-      const clean = t.trim();
-      if (clean) tagsSet.add(clean);
-    });
-    return Array.from(tagsSet);
+    (leadTags || []).forEach(t => addTag(t));
+    return result;
   }, [integrations, leadTags]);
 
   // Filtros locais da tabela

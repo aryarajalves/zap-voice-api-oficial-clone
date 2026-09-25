@@ -33,6 +33,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             logger.error(f"AUTO_PROCESS | Webhook #{history_id} não encontrado no banco.")
             return
 
+        integration = db.query(models.WebhookIntegration).filter_by(id=mapping.integration_id).first()
         payload = history.payload or {}
         phone = variables.get("phone")
         
@@ -314,6 +315,37 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             except Exception as e:
                 logger.error(f"Erro ao obter header_format para mapping {mapping.id}: {e}")
 
+        # Geração automática de PDF para a Bússola Quiz se configurado
+        integration_platform = getattr(integration, "platform", "").lower() if integration else ""
+        has_bussola_pdf = False
+        v_map = mapping.variables_mapping or []
+        if isinstance(v_map, list):
+            for v in v_map:
+                if v.get("value") in ["bussola_pdf_auto", "bussola_pdf_url"] or v.get("custom_value") == "bussola_pdf_auto":
+                    has_bussola_pdf = True
+                    break
+        elif isinstance(v_map, dict):
+            if any(str(val) in ["bussola_pdf_auto", "bussola_pdf_url"] for val in v_map.values()):
+                has_bussola_pdf = True
+
+        if has_bussola_pdf or (integration_platform in ["bussola_quiz", "quiz_bussola", "landing_page_bussola_quiz"] and header_format == "DOCUMENT"):
+            bussola_msg = variables.get("mensagem") or payload.get("mensagem")
+            if bussola_msg:
+                try:
+                    from services.bussola_pdf_service import generate_and_upload_bussola_pdf
+                    lead_name = variables.get("name") or "Consulente"
+                    birth_date = variables.get("nascimento_completo") or variables.get("nascimento_data") or ""
+                    pdf_url, display_filename = generate_and_upload_bussola_pdf(
+                        lead_name=lead_name,
+                        birth_date=birth_date,
+                        message_text=bussola_msg
+                    )
+                    variables["bussola_pdf_url"] = pdf_url
+                    variables["bussola_pdf_filename"] = display_filename
+                    logger.info(f"📄 [WEBHOOK_AUTO_PDF] PDF da Bússola gerado com sucesso: {pdf_url} ({display_filename})")
+                except Exception as pdf_err:
+                    logger.error(f"❌ [WEBHOOK_AUTO_PDF] Erro ao gerar PDF da Bússola: {pdf_err}")
+
         components = extract_mapped_variables(payload, variables, mapping.variables_mapping or {}, header_format)
         
         # Nota privada (Forçando ativo por padrão, a não ser que seja nota customizada no legado)
@@ -400,6 +432,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             chatwoot_contact_id=webhook_contact_id,
             chatwoot_inbox_id=webhook_inbox_id,
             chatwoot_account_id=webhook_account_id,
+            processed_data=variables,
             is_stress_test=bool((history.processed_data or {}).get("is_stress_test"))
         )
         db.add(st)

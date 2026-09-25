@@ -18,5 +18,6 @@ Ao realizar refatorações ou expansões do sistema, a organização de arquivos
    - **Backend:** Arquivos entre **801 e 1.000 linhas** (acima de 800 e abaixo de 1.000).
    - **Frontend:** Arquivos entre **370 e 500 linhas**.
    Mantendo o usuário informado com transparência sobre o progresso geral.
+6. **Exclusão de Arquivos de Teste:** Arquivos de testes (ex: `*.test.jsx`, `*.test.js`, `*.spec.jsx`, `test_*.py` ou diretórios `tests_unit/`, `tests/`) **NÃO** entram em refatoração ou modularização e **NÃO** devem ser incluídos nos relatórios de zona crítica. Arquivos de teste contêm múltiplos cenários, mocks e asserts que justificam tamanhos maiores e devem ser preservados sem quebra estrutural desnecessária.
 
 Isso mantém a base de código limpa, escalável, fácil de navegar e 100% segura contra perda acidental de lógica.

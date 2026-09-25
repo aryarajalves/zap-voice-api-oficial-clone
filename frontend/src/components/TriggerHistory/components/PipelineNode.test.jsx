@@ -214,4 +214,46 @@ describe('PipelineNode Component', () => {
 
     expect(screen.getByText('🏁 INÍCIO')).toBeInTheDocument();
   });
+
+  it('deve renderizar handles na orientação horizontal (target na esquerda e source na direita)', () => {
+    const mockData = {
+      type: 'messageNode',
+      label: 'Mensagem Teste',
+      content: 'Oi'
+    };
+
+    render(<PipelineNode id="node-orient" data={mockData} />);
+
+    expect(screen.getByTestId('handle-target-left')).toBeInTheDocument();
+    expect(screen.getByTestId('handle-source-right')).toBeInTheDocument();
+  });
+
+  it('deve renderizar detalhes de validação de etiquetas (tags) com operador correto', () => {
+    const mockData = {
+      type: 'conditionNode',
+      conditionType: 'tag',
+      tags: ['whatsApp', 'robo'],
+      tagOperator: 'all'
+    };
+
+    render(<PipelineNode id="node-cond-tags" data={mockData} />);
+
+    expect(screen.getByText('🏷️ Etiquetas')).toBeInTheDocument();
+    expect(screen.getByText('whatsApp')).toBeInTheDocument();
+    expect(screen.getByText('robo')).toBeInTheDocument();
+    expect(screen.getByText('Possui Todas (E)')).toBeInTheDocument();
+  });
+
+  it('deve renderizar busca por texto na condição inteligente', () => {
+    const mockData = {
+      type: 'conditionNode',
+      conditionType: 'text',
+      condition: 'Comprar Agora'
+    };
+
+    render(<PipelineNode id="node-cond-text" data={mockData} />);
+
+    expect(screen.getByText('💬 Busca por Texto')).toBeInTheDocument();
+    expect(screen.getByText('"Comprar Agora"')).toBeInTheDocument();
+  });
 });

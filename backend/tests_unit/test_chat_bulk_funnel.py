@@ -83,8 +83,67 @@ async def test_trigger_bulk_funnel_with_ids():
             assert trigger.contacts_list[1]["phone"] == "5511999992222"
             assert mock_pub.called
 
+            # Verificar criacao de ChatMessage funnel_event para cada conversa
+            chat_events = db.query(models.ChatMessage).filter_by(message_type="funnel_event").all()
+            assert len(chat_events) == 2
+            convo_ids = {ev.conversation_id for ev in chat_events}
+            assert convo_ids == {101, 102}
+            for ev in chat_events:
+                assert ev.sender_type == "system"
+                assert "🚀 Funil \"Funil de Conversão\" foi iniciado" in ev.content
+                assert ev.meta_data.get("is_funnel_event") is True
+                assert ev.meta_data.get("trigger_id") == trigger.id
+                assert ev.meta_data.get("funnel_id") == 42
+                assert ev.meta_data.get("status") == "started"
+
     finally:
         db.close()
+
+
+@pytest.mark.asyncio
+async def test_get_active_funnels_map_with_bulk_contacts():
+    from routers.chat.conversation_modules.conversation_filter_helpers import get_active_funnels_map
+
+    engine = create_engine("sqlite:///:memory:")
+    models.Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+
+    try:
+        funnel = models.Funnel(id=88, client_id=1, name="Funil Lote Ativo")
+        db.add(funnel)
+        db.commit()
+
+        # Trigger em lote com contacts_list
+        trigger = models.ScheduledTrigger(
+            id=500,
+            client_id=1,
+            funnel_id=88,
+            status="processing",
+            is_bulk=True,
+            contact_phone=None,
+            contacts_list=[
+                {"id": 1, "phone": "5585998259497", "name": "Aryaraj"},
+                {"id": 2, "meta": {"sender": {"phone_number": "5511988887777", "name": "Contato 2"}}}
+            ]
+        )
+        db.add(trigger)
+        db.commit()
+
+        active_map = get_active_funnels_map(db, client_id=1)
+
+        # Sufixos de 8 dígitos: "98259497" e "88887777"
+        assert "98259497" in active_map
+        assert active_map["98259497"]["id"] == 88
+        assert active_map["98259497"]["trigger_id"] == 500
+        assert active_map["98259497"]["name"] == "Funil Lote Ativo"
+
+        assert "88887777" in active_map
+        assert active_map["88887777"]["id"] == 88
+        assert active_map["88887777"]["trigger_id"] == 500
+    finally:
+        db.close()
+
 
 
 @pytest.mark.asyncio

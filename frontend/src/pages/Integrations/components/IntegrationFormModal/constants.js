@@ -2,6 +2,7 @@ import { FiSliders, FiZap, FiSettings } from 'react-icons/fi';
 
 export const PLATFORM_OPTIONS = [
   { value: 'braip',     label: 'Braip' },
+  { value: 'bussola_quiz', label: 'Landing Page - Bussola Quiz' },
   { value: 'cakto',    label: 'Cakto' },
   { value: 'eduzz',    label: 'Eduzz' },
   { value: 'elementor',label: 'Elementor / Webhook Genérico' },

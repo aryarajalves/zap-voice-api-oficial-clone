@@ -310,12 +310,14 @@ def get_lead_filters(
         .filter(filter_clause, models.WebhookLead.tags != None)\
         .distinct().all()
     
-    unique_tags = set()
+    unique_tags_map = {}
     for row in all_tags_raw:
         if row[0]:
             parts = [t.strip() for t in row[0].split(',') if t.strip()]
             for p in parts:
-                unique_tags.add(p)
+                key = p.lower()
+                if key not in unique_tags_map:
+                    unique_tags_map[key] = p
 
     # Buscar também etiquetas internas mapeadas nas configurações de integração do cliente (a menos que only_leads seja True)
     if not only_leads:
@@ -328,7 +330,9 @@ def get_lead_filters(
                 if row[0]:
                     parts = [t.strip() for t in row[0].split(',') if t.strip()]
                     for p in parts:
-                        unique_tags.add(p)
+                        key = p.lower()
+                        if key not in unique_tags_map:
+                            unique_tags_map[key] = p
         except Exception as e:
             logger.error(f"Erro ao buscar tags mapeadas em get_lead_filters: {e}")
 
@@ -339,14 +343,14 @@ def get_lead_filters(
         imported_by_ids = db.query(models.WebhookLead.imported_by_client_id)\
             .filter(filter_clause, models.WebhookLead.imported_by_client_id.isnot(None))\
             .distinct().all()
-        ids = [c[0] for c in imported_by_ids]
+        ids = [c[0] for c in imported_by_ids if c[0]]
         
         # Também buscar o client_id principal dos leads caso imported_by_client_id seja nulo
         main_client_ids = db.query(models.WebhookLead.client_id)\
             .filter(filter_clause, models.WebhookLead.imported_by_client_id.is_(None))\
             .distinct().all()
         for mc in main_client_ids:
-            if mc[0] not in ids:
+            if mc[0] and mc[0] not in ids:
                 ids.append(mc[0])
 
         if ids:
@@ -359,7 +363,7 @@ def get_lead_filters(
     return {
         "event_types": [e[0] for e in event_types if e[0]],
         "product_names": [p[0] for p in product_names if p[0]],
-        "tags": sorted(list(unique_tags)),
+        "tags": sorted(list(unique_tags_map.values()), key=lambda x: x.lower()),
         "imported_by_clients": imported_by_clients
     }
 

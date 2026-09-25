@@ -705,3 +705,40 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                                 trigger.status = 'completed'
                                 db.commit()
                                 logger.info(f"✅ [RESUME] Envio de template direto concluído para {recipient}")
+
+        # --- SINCRONIZAÇÃO DE STATUS COM CHAT LOCAL (ChatMessage) ---
+        if msg_id:
+            try:
+                chat_msg = db.query(models.ChatMessage).filter(
+                    (models.ChatMessage.wa_message_id == clean_id) |
+                    (models.ChatMessage.wa_message_id == msg_id) |
+                    (models.ChatMessage.wa_message_id == f"wamid.{clean_id}")
+                ).first()
+
+                if chat_msg:
+                    status_priority = {'sent': 1, 'delivered': 2, 'read': 3, 'failed': 0}
+                    current_chat_status = getattr(chat_msg, 'status', None) or (chat_msg.meta_data.get('status') if chat_msg.meta_data else 'sent')
+                    
+                    if status_priority.get(status, 0) >= status_priority.get(current_chat_status, 0) or status == 'failed':
+                        chat_msg.status = status
+                        cur_meta = dict(chat_msg.meta_data or {})
+                        cur_meta["status"] = status
+                        chat_msg.meta_data = cur_meta
+                        db.commit()
+
+                        # Obter client_id para WebSocket
+                        chat_convo = chat_msg.conversation or db.query(models.ChatConversation).get(chat_msg.conversation_id)
+                        c_id = chat_convo.client_id if chat_convo else None
+
+                        payload_ws_status = {
+                            "conversation_id": chat_msg.conversation_id,
+                            "message_id": chat_msg.id,
+                            "wa_message_id": chat_msg.wa_message_id,
+                            "status": status,
+                            "client_id": c_id
+                        }
+                        await wah.rabbitmq.publish_event("message_status_updated", payload_ws_status)
+                        logger.info(f"👁️ [CHAT_STATUS_SYNC] Status '{status}' sincronizado para ChatMessage #{chat_msg.id} (Convo: {chat_msg.conversation_id})")
+            except Exception as e_chat_status:
+                logger.warning(f"⚠️ [CHAT_STATUS_SYNC] Erro ao sincronizar status com ChatMessage: {e_chat_status}")
+

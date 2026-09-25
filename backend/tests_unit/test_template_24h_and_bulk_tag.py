@@ -60,5 +60,13 @@ def test_template_24h_filter_and_bulk_tag(db_session, client):
         db_session.refresh(convo)
         assert "NovaEtiqueta24h" in convo.labels
         assert "existente" in convo.labels
+
+        # Validar que a mensagem de sistema foi gerada no chat com a etiqueta aplicada
+        system_msgs = db_session.query(models.ChatMessage).filter(
+            models.ChatMessage.conversation_id == convo.id,
+            models.ChatMessage.sender_type == "system"
+        ).all()
+        assert len(system_msgs) == 1
+        assert "adicionou marcador(es): NovaEtiqueta24h" in system_msgs[0].content
     finally:
         app.dependency_overrides.pop(get_current_user, None)

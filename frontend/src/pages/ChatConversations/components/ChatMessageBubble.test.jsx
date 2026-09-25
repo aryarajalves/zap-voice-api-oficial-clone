@@ -321,4 +321,142 @@ describe('ChatMessageBubble Unit Tests', () => {
         fireEvent.click(retryBtn);
         expect(onRetryMock).toHaveBeenCalledWith(failedTplMsg);
     });
+
+    it('renderiza indicador de leitura (dois tiques azuis) com status "read"', () => {
+        const readMsg = {
+            id: 20,
+            sender_type: 'user',
+            message_type: 'text',
+            content: 'Olá! Sua fatura está disponível.',
+            timestamp: new Date().toISOString(),
+            status: 'read'
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={readMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[readMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '17:00'}
+            />
+        );
+
+        const readIndicator = screen.getByTestId('message-read-status');
+        expect(readIndicator).toBeInTheDocument();
+        expect(readIndicator.getAttribute('title')).toBe('Lida pelo contato');
+    });
+
+    it('renderiza indicador de leitura quando status "read" está em meta_data', () => {
+        const readMsgMeta = {
+            id: 21,
+            sender_type: 'user',
+            message_type: 'text',
+            content: 'Sua solicitação foi confirmada.',
+            timestamp: new Date().toISOString(),
+            meta_data: { status: 'read' }
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={readMsgMeta}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[readMsgMeta]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '17:05'}
+            />
+        );
+
+        const readIndicator = screen.getByTestId('message-read-status');
+        expect(readIndicator).toBeInTheDocument();
+        expect(readIndicator.getAttribute('title')).toBe('Lida pelo contato');
+    });
+
+    it('não renderiza nenhum vezinho quando mensagem do atendente ainda não foi lida', () => {
+        const sentMsg = {
+            id: 22,
+            sender_type: 'user',
+            message_type: 'text',
+            content: 'Mensagem recém-enviada.',
+            timestamp: new Date().toISOString(),
+            status: 'sent'
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={sentMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[sentMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '17:10'}
+            />
+        );
+
+        expect(screen.queryByTestId('message-read-status')).toBeNull();
+        expect(screen.queryByTestId('message-sent-status')).toBeNull();
+    });
+
+    it('não exibe indicador de leitura/envio do atendente em mensagens recebidas do contato', () => {
+        const contactMsg = {
+            id: 23,
+            sender_type: 'contact',
+            message_type: 'text',
+            content: 'Obrigado pelo retorno!',
+            timestamp: new Date().toISOString()
+        };
+
+        render(
+            <ChatMessageBubble
+                msg={contactMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[contactMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '17:15'}
+            />
+        );
+
+        expect(screen.queryByTestId('message-read-status')).toBeNull();
+        expect(screen.queryByTestId('message-sent-status')).toBeNull();
+    });
+
+    it('aciona resposta ao clicar no botão de responder sem desbalancear scroll', () => {
+        const replyMsg = {
+            id: 24,
+            sender_type: 'user',
+            message_type: 'template',
+            content: '[Template: COMBO_PRODUTO_OFICIAL]',
+            meta_data: { template_name: 'COMBO_PRODUTO_OFICIAL' },
+            timestamp: new Date().toISOString()
+        };
+
+        const setReplyingToMock = vi.fn();
+        const setShouldScrollToBottomMock = vi.fn();
+        const focusMock = vi.fn();
+        const fakeInputRef = { current: { focus: focusMock } };
+
+        render(
+            <ChatMessageBubble
+                msg={replyMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[replyMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '18:00'}
+                setReplyingTo={setReplyingToMock}
+                chatInputRef={fakeInputRef}
+                engine={{ setShouldScrollToBottom: setShouldScrollToBottomMock, messagesContainerRef: { current: { scrollHeight: 2000, scrollTop: 1500, clientHeight: 400 } } }}
+            />
+        );
+
+        const replyButton = screen.getByTitle('Responder a esta mensagem');
+        expect(replyButton).toBeDefined();
+
+        fireEvent.click(replyButton);
+
+        expect(setReplyingToMock).toHaveBeenCalledWith(expect.objectContaining({
+            id: 24,
+            content: '[Template: COMBO_PRODUTO_OFICIAL]'
+        }));
+        expect(focusMock).toHaveBeenCalledWith({ preventScroll: true });
+    });
 });
+

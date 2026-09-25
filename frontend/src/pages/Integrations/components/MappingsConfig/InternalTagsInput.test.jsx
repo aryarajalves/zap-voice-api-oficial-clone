@@ -90,4 +90,41 @@ describe('InternalTagsInput Component', () => {
     // Não deve mostrar 'vip' pois já está selecionado
     expect(screen.queryByText('vip', { selector: 'div' })).not.toBeInTheDocument();
   });
+
+  it('não deve permitir adicionar etiqueta duplicada case-insensitive', () => {
+    render(
+      <InternalTagsInput
+        value="vip, lead_quente"
+        onChange={mockOnChange}
+        existingTags={existingTags}
+      />
+    );
+
+    const input = screen.getByPlaceholderText('Adicione outra tag...');
+    fireEvent.change(input, { target: { value: 'VIP' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    // Não deve chamar onChange com VIP duplicado
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it('deve deduplicar existingTags fornecidas com casing diferente no dropdown', () => {
+    const duplicateExisting = ['vip', 'VIP', 'Vip', 'lead_novo', 'lead_novo'];
+    render(
+      <InternalTagsInput
+        value=""
+        onChange={mockOnChange}
+        existingTags={duplicateExisting}
+      />
+    );
+
+    const input = screen.getByPlaceholderText('Digite uma tag e aperte Enter...');
+    fireEvent.focus(input);
+
+    // Deve conter apenas 1 item 'vip' e 1 item 'lead_novo'
+    const vipOptions = screen.getAllByText('vip');
+    expect(vipOptions.length).toBe(1);
+    const leadNovoOptions = screen.getAllByText('lead_novo');
+    expect(leadNovoOptions.length).toBe(1);
+  });
 });

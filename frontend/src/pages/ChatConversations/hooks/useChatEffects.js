@@ -6,6 +6,9 @@ export function useChatEffects({
     setSelectedConvo,
     chatInputRef,
     setSelectAllPages,
+    selectAllPages,
+    excludedConvoIds,
+    setExcludedConvoIds,
     activeTab,
     statusFilter,
     searchQuery,
@@ -20,6 +23,8 @@ export function useChatEffects({
     filterUrgent,
     filterHasReplied,
     filterHasActiveFunnel,
+    filterLastMessageRead,
+    filterLastMessageUnread,
     orderBy,
     activeClient,
     setIsSearchMode,
@@ -37,17 +42,18 @@ export function useChatEffects({
         }
     }, [engine?.newMessage]);
 
-    // Reseta selectAllPages se lista esvaziar
+    // Reseta exclusões se não estiver em selectAllPages e lista esvaziar
     useEffect(() => {
-        if (engine.selectedConvoIds.length === 0) {
-            setSelectAllPages(false);
+        if (!selectAllPages && engine.selectedConvoIds.length === 0) {
+            if (setExcludedConvoIds) setExcludedConvoIds([]);
         }
-    }, [engine.selectedConvoIds]);
+    }, [engine.selectedConvoIds, selectAllPages]);
 
-    // Reseta selectAllPages ao alterar qualquer filtro
+    // Reseta selectAllPages e excludedConvoIds ao alterar qualquer filtro
     useEffect(() => {
         setSelectAllPages(false);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, orderBy]);
+        if (setExcludedConvoIds) setExcludedConvoIds([]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, filterLastMessageRead, filterLastMessageUnread, orderBy]);
 
     // Polling de conversas e labels
     useEffect(() => {
@@ -58,7 +64,7 @@ export function useChatEffects({
             engine.loadAvailableLabels();
         }, 5000);
         return () => clearInterval(convoInterval);
-    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, orderBy]);
+    }, [activeTab, statusFilter, searchQuery, selectedLabelFilter, filterBlockStatus, filterHasNote, filterStartDate, filterEndDate, activeClient, engine.page, engine.limit, filterUnread, filterWindowOpen, filterTemplate24h, filterUrgent, filterHasReplied, filterHasActiveFunnel, filterLastMessageRead, filterLastMessageUnread, orderBy]);
 
     // Carregamento de mensagens da conversa selecionada e polling
     useEffect(() => {

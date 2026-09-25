@@ -272,6 +272,7 @@ const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLab
               key={mapping.id || mIndex}
               mapping={mapping}
               mIndex={mIndex}
+              integrationId={formData.id}
               isExpanded={expandedMappings[mIndex] !== false}
               toggleMapping={toggleMapping}
               updateMapping={updateMapping}

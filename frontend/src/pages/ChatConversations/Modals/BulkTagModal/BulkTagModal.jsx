@@ -6,6 +6,7 @@ import BulkTagSelectedList from './components/BulkTagSelectedList';
 import BulkTagSearchInput from './components/BulkTagSearchInput';
 import BulkTagAvailableList from './components/BulkTagAvailableList';
 import BulkTagModalFooter from './components/BulkTagModalFooter';
+import CreateLabelModal from './components/CreateLabelModal';
 
 export default function BulkTagModal({
   isOpen,
@@ -22,7 +23,10 @@ export default function BulkTagModal({
   onApply,
   isApplying,
   selectedCount,
-  loadAvailableLabels
+  loadAvailableLabels,
+  activeClientId,
+  initialChatLabels = [],
+  initialContactLabels = []
 }) {
   const {
     targetCategory,
@@ -38,7 +42,15 @@ export default function BulkTagModal({
     handleRemoveTag,
     handleClearAllTags,
     handleSwitchCategory,
-    handleKeyDown
+    handleKeyDown,
+    isCreateModalOpen,
+    setIsCreateModalOpen,
+    createTagName,
+    setCreateTagName,
+    createTagColor,
+    setCreateTagColor,
+    isCreatingLabel,
+    handleConfirmCreateLabel
   } = useBulkTagModal({
     isOpen,
     onClose,
@@ -52,10 +64,15 @@ export default function BulkTagModal({
     customBulkTag,
     setCustomBulkTag,
     onApply,
-    loadAvailableLabels
+    loadAvailableLabels,
+    activeClientId,
+    initialChatLabels,
+    initialContactLabels
   });
 
   if (!isOpen) return null;
+
+  const currentInitialTags = targetCategory === 'contacts' ? initialContactLabels : initialChatLabels;
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -113,11 +130,25 @@ export default function BulkTagModal({
             onClose={onClose}
             onApply={onApply}
             selectedTags={selectedTags}
+            initialTags={currentInitialTags}
             targetCategory={targetCategory}
             isApplying={isApplying}
           />
         </div>
       </div>
+
+      {/* Modal de Criação de Etiqueta com Escolha de Cor e Limite de 25 caracteres */}
+      <CreateLabelModal
+        isOpen={isCreateModalOpen}
+        tagName={createTagName}
+        tagColor={createTagColor}
+        onChangeName={setCreateTagName}
+        onChangeColor={setCreateTagColor}
+        onClose={() => setIsCreateModalOpen(false)}
+        onConfirm={handleConfirmCreateLabel}
+        isSaving={isCreatingLabel}
+        targetCategory={targetCategory}
+      />
     </div>
   );
 }

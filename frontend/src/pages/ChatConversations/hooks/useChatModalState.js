@@ -11,6 +11,7 @@ export function useChatModalState() {
     const [isCancelFunnelModalOpen, setIsCancelFunnelModalOpen] = useState(false);
     const [isCancelingFunnel, setIsCancelingFunnel] = useState(false);
     const [isSearchMode, setIsSearchMode] = useState(false);
+    const [isChatMaximized, setIsChatMaximized] = useState(false);
     const [highlightedMsgId, setHighlightedMsgId] = useState(null);
     const [exportModal, setExportModal] = useState({
         isOpen: false,
@@ -67,6 +68,7 @@ export function useChatModalState() {
         isCancelFunnelModalOpen, setIsCancelFunnelModalOpen,
         isCancelingFunnel, setIsCancelingFunnel,
         isSearchMode, setIsSearchMode,
+        isChatMaximized, setIsChatMaximized,
         highlightedMsgId, setHighlightedMsgId,
         exportModal, setExportModal,
         handleExportConversation

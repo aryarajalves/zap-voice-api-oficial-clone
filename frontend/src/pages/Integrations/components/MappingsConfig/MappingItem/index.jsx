@@ -31,6 +31,7 @@ export default function MappingItem({
   discoveredProducts,
   existingInternalTags,
   platform,
+  integrationId,
 }) {
   const [activeTab, setActiveTab] = useState('disparo');
   const allowedEvents = platform && PLATFORM_EVENT_TYPES[platform]
@@ -91,6 +92,7 @@ export default function MappingItem({
               allowedEvents={allowedEvents}
               selectedTpl={selectedTpl}
               templateButtons={templateButtons}
+              integrationId={integrationId}
               onGoToButtonsTab={() => setActiveTab('botoes')}
             />
           )}

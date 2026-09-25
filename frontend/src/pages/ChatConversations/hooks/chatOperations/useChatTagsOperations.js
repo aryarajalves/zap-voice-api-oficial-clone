@@ -5,7 +5,7 @@ import { API_URL } from '../../../../config';
 export function useChatTagsOperations({ selectedConvo, setSelectedConvo, activeClient, engine }) {
     const handleAddTagWithName = async (tagName, customColor = null) => {
         if (!tagName || !tagName.trim() || !selectedConvo) return;
-        const cleanTag = tagName.trim().slice(0, 20);
+        const cleanTag = tagName.trim().slice(0, 25);
         const currentTags = selectedConvo.labels || [];
 
         if (currentTags.map(t => t.toLowerCase()).includes(cleanTag.toLowerCase())) {
@@ -25,7 +25,19 @@ export function useChatTagsOperations({ selectedConvo, setSelectedConvo, activeC
             }
         }
 
-        const updatedTags = [...currentTags, cleanTag];
+        const seen = new Set();
+        const updatedTags = [];
+        [...currentTags, cleanTag].forEach(t => {
+            if (!t) return;
+            const clean = String(t).trim();
+            if (!clean) return;
+            const key = clean.toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                updatedTags.push(clean);
+            }
+        });
+
         try {
             const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/labels`, {
                 method: 'POST',
@@ -47,7 +59,8 @@ export function useChatTagsOperations({ selectedConvo, setSelectedConvo, activeC
 
     const handleRemoveTag = async (tagToRemove) => {
         if (!selectedConvo) return;
-        const updatedTags = (selectedConvo.labels || []).filter(t => t !== tagToRemove);
+        const removeLower = String(tagToRemove).trim().toLowerCase();
+        const updatedTags = (selectedConvo.labels || []).filter(t => String(t).trim().toLowerCase() !== removeLower);
         try {
             const res = await fetchWithAuth(`${API_URL}/chat/conversations/${selectedConvo.id}/labels`, {
                 method: 'POST',

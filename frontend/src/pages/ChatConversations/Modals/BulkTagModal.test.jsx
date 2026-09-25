@@ -111,7 +111,7 @@ describe('BulkTagModal Unit Tests', () => {
         const applyBtn = screen.getByText('Aplicar no Chat');
         expect(applyBtn.disabled).toBe(false);
         fireEvent.click(applyBtn);
-        expect(onApply).toHaveBeenCalledWith(['compra-aprovada'], 'chat');
+        expect(onApply).toHaveBeenCalledWith(['compra-aprovada'], 'chat', { initialTags: [] });
     });
 
     it('permite aplicar etiqueta em Contatos com target contacts', () => {
@@ -123,7 +123,7 @@ describe('BulkTagModal Unit Tests', () => {
                 isOpen={true}
                 onClose={vi.fn()}
                 contactLabels={contactLabels}
-                selectedBulkTag="lead-vip"
+                selectedBulkTag=""
                 setSelectedBulkTag={vi.fn()}
                 customBulkTag=""
                 setCustomBulkTag={vi.fn()}
@@ -142,7 +142,7 @@ describe('BulkTagModal Unit Tests', () => {
         const applyBtn = screen.getByText('Aplicar em Contatos');
         expect(applyBtn.disabled).toBe(false);
         fireEvent.click(applyBtn);
-        expect(onApply).toHaveBeenCalledWith(['lead-vip'], 'contacts');
+        expect(onApply).toHaveBeenCalledWith(['lead-vip'], 'contacts', { initialTags: [] });
     });
 
     it('permite selecionar múltiplas etiquetas de uma vez e exibe quantidade no botão de aplicar', () => {
@@ -170,11 +170,11 @@ describe('BulkTagModal Unit Tests', () => {
         fireEvent.click(screen.getByText('suporte-vip'));
 
         expect(screen.getByText('Etiquetas selecionadas (2):')).toBeDefined();
-        const applyBtn = screen.getByText('Aplicar 2 etiquetas no Chat');
+        const applyBtn = screen.getByText('Salvar 2 etiquetas no Chat');
         expect(applyBtn.disabled).toBe(false);
 
         fireEvent.click(applyBtn);
-        expect(onApply).toHaveBeenCalledWith(['compra-aprovada', 'suporte-vip'], 'chat');
+        expect(onApply).toHaveBeenCalledWith(['compra-aprovada', 'suporte-vip'], 'chat', { initialTags: [] });
     });
 
     it('permite desmarcar e remover etiquetas selecionadas', () => {
@@ -208,7 +208,46 @@ describe('BulkTagModal Unit Tests', () => {
         expect(screen.getByText('Aplicar no Chat')).toBeDefined();
     });
 
-    it('exibe opção para criar nova etiqueta quando o termo não existe na lista', () => {
+    it('inicializa etiquetas já presentes na conversa (initialChatLabels) e permite remover todas', () => {
+        const chatLabels = ['pepepopo', 'suporte-chat'];
+        const initialChatLabels = ['pepepopo'];
+        const onApply = vi.fn();
+
+        render(
+            <BulkTagModal
+                isOpen={true}
+                onClose={vi.fn()}
+                chatLabels={chatLabels}
+                initialChatLabels={initialChatLabels}
+                selectedBulkTag=""
+                setSelectedBulkTag={vi.fn()}
+                customBulkTag=""
+                setCustomBulkTag={vi.fn()}
+                onApply={onApply}
+                isApplying={false}
+                selectedCount={1}
+            />
+        );
+
+        // A etiqueta já existente deve aparecer na lista de selecionadas
+        expect(screen.getByText('Etiqueta selecionada:')).toBeDefined();
+        // E o botão deve estar como Aplicar no Chat inicialmente
+        const applyBtn = screen.getByText('Aplicar no Chat');
+        expect(applyBtn.disabled).toBe(false);
+
+        // Agora o usuário remove a etiqueta existente
+        const removeBtn = screen.getByTitle('Remover pepepopo');
+        fireEvent.click(removeBtn);
+
+        // Ao remover, o botão deve mudar para "Remover etiquetas do Chat" e continuar habilitado
+        const removeAllBtn = screen.getByText('Remover etiquetas do Chat');
+        expect(removeAllBtn.disabled).toBe(false);
+
+        fireEvent.click(removeAllBtn);
+        expect(onApply).toHaveBeenCalledWith([], 'chat', { initialTags: ['pepepopo'] });
+    });
+
+    it('abre a tela de criação de etiqueta ao tentar criar etiqueta inexistente e permite configurar cor e limite', async () => {
         const chatLabels = ['compra-aprovada'];
         const setCustomBulkTag = vi.fn();
 
@@ -233,7 +272,19 @@ describe('BulkTagModal Unit Tests', () => {
         const createButton = screen.getByText(/Criar e selecionar nova etiqueta no Chat:/);
         expect(createButton).toBeDefined();
 
+        // Ao clicar para criar etiqueta que não existe, abre o modal de criação com cores e limite
         fireEvent.click(createButton);
+        expect(screen.getByText('Criar Nova Etiqueta')).toBeDefined();
+        expect(screen.getByText('Selecione a Cor da Etiqueta')).toBeDefined();
+        expect(screen.getByText('Pré-visualização:')).toBeDefined();
+
+        // Valida que o limite de 25 caracteres é exibido
+        expect(screen.getByText('8/25 caracteres')).toBeDefined();
+
+        // Clica em "Criar e Selecionar" no modal de criação
+        const confirmCreateBtn = screen.getByRole('button', { name: /^Criar e Selecionar$/i });
+        fireEvent.click(confirmCreateBtn);
+
         expect(setCustomBulkTag).toHaveBeenCalledWith('nova-tag');
     });
 

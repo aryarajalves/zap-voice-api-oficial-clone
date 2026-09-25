@@ -116,12 +116,15 @@ const PipelineFlowViewer = ({ trigger, onNodeStatClick }) => {
     }, [trigger.funnel]);
 
     const rawNodes = useMemo(() => {
-        return Array.isArray(funnelSteps.nodes) ? funnelSteps.nodes : [];
+        const nodes = Array.isArray(funnelSteps.nodes) ? funnelSteps.nodes : [];
+        return nodes.filter(n => !['folderNode', 'folder', 'groupNode', 'group'].includes(n.type));
     }, [funnelSteps.nodes]);
 
     const rawEdges = useMemo(() => {
-        return Array.isArray(funnelSteps.edges) ? funnelSteps.edges : [];
-    }, [funnelSteps.edges]);
+        const edges = Array.isArray(funnelSteps.edges) ? funnelSteps.edges : [];
+        const validIds = new Set(rawNodes.map(n => n.id));
+        return edges.filter(e => validIds.has(e.source) && validIds.has(e.target));
+    }, [funnelSteps.edges, rawNodes]);
 
     // 2. Calcular a ordem topológica real dos nós usando BFS para detectar "já passou por aqui"
     const nodeOrderMap = useMemo(() => {

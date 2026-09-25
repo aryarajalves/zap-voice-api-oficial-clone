@@ -1,7 +1,8 @@
 import React from 'react';
-import { FiX, FiCheckCircle, FiSidebar, FiSlash, FiLayers, FiFileText, FiRefreshCw, FiSearch, FiArchive, FiTag } from 'react-icons/fi';
+import { FiX, FiCheckCircle, FiSidebar, FiSlash, FiLayers, FiFileText, FiRefreshCw, FiSearch, FiArchive, FiTag, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import { BsPinAngle, BsPinAngleFill, BsExclamationCircle, BsExclamationCircleFill, BsStars } from 'react-icons/bs';
 import { getFirstName } from '../../../utils/nameFormatter';
+import ConversationLabelsList from './ConversationLabelsList';
 
 export default function ActiveChatHeader({
     selectedConvo,
@@ -19,7 +20,9 @@ export default function ActiveChatHeader({
     isAnalyzingAi,
     handleAnalyzeSingleChatDoubts,
     isSearchMode,
-    setIsSearchMode
+    setIsSearchMode,
+    isChatMaximized,
+    setIsChatMaximized
 }) {
     if (!selectedConvo) return null;
 
@@ -51,27 +54,13 @@ export default function ActiveChatHeader({
                         </span>
                     )}
                 </div>
-                {selectedConvo.labels && selectedConvo.labels.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5" data-testid="chat-header-labels">
-                        {selectedConvo.labels.map(label => {
-                            const labelColor = typeof engine?.getLabelColor === 'function' ? engine.getLabelColor(label) : '#3B82F6';
-                            return (
-                                <span
-                                    key={label}
-                                    style={{
-                                        color: labelColor,
-                                        borderColor: `${labelColor}40`,
-                                        backgroundColor: `${labelColor}18`
-                                    }}
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-xs"
-                                >
-                                    <FiTag size={10} />
-                                    <span>{label}</span>
-                                </span>
-                            );
-                        })}
-                    </div>
-                )}
+                <ConversationLabelsList
+                    labels={selectedConvo.labels}
+                    getLabelColor={engine?.getLabelColor}
+                    contactName={selectedConvo.contact_name || selectedConvo.phone}
+                    variant="header"
+                    className="mt-1.5"
+                />
             </div>
             <div className="flex items-center gap-2">
                 <button
@@ -193,6 +182,18 @@ export default function ActiveChatHeader({
                     }`}
                 >
                     <FiSearch size={16} />
+                </button>
+
+                <button
+                    onClick={() => setIsChatMaximized?.(!isChatMaximized)}
+                    title={isChatMaximized ? "Restaurar layout" : "Maximizar conversa"}
+                    className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                        isChatMaximized
+                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                            : 'bg-white dark:bg-[#1e293b] border-gray-200 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-200 dark:hover:border-amber-800/30'
+                    }`}
+                >
+                    {isChatMaximized ? <FiMinimize2 size={16} /> : <FiMaximize2 size={16} />}
                 </button>
 
                 <button

@@ -25,7 +25,28 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
 
   const [selectedTag, setSelectedTag] = useState(null);
 
-  const rawOptions = options || [];
+  // Normaliza e deduplica opções de forma canônica e estrita
+  const rawOptions = React.useMemo(() => {
+    const list = options || [];
+    const seen = new Set();
+    const result = [];
+    list.forEach(opt => {
+      if (!opt) return;
+      const val = typeof opt === 'object' ? String(opt.value ?? opt.label ?? '') : String(opt);
+      const cleanVal = val.trim();
+      if (!cleanVal) return;
+      const key = cleanVal.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        if (typeof opt === 'object') {
+          result.push({ ...opt, value: cleanVal, label: (opt.label ? String(opt.label).trim() : cleanVal) });
+        } else {
+          result.push({ value: cleanVal, label: cleanVal });
+        }
+      }
+    });
+    return result;
+  }, [options]);
 
   const allTags = React.useMemo(() => {
     const tagsSet = new Set();
@@ -62,33 +83,66 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
     displayOptions.unshift({ value: "", label: "Nenhum" });
   }
 
-  const isSelected = (optValue) => {
+  // Lista de valores selecionados deduplicada case-insensitively
+  const currentValues = React.useMemo(() => {
+    let rawList = [];
     if (isMulti) {
-      return Array.isArray(value) && value.includes(optValue);
+      rawList = Array.isArray(value)
+        ? value
+        : (typeof value === 'string' && value.trim() ? value.split(',') : []);
+    } else {
+      rawList = value !== null && value !== undefined && value !== '' ? [value] : [];
     }
-    return String(value) === String(optValue);
+    const seen = new Set();
+    const cleanList = [];
+    rawList.forEach(v => {
+      const clean = String(v).trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        cleanList.push(clean);
+      }
+    });
+    return cleanList;
+  }, [value, isMulti]);
+
+  const isSelected = (optValue) => {
+    const cleanOpt = String(optValue).trim().toLowerCase();
+    return currentValues.some(v => v.toLowerCase() === cleanOpt);
   };
 
-  const currentValues = isMulti
-    ? (Array.isArray(value) ? value : (typeof value === 'string' && value.trim() ? value.split(',').map(v => v.trim()) : []))
-    : [value];
-  const selectedOptions = currentValues.filter(Boolean).map(v => {
-    const found = rawOptions.find(opt => opt && String(opt.value) === String(v));
+  const selectedOptions = currentValues.map(v => {
+    const found = rawOptions.find(opt => opt && String(opt.value).toLowerCase() === v.toLowerCase());
     return found || { value: v, label: v };
   });
 
   const handleToggle = (optValue) => {
+    const cleanOpt = String(optValue).trim();
+    if (!cleanOpt) return;
     if (isMulti) {
-      const newValue = currentValues.includes(optValue)
-        ? currentValues.filter(v => v !== optValue)
-        : [...currentValues, optValue];
+      const exists = currentValues.some(v => v.toLowerCase() === cleanOpt.toLowerCase());
+      const newValue = exists
+        ? currentValues.filter(v => v.toLowerCase() !== cleanOpt.toLowerCase())
+        : [...currentValues, cleanOpt];
       onChange(newValue);
     } else {
-      onChange(optValue);
+      onChange(cleanOpt);
       setIsOpen(false);
       setSearchTerm("");
     }
   };
+
+  const cleanSearchTerm = searchTerm.trim();
+  const searchLower = cleanSearchTerm.toLowerCase();
+  const isAlreadyInOptions = rawOptions.some(opt => {
+    if (!opt) return false;
+    const v = String(opt.value || '').trim().toLowerCase();
+    const l = String(opt.label || '').trim().toLowerCase();
+    return v === searchLower || l === searchLower;
+  });
+  const isAlreadySelected = currentValues.some(v => v.toLowerCase() === searchLower);
+  const canCreateTag = Boolean(cleanSearchTerm && !isAlreadyInOptions && !isAlreadySelected);
 
   return (
     <div className="relative w-full" ref={containerRef}>
@@ -181,19 +235,18 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
               )}
             </div>
             <div className="max-h-60 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-white/10">
-              {/* Opção para criar nova etiqueta caso o termo digitado ainda não exista */}
-              {searchTerm.trim() && !rawOptions.some(opt => opt && String(opt.value).toLowerCase() === searchTerm.trim().toLowerCase() || String(opt.label).toLowerCase() === searchTerm.trim().toLowerCase()) && (
+              {/* Opção para criar nova etiqueta caso o termo digitado ainda não exista e não esteja selecionado */}
+              {canCreateTag && (
                 <div
                   className="p-2.5 text-xs rounded-lg cursor-pointer transition-colors flex items-center justify-between mb-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-bold border border-blue-500/20"
                   onClick={(e) => {
                     e.stopPropagation();
-                    const newTag = searchTerm.trim();
-                    handleToggle(newTag);
+                    handleToggle(cleanSearchTerm.slice(0, 25));
                     setSearchTerm("");
                   }}
                 >
                   <span className="truncate">
-                    + Criar etiqueta: <strong className="underline">{searchTerm.trim()}</strong>
+                    + Criar etiqueta: <strong className="underline">{cleanSearchTerm.slice(0, 25)}</strong>
                   </span>
                   <span className="text-[10px] bg-blue-500 text-white px-2 py-0.5 rounded font-extrabold shrink-0">
                     ADICIONAR

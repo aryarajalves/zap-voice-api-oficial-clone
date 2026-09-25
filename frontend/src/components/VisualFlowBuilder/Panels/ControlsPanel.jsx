@@ -1,10 +1,10 @@
 import React from 'react';
 import { Panel } from 'reactflow';
-import { FiArrowLeft, FiSave, FiTrash2, FiMinimize, FiMaximize } from 'react-icons/fi';
+import { FiArrowLeft, FiSave, FiTrash2, FiMinimize, FiMaximize, FiDownload } from 'react-icons/fi';
 
 const ControlsPanel = ({
     onBack, isFullScreen, toggleFullScreen,
-    handleSave, saving, onDelete
+    handleSave, saving, onDelete, onExport
 }) => {
     return (
         <Panel position="top-right" className="flex items-center gap-2">
@@ -23,6 +23,16 @@ const ControlsPanel = ({
             >
                 <FiSave size={16} /> {saving ? 'Salvando...' : 'Salvar Fluxo'}
             </button>
+            {onExport && (
+                <button 
+                    onClick={onExport} 
+                    className="flex items-center gap-1.5 px-3 py-2 bg-cyan-50 dark:bg-cyan-950/30 text-cyan-600 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-900/50 rounded-lg shadow-sm hover:bg-cyan-100 dark:hover:bg-cyan-900/50 transition font-bold text-sm"
+                    title="Exportar Fluxo em JSON"
+                    data-testid="flow-export-btn"
+                >
+                    <FiDownload size={16} /> Exportar JSON
+                </button>
+            )}
             {onDelete && (
                 <button 
                     onClick={onDelete} 

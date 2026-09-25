@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiGlobe, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram, FiHelpCircle, FiTerminal, FiMessageSquare, FiMail } from 'react-icons/fi';
+import { FiHome, FiLayers, FiClock, FiSettings, FiLogOut, FiSlash, FiUsers, FiGitMerge, FiPlus, FiCalendar, FiActivity, FiZap, FiDollarSign, FiDatabase, FiInstagram, FiHelpCircle, FiTerminal, FiMessageSquare, FiMail } from 'react-icons/fi';
 import ClientSelector from './ClientSelector';
 import ConfirmModal from './ConfirmModal';
 import { useClient } from '../contexts/ClientContext';
@@ -53,8 +53,6 @@ export default function Sidebar({ activeView, onViewChange, onLogout, onSettings
         { id: 'history', label: 'Histórico', icon: FiClock, roles: ['super_admin', 'admin', 'premium', 'user'], category: 'campanhas' },
 
         // Criação de Páginas
-        { id: 'capture_page', label: 'Página de Captura', icon: FiGlobe, roles: ['super_admin', 'admin', 'premium'], category: 'paginas' },
-        { id: 'pagina_captura', label: 'Checkout Prepopulado', icon: FiGlobe, roles: ['super_admin', 'admin', 'premium'], category: 'paginas' },
         { id: 'hot_leads', label: 'Leads Quentes', icon: FiZap, roles: ['super_admin', 'admin', 'premium'], category: 'paginas' },
 
         // Automação

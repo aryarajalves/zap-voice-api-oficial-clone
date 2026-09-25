@@ -41,8 +41,26 @@ describe('useIntegrationsTableFilter hook', () => {
     expect(result.current.existingInternalTags).toContain('tag_lead_2');
     
     // vip não deve aparecer duplicado
-    const vipCount = result.current.existingInternalTags.filter(t => t === 'vip').length;
+    const vipCount = result.current.existingInternalTags.filter(t => t.toLowerCase() === 'vip').length;
     expect(vipCount).toBe(1);
+  });
+
+  it('deduplica tags internas com casing diferente entre integracao e leads', () => {
+    const customIntegrations = [
+      {
+        id: 10,
+        mappings: [{ internal_tags: 'compra_aprovada, ALUNO' }]
+      }
+    ];
+    const customLeadTags = ['COMPRA_APROVADA', 'aluno', 'Compra_Aprovada '];
+
+    const { result } = renderHook(() =>
+      useIntegrationsTableFilter(customIntegrations, customLeadTags)
+    );
+
+    expect(result.current.existingInternalTags.length).toBe(2);
+    expect(result.current.existingInternalTags.filter(t => t.toLowerCase() === 'compra_aprovada').length).toBe(1);
+    expect(result.current.existingInternalTags.filter(t => t.toLowerCase() === 'aluno').length).toBe(1);
   });
 
   it('ordena por quantidade de histórico em ordem decrescente', () => {

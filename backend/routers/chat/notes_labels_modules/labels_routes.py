@@ -119,17 +119,27 @@ async def bulk_tag_conversations(
         labels_to_add = [labels_to_add]
     labels_to_add = [l.strip() for l in labels_to_add if isinstance(l, str) and l.strip()]
 
-    if not labels_to_add:
-        raise HTTPException(status_code=400, detail="Forneça ao menos uma etiqueta para aplicar.")
+    remove_labels = payload.get("remove_labels", [])
+    if isinstance(remove_labels, str):
+        remove_labels = [remove_labels]
+    remove_labels = [l.strip() for l in remove_labels if isinstance(l, str) and l.strip()]
+
+    mode = payload.get("mode", "add")  # "add" | "sync"
+
+    if not labels_to_add and not remove_labels and mode != "sync":
+        raise HTTPException(status_code=400, detail="Forneça ao menos uma etiqueta para aplicar ou remover.")
 
     select_all_pages = payload.get("select_all_pages", False)
     ids = payload.get("ids", [])
+    excluded_ids = payload.get("excluded_ids", [])
 
     if not select_all_pages and not ids:
         raise HTTPException(status_code=400, detail="Nenhuma conversa selecionada para etiquetar.")
 
     if select_all_pages:
         query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
+        if excluded_ids:
+            query = query.filter(~models.ChatConversation.id.in_(excluded_ids))
         
         tab = payload.get("tab", "todos")
         status = payload.get("status", "open")
@@ -270,18 +280,60 @@ async def bulk_tag_conversations(
 
     # Atualiza as etiquetas das conversas (Chat) se target for 'chat' ou 'both'
     if target in ("chat", "both"):
+        user_name = current_user.full_name or current_user.email or "Atendente"
         for convo in conversations:
             current_labels = convo.labels if isinstance(convo.labels, list) else []
-            new_labels = list(current_labels)
             updated_this = False
-            for lbl in labels_to_add:
-                if lbl.lower() not in [x.lower() for x in new_labels]:
-                    new_labels.append(lbl)
+            added_for_convo = []
+            removed_for_convo = []
+
+            if mode == "sync":
+                new_labels_lower = [l.lower() for l in labels_to_add]
+                old_labels_lower = [l.lower() for l in current_labels]
+                added_for_convo = [l for l in labels_to_add if l.lower() not in old_labels_lower]
+                removed_for_convo = [l for l in current_labels if l.lower() not in new_labels_lower]
+                if added_for_convo or removed_for_convo:
+                    convo.labels = list(labels_to_add)
+                    flag_modified(convo, "labels")
                     updated_this = True
+            else:
+                new_labels = list(current_labels)
+                if remove_labels:
+                    rem_lower = [x.lower() for x in remove_labels]
+                    for x in current_labels:
+                        if x.lower() in rem_lower:
+                            removed_for_convo.append(x)
+                    if removed_for_convo:
+                        new_labels = [x for x in new_labels if x.lower() not in rem_lower]
+                        updated_this = True
+
+                for lbl in labels_to_add:
+                    if lbl.lower() not in [x.lower() for x in new_labels]:
+                        new_labels.append(lbl)
+                        added_for_convo.append(lbl)
+                        updated_this = True
+
+                if updated_this:
+                    convo.labels = new_labels
+                    flag_modified(convo, "labels")
+
             if updated_this:
-                convo.labels = new_labels
-                flag_modified(convo, "labels")
                 count_updated += 1
+                events = []
+                if added_for_convo:
+                    events.append(f"adicionou marcador(es): {', '.join(added_for_convo)}")
+                if removed_for_convo:
+                    events.append(f"removeu marcador(es): {', '.join(removed_for_convo)}")
+                if events:
+                    event_text = f"O atendente {user_name} " + " e ".join(events)
+                    system_msg = models.ChatMessage(
+                        conversation_id=convo.id,
+                        sender_type="system",
+                        message_type="text",
+                        content=event_text,
+                        timestamp=datetime.now(timezone.utc)
+                    )
+                    db.add(system_msg)
 
     # Atualiza as tags dos contatos (Aba de Contatos / Leads) se target for 'contacts', 'contatos' ou 'both'
     if target in ("contacts", "contatos", "both"):
@@ -311,10 +363,28 @@ async def bulk_tag_conversations(
             for lead in all_leads:
                 existing_tags = [t.strip() for t in (lead.tags or "").split(",") if t.strip()]
                 lead_updated = False
-                for lbl in labels_to_add:
-                    if lbl.lower() not in [t.lower() for t in existing_tags]:
-                        existing_tags.append(lbl)
+                if mode == "sync":
+                    new_tags_lower = [l.lower() for l in labels_to_add]
+                    filtered_tags = [t for t in existing_tags if t.lower() in new_tags_lower]
+                    for lbl in labels_to_add:
+                        if lbl.lower() not in [t.lower() for t in filtered_tags]:
+                            filtered_tags.append(lbl)
+                    if filtered_tags != existing_tags:
+                        existing_tags = filtered_tags
                         lead_updated = True
+                else:
+                    if remove_labels:
+                        rem_lower = [x.lower() for x in remove_labels]
+                        before_len = len(existing_tags)
+                        existing_tags = [t for t in existing_tags if t.lower() not in rem_lower]
+                        if len(existing_tags) != before_len:
+                            lead_updated = True
+
+                    for lbl in labels_to_add:
+                        if lbl.lower() not in [t.lower() for t in existing_tags]:
+                            existing_tags.append(lbl)
+                            lead_updated = True
+
                 if lead_updated:
                     lead.tags = ", ".join(existing_tags)
                     flag_modified(lead, "tags")

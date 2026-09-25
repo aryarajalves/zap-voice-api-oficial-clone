@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     FiMessageSquare, FiImage, FiMic, FiClock, FiCpu, 
     FiShuffle, FiLink, FiTag, FiUser, FiCalendar, 
-    FiGlobe, FiGift, FiTarget, FiSearch, FiSliders, FiZap, FiFileText, FiDatabase, FiGitBranch
+    FiGlobe, FiGift, FiTarget, FiSearch, FiSliders, FiZap, FiFileText, FiDatabase, FiGitBranch, FiFolder
 } from 'react-icons/fi';
 import { useAuth } from '../../../AuthContext';
 
@@ -200,6 +200,17 @@ const ContextMenu = ({ top, left, onClose, onAddNode }) => {
             colorClass: 'bg-amber-100 dark:bg-amber-900/50 text-amber-500 group-hover:bg-amber-200',
             hoverBg: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600',
             keywords: ['roleta', 'sorteio', 'ganhar', 'brinde', 'cupom', 'premio']
+        },
+
+        // --- ORGANIZAÇÃO ---
+        {
+            type: 'folderNode',
+            label: 'Pasta / Seção Organizadora',
+            category: 'Organização',
+            icon: FiFolder,
+            colorClass: 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 group-hover:bg-purple-200',
+            hoverBg: 'hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:text-purple-600',
+            keywords: ['pasta', 'secao', 'grupo', 'organizar', 'bloco', 'container', 'moldura', 'area']
         }
     ], []);
 
@@ -232,7 +243,7 @@ const ContextMenu = ({ top, left, onClose, onAddNode }) => {
 
     // Agrupa os nós filtrados por suas respectivas categorias mantendo a ordem das seções
     const groupedNodes = useMemo(() => {
-        const categoriesOrder = ['Conteúdo', 'Fluxo e Tempo', 'Lógica', 'Integrações', 'Gamificação'];
+        const categoriesOrder = ['Conteúdo', 'Fluxo e Tempo', 'Lógica', 'Integrações', 'Gamificação', 'Organização'];
         const groups = {};
         
         filteredNodes.forEach(node => {

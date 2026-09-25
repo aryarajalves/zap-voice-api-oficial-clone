@@ -27,12 +27,24 @@ async def handle_bulk_send(data: dict):
         db_lock = SessionLocal()
         try:
             from models import ScheduledTrigger
-            # Tenta obter o lock. Se skip_locked=True e já estiver travado, retorna None.
-            trigger = db_lock.query(ScheduledTrigger).filter(ScheduledTrigger.id == trigger_id).with_for_update(skip_locked=True).first()
+            # Tenta obter o lock com breve tolerância a micro-latências de transações atômicas
+            trigger = None
+            for attempt in range(4):
+                trigger = db_lock.query(ScheduledTrigger).filter(ScheduledTrigger.id == trigger_id).with_for_update(skip_locked=True).first()
+                if trigger:
+                    break
+                if attempt < 3:
+                    await asyncio.sleep(0.3)
             
             if not trigger:
-                # Se não retornou a linha, ou ela não existe ou está bloqueada por outro processo (transação activa)
-                logger.warning(f"🚫 [BULK LOCK] Trigger {trigger_id} está sendo processado por outro worker ou processo atômico. Abortando.")
+                # Verificar se o trigger existe no banco
+                exists_check = db_lock.query(ScheduledTrigger.id, ScheduledTrigger.status).filter(ScheduledTrigger.id == trigger_id).first()
+                if not exists_check:
+                    logger.warning(f"⚠️ [BULK] Trigger {trigger_id} não encontrado no banco de dados. Abortando.")
+                    should_wait = False
+                    return
+                # Se existe mas não pegou lock, outro worker ou processo atômico está com ele bloqueado
+                logger.warning(f"🚫 [BULK LOCK] Trigger {trigger_id} está sendo processado por outro worker ou processo atômico (Status: {exists_check.status}). Abortando duplicidade.")
                 should_wait = False # Não gasta slot do worker esperando se foi apenas uma duplicidade de fila
                 return
             

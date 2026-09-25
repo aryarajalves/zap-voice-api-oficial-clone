@@ -266,7 +266,23 @@ async def handle_external_webhook(
                 models.WebhookEventMapping.is_active == True,
                 (models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "")
             ).first()
-            
+
+        # 4.2.1. Alias para leitura_concluida <-> checkout_pre_populado (Quiz Bússola)
+        if not mapping and event_type == "leitura_concluida" and str(payload.get("event", "")).upper() == "PURCHASE_OUT_OF_SHOPPING_CART":
+            mapping = db.query(models.WebhookEventMapping).filter(
+                models.WebhookEventMapping.integration_id == integration.id,
+                models.WebhookEventMapping.event_type == "checkout_pre_populado",
+                models.WebhookEventMapping.is_active == True,
+                (models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "") | (models.WebhookEventMapping.product_name == product_name)
+            ).first()
+        elif not mapping and event_type == "checkout_pre_populado" and str(payload.get("tipo", "")).lower() == "leitura_concluida":
+            mapping = db.query(models.WebhookEventMapping).filter(
+                models.WebhookEventMapping.integration_id == integration.id,
+                models.WebhookEventMapping.event_type == "leitura_concluida",
+                models.WebhookEventMapping.is_active == True,
+                (models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "") | (models.WebhookEventMapping.product_name == product_name)
+            ).first()
+
         # 4.3. 'outros' (catch-all) + Specific product name
         if not mapping and event_type != "outros" and product_name:
             mapping = db.query(models.WebhookEventMapping).filter(

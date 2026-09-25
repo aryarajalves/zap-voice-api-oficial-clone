@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useClient } from '../../../contexts/ClientContext';
 import {
   useTemplateUIState,
@@ -32,6 +32,15 @@ export const useTemplateCreator = (onSuccess, refreshKey) => {
   });
 
   fetchTemplatesRef.current = listState.fetchTemplates;
+
+  const prevClientIdRef = useRef(activeClient?.id);
+  useEffect(() => {
+    if (prevClientIdRef.current !== activeClient?.id) {
+      prevClientIdRef.current = activeClient?.id;
+      uiState.setIsBodyExpanded(false);
+      uiState.setIsGuideOpen(false);
+    }
+  }, [activeClient?.id, uiState]);
 
   return {
     activeClient,

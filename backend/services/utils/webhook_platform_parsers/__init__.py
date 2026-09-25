@@ -25,6 +25,9 @@ from .crm_and_groups import (
     parse_appmax,
     parse_zapgroup,
 )
+from .bussola_quiz import (
+    parse_bussola_quiz,
+)
 
 __all__ = [
     "get_doc_label",
@@ -46,4 +49,5 @@ __all__ = [
     "parse_herospark",
     "parse_appmax",
     "parse_zapgroup",
+    "parse_bussola_quiz",
 ]

@@ -13,12 +13,15 @@ export function useChatFilterState() {
     const [filterUrgent, setFilterUrgent] = useState(false);
     const [filterHasReplied, setFilterHasReplied] = useState(false);
     const [filterHasActiveFunnel, setFilterHasActiveFunnel] = useState(false);
+    const [filterLastMessageRead, setFilterLastMessageRead] = useState(false);
+    const [filterLastMessageUnread, setFilterLastMessageUnread] = useState(false);
     const [filterBlockStatus, setFilterBlockStatus] = useState(null);
     const [filterStartDate, setFilterStartDate] = useState('');
     const [filterEndDate, setFilterEndDate] = useState('');
     const [orderBy, setOrderBy] = useState('recent');
     const [activeFilterTab, setActiveFilterTab] = useState(null);
     const [selectAllPages, setSelectAllPages] = useState(false);
+    const [excludedConvoIds, setExcludedConvoIds] = useState([]);
 
     return {
         selectedConvo, setSelectedConvo,
@@ -33,11 +36,14 @@ export function useChatFilterState() {
         filterUrgent, setFilterUrgent,
         filterHasReplied, setFilterHasReplied,
         filterHasActiveFunnel, setFilterHasActiveFunnel,
+        filterLastMessageRead, setFilterLastMessageRead,
+        filterLastMessageUnread, setFilterLastMessageUnread,
         filterBlockStatus, setFilterBlockStatus,
         filterStartDate, setFilterStartDate,
         filterEndDate, setFilterEndDate,
         orderBy, setOrderBy,
         activeFilterTab, setActiveFilterTab,
-        selectAllPages, setSelectAllPages
+        selectAllPages, setSelectAllPages,
+        excludedConvoIds, setExcludedConvoIds
     };
 }

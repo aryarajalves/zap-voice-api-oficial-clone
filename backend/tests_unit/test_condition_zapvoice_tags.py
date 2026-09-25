@@ -127,3 +127,116 @@ async def test_condition_tag_empty(mock_trigger, mock_chatwoot):
     )
     
     assert result == "no"
+
+
+@pytest.mark.asyncio
+async def test_condition_multiple_tags_operator_or_success(mock_trigger, mock_chatwoot):
+    """Valida operador OU ('any'): contato possui uma das etiquetas exigidas -> 'yes'."""
+    db = MagicMock()
+    mock_convo = MagicMock()
+    mock_convo.labels = ["vip", "suporte"]
+    db.query.return_value.filter.return_value.first.return_value = mock_convo
+
+    node = {
+        "id": "cond_tag_or_1",
+        "data": {
+            "conditionType": "tag",
+            "tags": ["cliente", "vip"],
+            "tagOperator": "any"
+        }
+    }
+
+    result = await handle_condition_node(
+        db=db,
+        trigger=mock_trigger,
+        node=node,
+        chatwoot=None,
+        contact_phone="5511988887777",
+        edges=[]
+    )
+    assert result == "yes"
+
+
+@pytest.mark.asyncio
+async def test_condition_multiple_tags_operator_or_failure(mock_trigger, mock_chatwoot):
+    """Valida operador OU ('any'): contato não possui nenhuma das etiquetas exigidas -> 'no'."""
+    db = MagicMock()
+    mock_convo = MagicMock()
+    mock_convo.labels = ["suporte"]
+    db.query.return_value.filter.return_value.first.side_effect = [mock_convo, None]
+
+    node = {
+        "id": "cond_tag_or_2",
+        "data": {
+            "conditionType": "tag",
+            "tags": ["cliente", "vip"],
+            "tagOperator": "any"
+        }
+    }
+
+    result = await handle_condition_node(
+        db=db,
+        trigger=mock_trigger,
+        node=node,
+        chatwoot=None,
+        contact_phone="5511988887777",
+        edges=[]
+    )
+    assert result == "no"
+
+
+@pytest.mark.asyncio
+async def test_condition_multiple_tags_operator_and_success(mock_trigger, mock_chatwoot):
+    """Valida operador E ('all'): contato possui TODAS as etiquetas exigidas -> 'yes'."""
+    db = MagicMock()
+    mock_convo = MagicMock()
+    mock_convo.labels = ["cliente", "vip", "lead_qualificado"]
+    db.query.return_value.filter.return_value.first.return_value = mock_convo
+
+    node = {
+        "id": "cond_tag_and_1",
+        "data": {
+            "conditionType": "tag",
+            "tags": ["cliente", "vip"],
+            "tagOperator": "all"
+        }
+    }
+
+    result = await handle_condition_node(
+        db=db,
+        trigger=mock_trigger,
+        node=node,
+        chatwoot=None,
+        contact_phone="5511988887777",
+        edges=[]
+    )
+    assert result == "yes"
+
+
+@pytest.mark.asyncio
+async def test_condition_multiple_tags_operator_and_failure(mock_trigger, mock_chatwoot):
+    """Valida operador E ('all'): contato possui apenas 1 das 2 etiquetas exigidas -> 'no'."""
+    db = MagicMock()
+    mock_convo = MagicMock()
+    mock_convo.labels = ["cliente"]
+    db.query.return_value.filter.return_value.first.side_effect = [mock_convo, None]
+
+    node = {
+        "id": "cond_tag_and_2",
+        "data": {
+            "conditionType": "tag",
+            "tags": ["cliente", "vip"],
+            "tagOperator": "all"
+        }
+    }
+
+    result = await handle_condition_node(
+        db=db,
+        trigger=mock_trigger,
+        node=node,
+        chatwoot=None,
+        contact_phone="5511988887777",
+        edges=[]
+    )
+    assert result == "no"
+

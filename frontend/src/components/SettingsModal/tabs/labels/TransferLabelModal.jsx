@@ -113,8 +113,8 @@ const TransferLabelModal = ({
                                 type="text"
                                 placeholder="Nome do novo marcador..."
                                 value={customTargetName}
-                                maxLength={20}
-                                onChange={(e) => setCustomTargetName(e.target.value.slice(0, 20))}
+                                maxLength={25}
+                                onChange={(e) => setCustomTargetName(e.target.value.slice(0, 25))}
                                 className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-white rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             {availableTargets.length > 0 && (

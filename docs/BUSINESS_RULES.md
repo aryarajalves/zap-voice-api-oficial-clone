@@ -58,6 +58,10 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 - **Prevenção de Duplicações**: Para evitar conflitos de automação, disparos concorrentes ou loops de mensagens para o mesmo lead quando uma conversa nova for iniciada ou reaberta no Chat:
   - O painel do editor (`MetadataPanel`) desabilita a opção em outros funis e exibe aviso de bloqueio informando o nome do funil atualmente ativo.
   - A API (`routers/funnels.py`) valida e rejeita (`HTTP 400`) qualquer tentativa de criação ou atualização que tente ativar o gatilho caso outro funil já o detenha.
+
+### 11. Limite de Caracteres no Nome de Etiquetas / Marcadores
+- **Tamanho Máximo Rígido**: O tamanho máximo permitido para o nome de qualquer etiqueta ou marcador (tanto nas Etiquetas Internas ZapVoice quanto nas Etiquetas na Conversa / Chat Local) é de **25 caracteres**.
+- **Consistência Ponta a Ponta**: A regra é aplicada de forma rígida no backend (validação com erro `400` para mais de 25 caracteres) e no frontend em todos os formulários e modais (contador visual `0/25 caracteres`, propriedade `maxLength={25}` e corte preventivo `.slice(0, 25)`).
   - Para transferir o gatilho para outro funil, o usuário deve primeiro desmarcar e salvar no funil atualmente ativo.
 
 ### 11. Notificação de Início de Funil e Visualização de Pipeline no Chat
@@ -106,6 +110,24 @@ Abaixo, detalho cada tela identificada no sistema e as dúvidas que precisamos s
     - O payload enviado pelo ZapGroup possui suporte a dois eventos principais: `lead_extraido` (quando um participante é extraído) e `voto_enquete` (quando um participante vota em uma enquete do grupo).
     - O campo `grupo` (objeto ou string) é mapeado como `product_name` (nome do grupo no WhatsApp).
     - No evento `voto_enquete`, o sistema extrai e disponibiliza as variáveis personalizadas `titulo_enquete`, `opcao_marcada` e `opcoes_marcadas` para serem usadas nos templates e funis de disparo.
+- **Integração Landing Page - Bussola Quiz (origem: `quiz_bussola` / `bussola_quiz`)**:
+    - O payload enviado pela Landing Page do Quiz Bússola suporta o evento principal `leitura_concluida` (quando a leitura astrológica é concluída pelo lead), além de compatibilidade com `checkout_pre_populado`, `compra_aprovada` e `carrinho_abandonado`.
+    - O campo `quiz.area` ou `produto` é mapeado automaticamente como `product_name` (ex: "Bússola Astrológica - Dinheiro").
+    - Extrai e disponibiliza variáveis nativas para serem usadas nos templates, mensagens e nós de funis:
+        - `{{mensagem}}`: Leitura astrológica completa e formatada para o WhatsApp
+        - `{{leitura_id}}`: Identificador único da leitura
+        - `{{nome_completo}}` e `{{first_name}}`: Nome e primeiro nome do lead
+        - `{{nascimento_data}}`, `{{nascimento_hora}}`, `{{nascimento_completo}}`: Dados de nascimento estruturados
+        - `{{cidade}}`, `{{cidade_nome}}`, `{{cidade_uf}}`: Localização do lead
+        - `{{quiz_area}}`, `{{quiz_espelho}}`, `{{quiz_quebra}}`: Dados das respostas do quiz
+        - `{{carta_titulo}}`, `{{carta_destaque}}`: Dados da carta sorteada
+    - **Geração Automática de PDF da Leitura Astrológica (Gatilho)**:
+        - No editor de gatilho de integrações do tipo `bussola_quiz`, é disponibilizada a opção/switch "Gerar PDF da Leitura Astrológica".
+        - O PDF é gerado a partir do texto integral da `mensagem` vinda no JSON do webhook, convertendo negritos do WhatsApp (`*texto*` -> negrito) e quebras de linha (`\n` -> `<br/>`), com sanitização de caracteres/emojis para evitar falhas de codificação.
+        - **Padrão Estético do PDF**: Formato A4, design minimalista/clean com fundo branco, cabeçalho sutil (Título "Leitura - Bússola Astrológica", Nome do Lead, Data de Nascimento), divisória elegante, corpo do texto justificado/legível e rodapé com paginação contínua ("Bússola Astrológica • Página X de Y").
+        - **Nome do Arquivo**: `Leitura_Bussola_{Primeiro_Nome}.pdf` (ou `Leitura_Bussola.pdf` como fallback).
+        - **Entrega no WhatsApp**: O PDF gerado é enviado para o storage (MinIO/S3), injetando as variáveis `bussola_pdf_url` e `bussola_pdf_filename`. Pode ser anexado automaticamente ao cabeçalho tipo Documento (`Header Document`) dos templates da Meta selecionando a opção nativa "PDF Automático da Leitura (Bússola Quiz)".
+        - **Visualizador de Renderização de PDF**: O painel do gatilho e a coluna de prévia contam com botão "Visualizar PDF", abrindo um modal interativo com campos de simulação editáveis (Nome, Data e Mensagem), visualização em tempo real do PDF renderizado em A4 e botão de download.
 
 ### 4. Gestão de Leads (`leads`)
 - **Propósito**: Visualizar os contatos que entraram via webhook e seu status.

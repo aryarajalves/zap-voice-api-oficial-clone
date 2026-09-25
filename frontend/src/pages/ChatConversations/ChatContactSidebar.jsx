@@ -88,7 +88,7 @@ export default function ChatContactSidebar({
 
     const handleTagSubmit = (rawName) => {
         if (!rawName || !rawName.trim()) return;
-        const cleanName = rawName.trim().slice(0, 20);
+        const cleanName = rawName.trim().slice(0, 25);
         const existsInAvailable = (availableLabels || []).some(l => l.toLowerCase() === cleanName.toLowerCase());
         if (existsInAvailable) {
             handleAddTagWithName(cleanName);

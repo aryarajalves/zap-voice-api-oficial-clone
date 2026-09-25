@@ -325,6 +325,9 @@ async def play_dispatch(
     if not trigger:
         raise HTTPException(status_code=404, detail="Dispatch not found for this integration")
     
+    from services.bussola_pdf_service import ensure_trigger_document_link
+    repaired_components = ensure_trigger_document_link(db, trigger)
+
     # Criar um novo registro (Clone) para manter o histórico íntegro
     new_trigger = models.ScheduledTrigger(
         client_id=trigger.client_id,
@@ -339,7 +342,7 @@ async def play_dispatch(
         scheduled_time=datetime.now(timezone.utc),
         template_name=trigger.template_name,
         template_language=trigger.template_language,
-        template_components=trigger.template_components,
+        template_components=repaired_components,
         private_message=trigger.private_message,
         private_message_delay=trigger.private_message_delay,
         private_message_concurrency=trigger.private_message_concurrency,
@@ -349,6 +352,7 @@ async def play_dispatch(
         integration_id=trigger.integration_id,
         chatwoot_label=trigger.chatwoot_label,
         is_free_message=trigger.is_free_message,
+        processed_data=trigger.processed_data,
         parent_id=None # Alterado para aparecer na lista principal como um novo disparo
     )
     

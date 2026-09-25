@@ -21,5 +21,10 @@ Para garantir que o projeto permaneça manutenível e que o agente consiga proce
 - Aguarde a confirmação do usuário antes de realizar a quebra estrutural.
 - **Backup Obrigatório:** Uma vez aprovada pelo usuário, crie obrigatoriamente uma cópia de segurança (backup) dos arquivos originais antes de qualquer modificação, assegurando possibilidade de restauração imediata.
 
+**🚫 Exceção Importante - Arquivos de Teste:**
+- **Arquivos de teste NÃO são para fazer refatoração nem modularização.**
+- Nenhum arquivo de teste (`*.test.jsx`, `*.test.js`, `*.spec.jsx`, `*.spec.js`, `test_*.py` ou localizados em pastas de teste) deve ser incluído em alertas vermelhos de refatoração ou filas de quebra modular. Testes contêm múltiplos cenários, casos de borda e mocks intencionalmente agrupados para validação da aplicação e devem ser mantidos íntegros.
+- A regra de limites e modularização aplica-se **exclusivamente a arquivos de código de aplicação / produção** (rotas, componentes, hooks, modelos, telas e serviços).
+
 Isso evita a criação de "Arquivos Monolíticos" que são difíceis de testar e debugar, mantendo o usuário no controle do fluxo de refatoração com segurança total.
 

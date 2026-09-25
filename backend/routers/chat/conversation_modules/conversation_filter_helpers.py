@@ -21,16 +21,22 @@ def build_conversation_filter_query(
     urgent_only: Optional[bool] = None,
     has_replied: Optional[bool] = None,
     has_active_funnel: Optional[bool] = None,
+    last_message_read_only: Optional[bool] = None,
+    last_message_unread_only: Optional[bool] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     search: Optional[str] = None,
     has_note: Optional[bool] = None,
-    order_by: Optional[str] = None
+    order_by: Optional[str] = None,
+    excluded_ids: Optional[List[int]] = None
 ):
     """
     Constrói a query SQL padrão de conversas aplicando todos os filtros do dashboard e de ações em lote.
     """
     query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
+
+    if excluded_ids:
+        query = query.filter(~models.ChatConversation.id.in_(excluded_ids))
 
     if status != "all":
         query = query.filter(models.ChatConversation.status == status)
@@ -116,6 +122,43 @@ def build_conversation_filter_query(
             query = query.filter(or_(*funnel_conditions))
         else:
             query = query.filter(models.ChatConversation.id == -1)
+
+    if last_message_read_only:
+        convo_ids_subq = db.query(models.ChatConversation.id).filter(models.ChatConversation.client_id == client_id)
+        subq = db.query(func.max(models.ChatMessage.id)).filter(
+            models.ChatMessage.conversation_id.in_(convo_ids_subq)
+        ).group_by(models.ChatMessage.conversation_id)
+
+        read_convo_ids = [
+            r[0] for r in db.query(models.ChatMessage.conversation_id).filter(
+                models.ChatMessage.id.in_(subq),
+                models.ChatMessage.sender_type == 'user',
+                models.ChatMessage.status == 'read'
+            ).all() if r[0]
+        ]
+        if read_convo_ids:
+            query = query.filter(models.ChatConversation.id.in_(read_convo_ids))
+        else:
+            query = query.filter(models.ChatConversation.id == -1)
+
+    if last_message_unread_only:
+        convo_ids_subq = db.query(models.ChatConversation.id).filter(models.ChatConversation.client_id == client_id)
+        subq = db.query(func.max(models.ChatMessage.id)).filter(
+            models.ChatMessage.conversation_id.in_(convo_ids_subq)
+        ).group_by(models.ChatMessage.conversation_id)
+
+        unread_convo_ids = [
+            r[0] for r in db.query(models.ChatMessage.conversation_id).filter(
+                models.ChatMessage.id.in_(subq),
+                models.ChatMessage.sender_type == 'user',
+                or_(models.ChatMessage.status != 'read', models.ChatMessage.status == None)
+            ).all() if r[0]
+        ]
+        if unread_convo_ids:
+            query = query.filter(models.ChatConversation.id.in_(unread_convo_ids))
+        else:
+            query = query.filter(models.ChatConversation.id == -1)
+
 
     if start_date:
         try:
@@ -255,6 +298,7 @@ def get_block_info(
 def get_active_funnels_map(db: Session, client_id: int) -> Dict[str, Dict[str, Any]]:
     """
     Retorna o mapa de funis ativos vinculados ao sufixo de telefone dos contatos.
+    Suporta tanto disparos individuais quanto em massa (bulk).
     """
     active_triggers = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.client_id == client_id,
@@ -263,15 +307,40 @@ def get_active_funnels_map(db: Session, client_id: int) -> Dict[str, Dict[str, A
 
     active_funnels_map = {}
     for t in active_triggers:
-        if t.funnel_id and t.contact_phone:
+        if not t.funnel_id:
+            continue
+        funnel = db.query(models.Funnel).filter(models.Funnel.id == t.funnel_id).first()
+        if not funnel:
+            continue
+
+        funnel_info = {
+            "id": funnel.id,
+            "trigger_id": t.id,
+            "name": funnel.name,
+            "status": t.status
+        }
+
+        # 1. Telefone direto do trigger (disparo individual ou child trigger)
+        if t.contact_phone:
             digits = "".join(filter(str.isdigit, t.contact_phone))
             if len(digits) >= 8:
-                funnel = db.query(models.Funnel).filter(models.Funnel.id == t.funnel_id).first()
-                if funnel:
-                    active_funnels_map[digits[-8:]] = {
-                        "id": funnel.id,
-                        "trigger_id": t.id,
-                        "name": funnel.name,
-                        "status": t.status
-                    }
+                active_funnels_map[digits[-8:]] = funnel_info
+
+        # 2. Lista de contatos de disparo em massa (bulk trigger pai)
+        if t.is_bulk and t.contacts_list and isinstance(t.contacts_list, list):
+            for c in t.contacts_list:
+                c_phone = None
+                if isinstance(c, dict):
+                    c_phone = c.get("phone") or c.get("telefone")
+                    if not c_phone and isinstance(c.get("meta"), dict):
+                        c_phone = c["meta"].get("sender", {}).get("phone_number")
+                elif isinstance(c, str):
+                    c_phone = c
+
+                if c_phone:
+                    c_digits = "".join(filter(str.isdigit, str(c_phone)))
+                    if len(c_digits) >= 8:
+                        active_funnels_map[c_digits[-8:]] = funnel_info
+
     return active_funnels_map
+

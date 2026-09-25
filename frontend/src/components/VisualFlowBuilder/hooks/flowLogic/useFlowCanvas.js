@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { applyNodeChanges, applyEdgeChanges, addEdge, useReactFlow } from 'reactflow';
 import { toast } from 'react-hot-toast';
 import { createNodeDefaultData } from './nodeDefaults';
@@ -132,19 +132,22 @@ export const useFlowCanvas = () => {
 
         setNodes((nds) => {
             const hasStartNode = nds.some(n => n.data?.isStart);
+            const isFolder = type === 'folderNode';
 
-            if (!hasStartNode) {
+            if (!hasStartNode && !isFolder) {
                 defaultData.isStart = true;
             }
 
             const newNode = {
                 id: `node_${Date.now()}`,
                 type,
+                zIndex: isFolder ? -10 : 10,
                 position,
+                style: isFolder ? { width: 520, height: 380 } : undefined,
                 data: defaultData
             };
 
-            const newNodes = nds.concat(newNode);
+            const newNodes = isFolder ? [newNode, ...nds] : nds.concat(newNode);
 
             if (menu.sourceNodeId) {
                 setEdges((eds) => {

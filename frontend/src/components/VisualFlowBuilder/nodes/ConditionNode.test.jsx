@@ -84,7 +84,11 @@ describe('ConditionNode', () => {
         // Clica na etiqueta 'interessado'
         fireEvent.click(screen.getByTestId('condition-tag-option-interessado'));
 
-        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { tag: 'interessado' });
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { 
+            tags: ['interessado'], 
+            tag: 'interessado', 
+            tagOperator: 'any' 
+        });
     });
 
     test('permite digitar uma etiqueta personalizada no seletor', async () => {
@@ -102,10 +106,14 @@ describe('ConditionNode', () => {
         fireEvent.change(searchInput, { target: { value: 'etiqueta_nova' } });
 
         const customOption = await screen.findByTestId('condition-tag-custom-option');
-        expect(customOption).toHaveTextContent('Usar etiqueta: "etiqueta_nova"');
+        expect(customOption).toHaveTextContent('Adicionar: "etiqueta_nova"');
         fireEvent.click(customOption);
 
-        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { tag: 'etiqueta_nova' });
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { 
+            tags: ['etiqueta_nova'], 
+            tag: 'etiqueta_nova', 
+            tagOperator: 'any' 
+        });
     });
 
     test('exibe botão de limpar quando uma etiqueta já está selecionada', () => {
@@ -121,7 +129,76 @@ describe('ConditionNode', () => {
         expect(clearBtn).toBeInTheDocument();
 
         fireEvent.click(clearBtn);
-        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { tag: '' });
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { 
+            tags: [], 
+            tag: '', 
+            tagOperator: 'any' 
+        });
+    });
+
+    test('exibe chips e seletor de operador E / OU quando há múltiplas etiquetas selecionadas', () => {
+        const multiTagData = { 
+            ...mockData, 
+            conditionType: 'tag', 
+            tags: ['interessado', 'vip'], 
+            tagOperator: 'any' 
+        };
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={multiTagData} />
+            </ReactFlowProvider>
+        );
+
+        // Deve exibir ambos os chips
+        expect(screen.getByTestId('condition-tag-chip-interessado')).toBeInTheDocument();
+        expect(screen.getByTestId('condition-tag-chip-vip')).toBeInTheDocument();
+
+        // Deve exibir o seletor de operador com botões OU e E
+        expect(screen.getByText('Regra de Combinação')).toBeInTheDocument();
+        expect(screen.getByTestId('condition-tag-operator-or')).toBeInTheDocument();
+        expect(screen.getByTestId('condition-tag-operator-and')).toBeInTheDocument();
+    });
+
+    test('permite alternar para operador E (Todas) e chama onChangeOperator', () => {
+        const multiTagData = { 
+            ...mockData, 
+            conditionType: 'tag', 
+            tags: ['interessado', 'vip'], 
+            tagOperator: 'any' 
+        };
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={multiTagData} />
+            </ReactFlowProvider>
+        );
+
+        const andButton = screen.getByTestId('condition-tag-operator-and');
+        fireEvent.click(andButton);
+
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { tagOperator: 'all' });
+    });
+
+    test('permite remover uma etiqueta individual através do chip', () => {
+        const multiTagData = { 
+            ...mockData, 
+            conditionType: 'tag', 
+            tags: ['interessado', 'vip'], 
+            tagOperator: 'any' 
+        };
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={multiTagData} />
+            </ReactFlowProvider>
+        );
+
+        const removeVipBtn = screen.getByTestId('condition-tag-remove-vip');
+        fireEvent.click(removeVipBtn);
+
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', { 
+            tags: ['interessado'], 
+            tag: 'interessado', 
+            tagOperator: 'any' 
+        });
     });
 
     test('quando o tipo é ai_question, renderiza as abas Parâmetros e Critérios de Sucesso', () => {
@@ -257,5 +334,31 @@ describe('ConditionNode', () => {
         expect(screen.getByText(/✅ Durante \(Início \/ Normal\)/i)).toBeInTheDocument();
         expect(screen.getByText(/⚡ Durante \(Próximo do Fim\)/i)).toBeInTheDocument();
         expect(screen.getByText(/🚫 Depois/i)).toBeInTheDocument();
+    });
+
+    test('ao clicar com mousedown seguido de click (comportamento real do mouse), seleciona a etiqueta e não desmarca automaticamente', async () => {
+        const tagData = { ...mockData, conditionType: 'tag', tag: '', tags: [] };
+        render(
+            <ReactFlowProvider>
+                <ConditionNode id="node-cond" data={tagData} />
+            </ReactFlowProvider>
+        );
+
+        const trigger = screen.getByTestId('condition-tag-trigger');
+        fireEvent.click(trigger);
+
+        const option = await screen.findByTestId('condition-tag-option-interessado');
+        
+        // Simula a sequência exata de eventos de um clique de mouse do usuário
+        fireEvent.mouseDown(option);
+        fireEvent.click(option);
+
+        // Deve ter chamado apenas UMA vez para adicionar 'interessado', sem toggle reverso
+        expect(mockOnChange).toHaveBeenCalledTimes(1);
+        expect(mockOnChange).toHaveBeenCalledWith('node-cond', {
+            tags: ['interessado'],
+            tag: 'interessado',
+            tagOperator: 'any'
+        });
     });
 });

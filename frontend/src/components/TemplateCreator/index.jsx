@@ -1,5 +1,4 @@
 import React from 'react';
-import { Toaster } from 'react-hot-toast';
 import { useTemplateCreator } from './hooks/useTemplateCreator';
 import TemplateForm from './components/TemplateForm';
 import TemplateList from './components/TemplateList';
@@ -12,8 +11,6 @@ const TemplateCreator = ({ onSuccess, refreshKey }) => {
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <Toaster position="top-right" reverseOrder={false} />
-
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 <TemplateForm logic={logic} />
                 <TemplateList logic={logic} />

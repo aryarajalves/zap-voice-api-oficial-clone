@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { API_URL } from '../../../../config';
 import { fetchWithAuth } from '../../../../AuthContext';
@@ -99,8 +99,10 @@ export function useTemplateFormData({ activeClient, fetchTemplates, onSuccess })
     }
   };
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setEditingId(null);
+    setButtonIndexToRemove(null);
+    setIsRemoveButtonModalOpen(false);
     setFormData({
       name: '',
       category: 'MARKETING',
@@ -112,15 +114,28 @@ export function useTemplateFormData({ activeClient, fetchTemplates, onSuccess })
       footer_text: '',
       buttons: []
     });
-    Object.values(mediaCache).forEach(
-      (c) => c.previewUrl && URL.revokeObjectURL(c.previewUrl)
-    );
-    setMediaCache({
-      IMAGE: { url: '', fileName: '', previewUrl: null },
-      VIDEO: { url: '', fileName: '', previewUrl: null },
-      DOCUMENT: { url: '', fileName: '', previewUrl: null }
+    setMediaCache((prev) => {
+      Object.values(prev).forEach(
+        (c) => c?.previewUrl && URL.revokeObjectURL(c.previewUrl)
+      );
+      return {
+        IMAGE: { url: '', fileName: '', previewUrl: null },
+        VIDEO: { url: '', fileName: '', previewUrl: null },
+        DOCUMENT: { url: '', fileName: '', previewUrl: null }
+      };
     });
-  };
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
+  const prevClientIdRef = useRef(activeClient?.id);
+  useEffect(() => {
+    if (prevClientIdRef.current !== activeClient?.id) {
+      prevClientIdRef.current = activeClient?.id;
+      resetForm();
+    }
+  }, [activeClient?.id, resetForm]);
 
   const handleMediaUpload = async (file) => {
     await handleMediaUploadHelper(

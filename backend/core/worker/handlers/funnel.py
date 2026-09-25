@@ -108,12 +108,19 @@ async def handle_funnel_execution(data: dict):
                     db.commit()
                     return
 
+                # 0.5. Garantir que documento de cabeçalho (ex: PDF da Bússola) possua URL válida
+                from services.bussola_pdf_service import ensure_trigger_document_link
+                effective_components = ensure_trigger_document_link(db, trigger)
+                if effective_components != trigger.template_components:
+                    trigger.template_components = effective_components
+                    db.commit()
+
                 # 1. Enviar Template via Meta
                 res = await chatwoot_cl.send_template(
                     contact_phone,
                     trigger.template_name,
                     trigger.template_language or "pt_BR",
-                    trigger.template_components or []
+                    effective_components
                 )
 
                 if res and not res.get("error"):

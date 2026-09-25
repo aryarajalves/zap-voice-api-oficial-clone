@@ -24,8 +24,9 @@ export default function BulkTagSearchInput({
           id="bulk-tag-search-input"
           type="text"
           placeholder={isChat ? 'Digite o nome da etiqueta do Chat...' : 'Digite o nome da etiqueta de Contatos...'}
+          maxLength={25}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => setSearchTerm(e.target.value.slice(0, 25))}
           onKeyDown={onKeyDown}
           className="w-full pl-9 pr-8 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl text-sm focus:outline-none focus:border-blue-500 placeholder-slate-500 transition"
         />

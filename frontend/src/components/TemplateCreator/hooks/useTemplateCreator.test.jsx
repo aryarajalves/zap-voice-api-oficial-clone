@@ -147,6 +147,52 @@ describe('TemplateCreator Hooks Suite', () => {
       expect(result.current.formData.body_text).toBe('Corpo do template');
       expect(result.current.formData.buttons).toHaveLength(1);
     });
+
+    it('cancela a edição e limpa todos os campos do formulário quando o cliente ativo muda', () => {
+      const { result, rerender } = renderHook(
+        ({ client }) =>
+          useTemplateFormData({ activeClient: client, fetchTemplates: vi.fn() }),
+        { initialProps: { client: { id: 11, name: 'Escola Sexologia' } } }
+      );
+
+      const templateMock = {
+        id: 99,
+        name: 'carrinho_abandonado_cama',
+        category: 'MARKETING',
+        language: 'pt_BR',
+        components: [
+          { type: 'HEADER', format: 'TEXT', text: 'Cabeçalho Antigo' },
+          { type: 'BODY', text: 'Você estava a um passo de dominar...' },
+          { type: 'FOOTER', text: 'Rodapé Antigo' },
+          { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'Quero continuar' }] }
+        ]
+      };
+
+      act(() => {
+        result.current.handleEdit(templateMock);
+      });
+
+      expect(result.current.editingId).toBe(99);
+      expect(result.current.formData.name).toBe('carrinho_abandonado_cama');
+      expect(result.current.formData.body_text).toBe('Você estava a um passo de dominar...');
+      expect(result.current.formData.buttons).toHaveLength(1);
+
+      // Troca de cliente para ID 14 (Cliente - Crassus)
+      rerender({ client: { id: 14, name: 'Cliente - Crassus' } });
+
+      expect(result.current.editingId).toBeNull();
+      expect(result.current.formData).toEqual({
+        name: '',
+        category: 'MARKETING',
+        language: 'pt_BR',
+        header_type: 'NONE',
+        header_text: '',
+        header_media_url: '',
+        body_text: '',
+        footer_text: '',
+        buttons: []
+      });
+    });
   });
 
   describe('useTemplateListState', () => {

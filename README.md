@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.9.4 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.9.5 — Versão Estável)
 
-Versão estável com **Filtro Avançado de Conversas por Marcadores (Condições Individuais de "Possui" / "Não possui" combinadas com Operadores Lógicos OU / E)**, **Ocultação e Bloqueio Automático do Scroll de Conversas durante Seleção de Marcadores**, **Sincronização de Memória do Agente em Tempo Real no Chat**, **Transferência de Contatos entre Marcadores**, **Auditoria de Segurança Integrada (pip-audit + npm audit 100% seguros)** e **Modularização Completa de Clean Code**.
+Versão estável com **Geração Automática de PDF Editorial e Capa Visual para Bússola Quiz (Layout A4 Dourado & Azul-Noite, Nome Elegante no Balão do WhatsApp `✨ Leitura da Bússola - {Nome}.pdf` e Envio Dinâmico via Funil `{{bussola_pdf_url}}`)**, **Filtro Exclusivo de Templates Aprovados (APPROVED) na Seleção de Disparos**, **Cancelamento e Reset Seguro do Formulário de Criação de Template ao Trocar de Cliente**, **Notificação Toast de Cópia da URL de Webhooks**, **Confirmação de Leitura em Tempo Real no Chat (Status 'Read' / Dois Tiques Azuis da Meta)**, **Filtro Avançado de Conversas por Marcadores**, **Auditoria de Segurança Integrada (pip-audit + npm audit 100% seguros)** e **Modularização Completa de Clean Code**.
 
 
 

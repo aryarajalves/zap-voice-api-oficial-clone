@@ -1,4 +1,4 @@
-﻿from typing import Optional
+from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
@@ -84,9 +84,9 @@ async def list_templates(
     if not include_archived:
         templates = [t for t in templates if not t.get("is_archived", False)]
 
-    # Filtrar pausados se include_paused for False
+    # Filtrar pausados, pendentes e rejeitados (manter apenas APPROVED) se include_paused for False
     if not include_paused:
-        templates = [t for t in templates if (t.get("status") or "").upper() != "PAUSED"]
+        templates = [t for t in templates if (t.get("status") or "APPROVED").upper() == "APPROVED"]
 
     # Mesclar as tags locais, is_pinned e created_at
     try:

@@ -19,12 +19,12 @@ const PipelineNode = ({ id, data }) => {
     return (
         <div className={`w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-2xl border transition-all duration-300 ${statusStyles.borderClass}`}>
             
-            {/* Target handle para conexão de entrada */}
+            {/* Target handle para conexão de entrada (Horizontal - Esquerda) */}
             <Handle 
                 type="target" 
-                position={Position.Top} 
+                position={Position.Left} 
                 className="w-3 h-3 bg-blue-500 border-2 border-white dark:border-gray-900" 
-                style={{ top: -6 }}
+                style={{ left: -6 }}
             />
             
             {/* Header do Nó */}
@@ -103,12 +103,96 @@ const PipelineNode = ({ id, data }) => {
                 )}
 
                 {/* Exibição específica para Condições */}
-                {type === 'conditionNode' && (
-                    <div className="text-[10px] font-bold text-gray-400 space-y-1">
-                        <p>Variável: <span className="text-gray-700 dark:text-gray-300 font-black">{data.variable || 'N/A'}</span></p>
-                        <p>Operação: <span className="text-gray-700 dark:text-gray-300 font-black">{data.operator || 'N/A'}</span></p>
-                    </div>
-                )}
+                {(type === 'conditionNode' || type === 'condition') && (() => {
+                    const conditionType = data.conditionType || 'text';
+                    const tags = Array.isArray(data.tags) ? data.tags : (data.tag ? [data.tag] : []);
+                    const tagOperator = data.tagOperator || 'any';
+
+                    return (
+                        <div className="space-y-2 text-xs bg-gray-50 dark:bg-gray-950/30 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                            {/* Header interno de Validação */}
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                    Validação
+                                </span>
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/40">
+                                    {conditionType === 'tag' ? '🏷️ Etiquetas' :
+                                     conditionType === 'text' ? '💬 Busca por Texto' :
+                                     conditionType === 'ai_question' ? '🧠 Análise IA' :
+                                     conditionType === 'datetime_range' ? '🕒 Período Data/Hora' :
+                                     conditionType === 'weekday' ? '📅 Dias da Semana' : 'Condição'}
+                                </span>
+                            </div>
+
+                            {/* Validação por Etiquetas */}
+                            {conditionType === 'tag' && (
+                                <div className="space-y-1.5">
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {tags.length > 0 ? (
+                                            tags.map((t, idx) => (
+                                                <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-bold border border-blue-200 dark:border-blue-800/50">
+                                                    <span>🏷️</span> {t}
+                                                </span>
+                                            ))
+                                        ) : (
+                                            <span className="text-[10px] text-gray-400 italic">Nenhuma etiqueta configurada</span>
+                                        )}
+                                    </div>
+                                    <div className="text-[9px] font-bold text-gray-500 dark:text-gray-400 flex items-center justify-between pt-1 border-t border-gray-200/50 dark:border-gray-800/50">
+                                        <span>Critério:</span>
+                                        <span className="text-purple-600 dark:text-purple-400 uppercase font-black">
+                                            {tagOperator === 'all' ? 'Possui Todas (E)' : 'Possui Qualquer Uma (OU)'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Validação por Texto */}
+                            {conditionType === 'text' && (
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                                        Buscar termo: <strong className="text-gray-800 dark:text-gray-200 font-bold">&quot;{data.condition || ''}&quot;</strong>
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Validação por Pergunta IA */}
+                            {conditionType === 'ai_question' && (
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-600 dark:text-gray-300 font-semibold line-clamp-2">
+                                        ❓ {data.aiQuestion || 'Pergunta não configurada'}
+                                    </p>
+                                    {data.aiInstructions && (
+                                        <p className="text-[9px] text-gray-400 italic line-clamp-2">
+                                            Critério: &quot;{data.aiInstructions}&quot;
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Validação por Período */}
+                            {conditionType === 'datetime_range' && (
+                                <div className="space-y-1 text-[10px]">
+                                    <p className="text-gray-600 dark:text-gray-300 font-semibold">
+                                        Início: <span className="font-mono text-gray-800 dark:text-gray-100">{data.startDateTime || 'N/A'}</span>
+                                    </p>
+                                    <p className="text-gray-600 dark:text-gray-300 font-semibold">
+                                        Fim: <span className="font-mono text-gray-800 dark:text-gray-100">{data.endDateTime || 'N/A'}</span>
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Validação por Dias da Semana */}
+                            {conditionType === 'weekday' && (
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">
+                                        Dias: <span className="text-gray-800 dark:text-gray-200 font-bold">{Array.isArray(data.allowedDays) ? data.allowedDays.join(', ') : 'Todos'}</span>
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
 
                 {/* Exibição específica para Requisição HTTP */}
                 {(type === 'httpRequestNode' || type === 'http_request') && (() => {
@@ -223,24 +307,55 @@ const PipelineNode = ({ id, data }) => {
                 )}
             </div>
 
-            {/* Source handles para conexões de saída */}
+            {/* Source handles para conexões de saída (Horizontal - Direita) */}
             {((type === 'dateNode' || type === 'date') && data.enableLateBypass) ? (
                 <>
-                    <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ bottom: -6, left: '30%' }} title="No Horário" />
-                    <Handle type="source" position={Position.Bottom} id="late" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ bottom: -6, left: '70%' }} title="Atrasado" />
+                    <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '35%' }} title="No Horário" />
+                    <Handle type="source" position={Position.Right} id="late" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '65%' }} title="Atrasado" />
                 </>
             ) : type === 'businessHoursNode' || type === 'business_hours' ? (
                 <>
-                    <Handle type="source" position={Position.Bottom} id="aberto" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ bottom: -6, left: '30%' }} title="Aberto" />
-                    <Handle type="source" position={Position.Bottom} id="fechado" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ bottom: -6, left: '70%' }} title="Fechado" />
+                    <Handle type="source" position={Position.Right} id="aberto" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '35%' }} title="Aberto" />
+                    <Handle type="source" position={Position.Right} id="fechado" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '65%' }} title="Fechado" />
                 </>
             ) : type === 'httpRequestNode' || type === 'http_request' ? (
                 <>
-                    <Handle type="source" position={Position.Bottom} id="success" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ bottom: -6, left: '30%' }} title="Sucesso" />
-                    <Handle type="source" position={Position.Bottom} id="fail" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ bottom: -6, left: '70%' }} title="Falha" />
+                    <Handle type="source" position={Position.Right} id="success" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '35%' }} title="Sucesso" />
+                    <Handle type="source" position={Position.Right} id="fail" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '65%' }} title="Falha" />
                 </>
+            ) : type === 'conditionNode' || type === 'condition' ? (
+                data.conditionType === 'datetime_range' ? (
+                    <>
+                        <Handle type="source" position={Position.Right} id="before" className="w-3 h-3 bg-blue-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '25%' }} title="Antes" />
+                        <Handle type="source" position={Position.Right} id="between" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '50%' }} title="Durante" />
+                        <Handle type="source" position={Position.Right} id="after" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '75%' }} title="Depois" />
+                        <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-gray-400 border-2 border-white dark:border-gray-900" style={{ display: 'none' }} />
+                    </>
+                ) : (
+                    <>
+                        <Handle type="source" position={Position.Right} id="yes" className="w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '35%' }} title="Sim / Válido" />
+                        <Handle type="source" position={Position.Right} id="no" className="w-3 h-3 bg-red-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '65%' }} title="Não / Inválido" />
+                        {data.conditionType === 'ai_question' && (
+                            <Handle type="source" position={Position.Right} id="error" className="w-3 h-3 bg-orange-500 border-2 border-white dark:border-gray-900" style={{ right: -6, top: '85%' }} title="Erro / Falha" />
+                        )}
+                        <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-gray-400 border-2 border-white dark:border-gray-900" style={{ display: 'none' }} />
+                    </>
+                )
             ) : (
-                <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-blue-500 border-2 border-white dark:border-gray-900" style={{ bottom: -6 }} />
+                <>
+                    <Handle type="source" position={Position.Right} id="default" className="w-3 h-3 bg-blue-500 border-2 border-white dark:border-gray-900" style={{ right: -6 }} />
+                    {Array.isArray(data.buttons) && data.buttons.map((_, btnIdx) => (
+                        <Handle
+                            key={btnIdx}
+                            type="source"
+                            position={Position.Right}
+                            id={`button_${btnIdx}`}
+                            className="w-3 h-3 bg-blue-600 border-2 border-white dark:border-gray-900"
+                            style={{ right: -6, top: `${45 + (btnIdx + 1) * 15}%` }}
+                            title={`Botão ${btnIdx + 1}`}
+                        />
+                    ))}
+                </>
             )}
         </div>
     );

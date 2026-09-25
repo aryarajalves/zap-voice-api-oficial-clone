@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from core.deps import get_db, get_current_user
@@ -11,7 +12,7 @@ logger = setup_logger("ChatLabelsRouter")
 router = APIRouter()
 
 class ChatLabelCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=25)
     color: str = Field("#3B82F6", max_length=7)
 
 class ChatLabelOut(BaseModel):
@@ -36,7 +37,15 @@ async def list_chat_labels(
         models.ChatLabel.client_id == client_id
     ).all()
     
-    unique_labels = set(label.name for label in db_labels)
+    # Dicionário de deduplicação canônica (chave minúscula -> nome limpo)
+    unique_map = {}
+    for label in db_labels:
+        if label.name and isinstance(label.name, str):
+            clean = label.name.strip()
+            if clean:
+                key = clean.lower()
+                if key not in unique_map:
+                    unique_map[key] = clean
     
     # 2. Obter etiquetas legadas extraídas dinamicamente de conversas ativas
     convs = db.query(models.ChatConversation).filter(
@@ -47,9 +56,14 @@ async def list_chat_labels(
     for c in convs:
         if isinstance(c.labels, list):
             for label in c.labels:
-                unique_labels.add(label)
+                if isinstance(label, str):
+                    clean = label.strip()
+                    if clean:
+                        key = clean.lower()
+                        if key not in unique_map:
+                            unique_map[key] = clean
                 
-    return sorted(list(unique_labels))
+    return sorted(list(unique_map.values()), key=lambda x: x.lower())
 
 @router.get("/chat/labels/details", response_model=List[ChatLabelOut])
 async def list_chat_labels_details(
@@ -65,7 +79,16 @@ async def list_chat_labels_details(
         models.ChatLabel.client_id == client_id
     ).order_by(models.ChatLabel.created_at.desc()).all()
     
-    registered_names = {label.name.lower(): label for label in db_labels}
+    registered_names = {}
+    db_labels_unique = []
+    for label in db_labels:
+        if not label.name:
+            continue
+        clean_name = label.name.strip()
+        key = clean_name.lower()
+        if key not in registered_names:
+            registered_names[key] = label
+            db_labels_unique.append(label)
     
     # 2. Obter etiquetas extraídas dinamicamente de conversas ativas e calcular uso
     convs = db.query(models.ChatConversation).filter(
@@ -101,12 +124,12 @@ async def list_chat_labels_details(
                         "usage_count": 0
                     }
     
-    # Unificar a lista (cadastrados primeiro, depois os dinâmicos/legacy)
+    # Unificar a lista (cadastrados primeiro sem duplicatas, depois os dinâmicos/legacy)
     result = []
-    for label in db_labels:
+    for label in db_labels_unique:
         result.append({
             "id": label.id,
-            "name": label.name,
+            "name": label.name.strip(),
             "color": label.color,
             "is_legacy": False,
             "usage_count": usage_counts.get(label.name.strip().lower(), 0)
@@ -128,13 +151,15 @@ async def create_chat_label(
         raise HTTPException(status_code=400, detail="Client ID não fornecido.")
         
     label_name = payload.name.strip()
-    if len(label_name) > 20:
-        raise HTTPException(status_code=400, detail="O nome do marcador deve ter no máximo 20 caracteres.")
+    if not label_name:
+        raise HTTPException(status_code=400, detail="O nome do marcador não pode ser vazio.")
+    if len(label_name) > 25:
+        raise HTTPException(status_code=400, detail="O nome do marcador deve ter no máximo 25 caracteres.")
     
-    # Verificar se etiqueta já existe com este nome para o cliente
+    # Verificar se etiqueta já existe com este nome para o cliente (case-insensitive)
     exists = db.query(models.ChatLabel).filter(
         models.ChatLabel.client_id == client_id,
-        models.ChatLabel.name.ilike(label_name)
+        func.lower(models.ChatLabel.name) == label_name.lower()
     ).first()
     
     if exists:
@@ -167,15 +192,15 @@ async def update_chat_label(
         raise HTTPException(status_code=400, detail="Client ID não fornecido.")
         
     label_name = payload.name.strip()
-    if len(label_name) > 20:
-        raise HTTPException(status_code=400, detail="O nome do marcador deve ter no máximo 20 caracteres.")
+    if len(label_name) > 25:
+        raise HTTPException(status_code=400, detail="O nome do marcador deve ter no máximo 25 caracteres.")
     
     # 1. Se label_id for 0 (dinâmico/legacy), convertemos em um novo registro salvo no banco
     if label_id == 0:
-        # Verificar se já existe cadastrada com este nome
+        # Verificar se já existe cadastrada com este nome (case-insensitive)
         exists = db.query(models.ChatLabel).filter(
             models.ChatLabel.client_id == client_id,
-            models.ChatLabel.name.ilike(label_name)
+            func.lower(models.ChatLabel.name) == label_name.lower()
         ).first()
         if exists:
             # Se já existe, atualizamos apenas a cor
@@ -203,10 +228,10 @@ async def update_chat_label(
     if not db_label:
         raise HTTPException(status_code=404, detail="Marcador não encontrado.")
         
-    # Verificar se novo nome está em uso por outro marcador
+    # Verificar se novo nome está em uso por outro marcador (case-insensitive)
     duplicate = db.query(models.ChatLabel).filter(
         models.ChatLabel.client_id == client_id,
-        models.ChatLabel.name.ilike(label_name),
+        func.lower(models.ChatLabel.name) == label_name.lower(),
         models.ChatLabel.id != label_id
     ).first()
     

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List
@@ -559,3 +559,121 @@ def update_custom_fields_mapping(
         db.rollback()
         logger.error(f"Error updating custom fields mapping: {err}")
         raise HTTPException(status_code=500, detail="Erro interno ao salvar mapeamento")
+
+
+DEFAULT_BUSSOLA_SAMPLE_MESSAGE = (
+    "Olá, Aryaraj! Aqui está a sua leitura da Bússola Astrológica:\n\n"
+    "*ÁREA:* Dinheiro e Prosperidade\n"
+    "*MOMENTO ATUAL:* Momento de grande expansão e quebra de padrões limitantes.\n\n"
+    "Suas configurações astrais apontam que o alinhamento com seu propósito trará resultados concretos "
+    "nas próximas semanas. A autoconfiança é a chave para destravar seu potencial máximo.\n\n"
+    "*CONSELHO DO ORÁCULO:* Valorize suas conquistas e avance sem hesitar!"
+)
+
+
+@router.get("/{integration_id}/bussola-quiz/sample-data", summary="Obter dados de exemplo ou último payload para prévia do PDF da Bússola")
+def get_bussola_quiz_sample_data(
+    integration_id: str,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead_name = "Aryaraj Alves Fernandes"
+    birth_date = "20/05/1995 às 14:30"
+    message_text = DEFAULT_BUSSOLA_SAMPLE_MESSAGE
+
+    try:
+        uuid_obj = uuid.UUID(integration_id)
+        db_integration = db.query(models.WebhookIntegration).filter(
+            models.WebhookIntegration.id == uuid_obj,
+            models.WebhookIntegration.client_id == x_client_id
+        ).first()
+
+        if db_integration:
+            last_history = db.query(models.WebhookHistory).filter(
+                models.WebhookHistory.integration_id == db_integration.id
+            ).order_by(models.WebhookHistory.created_at.desc()).first()
+
+            if last_history and last_history.payload:
+                from services.webhooks_utils import parse_webhook_payload
+                parsed = parse_webhook_payload(db_integration.platform, last_history.payload)
+                if parsed.get("name"):
+                    lead_name = parsed.get("name")
+                if parsed.get("nascimento_completo"):
+                    birth_date = parsed.get("nascimento_completo")
+                elif parsed.get("nascimento_data"):
+                    birth_date = parsed.get("nascimento_data")
+                if parsed.get("mensagem"):
+                    message_text = parsed.get("mensagem")
+    except Exception:
+        pass
+
+    from services.bussola_pdf_service import format_bussola_display_filename
+    display_filename, _ = format_bussola_display_filename(lead_name)
+
+    return {
+        "lead_name": lead_name,
+        "birth_date": birth_date,
+        "message_text": message_text,
+        "display_filename": display_filename
+    }
+
+
+@router.post("/{integration_id}/bussola-quiz/preview-pdf", summary="Renderizar PDF de prévia da leitura da Bússola")
+def preview_bussola_quiz_pdf(
+    integration_id: str,
+    body: schemas.BussolaPdfPreviewRequest = None,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead_name = (body.lead_name if body and body.lead_name else None) or "Aryaraj Alves Fernandes"
+    birth_date = (body.birth_date if body and body.birth_date else None) or "20/05/1995 às 14:30"
+    message_text = (body.message_text if body and body.message_text else None) or DEFAULT_BUSSOLA_SAMPLE_MESSAGE
+
+    from services.bussola_pdf_service import generate_bussola_pdf_bytes
+    try:
+        pdf_bytes = generate_bussola_pdf_bytes(
+            lead_name=lead_name,
+            birth_date=birth_date,
+            message_text=message_text
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "inline; filename=preview_bussola.pdf"}
+        )
+    except Exception as e:
+        logger.error(f"Erro ao gerar prévia de PDF da Bússola: {e}")
+        raise HTTPException(status_code=500, detail="Falha ao gerar o PDF de prévia")
+
+
+@router.post("/{integration_id}/bussola-quiz/preview-cover", summary="Renderizar Imagem de Capa (1200x630) de prévia da Bússola")
+def preview_bussola_quiz_cover(
+    integration_id: str,
+    body: schemas.BussolaPdfPreviewRequest = None,
+    x_client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lead_name = (body.lead_name if body and body.lead_name else None) or "Aryaraj Alves Fernandes"
+    birth_date = (body.birth_date if body and body.birth_date else None) or "20/05/1995 às 14:30"
+    message_text = (body.message_text if body and body.message_text else None) or DEFAULT_BUSSOLA_SAMPLE_MESSAGE
+
+    from services.bussola_pdf_service import generate_bussola_cover_image_bytes
+    try:
+        img_bytes = generate_bussola_cover_image_bytes(
+            lead_name=lead_name,
+            birth_date=birth_date,
+            message_text=message_text
+        )
+        return Response(
+            content=img_bytes,
+            media_type="image/png",
+            headers={"Content-Disposition": "inline; filename=preview_capa_bussola.png"}
+        )
+    except Exception as e:
+        logger.error(f"Erro ao gerar prévia de Capa da Bússola: {e}")
+        raise HTTPException(status_code=500, detail="Falha ao gerar a imagem de capa de prévia")
+
+

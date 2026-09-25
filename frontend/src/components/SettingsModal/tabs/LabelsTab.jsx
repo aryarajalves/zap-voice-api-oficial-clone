@@ -87,14 +87,30 @@ const LabelsTab = ({ user, activeClient }) => {
         if (e && typeof e.preventDefault === 'function') {
             e.preventDefault();
         }
-        if (!name.trim()) {
+        const cleanName = name.trim();
+        if (!cleanName) {
             toast.error("Por favor, digite o nome da etiqueta.");
+            return;
+        }
+        if (cleanName.length > 25) {
+            toast.error("O nome da etiqueta deve ter no máximo 25 caracteres.");
+            return;
+        }
+
+        const isEditing = editingLabel !== null;
+        
+        // Validação de unicidade case-insensitive preventiva
+        const duplicate = labels.find(l => 
+            l.name?.trim().toLowerCase() === cleanName.toLowerCase() &&
+            (!isEditing || l.id !== editingLabel.id)
+        );
+        if (duplicate) {
+            toast.error("Já existe uma etiqueta com este nome.");
             return;
         }
 
         setLoading(true);
         try {
-            const isEditing = editingLabel !== null;
             const method = isEditing ? 'PUT' : 'POST';
             const url = isEditing 
                 ? `${API_URL}/chat/labels/${editingLabel.id}`

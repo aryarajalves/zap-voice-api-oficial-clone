@@ -33,9 +33,43 @@ export default function ChatModals({
     isCancelingFunnel,
     setIsCancelingFunnel,
     selectAllPages,
+    excludedConvoIds = [],
+    setExcludedConvoIds,
     exportModal,
     setExportModal
 }) {
+    const effectiveSelectedCount = selectAllPages
+        ? Math.max(0, engine.totalConvos - (excludedConvoIds?.length || 0))
+        : engine.selectedConvoIds.length;
+
+    const targetConvo = React.useMemo(() => {
+        if (!engine?.selectedConvoIds?.length) return selectedConvo || null;
+        if (selectedConvo && selectedConvo.id === engine.selectedConvoIds[0]) return selectedConvo;
+        return (engine.conversations || []).find(c => c.id === engine.selectedConvoIds[0]) || selectedConvo || null;
+    }, [engine?.selectedConvoIds, engine?.conversations, selectedConvo]);
+
+    const initialChatLabels = React.useMemo(() => {
+        if (engine?.selectedConvoIds?.length === 1) {
+            return targetConvo?.labels || [];
+        }
+        if (engine?.selectedConvoIds?.length > 1) {
+            const list = (engine.conversations || []).filter(c => engine.selectedConvoIds.includes(c.id));
+            if (!list.length) return [];
+            return list.reduce((acc, c, idx) => {
+                const cLabels = c.labels || [];
+                return idx === 0 ? cLabels : acc.filter(l => cLabels.includes(l));
+            }, []);
+        }
+        return [];
+    }, [engine?.selectedConvoIds, targetConvo, engine?.conversations]);
+
+    const initialContactLabels = React.useMemo(() => {
+        if (engine?.selectedConvoIds?.length === 1) {
+            return targetConvo?.contact_labels || [];
+        }
+        return [];
+    }, [engine?.selectedConvoIds, targetConvo]);
+
     return (
         <>
             <MediaPreviewModal
@@ -50,7 +84,7 @@ export default function ChatModals({
             <DeleteConvoModal
                 isOpen={!!engine.confirmDeleteConvos}
                 isBulk={engine.confirmDeleteConvos === 'bulk'}
-                selectedCount={selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}
+                selectedCount={effectiveSelectedCount}
                 selectAllPages={selectAllPages}
                 contactName={
                     engine.confirmDeleteConvos === 'single'
@@ -160,15 +194,22 @@ export default function ChatModals({
                 onClose={() => engine.setIsBulkFunnelModalOpen(false)}
                 onTrigger={async (funnelId) => {
                     const payloadExtra = chatOps.getBulkPayloadExtra ? chatOps.getBulkPayloadExtra() : (
-                        selectAllPages ? { select_all_pages: true } : { ids: engine.selectedConvoIds }
+                        selectAllPages ? {
+                            select_all_pages: true,
+                            excluded_ids: excludedConvoIds?.length > 0 ? excludedConvoIds : undefined
+                        } : { ids: engine.selectedConvoIds }
                     );
                     const success = await engine.handleBulkTriggerFunnel(funnelId, payloadExtra);
                     if (success) {
                         engine.setIsBulkFunnelModalOpen(false);
+                        if (selectAllPages) {
+                            engine.setSelectedConvoIds([]);
+                            if (setExcludedConvoIds) setExcludedConvoIds([]);
+                        }
                     }
                 }}
                 isTriggering={engine.isTriggeringBulkFunnel}
-                selectedCount={selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}
+                selectedCount={effectiveSelectedCount}
                 isBulk={true}
             />
 
@@ -214,10 +255,13 @@ export default function ChatModals({
                 setSelectedBulkTag={chatOps.setSelectedBulkTag}
                 customBulkTag={chatOps.customBulkTag}
                 setCustomBulkTag={chatOps.setCustomBulkTag}
-                onApply={(tag, target) => chatOps.handleBulkTagConversations(tag, target)}
+                initialChatLabels={initialChatLabels}
+                initialContactLabels={initialContactLabels}
+                onApply={(tag, target, options) => chatOps.handleBulkTagConversations(tag, target, options)}
                 isApplying={chatOps.isApplyingBulkTag}
-                selectedCount={selectAllPages ? engine.totalConvos : engine.selectedConvoIds.length}
+                selectedCount={effectiveSelectedCount}
                 loadAvailableLabels={engine.loadAvailableLabels}
+                activeClientId={activeClient?.id}
             />
 
             <AiReportModal

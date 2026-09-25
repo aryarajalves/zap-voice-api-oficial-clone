@@ -9,6 +9,7 @@ import MetadataPanel from './Panels/MetadataPanel';
 import ControlsPanel from './Panels/ControlsPanel';
 import ContextMenu from './components/ContextMenu';
 import ConfirmModal from '../ConfirmModal';
+import { exportFunnelAsJson } from '../../utils/funnelExportImport';
 
 const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, onDelete, refreshKey }) => {
     const portalContainer = React.useContext(PortalContext);
@@ -43,6 +44,11 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
                     onConnectEnd={onConnectEnd}
                     nodeTypes={nodeTypes}
                     onPaneContextMenu={onPaneContextMenu}
+                    onNodeContextMenu={(event, node) => {
+                        if (node?.type === 'folderNode') {
+                            onPaneContextMenu(event);
+                        }
+                    }}
                     onPaneClick={onPaneClick}
                     connectionMode={ConnectionMode.Strict}
                     defaultEdgeOptions={{ animated: true, style: { strokeWidth: 2 } }}
@@ -79,6 +85,19 @@ const FlowEditor = ({ funnelId, isFullScreen, toggleFullScreen, onBack, onSave, 
                     <ControlsPanel
                         onBack={onBack} isFullScreen={isFullScreen} toggleFullScreen={toggleFullScreen}
                         handleSave={handleSave} saving={saving} onDelete={onDelete}
+                        onExport={() => exportFunnelAsJson({
+                            name: funnelName,
+                            steps: { nodes, edges },
+                            trigger_phrase: triggerPhrase,
+                            trigger_match_type: triggerMatchType,
+                            trigger_limit_type: triggerLimitType,
+                            is_trigger_active: isTriggerActive,
+                            allowed_phones: allowedPhones,
+                            blocked_phones: blockedPhones,
+                            business_hours_start: businessHoursStart,
+                            business_hours_end: businessHoursEnd,
+                            business_hours_days: businessHoursDays
+                        })}
                     />
 
                     {menu && <ContextMenu top={menu.top} left={menu.left} onClose={() => setMenu(null)} onAddNode={handleAddNode} />}

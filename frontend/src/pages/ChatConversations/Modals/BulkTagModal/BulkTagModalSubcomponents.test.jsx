@@ -32,7 +32,7 @@ describe('BulkTagModal Subcomponentes e Hooks', () => {
       expect(result.current.selectedTags).not.toContain('VIP');
     });
 
-    it('permite criar tag personalizada', () => {
+    it('abre modal de criação para tag personalizada e confirma criação com cor', async () => {
       const setCustomBulkTag = vi.fn();
       const { result } = renderHook(() =>
         useBulkTagModal({
@@ -46,8 +46,16 @@ describe('BulkTagModal Subcomponentes e Hooks', () => {
         result.current.handleCreateCustomTag('NovaTagExclusiva');
       });
 
+      expect(result.current.isCreateModalOpen).toBe(true);
+      expect(result.current.createTagName).toBe('NovaTagExclusiva');
+
+      await act(async () => {
+        await result.current.handleConfirmCreateLabel();
+      });
+
       expect(result.current.selectedTags).toContain('NovaTagExclusiva');
       expect(setCustomBulkTag).toHaveBeenCalledWith('NovaTagExclusiva');
+      expect(result.current.isCreateModalOpen).toBe(false);
     });
 
     it('alterna categoria e limpa seleções anteriores', () => {
@@ -181,9 +189,28 @@ describe('BulkTagModal Subcomponentes e Hooks', () => {
         />
       );
 
-      const applyBtn = screen.getByRole('button', { name: /Aplicar 2 etiquetas/i });
+      const applyBtn = screen.getByRole('button', { name: /Salvar 2 etiquetas no Chat/i });
       fireEvent.click(applyBtn);
-      expect(onApply).toHaveBeenCalledWith(['TagA', 'TagB'], 'chat');
+      expect(onApply).toHaveBeenCalledWith(['TagA', 'TagB'], 'chat', { initialTags: [] });
+    });
+
+    it('footer exibe botão de remoção habilitado quando desmarcar todas as etiquetas existentes', () => {
+      const onApply = vi.fn();
+      render(
+        <BulkTagModalFooter
+          onClose={vi.fn()}
+          onApply={onApply}
+          selectedTags={[]}
+          initialTags={['tag-antiga']}
+          targetCategory="chat"
+          isApplying={false}
+        />
+      );
+
+      const removeBtn = screen.getByRole('button', { name: /Remover etiquetas do Chat/i });
+      expect(removeBtn.disabled).toBe(false);
+      fireEvent.click(removeBtn);
+      expect(onApply).toHaveBeenCalledWith([], 'chat', { initialTags: ['tag-antiga'] });
     });
   });
 });

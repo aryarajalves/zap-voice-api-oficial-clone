@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { FiTag, FiX } from 'react-icons/fi';
 
 const PRESET_COLORS = [
@@ -19,13 +20,16 @@ export default function NewTagModal({
 }) {
     if (!newTagModalData || !newTagModalData.isOpen) return null;
 
-    return (
+    const modalContent = (
         <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[999999] flex items-center justify-center p-4 select-none"
             onClick={(e) => e.stopPropagation()}
         >
+            {/* Backdrop escuro cobrindo 100% da tela até o topo absoluto */}
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" />
+
             <div
-                className="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                className="relative bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-10"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#0f172a]/60">
@@ -45,17 +49,17 @@ export default function NewTagModal({
                 <div className="p-6 space-y-4 font-sans">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-                            Nome da Etiqueta (Máx. 20 caracteres)
+                            Nome da Etiqueta (Máx. 25 caracteres)
                         </label>
                         <input
                             type="text"
-                            maxLength={20}
+                            maxLength={25}
                             value={newTagModalData.name}
-                            onChange={(e) => setNewTagModalData(prev => ({ ...prev, name: e.target.value.slice(0, 20) }))}
+                            onChange={(e) => setNewTagModalData(prev => ({ ...prev, name: e.target.value.slice(0, 25) }))}
                             className="w-full px-3 py-2 bg-gray-50 dark:bg-black/30 text-gray-800 dark:text-gray-100 text-xs rounded-xl border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans"
                         />
                         <span className="text-[10px] text-gray-400 mt-1 block text-right">
-                            {newTagModalData.name ? newTagModalData.name.length : 0}/20 caracteres
+                            {newTagModalData.name ? newTagModalData.name.length : 0}/25 caracteres
                         </span>
                     </div>
 
@@ -122,7 +126,7 @@ export default function NewTagModal({
                         type="button"
                         disabled={!newTagModalData.name || !newTagModalData.name.trim()}
                         onClick={async () => {
-                            const finalName = newTagModalData.name.trim().slice(0, 20);
+                            const finalName = newTagModalData.name.trim().slice(0, 25);
                             if (!finalName) return;
                             await handleAddTagWithName(finalName, newTagModalData.color);
                             setNewTagModalData(null);
@@ -135,4 +139,8 @@ export default function NewTagModal({
             </div>
         </div>
     );
+
+    return typeof document !== 'undefined'
+        ? createPortal(modalContent, document.body)
+        : modalContent;
 }

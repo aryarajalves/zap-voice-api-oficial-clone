@@ -32,6 +32,7 @@ vi.mock('react-icons/fi', () => ({
   FiFileText: () => <span data-testid="icon-filetext" />,
   FiDatabase: () => <span data-testid="icon-database" />,
   FiGitBranch: () => <span data-testid="icon-gitbranch" />,
+  FiFolder: () => <span data-testid="icon-folder" />,
 }));
 
 const defaultProps = {
@@ -69,6 +70,10 @@ describe('ContextMenu', () => {
     const httpButton = screen.getByText('Requisição HTTP (Webhook)');
     fireEvent.click(httpButton);
     expect(defaultProps.onAddNode).toHaveBeenCalledWith('httpRequestNode');
+
+    const folderButton = screen.getByText('Pasta / Seção Organizadora');
+    fireEvent.click(folderButton);
+    expect(defaultProps.onAddNode).toHaveBeenCalledWith('folderNode');
   });
 
   it('chama onClose ao sair com o mouse (onMouseLeave)', () => {

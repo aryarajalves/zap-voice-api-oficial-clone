@@ -1,6 +1,8 @@
 export const calculateNodeOrderMap = (trigger) => {
-    const funnelNodes = trigger.funnel?.steps?.nodes || [];
-    const funnelEdges = trigger.funnel?.steps?.edges || [];
+    const rawNodes = trigger.funnel?.steps?.nodes || [];
+    const funnelNodes = rawNodes.filter(n => !['folderNode', 'folder', 'groupNode', 'group'].includes(n.type));
+    const validIds = new Set(funnelNodes.map(n => n.id));
+    const funnelEdges = (trigger.funnel?.steps?.edges || []).filter(e => validIds.has(e.source) && validIds.has(e.target));
 
     const nodeOrderMap = {};
     const adj = {};

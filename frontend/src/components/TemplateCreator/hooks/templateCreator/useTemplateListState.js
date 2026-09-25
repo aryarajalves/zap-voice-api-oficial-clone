@@ -35,6 +35,8 @@ export function useTemplateListState({ activeClient, refreshKey, editingId, rese
   }, [activeClient]);
 
   useEffect(() => {
+    setTemplateToDelete(null);
+    setIsDeleteModalOpen(false);
     fetchTemplates();
   }, [activeClient, refreshKey, fetchTemplates]);
 

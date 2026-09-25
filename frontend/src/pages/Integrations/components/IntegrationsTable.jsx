@@ -1,5 +1,5 @@
-import React from 'react';
-import { FiCopy, FiActivity, FiPlay, FiZap, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiCopy, FiCheck, FiActivity, FiPlay, FiZap, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { WEBHOOK_BASE_URL } from '../../../config';
 
@@ -21,6 +21,44 @@ export default function IntegrationsTable({
   onOpenEditModal,
   onOpenDeleteModal
 }) {
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopyUrl = async (item) => {
+    const url = `${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+    } catch {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch {
+        // Fallback silencioso
+      }
+    }
+    setCopiedId(item.id);
+    toast.success('URL copiada!');
+    setTimeout(() => {
+      setCopiedId((prev) => (prev === item.id ? null : prev));
+    }, 2000);
+  };
+
   return (
     <>
       <table className="w-full text-left">
@@ -55,19 +93,27 @@ export default function IntegrationsTable({
                 </span>
               </td>
               <td className="px-4 py-4">
-                <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-transparent group-hover:border-blue-500/20 transition-all w-[190px]">
-                  <span className="truncate text-[10px] font-mono text-gray-500 dark:text-gray-400">
-                    {`${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`}
+                <button
+                  type="button"
+                  title="Clique para copiar a URL do Webhook"
+                  onClick={() => handleCopyUrl(item)}
+                  className={`flex items-center justify-between gap-1.5 bg-gray-100 dark:bg-gray-800 px-2.5 py-1.5 rounded-lg border transition-all w-[190px] cursor-pointer active:scale-95 ${
+                    copiedId === item.id
+                      ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-500'
+                      : 'border-transparent hover:border-blue-500/30 group-hover:border-blue-500/20'
+                  }`}
+                >
+                  <span className={`truncate text-[10px] font-mono ${
+                    copiedId === item.id ? 'text-emerald-500 font-bold' : 'text-gray-500 dark:text-gray-400'
+                  }`}>
+                    {copiedId === item.id ? 'Copiado!' : `${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`}
                   </span>
-                  <FiCopy
-                    size={11}
-                    className="cursor-pointer text-gray-400 hover:text-blue-500 transition-colors shrink-0"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${WEBHOOK_BASE_URL}/api/webhooks/${item.custom_slug || item.id}`);
-                      toast.success('URL copiada!');
-                    }}
-                  />
-                </div>
+                  {copiedId === item.id ? (
+                    <FiCheck size={12} className="text-emerald-500 shrink-0" />
+                  ) : (
+                    <FiCopy size={12} className="text-gray-400 hover:text-blue-500 transition-colors shrink-0" />
+                  )}
+                </button>
               </td>
               <td className="px-4 py-4">
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">

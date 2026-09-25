@@ -97,6 +97,7 @@ async def list_messages(
             "timestamp": m.timestamp.isoformat() if m.timestamp else None,
             "wa_message_id": m.wa_message_id,
             "meta_data": m.meta_data,
+            "status": getattr(m, 'status', None) or (m.meta_data.get("status") if m.meta_data else "sent"),
             "quoted_message_id": m.quoted_message_id,
             "is_starred": bool(m.is_starred or (m.meta_data and m.meta_data.get("is_starred")))
         })
@@ -214,6 +215,7 @@ async def send_chat_message(
             "content": new_message.content,
             "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
             "wa_message_id": new_message.wa_message_id,
+            "status": "sent",
             "meta_data": new_message.meta_data,
             "client_id": client_id
         }
@@ -230,6 +232,7 @@ async def send_chat_message(
         "content": new_message.content,
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
         "wa_message_id": new_message.wa_message_id,
+        "status": "sent",
         "meta_data": new_message.meta_data,
         "quoted_message_id": new_message.quoted_message_id
     }

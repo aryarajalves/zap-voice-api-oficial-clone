@@ -23,12 +23,37 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
         return "stop"
 
     from storage import storage
-    file_url = data.get("mediaUrl") or data.get("url")
+    raw_file_url = data.get("mediaUrl") or data.get("url") or ""
+    file_url = apply_vars_func(raw_file_url) if raw_file_url else ""
+
+    # Se o nó de mídia do funil solicitar o PDF da Bússola (via variável ou chave automática) e ainda não existir
+    p_data = dict(trigger.processed_data or {}) if getattr(trigger, "processed_data", None) else {}
+    if raw_file_url in ("{{bussola_pdf_url}}", "bussola_pdf_auto") or "{{bussola_pdf_url}}" in file_url:
+        if not p_data.get("bussola_pdf_url"):
+            b_msg = p_data.get("mensagem")
+            if b_msg:
+                try:
+                    from services.bussola_pdf_service import generate_and_upload_bussola_pdf
+                    l_name = trigger.contact_name or p_data.get("name") or "Consulente"
+                    b_date = p_data.get("nascimento_completo") or p_data.get("nascimento_data") or ""
+                    pdf_url, disp_fn = generate_and_upload_bussola_pdf(lead_name=l_name, birth_date=b_date, message_text=b_msg)
+                    p_data["bussola_pdf_url"] = pdf_url
+                    p_data["bussola_pdf_filename"] = disp_fn
+                    trigger.processed_data = p_data
+                    db.commit()
+                    file_url = pdf_url
+                except Exception as e_pdf:
+                    logger.error(f"Erro ao gerar PDF da Bússola no nó de mídia do funil: {e_pdf}")
+        else:
+            file_url = p_data.get("bussola_pdf_url")
+
     if file_url:
         file_url = storage.get_public_url(file_url)
     
     media_type = data.get("mediaType", "image")
     caption = data.get("caption", "")
+    raw_filename = data.get("fileName") or p_data.get("bussola_pdf_filename") or "documento"
+    resolved_filename = apply_vars_func(raw_filename)
     
     if not file_url: return "continue"
 
@@ -43,7 +68,7 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
     caption_processed = apply_vars_func(caption)
     log_node_execution(db, trigger, current_node_id, "processing", "📁 Processando Mídia...")
     log_node_execution(db, trigger, current_node_id, "started", None, {
-        "media_type": media_type, "media_url": file_url, "media_file": data.get("fileName", "Mídia"), "caption": caption_processed
+        "media_type": media_type, "media_url": file_url, "media_file": resolved_filename, "caption": caption_processed
     })
     
     # ZapVoice-only: sempre usa Meta Direto. Chatwoot foi removido do sistema.
@@ -115,7 +140,7 @@ async def handle_media_node(db, trigger, node, chatwoot, conversation_id, contac
         elif media_type == "audio":
             res = await chatwoot.send_audio_official(contact_phone, file_url)
         elif media_type in ["document", "file"]:
-            res = await chatwoot.send_document_official(contact_phone, file_url, caption=caption_processed, filename=data.get("fileName", "documento"))
+            res = await chatwoot.send_document_official(contact_phone, file_url, caption=caption_processed, filename=resolved_filename)
         else:
             logger.warning(f"⚠️ Tipo de mídia '{media_type}' não suportado no envio oficial direto.")
             return "continue"

@@ -140,4 +140,65 @@ describe('Bulk Funnel in Chat Conversations', () => {
         fireEvent.click(funnelBtn);
         expect(mockEngine.setIsBulkFunnelModalOpen).toHaveBeenCalledWith(true);
     });
+
+    it('useChatFunnelAndStatus atualiza active_funnel e recarrega mensagens em handleBulkTriggerFunnel', async () => {
+        const { renderHook, act } = await import('@testing-library/react');
+        const { useChatFunnelAndStatus } = await import('./hooks/useChatFunnelAndStatus');
+
+        const setSelectedConvo = vi.fn();
+        const loadConversations = vi.fn().mockResolvedValue();
+        const loadMessages = vi.fn().mockResolvedValue();
+
+        const selectedConvo = {
+            id: 28018,
+            contact_name: 'Aryaraj',
+            phone: '5585998259497',
+            status: 'open'
+        };
+
+        const { fetchWithAuth } = await import('../../AuthContext');
+        fetchWithAuth.mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({
+                status: 'ok',
+                trigger_id: 7279,
+                funnel_id: 176,
+                funnel_name: 'Novo Funil Teste',
+                total_contacts: 1,
+                message: 'Funil "Novo Funil Teste" iniciado com sucesso para 1 contato(s)!'
+            })
+        });
+
+        const { result } = renderHook(() => useChatFunnelAndStatus({
+            activeClient: { id: 1 },
+            selectedConvo,
+            setSelectedConvo,
+            loadConversations,
+            loadMessages,
+            isSending: false,
+            setIsSending: vi.fn(),
+            setTimeLeft24h: vi.fn()
+        }));
+
+        let success;
+        await act(async () => {
+            success = await result.current.handleBulkTriggerFunnel(176, { ids: [28018] });
+        });
+
+        expect(success).toBe(true);
+        expect(loadConversations).toHaveBeenCalled();
+        expect(loadMessages).toHaveBeenCalledWith(28018);
+        expect(setSelectedConvo).toHaveBeenCalled();
+
+        // Validar funcao updater passada para setSelectedConvo
+        const updater = setSelectedConvo.mock.calls[0][0];
+        const updatedConvo = updater(selectedConvo);
+        expect(updatedConvo.active_funnel).toEqual({
+            id: 176,
+            trigger_id: 7279,
+            name: 'Novo Funil Teste',
+            status: 'processing'
+        });
+    });
 });
+

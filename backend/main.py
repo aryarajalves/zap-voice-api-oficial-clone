@@ -93,6 +93,15 @@ from routers.triggers import router as triggers_router
 
 # Tarefa de agendamento que roda em background (dispara mensagens nos horários certos)
 from services.scheduler import scheduler_task
+from services.admin_seed_service import seed_super_admin
+from services.background_tasks import system_monitor_task, backup_scheduler_task, event_listener
+from services.websocket_service import handle_websocket_connection
+from services.spa_service import (
+    get_index_with_cache_busting,
+    serve_spa_index_response,
+    serve_spa_env_config_response,
+    serve_spa_catchall_response
+)
 
 # Cliente RabbitMQ — fila de mensagens para processar eventos de forma assíncrona
 from rabbitmq_client import rabbitmq
@@ -460,99 +469,13 @@ async def startup_event():
     # Fim do startup
     logger.info("✅ Startup finalizado. Servidor pronto!")
 
-async def seed_super_admin():
-    """Garante que o Super Admin exista conforme o .env com lógica de retry"""
-    from database import SessionLocal
-    from models import User
-    from core.security import get_password_hash, verify_password
-    from sqlalchemy.exc import OperationalError
-    
-    email = os.getenv("SUPER_ADMIN_EMAIL")
-    password = os.getenv("SUPER_ADMIN_PASSWORD")
-    
-    # Limpar aspas que podem vir do Portainer/Docker e espaços em branco
-    if email: email = email.strip('"').strip("'").strip()
-    if password: password = password.strip('"').strip("'").strip()
-    
-    if not email or not password:
-        logger.warning("⚠️ SUPER_ADMIN_EMAIL ou SUPER_ADMIN_PASSWORD não configurados no .env")
-        return
-
-    logger.info(f"🔑 Verificando configuração de Super Admin para: {email}")
-    
-    max_retries = 5
-    retry_delay = 5
-    
-    for attempt in range(max_retries):
-        db = SessionLocal()
-        try:
-            # 1. Remover outros admins legados e outros super_admins que não sejam o atual do ENV
-            old_admins = db.query(User).filter(User.role == "super_admin", User.email != email).all()
-            for old_adm in old_admins:
-                logger.info(f"🗑️ Removendo super admin legado/antigo: {old_adm.email}")
-                db.delete(old_adm)
-
-            if email != "admin@admin.com":
-                old_admin = db.query(User).filter(User.email == "admin@admin.com").first()
-                if old_admin:
-                    logger.info("🗑️ Removendo admin legado (admin@admin.com)")
-                    db.delete(old_admin)
-            
-            db.commit()
-
-            # 2. Garantir o admin atual e forçar sincronização de senha se necessário
-            user = db.query(User).filter(User.email == email).first()
-            
-            if user:
-                # Verifica se a senha atual do banco bate com a do ENV
-                if not verify_password(password, user.hashed_password):
-                    logger.info(f"🔑 Senha do Super Admin ({email}) desalinhada com o ENV. Atualizando...")
-                    user.hashed_password = get_password_hash(password)
-                else:
-                    logger.info(f"✨ Super Admin {email} já está com a senha correta no banco.")
-                
-                user.role = "super_admin"
-                user.is_active = True
-                user.full_name = "Super Admin"
-            else:
-                logger.info(f"🚀 Criando novo Super Admin: {email}")
-                hashed_password = get_password_hash(password)
-                new_user = User(
-                    email=email,
-                    hashed_password=hashed_password,
-                    role="super_admin",
-                    full_name="Super Admin",
-                    is_active=True
-                )
-                db.add(new_user)
-                
-            db.commit()
-            logger.info(f"✅ Sincronização de Super Admin ({email}) concluída com sucesso!")
-            break # Sucesso — sai do loop de tentativas
-            
-        except OperationalError as e:
-            logger.warning(f"⏳ Banco de dados ainda não está pronto (Tentativa {attempt + 1}/{max_retries}). Aguardando {retry_delay}s...")
-            if attempt == max_retries - 1:
-                logger.error(f"❌ Não foi possível conectar ao banco após {max_retries} tentativas: {e}")
-                raise
-            await asyncio.sleep(retry_delay)
-        except Exception as e:
-            logger.error(f"❌ Erro inesperado ao realizar seed do Super Admin: {e}")
-            db.rollback()
-            raise
-        finally:
-            db.close()
-
 def run_migrations():
     """Garante que todas as tabelas e colunas necessárias existam no banco."""
-    # O auto_migrate agora é dinâmico e resolve tudo baseado no models.py
-    # Ele já chama Base.metadata.create_all(bind=engine) internamente
     auto_migrate(engine)
 
     from database import SessionLocal
     db = SessionLocal()
     try:
-        # Log de diagnóstico
         from models import WebhookIntegration, WebhookConfig, WebhookEventMapping
         count_new = db.query(WebhookIntegration).count()
         count_old = db.query(WebhookConfig).count()
@@ -564,216 +487,15 @@ def run_migrations():
         db.close()
 
 
-async def system_monitor_task():
-    """Coleta e envia estatísticas de sistema via WebSocket a cada 5 segundos"""
-    from services.monitor import SystemMonitor
-    
-    # Primeira chamada para inicializar o psutil.cpu_percent
-    SystemMonitor.get_cpu_usage()
-    
-    await asyncio.sleep(2) # Aguarda o sistema estabilizar (era 10s)
-    
-    while True:
-        logger.debug("Iniciando ciclo de monitoramento de sistema...")
-        try:
-            # Coleta métricas globais uma vez por ciclo
-            global_stats = await SystemMonitor.collect_all()
-            
-            # Itera sobre as conexões para enviar dados personalizados
-            for ws, metadata in manager.active_connections.copy().items():
-                try:
-                    stats = global_stats.copy()
-                    client_id = metadata.get("client_id")
-                    
-                    if client_id:
-                        # Adiciona dados específicos do cliente
-                        stats["client_stats"] = await SystemMonitor.get_client_stats(client_id)
-                    
-                    await manager.send_personal_message({
-                        "event": "system_stats",
-                        "data": stats
-                    }, ws)
-                except Exception as e:
-                    logger.warning(f"Erro ao enviar stats individual: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Erro na tarefa de monitoramento: {e}")
-        
-        # logger.debug("Estatísticas de sistema enviadas.") # Reduzir spam
-        await asyncio.sleep(5) # Intervalo de atualização
-
-async def backup_scheduler_task():
-    """Verifica periodicamente se há um backup agendado a executar."""
-    from database import SessionLocal
-    from models import BackupConfig
-    from routers.backup import _run_backup_job
-
-    await asyncio.sleep(30)  # Aguarda o sistema estabilizar antes de começar
-    logger.info("⏰ [BACKUP-SCHEDULER] Task de backup agendado iniciada.")
-
-    while True:
-        try:
-            db = SessionLocal()
-            try:
-                config = db.query(BackupConfig).first()
-                if (
-                    config
-                    and config.enabled
-                    and config.interval_type != "manual"
-                    and config.next_backup_at is not None
-                ):
-                    now = datetime.now(timezone.utc)
-                    next_at = config.next_backup_at
-                    if next_at.tzinfo is None:
-                        from datetime import timezone as tz
-                        next_at = next_at.replace(tzinfo=timezone.utc)
-
-                    if now >= next_at:
-                        config_id = config.id
-                        logger.info(f"⏰ [BACKUP-SCHEDULER] Disparando backup agendado (próximo era {next_at.isoformat()})...")
-                        loop = asyncio.get_event_loop()
-                        await loop.run_in_executor(None, _run_backup_job, "", config_id)
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(f"❌ [BACKUP-SCHEDULER] Erro na verificação de agendamento: {e}")
-
-        await asyncio.sleep(60)  # Verifica a cada 60 segundos
-
-
-
-async def event_listener():
-    """Conecta ao RabbitMQ para ouvir eventos de progresso e repassar ao Frontend"""
-    await asyncio.sleep(5) 
-    try:
-        logger.info("Conectando Websocket Listener ao RabbitMQ...")
-        await rabbitmq.subscribe_events(manager.broadcast)
-    except Exception as e:
-        logger.error(f"Erro ao iniciar listener de eventos: {e}")
-
-
 # Endpoint WebSocket
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = None):
-    from jose import jwt, JWTError
-    from core.security import SECRET_KEY, ALGORITHM
-    from database import SessionLocal
-    import models
+    await handle_websocket_connection(websocket, token=token)
 
-    if not token:
-        await websocket.close(code=4001)
-        return
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-        if not email:
-            await websocket.close(code=4001)
-            return
-    except JWTError:
-        await websocket.close(code=4001)
-        return
-
-    db = SessionLocal()
-    try:
-        user = db.query(models.User).filter(models.User.email == email, models.User.is_active == True).first()
-        if not user:
-            await websocket.close(code=4001)
-            return
-
-        is_super_admin = user.role == "super_admin"
-        allowed_ids = {c.id for c in (user.accessible_clients or [])}
-        if getattr(user, "client_id", None):
-            allowed_ids.add(user.client_id)
-
-        meta = {
-            "user_id": user.id,
-            "email": user.email,
-            "role": user.role,
-            "accessible_client_ids": allowed_ids if not is_super_admin else None,
-            "client_id": None
-        }
-    finally:
-        db.close()
-
-    origin = websocket.headers.get("origin")
-    logger.info(f"🔌 [WS] Conexão WS autenticada ({user.email}) de origin: {origin}")
-    await manager.connect(websocket, metadata=meta)
-
-    try:
-        while True:
-            data = await websocket.receive_text()
-            try:
-                message = json.loads(data)
-                if message.get("event") == "subscribe_client":
-                    raw_client_id = message.get("client_id")
-                    if raw_client_id is not None:
-                        try:
-                            req_client_id = int(raw_client_id)
-                        except (ValueError, TypeError):
-                            await manager.send_personal_message({
-                                "event": "error",
-                                "detail": "Client ID inválido"
-                            }, websocket)
-                            continue
-
-                        # Validação de isolamento multi-tenant
-                        if not is_super_admin and req_client_id not in allowed_ids:
-                            logger.warning(f"⚠️ [WS] Usuário {user.email} tentou assinar client_id={req_client_id} não autorizado.")
-                            await manager.send_personal_message({
-                                "event": "error",
-                                "detail": "Acesso negado ao cliente solicitado."
-                            }, websocket)
-                            continue
-
-                        await manager.update_metadata(websocket, {"client_id": req_client_id})
-                        logger.info(f"👤 [WS] Cliente {req_client_id} assinado na conexão WS de {user.email}.")
-                        
-                        # Envia resposta imediata para não deixar a tela carregando
-                        from services.monitor import SystemMonitor
-                        stats = await SystemMonitor.collect_all(client_id=req_client_id)
-                        await manager.send_personal_message({
-                            "event": "system_stats",
-                            "data": stats
-                        }, websocket)
-            except Exception as e:
-                logger.error(f"Erro ao processar mensagem WS: {e}")
-    except Exception as e:
-        logger.info(f"🔌 Conexão WS encerrada: {str(e)}")
-        manager.disconnect(websocket)
-
-
-
-def get_index_with_cache_busting():
-    """
-    Lê o index.html e injeta timestamp no script de configuração
-    para garantir que os navegadores não usem cache antigo.
-    """
-    index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "dist", "index.html")
-    if not os.path.exists(index_path):
-        logger.error(f"❌ [STATIC] Arquivo index.html não encontrado em: {index_path}")
-        return None
-    
-    try:
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        
-        # Injeta timestamp no env-config.js para forçar recarregamento
-        # Ex: src="/env-config.js" → src="/env-config.js?v=17382910..."
-        timestamp = int(time.time())
-        content = content.replace(
-            'src="/env-config.js"', 
-            f'src="/env-config.js?v={timestamp}"'
-        )
-        return content
-    except Exception as e:
-        logger.error(f"Erro ao ler index.html para cache busting: {e}")
-        return None
 
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
-    if not DEBUG:
-        from fastapi import HTTPException
+    if not ENABLE_DOCS:
         raise HTTPException(status_code=404)
     from core.swagger_docs import get_swagger_ui_html
     return get_swagger_ui_html()
@@ -781,80 +503,16 @@ async def custom_swagger_ui_html():
 
 @app.get("/")
 async def root():
-    # Serve React App com Cache Busting Dinâmico
-    content = get_index_with_cache_busting()
-    if content:
-        from fastapi.responses import HTMLResponse
-        response = HTMLResponse(content)
-        # Headers BRUTAIS de anti-cache
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-        return response
-    
-    return {
-        "message": "ZapVoice API",
-        "docs": "/docs",
-        "status": "online",
-        "version": "1.8.2",
-        "mode": "production"
-    }
+    return serve_spa_index_response()
+
 
 # Servindo env-config.js sem cache
 @app.get("/env-config.js")
 async def serve_env_config():
-    config_path = os.path.join(_BASE_DIR, "static", "dist", "env-config.js")
-    if os.path.exists(config_path):
-        response = FileResponse(config_path, media_type="application/javascript")
-        # Desabilita cache para garantir que atualizações em tempo de execução sejam aplicadas
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        return response
-    raise HTTPException(status_code=404, detail="Config file not found")
+    return serve_spa_env_config_response()
 
-# Mapeamento de extensões para media types
-_STATIC_MEDIA_TYPES = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    ".svg": "image/svg+xml",
-    ".ico": "image/x-icon",
-    ".txt": "text/plain",
-    ".json": "application/json",
-    ".webmanifest": "application/manifest+json",
-    ".woff": "font/woff",
-    ".woff2": "font/woff2",
-    ".ttf": "font/ttf",
-    ".eot": "font/eot",
-}
 
 # Rota coringa do SPA (deve rodar APÓS todas as outras rotas)
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
-    # Ignorar caminhos de API, Estáticos e Webhooks para não dar conflito de método (POST vs GET)
-    path_lower = full_path.lower()
-    if path_lower.startswith("api") or path_lower.startswith("static") or path_lower.startswith("docs") or path_lower.startswith("openapi") or path_lower.startswith("triggers"):
-        raise HTTPException(status_code=404, detail="API route not found via Frontend Catch-all")
-
-    # Verificar se é um arquivo estático que existe na pasta dist/
-    # (imagens, fontes, manifests, etc. que não são servidos pelo mount /assets)
-    _, ext = os.path.splitext(full_path)
-    if ext.lower() in _STATIC_MEDIA_TYPES:
-        static_file = os.path.join(_BASE_DIR, "static", "dist", full_path)
-        if os.path.isfile(static_file):
-            media_type = _STATIC_MEDIA_TYPES[ext.lower()]
-            return FileResponse(static_file, media_type=media_type)
-        # Arquivo estático não encontrado - não redirecionar para SPA
-        raise HTTPException(status_code=404, detail=f"Static file not found: {full_path}")
-
-    content = get_index_with_cache_busting()
-    if content:
-        response = HTMLResponse(content)
-        # Headers BRUTAIS de anti-cache
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-        return response
-        
-    return {"message": "Path not found (Frontend not built)"}
+    return serve_spa_catchall_response(full_path)

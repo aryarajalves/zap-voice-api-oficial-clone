@@ -30,6 +30,10 @@ export default function ChatListFilters({
     setFilterHasReplied,
     filterHasActiveFunnel,
     setFilterHasActiveFunnel,
+    filterLastMessageRead,
+    setFilterLastMessageRead,
+    filterLastMessageUnread,
+    setFilterLastMessageUnread,
     filterBlockStatus,
     setFilterBlockStatus,
     filterStartDate,
@@ -150,7 +154,7 @@ export default function ChatListFilters({
                     >
                         {[
                             { key: 'marcador', label: 'Marcador', icon: FiTag, active: !!(selectedLabelFilter && (typeof selectedLabelFilter === 'string' ? selectedLabelFilter : selectedLabelFilter.labels?.length > 0)) },
-                            { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterTemplate24h || filterUnread || filterHasNote || filterUrgent || filterHasReplied || filterHasActiveFunnel },
+                            { key: 'status', label: 'Status', icon: FiRefreshCw, active: filterWindowOpen || filterTemplate24h || filterUnread || filterHasNote || filterUrgent || filterHasReplied || filterHasActiveFunnel || filterLastMessageRead || filterLastMessageUnread },
                             { 
                                 key: 'bloqueio', 
                                 label: filterBlockStatus === 'unblocked' ? 'Não Bloqueados' : filterBlockStatus === 'blocked' ? 'Bloqueados' : filterBlockStatus === 'resting' ? 'Em Repouso' : 'Bloqueio', 
@@ -247,6 +251,26 @@ export default function ChatListFilters({
                             title="Filtrar contatos que possuem um funil em execução no momento"
                         >
                             Funil Ativo
+                        </button>
+                        <button
+                            onClick={() => {
+                                setFilterLastMessageRead(!filterLastMessageRead);
+                                if (!filterLastMessageRead) setFilterLastMessageUnread(false);
+                            }}
+                            className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterLastMessageRead ? 'bg-sky-500/20 text-sky-400 border-sky-500/40 font-bold ring-1 ring-sky-500/40' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                            title="Filtrar conversas onde o contato visualizou a última mensagem que enviamos"
+                        >
+                            Viu última msg
+                        </button>
+                        <button
+                            onClick={() => {
+                                setFilterLastMessageUnread(!filterLastMessageUnread);
+                                if (!filterLastMessageUnread) setFilterLastMessageRead(false);
+                            }}
+                            className={`py-1.5 px-1 rounded-lg border text-[10px] font-semibold text-center truncate transition ${filterLastMessageUnread ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 font-bold ring-1 ring-amber-500/40' : 'text-gray-400 border-gray-200 dark:border-white/5 bg-white dark:bg-[#1e293b]'}`}
+                            title="Filtrar conversas onde o contato ainda não visualizou a última mensagem que enviamos"
+                        >
+                            Não viu última msg
                         </button>
                     </div>
                 )}

@@ -21,6 +21,7 @@ import CheckWindowNode from './nodes/CheckWindowNode';
 import WaitEventNode from './nodes/WaitEventNode';
 import InputDataNode from './nodes/InputDataNode';
 import NewConversationNode from './nodes/NewConversationNode';
+import FolderNode from './nodes/FolderNode';
 
 const nodeTypes = {
     messageNode: MessageNode,
@@ -45,7 +46,8 @@ const nodeTypes = {
     checkWindowNode: CheckWindowNode,
     waitEventNode: WaitEventNode,
     inputDataNode: InputDataNode,
-    newConversationNode: NewConversationNode
+    newConversationNode: NewConversationNode,
+    folderNode: FolderNode
 };
 
 export default nodeTypes;

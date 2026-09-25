@@ -176,3 +176,9 @@ class WebhookHistory(WebhookHistoryBase):
 
     class Config:
         from_attributes = True
+
+
+class BussolaPdfPreviewRequest(BaseModel):
+    lead_name: Optional[str] = None
+    birth_date: Optional[str] = None
+    message_text: Optional[str] = None

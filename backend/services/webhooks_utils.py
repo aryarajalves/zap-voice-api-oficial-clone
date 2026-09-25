@@ -149,6 +149,9 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
     elif platform_lower == 'zapgroup':
         from services.utils.webhook_platform_parsers import parse_zapgroup
         parse_zapgroup(payload, result)
+    elif platform_lower in ['bussola_quiz', 'quiz_bussola', 'landing_page_bussola_quiz']:
+        from services.utils.webhook_platform_parsers import parse_bussola_quiz
+        parse_bussola_quiz(payload, result)
     elif platform_lower in ['elementor', 'generic', 'outra', 'outros']:
         # Tenta capturar campos comuns em payloads desconhecidos
         result['name'] = (
@@ -316,7 +319,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
             result['price'] = str(price_to_normalize)
 
     # Detecção prioritária para checkout pré-populado
-    if (
+    if result.get('event_type') != "leitura_concluida" and (
         payload.get("checkout_pre_populado") or
         payload.get("is_checkout_pre_populado") or
         str(payload.get("tipo", "")).lower() == "checkout_pre_populado" or
@@ -338,14 +341,19 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
     friendly_map = {
         "APPROVED": "Compra Aprovada", "SALE_APPROVED": "Compra Aprovada", "PAID": "Compra Aprovada",
         "COMPLETED": "Compra Aprovada", "COMPLETE": "Compra Aprovada",
-        "COMPRA_APROVADA": "Compra Aprovada", "PIX_GERADO": "Pix Gerado", "BOLETO_IMPRESSO": "Boleto Impresso",
-        "REEMBOLSO": "Reembolso", "CARTAO_RECUSADO": "Cartão Recusado", "CARRINHO_ABANDONADO": "Carrinho Abandonado",
+        "COMPRA_APROVADA": "Compra Aprovada", "COMPRA APROVADA": "Compra Aprovada",
+        "PIX_GERADO": "Pix Gerado", "PIX GERADO": "Pix Gerado",
+        "BOLETO_IMPRESSO": "Boleto Impresso", "BOLETO IMPRESSO": "Boleto Impresso",
+        "REEMBOLSO": "Reembolso", "CARTAO_RECUSADO": "Cartão Recusado",
+        "CARRINHO_ABANDONADO": "Carrinho Abandonado", "CARRINHO ABANDONADO": "Carrinho Abandonado",
         "CHECKOUT_PRE_POPULADO": "Checkout Pré-populado",
         "CHECKOUT PRÉ-POPULADO": "Checkout Pré-populado",
         "CHECKOUT PRE-POPULADO": "Checkout Pré-populado",
         "CHECKOUT PRE_POPULADO": "Checkout Pré-populado",
         "CHECKOUT_PRE-POPULADO": "Checkout Pré-populado",
         "PIX_EXPIRADO": "Pix Expirado", "EVENTO_ALUNO": "Evento do Aluno", "OUTROS": "Outros",
+        "LEITURA_CONCLUIDA": "Leitura Concluída", "LEITURA_CONCLUÍDA": "Leitura Concluída",
+        "LEITURA CONCLUIDA": "Leitura Concluída", "LEITURA CONCLUÍDA": "Leitura Concluída",
         "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso",
         "PURCHASE_REFUNDED": "Reembolso", "PURCHASE_CANCELED": "Compra Cancelada",
         "REFUSED": "Cartão Recusado", "ABANDONED_CART": "Carrinho Abandonado", "ABANDONED": "Carrinho Abandonado",
@@ -492,6 +500,37 @@ def extract_mapped_variables(payload: dict, parsed_data: dict, mapping_config: U
         if not lookup_key:
             return ""
             
+        if lookup_key in ("bussola_pdf_auto", "bussola_cover_auto"):
+            b_msg = (
+                parsed_data.get("mensagem")
+                or payload.get("mensagem")
+                or payload.get("variables", {}).get("mensagem")
+                or (payload.get("data", {}).get("variables", {}).get("mensagem") if isinstance(payload.get("data"), dict) else None)
+            )
+            l_name = parsed_data.get("name") or parsed_data.get("first_name") or "Consulente"
+            b_date = parsed_data.get("nascimento_completo") or parsed_data.get("nascimento_data") or ""
+
+            if not parsed_data.get("bussola_pdf_url") and b_msg:
+                try:
+                    from services.bussola_pdf_service import generate_and_upload_bussola_pdf
+                    pdf_url, disp_fn = generate_and_upload_bussola_pdf(lead_name=l_name, birth_date=b_date, message_text=b_msg)
+                    parsed_data["bussola_pdf_url"] = pdf_url
+                    parsed_data["bussola_pdf_filename"] = disp_fn
+                except Exception as err:
+                    logger.error(f"Erro JIT ao gerar PDF da Bússola: {err}")
+
+            if (lookup_key == "bussola_cover_auto" or header_format == "IMAGE") and not parsed_data.get("bussola_cover_image_url") and b_msg:
+                try:
+                    from services.bussola_pdf_service import generate_and_upload_bussola_cover_image
+                    cover_url = generate_and_upload_bussola_cover_image(lead_name=l_name, birth_date=b_date, message_text=b_msg)
+                    parsed_data["bussola_cover_image_url"] = cover_url
+                except Exception as err:
+                    logger.error(f"Erro JIT ao gerar Capa da Bússola: {err}")
+
+            if lookup_key == "bussola_cover_auto":
+                return parsed_data.get("bussola_cover_image_url", "")
+            return parsed_data.get("bussola_pdf_url", "")
+
         # Tenta no parsed_data primeiro (chaves simples como 'name', 'phone')
         if lookup_key in parsed_data:
             val = parsed_data.get(lookup_key)
@@ -536,7 +575,19 @@ def extract_mapped_variables(payload: dict, parsed_data: dict, mapping_config: U
                 # Para header, se for mídia, o formato é diferente (link)
                 if header_format in ["IMAGE", "VIDEO", "DOCUMENT"]:
                     media_type = header_format.lower()
-                    header_params.append({"type": media_type, media_type: {"link": extracted_text}})
+                    if media_type == "image" and (val_type in ("bussola_pdf_auto", "bussola_cover_auto") or custom_val in ("bussola_pdf_auto", "bussola_cover_auto")):
+                        media_link = parsed_data.get("bussola_cover_image_url") or extracted_text
+                    else:
+                        media_link = extracted_text or (parsed_data.get("bussola_pdf_url", "") if media_type == "document" else "")
+                    media_payload = {"link": media_link}
+                    if media_type == "document":
+                        pdf_fn = parsed_data.get("bussola_pdf_filename")
+                        if not pdf_fn:
+                            from services.bussola_pdf_service import format_bussola_display_filename
+                            lead_fn = parsed_data.get("name") or parsed_data.get("first_name") or "Consulente"
+                            pdf_fn, _ = format_bussola_display_filename(lead_fn)
+                        media_payload["filename"] = pdf_fn
+                    header_params.append({"type": media_type, media_type: media_payload})
                 else:
                     header_params.append(param)
             elif comp_type == "button":

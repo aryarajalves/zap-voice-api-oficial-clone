@@ -49,4 +49,73 @@ describe('SearchableSelect - Criar Nova Etiqueta Personalizada', () => {
     // Deve exibir a badge da nova etiqueta "teste_hoje" na interface
     expect(screen.getByText('teste_hoje')).toBeDefined();
   });
+
+  it('não deve exibir botão de criar etiqueta se o termo já existir em options com casing diferente', () => {
+    const handleChange = vi.fn();
+    const options = [
+      { value: 'compra_aprovada_bussula', label: 'compra_aprovada_bussula' }
+    ];
+
+    render(
+      <SearchableSelect
+        options={options}
+        value={[]}
+        onChange={handleChange}
+        placeholder="Adicione etiquetas..."
+        isMulti={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Adicione etiquetas...'));
+    const searchInput = screen.getByPlaceholderText('Digite para buscar...');
+    fireEvent.change(searchInput, { target: { value: 'Compra_Aprovada_Bussula' } });
+
+    // O botão Criar etiqueta NÃO deve existir
+    expect(screen.queryByText(/Criar etiqueta:/i)).not.toBeInTheDocument();
+  });
+
+  it('não deve exibir botão de criar etiqueta se ela já estiver selecionada em value', () => {
+    const handleChange = vi.fn();
+    const options = [];
+
+    render(
+      <SearchableSelect
+        options={options}
+        value={['minha_tag']}
+        onChange={handleChange}
+        placeholder="Adicione etiquetas..."
+        isMulti={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('minha_tag'));
+    const searchInput = screen.getByPlaceholderText('Digite para buscar...');
+    fireEvent.change(searchInput, { target: { value: 'Minha_Tag' } });
+
+    expect(screen.queryByText(/Criar etiqueta:/i)).not.toBeInTheDocument();
+  });
+
+  it('deve deduplicar opções repetidas ou com casing/espaços diferentes na listagem', () => {
+    const handleChange = vi.fn();
+    const duplicateOptions = [
+      { value: 'compra_aprovada_bussula', label: 'compra_aprovada_bussula' },
+      { value: 'Compra_Aprovada_Bussula', label: 'Compra_Aprovada_Bussula' },
+      { value: ' compra_aprovada_bussula ', label: ' compra_aprovada_bussula ' }
+    ];
+
+    render(
+      <SearchableSelect
+        options={duplicateOptions}
+        value={[]}
+        onChange={handleChange}
+        placeholder="Adicione etiquetas..."
+        isMulti={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Adicione etiquetas...'));
+    // Deve haver exatamente 1 item no dropdown
+    const items = screen.getAllByText('compra_aprovada_bussula');
+    expect(items.length).toBe(1);
+  });
 });

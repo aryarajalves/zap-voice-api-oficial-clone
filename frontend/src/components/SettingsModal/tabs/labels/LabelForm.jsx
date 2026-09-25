@@ -32,15 +32,15 @@ const LabelForm = ({
                             {editingLabel ? 'Editar Nome da Etiqueta' : 'Nome da Etiqueta'}
                         </label>
                         <span className="text-[10px] text-gray-400 font-semibold">
-                            {name ? name.length : 0}/20 caracteres
+                            {name ? name.length : 0}/25 caracteres
                         </span>
                     </div>
                     <input
                         type="text"
                         placeholder="Ex: Suporte, Lead Quente..."
                         value={name}
-                        maxLength={20}
-                        onChange={(e) => setName(e.target.value.slice(0, 20))}
+                        maxLength={25}
+                        onChange={(e) => setName(e.target.value.slice(0, 25))}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                                 e.preventDefault();

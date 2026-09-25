@@ -50,6 +50,7 @@ from .webhooks import (
     WebhookIntegration,
     WebhookHistoryBase,
     WebhookHistory,
+    BussolaPdfPreviewRequest,
 )
 from .leads import (
     WebhookLeadBase,

@@ -12,17 +12,38 @@ export default function ContactTagsSection({
     setIsTagDropdownOpen,
     handleTagSubmit
 }) {
-    const unselectedLabels = (availableLabels || []).filter(
-        label => !(labels || []).map(l => l.toLowerCase()).includes(label.toLowerCase())
+    // Deduplica availableLabels canonicamente
+    const uniqueAvailableLabels = React.useMemo(() => {
+        const seen = new Set();
+        const result = [];
+        (availableLabels || []).forEach(l => {
+            if (!l) return;
+            const clean = String(l).trim();
+            if (!clean) return;
+            const key = clean.toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                result.push(clean);
+            }
+        });
+        return result;
+    }, [availableLabels]);
+
+    const appliedLower = React.useMemo(() => {
+        return (labels || []).map(l => String(l).trim().toLowerCase()).filter(Boolean);
+    }, [labels]);
+
+    const unselectedLabels = uniqueAvailableLabels.filter(
+        label => !appliedLower.includes(label.toLowerCase())
     );
 
     const filteredDropdownLabels = unselectedLabels.filter(
-        label => label.toLowerCase().includes(tagSearchQuery.toLowerCase())
+        label => label.toLowerCase().includes(tagSearchQuery.toLowerCase().trim())
     );
 
-    const isExactMatchExisting = (availableLabels || []).some(
+    const isExactMatchExisting = uniqueAvailableLabels.some(
         l => l.toLowerCase() === tagSearchQuery.trim().toLowerCase()
-    );
+    ) || appliedLower.includes(tagSearchQuery.trim().toLowerCase());
 
     return (
         <div className="space-y-3">
@@ -73,11 +94,11 @@ export default function ContactTagsSection({
                     <div className="relative flex-1">
                         <input
                             type="text"
-                            maxLength={20}
+                            maxLength={25}
                             placeholder="Pesquisar ou criar marcador..."
                             value={tagSearchQuery}
                             onChange={(e) => {
-                                setTagSearchQuery(e.target.value.slice(0, 20));
+                                setTagSearchQuery(e.target.value.slice(0, 25));
                                 setIsTagDropdownOpen(true);
                             }}
                             onFocus={() => setIsTagDropdownOpen(true)}
@@ -154,7 +175,7 @@ export default function ContactTagsSection({
                                 className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border-t border-gray-100 dark:border-white/5 flex items-center gap-1.5 cursor-pointer"
                             >
                                 <span>+ Criar novo marcador:</span>
-                                <span className="italic pr-2 break-all">"{tagSearchQuery.trim().slice(0, 20)}" ({tagSearchQuery.trim().slice(0, 20).length}/20)</span>
+                                <span className="italic pr-2 break-all">"{tagSearchQuery.trim().slice(0, 25)}" ({tagSearchQuery.trim().slice(0, 25).length}/25)</span>
                             </button>
                         )}
 

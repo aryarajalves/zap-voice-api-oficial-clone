@@ -7,6 +7,7 @@ export const EVENT_HINTS = {
   checkout_pre_populado: '🛒 Disparado quando o lead acessa o checkout pré-populado ou abandona o carrinho com dados já preenchidos (PURCHASE_OUT_OF_SHOPPING_CART).',
   voto_enquete: '📊 Disparado pelo ZapGroup quando um participante vota em uma enquete do grupo. Extrai {{titulo_enquete}} e {{opcao_marcada}}.',
   lead_extraido: '👥 Disparado pelo ZapGroup quando um participante é extraído do grupo do WhatsApp.',
+  leitura_concluida: '🔮 Disparado pelo Quiz da Bússola quando a leitura astrológica é concluída. Extrai {{mensagem}}, {{nascimento_data}}, {{cidade}}, {{quiz_area}} e dados da carta.',
   alteracao_vencimento: '📅 Disparado pela Hotmart quando a data de cobrança de uma assinatura é alterada (evento UPDATE_SUBSCRIPTION_CHARGE_DATE).',
   troca_de_plano: '🔄 Disparado pela Hotmart quando o assinante muda de plano (evento SWITCH_PLAN).',
 };

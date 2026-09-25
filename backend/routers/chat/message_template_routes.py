@@ -192,6 +192,7 @@ async def send_chat_template(
             "content": new_message.content,
             "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
             "wa_message_id": new_message.wa_message_id,
+            "status": "sent",
             "meta_data": new_message.meta_data,
             "client_id": client_id
         }
@@ -208,6 +209,7 @@ async def send_chat_template(
         "content": new_message.content,
         "timestamp": new_message.timestamp.isoformat() if new_message.timestamp else datetime.now().isoformat(),
         "wa_message_id": new_message.wa_message_id,
+        "status": "sent",
         "meta_data": new_message.meta_data,
         "sent_as_text": sent_as_text
     }

@@ -8,6 +8,7 @@ export function useChatFunnelAndStatus({
   selectedConvo,
   setSelectedConvo,
   loadConversations,
+  loadMessages,
   isSending,
   setIsSending,
   setTimeLeft24h
@@ -54,6 +55,9 @@ export function useChatFunnelAndStatus({
           ...prev, 
           active_funnel: { id: data.funnel_id, trigger_id: data.trigger_id, name: data.funnel_name, status: data.trigger_status } 
         } : prev);
+        if (typeof loadMessages === 'function' && selectedConvo?.id) {
+          await loadMessages(selectedConvo.id);
+        }
         await loadConversations();
         return true;
       } else {
@@ -208,6 +212,24 @@ export function useChatFunnelAndStatus({
         const data = await res.json();
         toast.dismiss(loadingToast);
         toast.success(data.message || `Funil "${data.funnel_name}" iniciado para ${data.total_contacts || 0} contato(s)!`);
+        if (selectedConvo) {
+          const selectedConvoId = selectedConvo.id;
+          const wasSelectedIncluded = payloadExtra.select_all || (Array.isArray(payloadExtra.ids) && payloadExtra.ids.includes(selectedConvoId));
+          if (wasSelectedIncluded) {
+            setSelectedConvo(prev => prev ? {
+              ...prev,
+              active_funnel: {
+                id: data.funnel_id,
+                trigger_id: data.trigger_id,
+                name: data.funnel_name,
+                status: 'processing'
+              }
+            } : prev);
+            if (typeof loadMessages === 'function') {
+              await loadMessages(selectedConvoId);
+            }
+          }
+        }
         await loadConversations();
         return true;
       } else {

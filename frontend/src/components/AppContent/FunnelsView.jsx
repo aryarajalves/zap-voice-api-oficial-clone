@@ -1,10 +1,24 @@
-import React from 'react';
-import { FiArchive, FiTag, FiTrash2, FiGlobe } from 'react-icons/fi';
+import React, { useRef } from 'react';
+import { FiArchive, FiTag, FiTrash2, FiGlobe, FiUpload } from 'react-icons/fi';
 import VisualFlowBuilder from '../VisualFlowBuilder';
 import { FunnelList } from '../FunnelList';
 import PageGuard from './PageGuard';
+import { importFunnelFromJson } from '../../utils/funnelExportImport';
 
 export default function FunnelsView({ logic }) {
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await importFunnelFromJson(file, logic.activeClient?.id, logic.funnels, () => {
+        logic.fetchFunnels?.();
+      });
+    } finally {
+      e.target.value = '';
+    }
+  };
   return (
     <PageGuard pageKey="funnels" pagesStatus={logic.user?.pages_status}>
       {logic.showBuilder ? (
@@ -67,6 +81,23 @@ export default function FunnelsView({ logic }) {
               )}
             </div>
             <div className="flex items-center gap-3">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".json,application/json"
+                className="hidden"
+                data-testid="funnel-import-input"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-5 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-semibold border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center gap-2 shadow-sm text-sm"
+                title="Importar funil a partir de arquivo JSON"
+                data-testid="funnel-import-btn"
+              >
+                <FiUpload size={16} className="text-emerald-500" />
+                Importar Funil
+              </button>
               <button
                 onClick={() => logic.setIsGlobalsModalOpen(true)}
                 className="px-5 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-semibold border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center gap-2 shadow-sm text-sm"

@@ -99,22 +99,26 @@ async def test_archive_and_unarchive_multiple_templates(db_session):
 @pytest.mark.asyncio
 @patch("routers.whatsapp.ChatwootClient")
 async def test_list_templates_filters_paused(mock_cw_client, db_session):
-    # Setup mock templates, one approved and one paused
+    # Setup mock templates: approved, paused, pending and rejected
     mock_instance = MagicMock()
     mock_cw_client.return_value = mock_instance
     mock_instance.get_whatsapp_templates = AsyncMock(return_value=[
         {"id": "10", "name": "template_active", "language": "pt_BR", "category": "MARKETING", "status": "APPROVED"},
-        {"id": "11", "name": "template_paused", "language": "pt_BR", "category": "MARKETING", "status": "PAUSED"}
+        {"id": "11", "name": "template_paused", "language": "pt_BR", "category": "MARKETING", "status": "PAUSED"},
+        {"id": "12", "name": "template_pending", "language": "pt_BR", "category": "MARKETING", "status": "PENDING"},
+        {"id": "13", "name": "template_rejected", "language": "pt_BR", "category": "MARKETING", "status": "REJECTED"}
     ])
 
     # Test list_templates with include_paused=True (default)
     res_all = await list_templates(include_paused=True, x_client_id=1, current_user=MockUser(1), db=db_session)
-    assert len(res_all) == 2
+    assert len(res_all) == 4
     names = [t["name"] for t in res_all]
     assert "template_active" in names
     assert "template_paused" in names
+    assert "template_pending" in names
+    assert "template_rejected" in names
 
-    # Test list_templates with include_paused=False
+    # Test list_templates with include_paused=False (only APPROVED should remain)
     res_filtered = await list_templates(include_paused=False, x_client_id=1, current_user=MockUser(1), db=db_session)
     assert len(res_filtered) == 1
     assert res_filtered[0]["name"] == "template_active"

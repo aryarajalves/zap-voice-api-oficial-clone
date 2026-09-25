@@ -232,13 +232,34 @@ export default function ChatMessageList({
                 targetMessage={contextMenu.targetMessage}
                 selectedConvo={selectedConvo}
                 onReply={(msg) => {
+                    // Captura a distância do fundo ANTES do re-render da barra de reply
+                    const container = engine?.messagesContainerRef?.current;
+                    const distFromBottom = container
+                        ? container.scrollHeight - container.scrollTop - container.clientHeight
+                        : null;
+
                     setReplyingTo({
                         id: msg.id,
                         content: msg.content || (msg.media_url ? '[Mídia]' : ''),
                         sender_type: msg.sender_type,
                         wa_message_id: msg.wa_message_id || msg.wamid || msg.message_id || String(msg.id)
                     });
-                    if (chatInputRef?.current) chatInputRef.current.focus();
+
+                    // Foco sem deslocar o scroll da página
+                    if (chatInputRef?.current) {
+                        try {
+                            chatInputRef.current.focus({ preventScroll: true });
+                        } catch {
+                            chatInputRef.current.focus();
+                        }
+                    }
+
+                    // Restaura a posição relativa ao fundo após o re-render da barra de reply
+                    if (container && distFromBottom !== null) {
+                        requestAnimationFrame(() => {
+                            container.scrollTop = container.scrollHeight - container.clientHeight - distFromBottom;
+                        });
+                    }
                 }}
                 onCopy={(msg) => handleCopyMessageContent?.(msg)}
                 onReact={(msg, emoji) => {

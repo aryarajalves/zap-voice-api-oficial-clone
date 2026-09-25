@@ -35,7 +35,7 @@ export function useSendTemplate({
     if (!activeClient?.id) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/whatsapp/templates`, {
+      const res = await fetch(`${API_URL}/whatsapp/templates?include_paused=false`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'X-Client-ID': String(activeClient.id)
@@ -43,7 +43,10 @@ export function useSendTemplate({
       });
       if (res.ok) {
         const data = await res.json();
-        setTemplates(data || []);
+        const approvedOnly = (Array.isArray(data) ? data : []).filter(
+          (t) => !t.status || String(t.status).toUpperCase() === 'APPROVED'
+        );
+        setTemplates(approvedOnly);
       } else {
         toast.error("Erro ao carregar templates do WhatsApp.");
       }
