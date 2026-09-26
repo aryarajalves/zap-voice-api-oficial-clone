@@ -179,7 +179,7 @@ def _filter_leads_by_active_filters(db: Session, client_id: int, filters):
     else:
         query = db.query(models.WebhookLead).filter(models.WebhookLead.client_id == client_id)
 
-    tag_filter_val = getattr(filters, 'tag_filter', None) or getattr(filters, 'tag', None)
+    tag_filter_val = getattr(filters, 'tag_filter', None)
     tag_mode_val = getattr(filters, 'tag_mode', 'OR') or 'OR'
     exclude_tag_val = getattr(filters, 'exclude_tag', None)
 

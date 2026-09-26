@@ -539,7 +539,7 @@ async def get_trigger_messages(
                 ).count(),
                 "free": counts_query.filter(models.MessageStatus.message_type.in_(['FREE_MESSAGE', 'DIRECT_MESSAGE'])).count(),
                 "template": counts_query.filter(models.MessageStatus.message_type == 'TEMPLATE').count(),
-                "private_note": trigger.total_private_notes or 0,
+                "private_note": trigger.total_private_notes if (trigger.total_private_notes is not None and trigger.total_private_notes > 0) else counts_query.filter(models.MessageStatus.private_note_posted == True).count(),
                 "remaining": max(0, total_c - proc_num),
             }
         else:

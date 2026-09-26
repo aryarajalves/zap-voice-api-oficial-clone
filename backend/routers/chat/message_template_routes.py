@@ -115,6 +115,7 @@ async def send_chat_template(
         meta_data["is_free_message"] = True
 
     template_media_url = None
+    template_filename = None
     if components:
         for comp in components:
             if comp.get("type") == "header":
@@ -125,6 +126,8 @@ async def send_chat_template(
                     if p_type in ["image", "video", "document"]:
                         media_obj = header_param.get(p_type, {})
                         template_media_url = media_obj.get("link")
+                        if p_type == "document":
+                            template_filename = media_obj.get("filename")
 
     new_message = models.ChatMessage(
         conversation_id=convo.id,
@@ -177,7 +180,9 @@ async def send_chat_template(
             template_name=template_name,
             content=content,
             internal_contact_id=new_message.id,
-            dono="agente"
+            dono="agente",
+            media_url=template_media_url,
+            filename=template_filename
         ))
     except Exception as e_mem:
         logger.error(f"⚠️ [CHAT_TEMPLATE] Falha ao enviar para o webhook de memória: {e_mem}")

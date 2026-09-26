@@ -43,10 +43,25 @@ async def notify_ai_memory(client_id: int, phone: str, content: str, msg_type: s
         logger.error(f"❌ [AI Memory] Erro ao enviar para o RabbitMQ: {e}")
         # Falha silenciosa para não quebrar o fluxo principal
 
-async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = None, template_name: str = None, content: str = None, trigger_id: int = None, node_id: str = None, internal_contact_id: int = None, dono: str = "agente", is_button_click: bool = False):
+async def notify_agent_memory_webhook(
+    client_id: int,
+    phone: str,
+    name: str = None,
+    template_name: str = None,
+    content: str = None,
+    trigger_id: int = None,
+    node_id: str = None,
+    internal_contact_id: int = None,
+    dono: str = "agente",
+    is_button_click: bool = False,
+    media_url: str = None,
+    filename: str = None,
+    document_content: str = None
+):
     """
     Envia os dados do template ou nó de funil para um webhook externo configurado.
     Focado na integração com n8n/agentes de memória.
+    Suporta Opção 1: envio dedicado de document_content, media_url e filename para documentos anexos.
     """
     try:
         webhook_url = get_setting("AGENT_MEMORY_WEBHOOK_URL", "", client_id=client_id)
@@ -65,6 +80,29 @@ async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = No
                 chatwoot_account_id = cw_acc_str
                 
         resolved_conta_id = chatwoot_account_id if chatwoot_account_id is not None else client_id
+
+        # Resolução automática de documento se não fornecido mas trigger_id presente
+        if (not document_content or not media_url) and trigger_id:
+            try:
+                from services.document_memory_service import resolve_document_details
+                from database import SessionLocal
+                import models
+                _db = SessionLocal()
+                try:
+                    _trig = _db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id == trigger_id).first()
+                    _mrec = _db.query(models.MessageStatus).filter(models.MessageStatus.id == internal_contact_id).first() if internal_contact_id else None
+                    _doc_info = await resolve_document_details(
+                        trigger=_trig,
+                        message_record=_mrec,
+                        extra_data={"media_url": media_url, "filename": filename, "document_content": document_content}
+                    )
+                    media_url = _doc_info.get("media_url") or media_url
+                    filename = _doc_info.get("filename") or filename
+                    document_content = _doc_info.get("document_content") or document_content
+                finally:
+                    _db.close()
+            except Exception as doc_err:
+                logger.debug(f"Não foi possível resolver detalhes de documento na memória: {doc_err}")
 
         payload = {
             "contact_phone": clean_phone,
@@ -92,6 +130,14 @@ async def notify_agent_memory_webhook(client_id: int, phone: str, name: str = No
             "trigger_id": trigger_id,
             "node_id": node_id
         }
+
+        # Opção 1: Envio de campos dedicados para documentos / mídias
+        if document_content:
+            payload["document_content"] = document_content
+        if media_url:
+            payload["media_url"] = media_url
+        if filename:
+            payload["filename"] = filename
 
         # DEBUG: Print to stdout so it shows in docker logs -f zapvoice_worker
         print(f"🚀 [MEMORIA DEBUG] Enviando Payload: {payload}")

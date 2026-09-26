@@ -2,7 +2,7 @@ import asyncio
 import models
 from core.logger import setup_logger
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from services.discovery import discover_or_create_chatwoot_conversation
 from config_loader import get_setting
 
@@ -203,8 +203,11 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
             return
 
         note_text = message_record.pending_private_note
-        if note_text and not message_record.private_note_posted:
-            logger.info(f"📝 [DEFERRED_POST_DELIVERY] Postando nota privada pendente para {phone} (Trigger {trigger_id})")
+        has_pending_note = bool(note_text and not message_record.private_note_posted)
+        has_chatwoot_labels = bool(trigger and trigger.chatwoot_label)
+
+        if (has_pending_note or has_chatwoot_labels):
+            logger.info(f"📝 [DEFERRED_POST_DELIVERY] Sincronizando Chatwoot para {phone} pós-entrega (Trigger {trigger_id})")
             
             disc = await discover_or_create_chatwoot_conversation(
                 client_id=trigger.client_id,
@@ -216,17 +219,35 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                 conversation_id = disc["conversation_id"]
                 cw = wah.ChatwootClient(client_id=trigger.client_id)
                 
-                try:
-                    await cw.send_private_note(conversation_id, note_text)
-                    message_record.private_note_posted = True
-                    message_record.chatwoot_conversation_id = conversation_id
-                    message_record.chatwoot_account_id = disc.get("account_id")
-                    db.commit()
-                    logger.info(f"✅ [DEFERRED_POST_DELIVERY] Nota privada postada com sucesso na conversa {conversation_id}")
-                except Exception as cw_err:
-                    logger.error(f"❌ [DEFERRED_POST_DELIVERY] Erro ao enviar nota privada para a conversa {conversation_id}: {cw_err}")
+                # 1. Enviar nota privada se pendente
+                if has_pending_note:
+                    try:
+                        await cw.send_private_note(conversation_id, note_text)
+                        message_record.private_note_posted = True
+                        message_record.chatwoot_conversation_id = conversation_id
+                        message_record.chatwoot_account_id = disc.get("account_id")
+                        if trigger:
+                            trigger.conversation_id = conversation_id
+                        db.commit()
+                        logger.info(f"✅ [DEFERRED_POST_DELIVERY] Nota privada postada com sucesso na conversa Chatwoot {conversation_id}")
+                    except Exception as cw_err:
+                        logger.error(f"❌ [DEFERRED_POST_DELIVERY] Erro ao enviar nota privada para a conversa Chatwoot {conversation_id}: {cw_err}")
+
+                # 2. Aplicar etiquetas no Chatwoot se existirem
+                if has_chatwoot_labels:
+                    try:
+                        from core.utils import robust_extract_labels
+                        clean_labels = robust_extract_labels(trigger.chatwoot_label)
+                        if clean_labels:
+                            await cw.add_label_to_conversation(conversation_id, clean_labels)
+                            if trigger:
+                                trigger.conversation_id = conversation_id
+                            db.commit()
+                            logger.info(f"🏷️ [DEFERRED_POST_DELIVERY] Etiquetas {clean_labels} aplicadas na conversa Chatwoot {conversation_id}")
+                    except Exception as cw_lbl_err:
+                        logger.error(f"❌ [DEFERRED_POST_DELIVERY] Erro ao aplicar etiquetas no Chatwoot {conversation_id}: {cw_lbl_err}")
             else:
-                logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] Não foi possível encontrar/criar conversa para {phone}")
+                logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] Não foi possível encontrar/criar conversa no Chatwoot para {phone}")
                 
         db.close()
     except Exception as e:
@@ -284,8 +305,12 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                         reason = "Erro desconhecido da Meta"
                         if meta_errors:
                             err = meta_errors[0]
-                            reason = f"Erro Meta {err.get('code')}: {err.get('message') or err.get('title')}"
+                            reason = f"Erro Meta {err.get('code')}: {err.get('title') or err.get('message') or 'Erro desconhecido'}"
                         message_record.failure_reason = reason
+                        if trigger:
+                            trigger.failure_reason = reason
+                            if (trigger.total_delivered or 0) == 0 and trigger.status != 'cancelled':
+                                trigger.status = 'failed'
                         
                         # Limpar bloqueio de ContactTemplateHistory para permitir reenvio imediato após falha da Meta
                         try:
@@ -509,6 +534,8 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                         target_cid = trigger.client_id if trigger else (int(message_record.var1) if (message_record and message_record.var1) else None)
                         if target_cid:
                             import services.ai_memory
+                            from services.document_memory_service import resolve_document_details
+                            doc_info = await resolve_document_details(trigger=trigger, message_record=message_record)
                             asyncio.create_task(services.ai_memory.notify_agent_memory_webhook(
                                 client_id=target_cid,
                                 phone=message_record.phone_number,
@@ -516,7 +543,10 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                                 template_name=message_record.template_name or (trigger.template_name if trigger else None) or "Mensagem",
                                 content=message_record.content or "",
                                 trigger_id=trigger.id if trigger else None,
-                                internal_contact_id=message_record.id
+                                internal_contact_id=message_record.id,
+                                media_url=doc_info.get("media_url"),
+                                filename=doc_info.get("filename"),
+                                document_content=doc_info.get("document_content")
                             ))
  
                     db.commit()

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiPlay, FiTrash2, FiCheck, FiInbox, FiEye, FiMousePointer, FiActivity, FiRefreshCw, FiMessageSquare, FiAlertTriangle, FiSlash } from 'react-icons/fi';
+import { FiPlay, FiTrash2, FiCheck, FiInbox, FiEye, FiMousePointer, FiActivity, FiRefreshCw, FiMessageSquare, FiAlertTriangle, FiSlash, FiUnlock } from 'react-icons/fi';
 import { getStatusBadge } from '../../../helpers';
 import { toast } from 'react-hot-toast';
 
@@ -67,7 +67,12 @@ const DispatchTableRow = ({
   setConfirmDeleteDispatch,
   isCancelling = {},
   fetchChildren,
-  onNavigateToChat
+  onNavigateToChat,
+  handleBlockDispatchContact,
+  handleUnblockDispatchContact,
+  onOpenBlockModal,
+  onOpenUnblockModal,
+  isBlocking = {}
 }) => {
   const isSelected = selectedDispatchIds.includes(item.id);
 
@@ -89,7 +94,14 @@ const DispatchTableRow = ({
             {item.contact_phone?.slice(-2) || '??'}
           </div>
           <div className="flex flex-col">
-            <span className="text-gray-300 text-sm font-bold">{item.contact_name || 'Desconhecido'}</span>
+            <span className="text-gray-300 text-sm font-bold flex items-center gap-1.5">
+              {item.contact_name || 'Desconhecido'}
+              {item.is_contact_blocked && (
+                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-widest" title="Na Blacklist">
+                  Bloqueado
+                </span>
+              )}
+            </span>
             <span className="text-gray-500 font-mono text-xs">{item.contact_phone}</span>
           </div>
         </div>
@@ -113,15 +125,15 @@ const DispatchTableRow = ({
             <button
               type="button"
               onClick={() => handlePlayDispatch(item.id)}
-              disabled={isPlaying[item.id]}
+              disabled={isPlaying[item.id] || item.is_contact_blocked}
               className="p-2 bg-green-500/10 hover:bg-green-500 text-green-500 hover:text-white rounded-lg transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 font-black text-[9px] uppercase tracking-wider"
-              title="Disparar Agora"
+              title={item.is_contact_blocked ? "Contato bloqueado na Blacklist" : "Disparar Agora"}
             >
               {isPlaying[item.id] ? <FiRefreshCw className="animate-spin" size={14} /> : <FiPlay size={14} fill="currentColor" />}
               <span>Disparar</span>
             </button>
           </div>
-          <div className="flex justify-start">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setConfirmDeleteDispatch({ isOpen: true, type: 'single', id: item.id })}
@@ -132,6 +144,29 @@ const DispatchTableRow = ({
               {isCancelling[item.id] ? <FiRefreshCw className="animate-spin" size={12} /> : <FiTrash2 size={12} />}
               <span>Excluir</span>
             </button>
+            {item.is_contact_blocked ? (
+              <button
+                type="button"
+                onClick={() => onOpenUnblockModal ? onOpenUnblockModal(item) : (handleUnblockDispatchContact && handleUnblockDispatchContact(item))}
+                disabled={isBlocking && isBlocking[item.id]}
+                className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-lg transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider cursor-pointer shadow-sm hover:shadow-emerald-500/20"
+                title="Clique para desbloquear o contato e permitir novos disparos"
+              >
+                {isBlocking && isBlocking[item.id] ? <FiRefreshCw className="animate-spin" size={11} /> : <FiUnlock size={11} />}
+                <span>Desbloquear</span>
+              </button>
+            ) : (item.status === 'failed' || item.total_failed > 0 || Boolean(item.failure_reason)) ? (
+              <button
+                type="button"
+                onClick={() => onOpenBlockModal ? onOpenBlockModal(item) : (handleBlockDispatchContact && handleBlockDispatchContact(item))}
+                disabled={isBlocking && isBlocking[item.id]}
+                className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/20 rounded-lg transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider cursor-pointer shadow-sm hover:shadow-rose-500/20"
+                title="Bloquear contato na Blacklist para não disparar mais"
+              >
+                {isBlocking && isBlocking[item.id] ? <FiRefreshCw className="animate-spin" size={11} /> : <FiSlash size={11} />}
+                <span>Bloquear</span>
+              </button>
+            ) : null}
           </div>
           {(item.status === 'cancelled' || item.status === 'failed' || item.total_failed > 0) && item.failure_reason && (
             <div className="text-[9px] text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-lg mt-1 leading-tight max-w-[220px] break-words italic font-bold">
@@ -161,7 +196,7 @@ const DispatchTableRow = ({
           </div>
           <div className="flex items-center gap-1.5 mt-2 bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg w-fit shadow-lg shadow-black/20">
             <span className="flex items-center gap-1 text-[11px] font-black text-emerald-500" title="Enviados">
-              <FiCheck size={13} /> {item.total_sent || (item.status === 'completed' ? 1 : 0)}
+              <FiCheck size={13} /> {(item.total_failed > 0 && (item.total_delivered || 0) === 0) ? 0 : (item.total_sent || (item.status === 'completed' ? 1 : 0))}
             </span>
             <div className="w-[1px] h-3 bg-white/10 mx-0.5"></div>
             <span className="flex items-center gap-1 text-[11px] font-black text-blue-400" title="Entregues">
@@ -264,8 +299,26 @@ const DispatchTableRow = ({
             <span className="text-blue-300 text-[12px] font-bold font-mono">{new Date(item.scheduled_time).toLocaleString()}</span>
           </div>
           <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1 flex items-center gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${new Date(item.scheduled_time) > new Date() ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`}></div>
-            {new Date(item.scheduled_time) > new Date() ? 'Aguardando Delay' : 'Processando'}
+            <div className={`w-1.5 h-1.5 rounded-full ${
+              (item.status === 'failed' || item.total_failed > 0)
+                ? 'bg-rose-500'
+                : item.status === 'cancelled'
+                ? 'bg-gray-500'
+                : item.status === 'completed'
+                ? 'bg-emerald-500'
+                : new Date(item.scheduled_time) > new Date()
+                ? 'bg-orange-500 animate-pulse'
+                : 'bg-green-500'
+            }`}></div>
+            {(item.status === 'failed' || item.total_failed > 0)
+              ? 'Falhou'
+              : item.status === 'cancelled'
+              ? 'Cancelado'
+              : item.status === 'completed'
+              ? 'Concluído'
+              : new Date(item.scheduled_time) > new Date()
+              ? 'Aguardando Delay'
+              : 'Processando'}
           </span>
         </div>
       </td>

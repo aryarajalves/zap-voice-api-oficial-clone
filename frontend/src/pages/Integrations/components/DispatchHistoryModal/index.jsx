@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FiZap } from 'react-icons/fi';
 import {
@@ -8,7 +8,8 @@ import {
   DispatchStatsBar,
   DispatchTable,
   DispatchPagination,
-  DispatchModalFooter
+  DispatchModalFooter,
+  BlockContactConfirmModal
 } from './components';
 
 const DispatchHistoryModal = ({
@@ -56,8 +57,20 @@ const DispatchHistoryModal = ({
   dispatchTemplateFilter,
   setDispatchTemplateFilter,
   distinctTemplates,
-  onNavigateToChat
+  onNavigateToChat,
+  handleBlockDispatchContact,
+  handleUnblockDispatchContact,
+  isBlocking,
+  handleBulkBlockDispatchContacts,
+  isBulkBlocking
 }) => {
+  const [blockConfirmModal, setBlockConfirmModal] = useState({
+    isOpen: false,
+    mode: 'block', // 'block' | 'unblock' | 'bulk_block'
+    item: null,
+    count: 0
+  });
+
   useEffect(() => {
     if (isOpen && integration?.id) {
       fetchDispatches(
@@ -92,6 +105,29 @@ const DispatchHistoryModal = ({
 
   const totalPages = Math.ceil(dispatchTotal / (dispatchLimit || 20)) || 1;
   const hasHistory = Array.isArray(dispatchHistory) && dispatchHistory.length > 0;
+
+  const handleOpenBlockModal = (item) => {
+    setBlockConfirmModal({ isOpen: true, mode: 'block', item, count: 1 });
+  };
+
+  const handleOpenUnblockModal = (item) => {
+    setBlockConfirmModal({ isOpen: true, mode: 'unblock', item, count: 1 });
+  };
+
+  const handleOpenBulkBlockModal = (count) => {
+    setBlockConfirmModal({ isOpen: true, mode: 'bulk_block', item: null, count });
+  };
+
+  const handleConfirmBlockAction = async () => {
+    if (blockConfirmModal.mode === 'block' && blockConfirmModal.item) {
+      await handleBlockDispatchContact(blockConfirmModal.item);
+    } else if (blockConfirmModal.mode === 'unblock' && blockConfirmModal.item) {
+      await handleUnblockDispatchContact(blockConfirmModal.item);
+    } else if (blockConfirmModal.mode === 'bulk_block') {
+      await handleBulkBlockDispatchContacts();
+    }
+    setBlockConfirmModal(prev => ({ ...prev, isOpen: false }));
+  };
 
   const handleRefresh = () => {
     fetchDispatches(
@@ -167,6 +203,9 @@ const DispatchHistoryModal = ({
                 isBulkPlayingDispatches={isBulkPlayingDispatches}
                 setConfirmDeleteDispatch={setConfirmDeleteDispatch}
                 setSelectedDispatchIds={setSelectedDispatchIds}
+                handleBulkBlockDispatchContacts={handleBulkBlockDispatchContacts}
+                isBulkBlocking={isBulkBlocking}
+                onOpenBulkBlockModal={handleOpenBulkBlockModal}
               />
 
               {/* Table List */}
@@ -185,6 +224,11 @@ const DispatchHistoryModal = ({
                     isCancelling={isCancelling}
                     fetchChildren={fetchChildren}
                     onNavigateToChat={onNavigateToChat}
+                    handleBlockDispatchContact={handleBlockDispatchContact}
+                    handleUnblockDispatchContact={handleUnblockDispatchContact}
+                    onOpenBlockModal={handleOpenBlockModal}
+                    onOpenUnblockModal={handleOpenUnblockModal}
+                    isBlocking={isBlocking}
                   />
 
                   {/* Pagination Controls */}
@@ -204,6 +248,21 @@ const DispatchHistoryModal = ({
 
         {/* Footer */}
         <DispatchModalFooter onRefresh={handleRefresh} onClose={onClose} />
+
+        {/* Modal de Confirmação de Bloqueio/Desbloqueio */}
+        <BlockContactConfirmModal
+          isOpen={blockConfirmModal.isOpen}
+          onClose={() => setBlockConfirmModal(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={handleConfirmBlockAction}
+          mode={blockConfirmModal.mode}
+          item={blockConfirmModal.item}
+          count={blockConfirmModal.count}
+          isLoading={
+            blockConfirmModal.mode === 'bulk_block'
+              ? isBulkBlocking
+              : (blockConfirmModal.item ? isBlocking[blockConfirmModal.item.id] : false)
+          }
+        />
 
       </div>
     </div>,

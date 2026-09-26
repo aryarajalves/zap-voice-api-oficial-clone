@@ -27,6 +27,8 @@ export function useDispatchHistory(activeClient) {
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [childrenModal, setChildrenModal] = useState({ isOpen: false, triggerId: null, triggerName: '', children: [], isLoading: false });
   const [dispatchStats, setDispatchStats] = useState(null);
+  const [isBlocking, setIsBlocking] = useState({});
+  const [isBulkBlocking, setIsBulkBlocking] = useState(false);
 
   const fetchDispatches = useCallback(async (integrationId, page = 1, limit = 20, search = '', event = '', start = '', end = '', type = '', template = '', status = '', isSilent = false) => {
     if (!activeClient || !integrationId) return;
@@ -85,9 +87,12 @@ export function useDispatchHistory(activeClient) {
       }, activeClient.id);
 
       if (res.ok) {
-        toast.success('Registros removidos');
+        toast.success(type === 'bulk' ? 'Disparos removidos com sucesso' : 'Disparo removido com sucesso');
         if (type === 'bulk') setSelectedDispatchIds([]);
         fetchDispatches(integrationId, dispatchPage, dispatchLimit, dispatchSearch, dispatchEventFilter, dispatchStartDate, dispatchEndDate, dispatchTypeFilter, dispatchTemplateFilter, dispatchStatusFilter);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || 'Erro ao remover registro');
       }
     } catch (err) {
       console.error(err);
@@ -163,6 +168,143 @@ export function useDispatchHistory(activeClient) {
     }
   }, [activeClient]);
 
+  const handleBlockDispatchContact = async (item) => {
+    if (!item?.contact_phone) {
+      toast.error('Telefone do contato inválido');
+      return;
+    }
+    const cleanPhone = String(item.contact_phone).replace(/\D/g, '');
+    setIsBlocking(prev => ({ ...prev, [item.id]: true }));
+    try {
+      const reason = item.failure_reason 
+        ? `Falha no disparo (${item.failure_reason.slice(0, 100)})` 
+        : 'Bloqueado após falha no disparo';
+
+      const res = await fetchWithAuth(`${API_URL}/blocked/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          phone: cleanPhone,
+          name: item.contact_name || cleanPhone,
+          reason: reason
+        })
+      }, activeClient?.id);
+
+      if (res.ok) {
+        toast.success(`Contato ${item.contact_name || cleanPhone} bloqueado na Blacklist!`);
+        setDispatchHistory(prev => prev.map(d => {
+          const dPhone = String(d.contact_phone || '').replace(/\D/g, '');
+          if (dPhone === cleanPhone || (cleanPhone.length >= 8 && dPhone.endsWith(cleanPhone.slice(-8)))) {
+            return { ...d, is_contact_blocked: true };
+          }
+          return d;
+        }));
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        if (errorData.detail && errorData.detail.includes('já está bloqueado')) {
+          toast.success('Contato já estava na lista de bloqueados.');
+          setDispatchHistory(prev => prev.map(d => {
+            const dPhone = String(d.contact_phone || '').replace(/\D/g, '');
+            if (dPhone === cleanPhone || (cleanPhone.length >= 8 && dPhone.endsWith(cleanPhone.slice(-8)))) {
+              return { ...d, is_contact_blocked: true };
+            }
+            return d;
+          }));
+        } else {
+          toast.error(errorData.detail || 'Erro ao bloquear contato');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro de conexão ao bloquear contato');
+    } finally {
+      setIsBlocking(prev => ({ ...prev, [item.id]: false }));
+    }
+  };
+
+  const handleBulkBlockDispatchContacts = async () => {
+    if (selectedDispatchIds.length === 0) return;
+    setIsBulkBlocking(true);
+    try {
+      const selectedItems = dispatchHistory.filter(d => selectedDispatchIds.includes(d.id));
+      const contactsToBlock = selectedItems
+        .filter(d => d.contact_phone)
+        .map(d => {
+          const clean = String(d.contact_phone).replace(/\D/g, '');
+          return {
+            phone: clean,
+            name: d.contact_name || clean,
+            reason: d.failure_reason ? `Falha no disparo (${d.failure_reason.slice(0, 100)})` : 'Bloqueado após falha no disparo'
+          };
+        });
+
+      if (contactsToBlock.length === 0) {
+        toast.error('Nenhum contato válido para bloquear');
+        setIsBulkBlocking(false);
+        return;
+      }
+
+      const res = await fetchWithAuth(`${API_URL}/blocked/block_bulk`, {
+        method: 'POST',
+        body: JSON.stringify({ contacts: contactsToBlock })
+      }, activeClient?.id);
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.success(`${data.success_count || contactsToBlock.length} contato(s) adicionado(s) à Blacklist!`);
+        const blockedPhoneSet = new Set(contactsToBlock.map(c => c.phone.slice(-8)));
+        setDispatchHistory(prev => prev.map(d => {
+          const dPhone = String(d.contact_phone || '').replace(/\D/g, '');
+          if (blockedPhoneSet.has(dPhone.slice(-8))) {
+            return { ...d, is_contact_blocked: true };
+          }
+          return d;
+        }));
+        setSelectedDispatchIds([]);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || 'Erro ao bloquear contatos selecionados');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro de conexão ao bloquear contatos');
+    } finally {
+      setIsBulkBlocking(false);
+    }
+  };
+
+  const handleUnblockDispatchContact = async (item) => {
+    if (!item?.contact_phone) {
+      toast.error('Telefone do contato não encontrado');
+      return;
+    }
+    const cleanPhone = String(item.contact_phone).replace(/\D/g, '');
+    setIsBlocking(prev => ({ ...prev, [item.id]: true }));
+    try {
+      const res = await fetchWithAuth(`${API_URL}/blocked/by_phone/${cleanPhone}`, {
+        method: 'DELETE'
+      }, activeClient?.id);
+
+      if (res.ok || res.status === 204) {
+        toast.success(`Contato ${item.contact_name || cleanPhone} desbloqueado com sucesso!`);
+        setDispatchHistory(prev => prev.map(d => {
+          const dPhone = String(d.contact_phone || '').replace(/\D/g, '');
+          if (dPhone === cleanPhone || (cleanPhone.length >= 8 && dPhone.endsWith(cleanPhone.slice(-8)))) {
+            return { ...d, is_contact_blocked: false };
+          }
+          return d;
+        }));
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.detail || 'Erro ao desbloquear contato');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro de conexão ao desbloquear contato');
+    } finally {
+      setIsBlocking(prev => ({ ...prev, [item.id]: false }));
+    }
+  };
+
   return {
     dispatchHistory,
     setDispatchHistory,
@@ -207,6 +349,11 @@ export function useDispatchHistory(activeClient) {
     handleBulkDispatchPlay,
     handleBackfillCosts,
     fetchDispatchContacts,
-    fetchChildren
+    fetchChildren,
+    handleBlockDispatchContact,
+    handleUnblockDispatchContact,
+    isBlocking,
+    handleBulkBlockDispatchContacts,
+    isBulkBlocking
   };
 }

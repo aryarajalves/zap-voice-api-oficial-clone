@@ -12,10 +12,8 @@ import ChildrenFunnelsModal from '../../../components/TriggerHistory/components/
 
 export default function IntegrationsModals({
   // Form Modal
-  isModalOpen,
-  setIsModalOpen,
-  formData,
-  setFormData,
+  isModalOpen, setIsModalOpen,
+  formData, setFormData,
   isSaving,
   handleSaveIntegration,
   editingIntegration,
@@ -26,22 +24,16 @@ export default function IntegrationsModals({
   existingInternalTags,
 
   // History Modal
-  isHistoryModalOpen,
-  setIsHistoryModalOpen,
+  isHistoryModalOpen, setIsHistoryModalOpen,
   setSelectedHistoryIds,
   historyIntegration,
   webhookHistory,
   loadingHistory,
-  webhookHistorySearch,
-  setWebhookHistorySearch,
-  webhookHistoryStatusFilter,
-  setWebhookHistoryStatusFilter,
-  webhookHistoryMappingFilter,
-  setWebhookHistoryMappingFilter,
-  historyCurrentPage,
-  setHistoryCurrentPage,
-  historyPageSize,
-  setHistoryPageSize,
+  webhookHistorySearch, setWebhookHistorySearch,
+  webhookHistoryStatusFilter, setWebhookHistoryStatusFilter,
+  webhookHistoryMappingFilter, setWebhookHistoryMappingFilter,
+  historyCurrentPage, setHistoryCurrentPage,
+  historyPageSize, setHistoryPageSize,
   selectedHistoryIds,
   wrappedResend,
   handleSyncHistory,
@@ -63,33 +55,22 @@ export default function IntegrationsModals({
   handleUpdateCustomFieldsMapping,
 
   // Dispatch History Modal
-  isDispatchHistoryModalOpen,
-  setIsDispatchHistoryModalOpen,
+  isDispatchHistoryModalOpen, setIsDispatchHistoryModalOpen,
   dispatchIntegration,
   dispatchHistory,
   loadingDispatchHistory,
-  dispatchSearch,
-  setDispatchSearch,
-  dispatchEventFilter,
-  setDispatchEventFilter,
-  dispatchTypeFilter,
-  setDispatchTypeFilter,
-  dispatchStatusFilter,
-  setDispatchStatusFilter,
-  dispatchTemplateFilter,
-  setDispatchTemplateFilter,
+  dispatchSearch, setDispatchSearch,
+  dispatchEventFilter, setDispatchEventFilter,
+  dispatchTypeFilter, setDispatchTypeFilter,
+  dispatchStatusFilter, setDispatchStatusFilter,
+  dispatchTemplateFilter, setDispatchTemplateFilter,
   distinctTemplates,
-  dispatchStartDate,
-  setDispatchStartDate,
-  dispatchEndDate,
-  setDispatchEndDate,
-  dispatchPage,
-  setDispatchPage,
-  dispatchLimit,
-  setDispatchLimit,
+  dispatchStartDate, setDispatchStartDate,
+  dispatchEndDate, setDispatchEndDate,
+  dispatchPage, setDispatchPage,
+  dispatchLimit, setDispatchLimit,
   dispatchTotal,
-  selectedDispatchIds,
-  setSelectedDispatchIds,
+  selectedDispatchIds, setSelectedDispatchIds,
   handleBulkDispatchPlay,
   handleDeleteDispatch,
   handlePlayDispatch,
@@ -105,6 +86,11 @@ export default function IntegrationsModals({
   fetchChildren,
   dispatchStats,
   onNavigateToChat,
+  handleBlockDispatchContact,
+  handleUnblockDispatchContact,
+  isBlocking,
+  handleBulkBlockDispatchContacts,
+  isBulkBlocking,
 
   // Test Modal
   isTestModalOpen,
@@ -235,19 +221,22 @@ export default function IntegrationsModals({
         dispatchLimit={dispatchLimit}
         setDispatchLimit={setDispatchLimit}
         dispatchTotal={dispatchTotal}
-        selectedDispatchIds={selectedDispatchIds}
-        setSelectedDispatchIds={setSelectedDispatchIds}
+        selectedDispatchIds={selectedDispatchIds} setSelectedDispatchIds={setSelectedDispatchIds}
         handleSelectAllDispatches={(e, list) => setSelectedDispatchIds(e.target.checked ? list.map(i => i.id) : [])}
         handleToggleSelectDispatch={(id) => setSelectedDispatchIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
         handleBulkDispatchPlay={() => handleBulkDispatchPlay(dispatchIntegration.id)}
         handleBulkDispatchDelete={() => handleDeleteDispatch(dispatchIntegration.id, 'bulk', null, selectedDispatchIds)}
         handlePlayDispatch={(id) => handlePlayDispatch(id, dispatchIntegration.id)}
+        handleBlockDispatchContact={handleBlockDispatchContact}
+        handleUnblockDispatchContact={handleUnblockDispatchContact}
+        isBlocking={isBlocking}
+        handleBulkBlockDispatchContacts={handleBulkBlockDispatchContacts}
+        isBulkBlocking={isBulkBlocking}
         handleCancelDispatch={() => {}}
         handleBackfillCosts={() => handleBackfillCosts(dispatchIntegration.id)}
         isBackfillingCosts={isBackfillingCosts}
         isBulkPlayingDispatches={isBulkPlayingDispatches}
-        isPlaying={isPlaying}
-        isCancelling={isCancelling}
+        isPlaying={isPlaying} isCancelling={isCancelling}
         setSelectedDispatch={setSelectedDispatch}
         setIsPipelineModalOpen={setIsPipelineModalOpen}
         fetchDispatches={fetchDispatches}
@@ -359,8 +348,8 @@ export default function IntegrationsModals({
         isOpen={confirmDeleteDispatch.isOpen}
         onClose={() => setConfirmDeleteDispatch({ ...confirmDeleteDispatch, isOpen: false })}
         onConfirm={() => handleDeleteDispatch(dispatchIntegration?.id, confirmDeleteDispatch.type, confirmDeleteDispatch.id, confirmDeleteDispatch.ids).then(() => setConfirmDeleteDispatch({ ...confirmDeleteDispatch, isOpen: false }))}
-        title="Excluir Disparo"
-        message="Deseja realmente excluir os disparos selecionados?"
+        title={confirmDeleteDispatch.type === 'single' ? "Excluir Disparo" : "Excluir Disparos"}
+        message={confirmDeleteDispatch.type === 'single' ? "Deseja realmente excluir este disparo?" : "Deseja realmente excluir os disparos selecionados?"}
       />
     </>
   );

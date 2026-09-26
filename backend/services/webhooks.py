@@ -342,6 +342,9 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                     )
                     variables["bussola_pdf_url"] = pdf_url
                     variables["bussola_pdf_filename"] = display_filename
+                    variables["document_content"] = bussola_msg
+                    variables["media_url"] = pdf_url
+                    variables["filename"] = display_filename
                     logger.info(f"📄 [WEBHOOK_AUTO_PDF] PDF da Bússola gerado com sucesso: {pdf_url} ({display_filename})")
                 except Exception as pdf_err:
                     logger.error(f"❌ [WEBHOOK_AUTO_PDF] Erro ao gerar PDF da Bússola: {pdf_err}")
@@ -365,6 +368,13 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             status = "queued"
         else:
             status = "processing"
+
+        # Checagem de Blacklist (Contato Bloqueado)
+        from services.blocked_contacts_service import is_contact_blocked
+        is_contact_blacklisted = is_contact_blocked(db, client_id, phone)
+        if is_contact_blacklisted:
+            status = "cancelled"
+            logger.info(f"🚫 [WEBHOOK_BLOCKED] Contato {phone} está na Blacklist. Disparo agendado como cancelado.")
 
         # Gera Chave de Idempotência Única
         import hashlib
@@ -410,6 +420,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
         st = models.ScheduledTrigger(
             scheduled_time=scheduled_time,
             status=status,
+            failure_reason="Contato bloqueado na Blacklist (envios suspensos)" if is_contact_blacklisted else None,
             contact_name=variables.get("name"),
             contact_phone=phone,
             template_name=template_name,
@@ -441,7 +452,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             db.refresh(st)
             
             # --- AGENDAMENTO DO GATILHO DE FOLLOW-UP ---
-            if getattr(mapping, "followup_active", False) and mapping.followup_template_name:
+            if not is_contact_blacklisted and getattr(mapping, "followup_active", False) and mapping.followup_template_name:
                 from services.template_history_service import is_template_sent_in_last_24h
                 if is_template_sent_in_last_24h(db, client_id, st.contact_phone, mapping.followup_template_name):
                     logger.warning(f"🚫 [FOLLOW-UP-24H-BLOCK] Template de follow-up '{mapping.followup_template_name}' bloqueado para {st.contact_phone} nas últimas 24h. Agendamento ignorado.")
@@ -524,8 +535,8 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 return
             raise e_st
         
-        # Se não houver delay, publica direto no RabbitMQ
-        if total_delay_sec <= 0:
+        # Se não houver delay e o contato não estiver bloqueado, publica direto no RabbitMQ
+        if total_delay_sec <= 0 and not is_contact_blacklisted:
             await rabbitmq.publish("zapvoice_funnel_executions", {
                 "trigger_id": st.id,
                 "funnel_id": funnel_id,

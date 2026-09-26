@@ -31,15 +31,18 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
     const seen = new Set();
     const result = [];
     list.forEach(opt => {
-      if (!opt) return;
-      const val = typeof opt === 'object' ? String(opt.value ?? opt.label ?? '') : String(opt);
+      if (!opt && opt !== '') return;
+      const isObj = typeof opt === 'object';
+      const rawVal = isObj ? (opt.value ?? '') : opt;
+      const val = String(rawVal ?? '');
+      const label = isObj ? String(opt.label ?? val).trim() : val.trim();
       const cleanVal = val.trim();
-      if (!cleanVal) return;
-      const key = cleanVal.toLowerCase();
+      if (!cleanVal && !label) return;
+      const key = (cleanVal + '::' + label).toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
-        if (typeof opt === 'object') {
-          result.push({ ...opt, value: cleanVal, label: (opt.label ? String(opt.label).trim() : cleanVal) });
+        if (isObj) {
+          result.push({ ...opt, value: opt.value !== undefined ? opt.value : cleanVal, label: label || cleanVal });
         } else {
           result.push({ value: cleanVal, label: cleanVal });
         }
@@ -108,6 +111,9 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
   }, [value, isMulti]);
 
   const isSelected = (optValue) => {
+    if (optValue === "" || optValue === null || optValue === undefined) {
+      return !isMulti && (value === "" || value === null || value === undefined);
+    }
     const cleanOpt = String(optValue).trim().toLowerCase();
     return currentValues.some(v => v.toLowerCase() === cleanOpt);
   };
@@ -118,8 +124,17 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
   });
 
   const handleToggle = (optValue) => {
-    const cleanOpt = String(optValue).trim();
-    if (!cleanOpt) return;
+    const cleanOpt = String(optValue ?? '').trim();
+    if (!cleanOpt) {
+      if (isMulti) {
+        onChange([]);
+      } else {
+        onChange('');
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+      return;
+    }
     if (isMulti) {
       const exists = currentValues.some(v => v.toLowerCase() === cleanOpt.toLowerCase());
       const newValue = exists
@@ -259,10 +274,10 @@ const SearchableSelect = ({ options, value, onChange, placeholder, icon: Icon, c
               ) : (
                 displayOptions.map(opt => {
                   const active = isSelected(opt.value);
-                  const isNone = opt.value === "";
+                  const isNone = opt.value === "" && !String(opt.label || '').toLowerCase().includes('todos');
                   return (
                     <div
-                      key={opt.value}
+                      key={opt.value !== "" && opt.value !== undefined ? String(opt.value) : `empty-${opt.label}`}
                       className={`p-2.5 text-xs rounded-lg cursor-pointer transition-colors flex items-center justify-between mb-0.5 last:mb-0 ${active ? 'bg-blue-500 text-white font-bold' : isNone ? 'text-gray-500 italic hover:bg-gray-100 dark:hover:bg-white/5' : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 text-gray-800 dark:text-gray-200'}`}
                       onClick={(e) => {
                         e.stopPropagation();

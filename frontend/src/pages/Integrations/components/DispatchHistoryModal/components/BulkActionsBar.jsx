@@ -1,12 +1,15 @@
 import React from 'react';
-import { FiRefreshCw, FiTrash2 } from 'react-icons/fi';
+import { FiRefreshCw, FiTrash2, FiSlash } from 'react-icons/fi';
 
 const BulkActionsBar = ({
   selectedDispatchIds,
   handleBulkDispatchPlay,
   isBulkPlayingDispatches,
   setConfirmDeleteDispatch,
-  setSelectedDispatchIds
+  setSelectedDispatchIds,
+  handleBulkBlockDispatchContacts,
+  isBulkBlocking,
+  onOpenBulkBlockModal
 }) => {
   if (selectedDispatchIds.length === 0) return null;
 
@@ -27,6 +30,15 @@ const BulkActionsBar = ({
           >
             {isBulkPlayingDispatches ? <FiRefreshCw className="animate-spin" size={12} /> : <FiRefreshCw size={12} />}
             Reprocessar Selecionados
+          </button>
+          <button
+            onClick={() => onOpenBulkBlockModal ? onOpenBulkBlockModal(selectedDispatchIds.length) : handleBulkBlockDispatchContacts()}
+            disabled={isBulkBlocking}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-lg transition-all font-bold text-[10px] uppercase tracking-tighter disabled:opacity-50 cursor-pointer"
+            title="Bloquear contatos selecionados na Blacklist"
+          >
+            {isBulkBlocking ? <FiRefreshCw className="animate-spin" size={12} /> : <FiSlash size={12} />}
+            Bloquear ({selectedDispatchIds.length})
           </button>
           <button
             onClick={() => setConfirmDeleteDispatch({ isOpen: true, type: 'bulk', ids: selectedDispatchIds })}

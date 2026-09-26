@@ -107,4 +107,32 @@ describe('SearchableSelect with Tags Filtering', () => {
     expect(items[2].textContent).toContain('Unpinned One');
     expect(items[3].textContent).toContain('Unpinned Two');
   });
+
+  it('deve renderizar a opção "Todos os Status" com value vazio e permitir selecionar', () => {
+    const statusOptions = [
+      { value: "", label: "Todos os Status" },
+      { value: "completed", label: "Sucesso / Enviados" },
+      { value: "failed", label: "Erro / Falhas" }
+    ];
+
+    render(
+      <SearchableSelect
+        options={statusOptions}
+        value="completed"
+        onChange={mockOnChange}
+        placeholder="Todos os Status"
+      />
+    );
+
+    expect(screen.getByText('Sucesso / Enviados')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Sucesso / Enviados'));
+
+    const todosOption = screen.getByText('Todos os Status');
+    expect(todosOption).toBeInTheDocument();
+
+    fireEvent.click(todosOption);
+
+    expect(mockOnChange).toHaveBeenCalledWith('');
+  });
 });

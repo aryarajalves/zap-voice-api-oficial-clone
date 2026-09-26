@@ -110,29 +110,33 @@ const HistoryModal = ({
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               <span className="text-gray-500 animate-pulse font-medium">Carregando histórico...</span>
             </div>
-          ) : webhookHistory.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-60">
               <FiSearch size={48} className="text-gray-300 dark:text-gray-700 mb-2" />
               <div className="text-center">
                 <p className="text-lg text-gray-400 font-bold">Nenhum registro encontrado</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {webhookHistorySearch ? `Não encontramos webhooks para "${webhookHistorySearch}"` : "Esta integração ainda não recebeu webhooks."}
+                  {webhookHistorySearch
+                    ? `Não encontramos webhooks para "${webhookHistorySearch}"`
+                    : (webhookHistoryStatusFilter || webhookHistoryMappingFilter || stressTestFilter)
+                    ? "Não encontramos webhooks para os filtros selecionados."
+                    : "Esta integração ainda não recebeu webhooks."}
                 </p>
               </div>
-              {webhookHistorySearch && (
+              {(webhookHistorySearch || webhookHistoryStatusFilter || webhookHistoryMappingFilter || stressTestFilter) ? (
                 <button
                   onClick={() => {
                     setWebhookHistorySearch('');
                     setWebhookHistoryStatusFilter('');
                     setWebhookHistoryMappingFilter('');
+                    setStressTestFilter(false);
                     fetchHistory(integration.id, '', '');
                   }}
-                  className="mt-4 text-xs font-bold bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+                  className="mt-4 text-xs font-bold bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all cursor-pointer"
                 >
-                  Limpar Busca
+                  Limpar Filtros e Busca
                 </button>
-              )}
-              {!webhookHistorySearch && (
+              ) : (
                 <label className="mt-4 cursor-pointer text-xs font-bold bg-violet-500/10 hover:bg-violet-500 text-violet-500 hover:text-white px-4 py-2 rounded-xl transition-all flex items-center gap-2">
                   <FiUpload size={13} /> Importar Histórico
                   <input type="file" accept=".json" className="hidden" onChange={(e) => { handleImportHistory(e.target.files[0]); e.target.value = ''; }} />

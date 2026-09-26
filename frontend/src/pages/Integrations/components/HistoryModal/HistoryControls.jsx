@@ -21,7 +21,6 @@ const HistoryControls = ({
   stressTestFilter,
   setStressTestFilter,
 }) => {
-  if (webhookHistoryLength === 0) return null;
 
   return (
     <div className="px-8 py-4 bg-gray-50/90 dark:bg-[#0f172a]/90 border-b border-gray-100 dark:border-white/5 flex flex-col gap-3.5 backdrop-blur-sm">
@@ -68,7 +67,7 @@ const HistoryControls = ({
 
           <button
             onClick={() => handleSyncAllHistory(integrationId)}
-            disabled={isSyncingAll}
+            disabled={isSyncingAll || webhookHistoryLength === 0}
             className="flex items-center gap-2 text-[11px] font-bold bg-blue-500/10 hover:bg-blue-600 text-blue-400 hover:text-white px-4 py-2.5 rounded-xl border border-blue-500/20 hover:border-blue-500 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-blue-500/10 group"
           >
             <FiRefreshCw size={13} className={`${isSyncingAll ? 'animate-spin' : 'group-hover:rotate-180'} transition-transform duration-500`} />
@@ -80,12 +79,19 @@ const HistoryControls = ({
       {/* Linha 2: Seleção em Massa e Filtros Secundários */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
         <div 
-          className="flex items-center gap-3 bg-white/5 hover:bg-white/10 px-3.5 py-1.5 rounded-xl border border-white/5 transition-all cursor-pointer group w-fit" 
-          onClick={() => handleSelectAll({ target: { checked: selectedHistoryIdsLength !== webhookHistoryLength } })}
+          className={`flex items-center gap-3 px-3.5 py-1.5 rounded-xl border border-white/5 transition-all ${
+            webhookHistoryLength === 0 ? 'opacity-40 cursor-not-allowed bg-white/[0.02]' : 'bg-white/5 hover:bg-white/10 cursor-pointer group'
+          } w-fit`}
+          onClick={() => {
+            if (webhookHistoryLength > 0) {
+              handleSelectAll({ target: { checked: selectedHistoryIdsLength !== webhookHistoryLength } });
+            }
+          }}
         >
           <input
             type="checkbox"
-            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition-all active:scale-90"
+            disabled={webhookHistoryLength === 0}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed transition-all active:scale-90"
             checked={selectedHistoryIdsLength === webhookHistoryLength && webhookHistoryLength > 0}
             onChange={handleSelectAll}
             onClick={(e) => e.stopPropagation()}
@@ -135,7 +141,10 @@ const HistoryControls = ({
               className="bg-transparent border-0 text-xs font-bold text-gray-200 cursor-pointer outline-none focus:ring-0"
             >
               <option value="" className="bg-[#0f172a] text-gray-200">TODOS OS STATUS</option>
-              {[...new Set((webhookHistory || []).map(item => item?.event_type).filter(Boolean))].sort().map(eventType => {
+              {[...new Set([
+                ...(webhookHistoryStatusFilter ? [webhookHistoryStatusFilter] : []),
+                ...((webhookHistory || []).map(item => item?.event_type).filter(Boolean))
+              ])].sort().map(eventType => {
                 const label = EVENT_TYPES.find(e => e.value === eventType)?.label || eventType;
                 return <option key={eventType} value={eventType} className="bg-[#0f172a] text-gray-200">{label.toUpperCase()}</option>;
               })}

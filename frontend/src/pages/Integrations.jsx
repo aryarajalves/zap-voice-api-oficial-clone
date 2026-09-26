@@ -59,7 +59,8 @@ export default function Integrations({
     contactsModal, setContactsModal, contactsFilter, setContactsFilter, loadingContacts,
     childrenModal, setChildrenModal, dispatchStats,
     fetchDispatches, handlePlayDispatch, handleDeleteDispatch, handleBulkDispatchPlay,
-    handleBackfillCosts, fetchChildren
+    handleBackfillCosts, fetchChildren,
+    handleBlockDispatchContact, handleUnblockDispatchContact, isBlocking, handleBulkBlockDispatchContacts, isBulkBlocking
   } = useDispatchHistory(activeClient);
 
   // 4. Hook de Modais e Ações da Página
@@ -250,8 +251,13 @@ export default function Integrations({
         selectedDispatchIds={selectedDispatchIds}
         setSelectedDispatchIds={setSelectedDispatchIds}
         handleBulkDispatchPlay={() => handleBulkDispatchPlay(dispatchIntegration?.id)}
-        handleDeleteDispatch={() => handleDeleteDispatch(dispatchIntegration?.id, 'bulk', null, selectedDispatchIds)}
+        handleDeleteDispatch={handleDeleteDispatch}
         handlePlayDispatch={(id) => handlePlayDispatch(id, dispatchIntegration?.id)}
+        handleBlockDispatchContact={handleBlockDispatchContact}
+        handleUnblockDispatchContact={handleUnblockDispatchContact}
+        isBlocking={isBlocking}
+        handleBulkBlockDispatchContacts={handleBulkBlockDispatchContacts}
+        isBulkBlocking={isBulkBlocking}
         handleBackfillCosts={() => handleBackfillCosts(dispatchIntegration?.id)}
         isBackfillingCosts={isBackfillingCosts}
         isBulkPlayingDispatches={isBulkPlayingDispatches}

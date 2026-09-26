@@ -13,7 +13,12 @@ const DispatchTable = ({
   setConfirmDeleteDispatch,
   isCancelling,
   fetchChildren,
-  onNavigateToChat
+  onNavigateToChat,
+  handleBlockDispatchContact,
+  handleUnblockDispatchContact,
+  onOpenBlockModal,
+  onOpenUnblockModal,
+  isBlocking
 }) => {
   const items = Array.isArray(dispatchHistory) ? dispatchHistory : [];
   const allSelected =
@@ -54,6 +59,11 @@ const DispatchTable = ({
             isCancelling={isCancelling}
             fetchChildren={fetchChildren}
             onNavigateToChat={onNavigateToChat}
+            handleBlockDispatchContact={handleBlockDispatchContact}
+            handleUnblockDispatchContact={handleUnblockDispatchContact}
+            onOpenBlockModal={onOpenBlockModal}
+            onOpenUnblockModal={onOpenUnblockModal}
+            isBlocking={isBlocking}
           />
         ))}
       </tbody>

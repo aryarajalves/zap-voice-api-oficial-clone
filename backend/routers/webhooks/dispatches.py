@@ -9,6 +9,7 @@ from database import SessionLocal
 from core.deps import get_current_user, get_validated_client_id
 from core.logger import logger
 from rabbitmq_client import rabbitmq
+from services.blocked_contacts_service import is_contact_blocked, get_blocked_phone_suffixes, is_phone_in_blocked_suffixes
 
 router = APIRouter()
 
@@ -59,10 +60,12 @@ async def list_dispatches(
         models.ScheduledTrigger.integration_id == str(uuid_obj),
         models.ScheduledTrigger.parent_id == None
     )
-
-    if status:
+    if status == 'completed':
+        query = query.filter(models.ScheduledTrigger.status == 'completed', or_(models.ScheduledTrigger.total_failed == 0, models.ScheduledTrigger.total_failed == None), models.ScheduledTrigger.failure_reason == None)
+    elif status == 'failed':
+        query = query.filter(or_(models.ScheduledTrigger.status == 'failed', models.ScheduledTrigger.total_failed > 0, models.ScheduledTrigger.failure_reason != None))
+    elif status:
         query = query.filter(models.ScheduledTrigger.status == status)
-
     if type_filter == 'cancelled':
         query = query.filter(models.ScheduledTrigger.status == 'cancelled')
     elif type_filter == 'free':
@@ -159,8 +162,14 @@ async def list_dispatches(
         ).all()
         followup_map = {f.parent_id: f for f in followups}
 
+    blocked_suffixes = get_blocked_phone_suffixes(db, x_client_id)
+
     backfilled = False
     for trigger in items:
+        trigger.is_contact_blocked = is_phone_in_blocked_suffixes(trigger.contact_phone, blocked_suffixes)
+        if (trigger.total_failed or 0) > 0 and (trigger.total_delivered or 0) == 0 and trigger.status == 'completed':
+            trigger.status = 'failed'
+            backfilled = True
         if trigger.sent_as is None and trigger.messages:
             first_msg = min(trigger.messages, key=lambda m: m.id)
             if first_msg.message_type:
@@ -219,11 +228,9 @@ async def list_dispatches(
         func.sum(models.ScheduledTrigger.total_cost)
     ).first()
 
-    sum_sent = stats_result[0] or 0 if stats_result else 0
-    sum_delivered = stats_result[1] or 0 if stats_result else 0
-    sum_read = stats_result[2] or 0 if stats_result else 0
-    sum_interactions = stats_result[3] or 0 if stats_result else 0
-    sum_cost = stats_result[4] or 0.0 if stats_result else 0.0
+    sum_sent, sum_delivered, sum_read, sum_interactions, sum_cost = (
+        stats_result[0] or 0, stats_result[1] or 0, stats_result[2] or 0, stats_result[3] or 0, stats_result[4] or 0.0
+    ) if stats_result else (0, 0, 0, 0, 0.0)
 
     delivered_pct = round((sum_delivered / sum_sent) * 100, 1) if sum_sent > 0 else 0.0
     read_pct = round((sum_read / sum_delivered) * 100, 1) if sum_delivered > 0 else 0.0
@@ -281,25 +288,21 @@ def backfill_dispatch_costs(
             sent_as = first_msg.message_type if first_msg else None
 
         if sent_as != 'TEMPLATE': continue
-
         cost_per_msg = None
         for msg in trigger.messages:
             if msg.meta_price_category and msg.meta_price_category in META_CATEGORY_PRICES_BRL:
                 cost_per_msg = META_CATEGORY_PRICES_BRL[msg.meta_price_category]
                 break
-
         if cost_per_msg is None:
             if trigger.event_type in mapping_costs:
                 cost_per_msg = mapping_costs[trigger.event_type]
             else:
                 cost_per_msg = META_CATEGORY_PRICES_BRL["marketing"]
-
         new_total = round(cost_per_msg * (trigger.total_delivered or 1), 4)
         trigger.total_cost = new_total
         trigger.cost_per_unit = cost_per_msg
         if trigger.sent_as is None: trigger.sent_as = 'TEMPLATE'
         updated += 1
-
     db.commit()
     return {"status": "success", "updated": updated, "message": f"{updated} disparo(s) com custo recalculado."}
 
@@ -324,6 +327,12 @@ async def play_dispatch(
 
     if not trigger:
         raise HTTPException(status_code=404, detail="Dispatch not found for this integration")
+
+    if is_contact_blocked(db, x_client_id, trigger.contact_phone):
+        raise HTTPException(
+            status_code=400,
+            detail=f"O contato ({trigger.contact_phone}) está bloqueado na Blacklist e não pode receber novos disparos."
+        )
     
     from services.bussola_pdf_service import ensure_trigger_document_link
     repaired_components = ensure_trigger_document_link(db, trigger)
@@ -461,12 +470,14 @@ def cancel_dispatch(
     trigger = db.query(models.ScheduledTrigger).filter(
         models.ScheduledTrigger.id == dispatch_id,
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == str(uuid_obj)
+        or_(models.ScheduledTrigger.integration_id == str(uuid_obj), models.ScheduledTrigger.integration_id == uuid_obj)
     ).first()
 
     if not trigger:
         raise HTTPException(status_code=404, detail="Dispatch not found for this integration")
     
+    db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id == dispatch_id).delete(synchronize_session=False)
+    db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id == dispatch_id).delete(synchronize_session=False)
     db.delete(trigger)
     db.commit()
     return {"status": "success"}
@@ -490,9 +501,18 @@ async def bulk_play_dispatches(
         models.ScheduledTrigger.integration_id == str(uuid_obj)
     ).all()
     
+    blocked_suffixes = get_blocked_phone_suffixes(db, x_client_id)
+
     count = 0
+    blocked_count = 0
     import hashlib
     for trigger in triggers:
+        if is_phone_in_blocked_suffixes(trigger.contact_phone, blocked_suffixes):
+            blocked_count += 1
+            trigger.status = "cancelled"
+            trigger.failure_reason = "Contato bloqueado na Blacklist (envios suspensos)"
+            continue
+
         trigger.status = "processing"
         trigger.scheduled_time = datetime.now(timezone.utc)
         trigger.publish_external_event = True  # Garante que o webhook de memória seja disparado no delivery
@@ -585,7 +605,12 @@ async def bulk_play_dispatches(
                     logger.info(f"⏳ [BULK-PLAY-FOLLOWUP] Criado novo follow-up #{new_followup.id} para trigger #{trigger.id} as {fu_scheduled_time}")
 
     db.commit()
-    return {"status": "success", "triggered_count": count}
+    if count == 0 and blocked_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Todos os {blocked_count} disparo(s) selecionados pertencem a contatos bloqueados na Blacklist."
+        )
+    return {"status": "success", "triggered_count": count, "blocked_count": blocked_count}
 
 @router.post("/{integration_id}/dispatches/bulk-delete", summary="Excluir múltiplos agendamentos em massa")
 async def bulk_delete_dispatches(
@@ -604,19 +629,17 @@ async def bulk_delete_dispatches(
     valid_ids_query = db.query(models.ScheduledTrigger.id).filter(
         models.ScheduledTrigger.id.in_(dispatch_ids),
         models.ScheduledTrigger.client_id == x_client_id,
-        models.ScheduledTrigger.integration_id == str(uuid_obj)
+        or_(models.ScheduledTrigger.integration_id == str(uuid_obj), models.ScheduledTrigger.integration_id == uuid_obj)
     )
     valid_ids = [row[0] for row in valid_ids_query.all()]
-    
     if not valid_ids:
         return {"status": "success", "deleted_count": 0}
 
     db.query(models.MessageStatus).filter(models.MessageStatus.trigger_id.in_(valid_ids)).delete(synchronize_session=False)
+    db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.parent_id.in_(valid_ids)).delete(synchronize_session=False)
     deleted_count = db.query(models.ScheduledTrigger).filter(models.ScheduledTrigger.id.in_(valid_ids)).delete(synchronize_session=False)
-    
     db.commit()
     logger.info(f"🗑️ [BULK DELETE] {deleted_count} disparos removidos.")
-    
     return {"status": "success", "deleted_count": deleted_count}
 
 @router.get("/record/{record_id}/status", summary="Buscar status detalhado de um disparo")

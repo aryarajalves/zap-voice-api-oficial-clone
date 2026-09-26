@@ -137,137 +137,64 @@ async def bulk_tag_conversations(
         raise HTTPException(status_code=400, detail="Nenhuma conversa selecionada para etiquetar.")
 
     if select_all_pages:
-        query = db.query(models.ChatConversation).filter(models.ChatConversation.client_id == client_id)
-        if excluded_ids:
-            query = query.filter(~models.ChatConversation.id.in_(excluded_ids))
-        
-        tab = payload.get("tab", "todos")
-        status = payload.get("status", "open")
-        search = payload.get("search")
-        label = payload.get("label")
-        has_note = payload.get("has_note")
-        start_date = payload.get("start_date")
-        end_date = payload.get("end_date")
-        unread_only = payload.get("unread_only")
-        window_open_only = payload.get("window_open_only")
-        template_sent_24h_only = payload.get("template_sent_24h_only")
-        has_replied = payload.get("has_replied")
+        from ..conversation_modules.conversation_filter_helpers import (
+            build_conversation_filter_query,
+            get_blocked_and_resting_data,
+            get_block_info,
+        )
 
-        if status != "all":
-            query = query.filter(models.ChatConversation.status == status)
-
-        if unread_only:
-            query = query.filter(models.ChatConversation.unread_count > 0)
-
-        if window_open_only:
-            limit_time = datetime.utcnow() - timedelta(hours=24)
-            query = query.filter(models.ChatConversation.last_contact_message_at >= limit_time)
-
-        if template_sent_24h_only:
-            since_24h = datetime.utcnow() - timedelta(hours=24)
-            
-            chat_convo_ids = [
-                r[0] for r in db.query(models.ChatMessage.conversation_id)
-                .filter(
-                    models.ChatMessage.timestamp >= since_24h,
-                    or_(
-                        models.ChatMessage.message_type.in_(['template', 'TEMPLATE']),
-                        models.ChatMessage.content.like('%[Template:%'),
-                        models.ChatMessage.content.like('%template%')
-                    )
-                ).distinct().all() if r[0]
-            ]
-            
-            raw_phones = [
-                r[0] for r in db.query(models.MessageStatus.phone_number)
-                .filter(
-                    models.MessageStatus.timestamp >= since_24h,
-                    models.MessageStatus.status.in_(['sent', 'delivered', 'read', 'SENT', 'DELIVERED', 'READ']),
-                    or_(
-                        models.MessageStatus.message_type.in_(['TEMPLATE', 'template']),
-                        models.MessageStatus.template_name.isnot(None)
-                    )
-                ).distinct().all() if r[0]
-            ]
-            
-            clean_phones = set()
-            clean_phones_no_plus = set()
-            for p in raw_phones:
-                p_clean = str(p).replace('+', '').strip()
-                if p_clean:
-                    clean_phones.add(p_clean)
-                    clean_phones.add(f"+{p_clean}")
-                    clean_phones_no_plus.add(p_clean)
-            
-            conditions = []
-            if chat_convo_ids:
-                conditions.append(models.ChatConversation.id.in_(chat_convo_ids))
-            if clean_phones:
-                conditions.append(models.ChatConversation.phone.in_(list(clean_phones)))
-                conditions.append(func.replace(models.ChatConversation.phone, '+', '').in_(list(clean_phones_no_plus)))
-                
-            if conditions:
-                query = query.filter(or_(*conditions))
-            else:
-                query = query.filter(models.ChatConversation.id == -1)
-
-        if has_replied:
-            query = query.filter(models.ChatConversation.last_contact_message_at.isnot(None))
-
-        if start_date:
-            try:
-                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-                query = query.filter(models.ChatConversation.last_message_at >= start_dt)
-            except Exception as e_dt:
-                logger.error(f"Erro ao parsear start_date na etiquetagem bulk: {e_dt}")
-
-        if end_date:
-            try:
-                end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time(23, 59, 59, 999999))
-                query = query.filter(models.ChatConversation.last_message_at <= end_dt)
-            except Exception as e_dt:
-                logger.error(f"Erro ao parsear end_date na etiquetagem bulk: {e_dt}")
-
-        if tab == "minha":
-            query = query.filter(models.ChatConversation.assigned_user_id == current_user.id)
-        elif tab == "nao_atribuida":
-            query = query.filter(models.ChatConversation.assigned_user_id == None)
-
-        if search:
-            search_term = f"%{search}%"
-            message_match = (
-                db.query(models.ChatMessage.id)
-                .filter(
-                    models.ChatMessage.conversation_id == models.ChatConversation.id,
-                    models.ChatMessage.content.ilike(search_term)
-                )
-                .exists()
-            )
-            query = query.filter(
-                models.ChatConversation.contact_name.ilike(search_term) |
-                models.ChatConversation.phone.ilike(search_term) |
-                message_match
-            )
-
-        if has_note:
-            query = query.filter(
-                models.ChatConversation.private_note.isnot(None),
-                models.ChatConversation.private_note != ''
-            )
+        query = build_conversation_filter_query(
+            db=db,
+            client_id=client_id,
+            current_user=current_user,
+            tab=payload.get("tab", "todos"),
+            status=payload.get("status", "open"),
+            unread_only=payload.get("unread_only"),
+            window_open_only=payload.get("window_open_only"),
+            template_sent_24h_only=payload.get("template_sent_24h_only"),
+            urgent_only=payload.get("urgent_only"),
+            has_replied=payload.get("has_replied"),
+            has_active_funnel=payload.get("has_active_funnel"),
+            start_date=payload.get("start_date"),
+            end_date=payload.get("end_date"),
+            search=payload.get("search"),
+            has_note=payload.get("has_note"),
+            excluded_ids=excluded_ids
+        )
 
         conversations = query.all()
 
-        from services.chat_label_service import filter_conversations_by_labels
-        conversations = filter_conversations_by_labels(
-            conversations=conversations,
-            label=label,
-            labels=payload.get("labels"),
-            include_labels=payload.get("include_labels"),
-            label_mode=payload.get("label_mode", "has"),
-            label_op=payload.get("label_op", "or"),
-            exclude_labels=payload.get("exclude_labels"),
-            exclude_label_op=payload.get("exclude_label_op", "or")
-        )
+        filter_label = payload.get("filter_label") or payload.get("label")
+        filter_labels = payload.get("filter_labels")
+        include_labels = payload.get("include_labels")
+        exclude_labels = payload.get("exclude_labels")
+        block_status = payload.get("block_status")
+
+        if filter_label or filter_labels or include_labels or exclude_labels:
+            from services.chat_label_service import filter_conversations_by_labels
+            conversations = filter_conversations_by_labels(
+                conversations=conversations,
+                label=filter_label,
+                labels=filter_labels,
+                include_labels=include_labels,
+                label_mode=payload.get("label_mode", "has"),
+                label_op=payload.get("label_op", "or"),
+                exclude_labels=exclude_labels,
+                exclude_label_op=payload.get("exclude_label_op", "or")
+            )
+
+        if block_status:
+            blocked_suffixes, resting_map = get_blocked_and_resting_data(db, client_id)
+            if block_status in ('unblocked', 'not_blocked'):
+                conversations = [
+                    c for c in conversations
+                    if get_block_info(c.phone, blocked_suffixes, resting_map)[0] != 'blocked'
+                ]
+            else:
+                conversations = [
+                    c for c in conversations
+                    if get_block_info(c.phone, blocked_suffixes, resting_map)[0] == block_status
+                ]
     else:
         conversations = db.query(models.ChatConversation).filter(
             models.ChatConversation.client_id == client_id,
@@ -339,10 +266,12 @@ async def bulk_tag_conversations(
     if target in ("contacts", "contatos", "both"):
         for convo in conversations:
             if convo.phone:
-                cp = str(convo.phone).replace('+', '').strip()
-                if cp:
-                    convo_phone_set.add(cp)
-                    convo_phone_set.add(f"+{cp}")
+                raw_p = str(convo.phone).strip()
+                digits = "".join(filter(str.isdigit, raw_p))
+                if digits:
+                    convo_phone_set.add(digits)
+                    convo_phone_set.add(f"+{digits}")
+                    convo_phone_set.add(raw_p)
 
         leads_updated_count = 0
         if convo_phone_set:
@@ -353,10 +282,11 @@ async def bulk_tag_conversations(
 
             leads_by_phone = {}
             for lead in all_leads:
-                cp = str(lead.phone).replace('+', '').strip()
-                if cp not in leads_by_phone:
-                    leads_by_phone[cp] = []
-                leads_by_phone[cp].append(lead)
+                digits = "".join(filter(str.isdigit, str(lead.phone or "")))
+                if digits:
+                    if digits not in leads_by_phone:
+                        leads_by_phone[digits] = []
+                    leads_by_phone[digits].append(lead)
 
             existing_lead_phones = set(leads_by_phone.keys())
 
@@ -393,13 +323,13 @@ async def bulk_tag_conversations(
             new_leads = []
             for convo in conversations:
                 if convo.phone:
-                    cp = str(convo.phone).replace('+', '').strip()
-                    if cp and cp not in existing_lead_phones:
-                        existing_lead_phones.add(cp)
+                    digits = "".join(filter(str.isdigit, str(convo.phone)))
+                    if digits and digits not in existing_lead_phones:
+                        existing_lead_phones.add(digits)
                         new_leads.append(models.WebhookLead(
                             client_id=client_id,
-                            phone=cp,
-                            name=convo.contact_name or cp,
+                            phone=digits,
+                            name=convo.contact_name or digits,
                             tags=", ".join(labels_to_add),
                             platform="Chatwoot",
                             created_at=datetime.utcnow()

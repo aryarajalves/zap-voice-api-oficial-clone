@@ -27,9 +27,11 @@ describe('HistoryControls Component', () => {
     setStressTestFilter: vi.fn(),
   };
 
-  it('retorna null se webhookHistoryLength for 0', () => {
-    const { container } = render(<HistoryControls {...defaultProps} webhookHistoryLength={0} />);
-    expect(container.firstChild).toBeNull();
+  it('renderiza os controles e a barra de pesquisa mesmo se webhookHistoryLength for 0', () => {
+    render(<HistoryControls {...defaultProps} webhookHistoryLength={0} webhookHistorySearch="5511987654322" />);
+    const searchInput = screen.getByPlaceholderText('Buscar por nome, telefone ou payload...');
+    expect(searchInput).toBeInTheDocument();
+    expect(searchInput).toHaveValue('5511987654322');
   });
 
   it('renderiza a barra de pesquisa ampla com placeholder correto', () => {

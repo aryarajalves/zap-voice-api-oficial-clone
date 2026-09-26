@@ -51,6 +51,15 @@ async def handle_funnel_execution(data: dict):
         
         logger.info(f"🎡 [WORKER] Recebido Job de Funil! Trigger ID: {trigger_id} | Phone: {contact_phone}")
 
+        # Checagem de Blacklist (Contato Bloqueado)
+        from services.blocked_contacts_service import is_contact_blocked
+        if not getattr(trigger, 'skip_block_check', False) and is_contact_blocked(db, client_id, contact_phone):
+            logger.warning(f"🚫 [BLOCKED_CONTACT] Contato {contact_phone} está bloqueado na Blacklist. Job #{trigger.id} cancelado.")
+            trigger.status = 'cancelled'
+            trigger.failure_reason = "Contato bloqueado na Blacklist (envios suspensos)"
+            db.commit()
+            return
+
         try:
             # Marcar como processando antes de começar
             if trigger.status != 'processing':
@@ -161,37 +170,15 @@ async def handle_funnel_execution(data: dict):
                                         if isinstance(media_data, dict):
                                             tpl_media_url = media_data.get("link") or media_data.get("url")
 
-                    # Registrar no histórico de mensagens com o conteúdo real e var5 contendo a URL da mídia
-                    db.add(models.MessageStatus(
-                        trigger_id=trigger.id,
-                        message_id=msg_id,
-                        phone_number=contact_phone,
-                        status='sent',
-                        message_type='TEMPLATE',
-                        content=real_content,
-                        var5=tpl_media_url
-                    ))
-                    trigger.total_sent = (trigger.total_sent or 0) + 1
-                    trigger.status = 'paused_waiting_delivery' if trigger.funnel_id else 'completed'
-                    db.commit() # Commit IMEDIATO para liberar o message_id para o webhook de entrega
-                    logger.info(f"✅ Template enviado com sucesso para {contact_phone}")
-
-                    # 2. Enviar Nota Privada (Private Note) se existir
+                    # 2. Preparar nota privada para envio pós-entrega (se configurada)
+                    final_note = None
                     if trigger.private_message:
                         try:
-                            import asyncio
-                            delay = trigger.private_message_delay or 0
-                            if delay > 0:
-                                logger.info(f"⏳ [DIRECT] Aguardando {delay}s para enviar nota privada...")
-                                await asyncio.sleep(delay)
-
-                            logger.info(f"📝 [DIRECT] Enviando nota privada para {contact_phone}")
                             from core.engine.utils import apply_vars
                             global_vars = db.query(models.GlobalVariable).filter(models.GlobalVariable.client_id == client_id).all()
                             global_map = {v.name: v.value for v in global_vars}
 
                             final_note = apply_vars(trigger.private_message, trigger, global_map)
-
                             if trigger.private_message == "true" or not final_note:
                                 template_cache = db.query(models.WhatsAppTemplateCache).filter(
                                     models.WhatsAppTemplateCache.client_id == client_id,
@@ -201,56 +188,26 @@ async def handle_funnel_execution(data: dict):
                                     final_note = apply_vars(template_cache.body, trigger, global_map)
                                 else:
                                     final_note = f"[Template: {trigger.template_name}]"
+                        except Exception as e_note_prep:
+                            logger.error(f"⚠️ [DIRECT] Erro ao preparar nota privada: {e_note_prep}")
 
-                            if not trigger.conversation_id:
-                                logger.info(f"🔍 [DIRECT] Buscando conversa para {contact_phone} para enviar nota privada")
-                                conv = await chatwoot_cl.ensure_conversation(contact_phone, trigger.contact_name, effective_inbox_id)
-                                if conv:
-                                    trigger.conversation_id = conv.get("conversation_id")
-                                    db.commit()
+                    # Registrar no histórico de mensagens com o conteúdo real e pending_private_note
+                    db.add(models.MessageStatus(
+                        trigger_id=trigger.id,
+                        message_id=msg_id,
+                        phone_number=contact_phone,
+                        status='sent',
+                        message_type='TEMPLATE',
+                        content=real_content,
+                        var5=tpl_media_url,
+                        pending_private_note=final_note
+                    ))
+                    trigger.total_sent = (trigger.total_sent or 0) + 1
+                    trigger.status = 'paused_waiting_delivery' if trigger.funnel_id else 'completed'
+                    db.commit() # Commit IMEDIATO para liberar o message_id para o webhook de entrega
+                    logger.info(f"✅ Template enviado para a fila da Meta para {contact_phone} (msg_id: {msg_id}). Conversa, etiquetas e notas só serão sincronizadas no chat após a confirmação de entrega (delivered).")
 
-                            if trigger.conversation_id:
-                                await chatwoot_cl.create_private_note(trigger.conversation_id, final_note)
-                                logger.info(f"✅ [DIRECT] Nota privada enviada com sucesso!")
-                            else:
-                                logger.warning(f"⚠️ [DIRECT] Não foi possível encontrar conversa para enviar nota privada para {contact_phone}")
-                        except Exception as e_note:
-                            logger.error(f"❌ [DIRECT] Erro ao enviar nota privada: {e_note}")
-
-                    # 3. Aplicar Etiquetas (Labels) se existirem — usa conversation_id já resolvido acima
-                    logger.info(f"🏷️ [DIRECT] chatwoot_label={trigger.chatwoot_label!r} | conversation_id={trigger.conversation_id!r}")
-                    if trigger.chatwoot_label:
-                        try:
-                            from core.utils import robust_extract_labels
-                            clean_labels = robust_extract_labels(trigger.chatwoot_label)
-                            logger.info(f"🏷️ [DIRECT] clean_labels após extração: {clean_labels!r}")
-                            if clean_labels:
-                                if not trigger.conversation_id:
-                                    logger.info(f"🔍 [DIRECT] Buscando conversa para {contact_phone} para aplicar etiquetas")
-                                    conv = await chatwoot_cl.ensure_conversation(contact_phone, trigger.contact_name, effective_inbox_id)
-                                    if conv:
-                                        trigger.conversation_id = conv.get("conversation_id")
-                                        db.commit()
-
-                                if trigger.conversation_id:
-                                    logger.info(f"🏷️ [DIRECT] Aplicando etiquetas {clean_labels} na conversa {trigger.conversation_id}")
-                                    await chatwoot_cl.add_label_to_conversation(trigger.conversation_id, clean_labels)
-                                
-                                # Sincronizar etiquetas localmente no banco do ZapVoice com notificação de sistema no Chat local
-                                from services.chat_label_service import apply_webhook_labels
-                                apply_webhook_labels(
-                                    db=db,
-                                    client_id=client_id,
-                                    phone=contact_phone,
-                                    raw_labels=clean_labels,
-                                    source="Webhook / Disparo",
-                                    contact_name=trigger.contact_name
-                                )
-
-                        except Exception as e_lbl:
-                            logger.error(f"❌ [DIRECT] Erro ao aplicar etiquetas: {e_lbl}")
-
-                    # 4. Se houver um Funil ZapVoice vinculado, aguardar confirmação de entrega
+                    # 3. Se houver um Funil ZapVoice vinculado, aguardar confirmação de entrega
                     if trigger.funnel_id:
                         logger.info(f"⏳ [FUNIL-ZAPVOICE] Template enviado. Aguardando confirmação de entrega para iniciar o Funil {trigger.funnel_id}...")
 

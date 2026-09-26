@@ -80,17 +80,17 @@ async def test_handle_whatsapp_event_dispatches_memory_for_webhook(mock_deferred
 @pytest.mark.asyncio
 @patch("services.ai_memory.notify_agent_memory_webhook", new_callable=AsyncMock)
 @patch("core.worker.handlers.whatsapp.handle_deferred_post_delivery", new_callable=AsyncMock)
-async def test_handle_whatsapp_event_no_memory_when_both_false(mock_deferred, mock_notify):
+async def test_handle_whatsapp_event_no_memory_when_failed(mock_deferred, mock_notify):
     """
     Testa se notify_agent_memory_webhook NÃO é chamado quando
-    tanto is_bulk quanto publish_external_event são falsos.
+    a mensagem recebe status 'failed'.
     """
     mock_trigger = MagicMock()
     mock_trigger.id = 102
     mock_trigger.client_id = 1
     mock_trigger.contact_name = "Maria Silva"
     mock_trigger.is_bulk = False
-    mock_trigger.publish_external_event = False  # Desativado
+    mock_trigger.publish_external_event = False
     
     mock_msg = MagicMock()
     mock_msg.trigger_id = 102
@@ -112,9 +112,9 @@ async def test_handle_whatsapp_event_no_memory_when_both_false(mock_deferred, mo
                             "statuses": [
                                 {
                                     "id": "wamid.7890",
-                                    "status": "delivered",
+                                    "status": "failed",
                                     "recipient_id": "5511999999999",
-                                    "pricing": {"category": "marketing", "billable": True}
+                                    "errors": [{"code": 131026, "title": "Message undeliverable"}]
                                 }
                             ]
                         }
@@ -127,5 +127,5 @@ async def test_handle_whatsapp_event_no_memory_when_both_false(mock_deferred, mo
     from core.worker.handlers.whatsapp import handle_whatsapp_event
     await handle_whatsapp_event(data)
     
-    # Não deve chamar notify_agent_memory_webhook
+    # Não deve chamar notify_agent_memory_webhook para mensagens falhas
     mock_notify.assert_not_called()

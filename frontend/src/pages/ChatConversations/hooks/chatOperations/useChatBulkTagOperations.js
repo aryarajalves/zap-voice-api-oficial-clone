@@ -35,13 +35,13 @@ export function useChatBulkTagOperations({
         const exc = selectedLabelFilter?.exclude_labels || (selectedLabelFilter?.items?.filter(i => i.mode === 'has_not').map(i => i.name)) || [];
 
         const labelPayload = typeof selectedLabelFilter === 'string'
-            ? { label: selectedLabelFilter || undefined }
+            ? { filter_label: selectedLabelFilter || undefined }
             : (inc.length > 0 || exc.length > 0 ? {
                 include_labels: inc.length > 0 ? inc : undefined,
                 exclude_labels: exc.length > 0 ? exc : undefined,
                 label_op: selectedLabelFilter?.op || 'or'
             } : (selectedLabelFilter?.labels?.length > 0 ? {
-                labels: selectedLabelFilter.labels,
+                filter_labels: selectedLabelFilter.labels,
                 label_mode: selectedLabelFilter.mode || 'has',
                 label_op: selectedLabelFilter.op || 'or'
             } : {}));

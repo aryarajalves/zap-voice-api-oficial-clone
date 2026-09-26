@@ -63,6 +63,7 @@ pytz                          # Suporte a fusos horários
 pandas                   # Manipulação de dados em tabelas (usado para gerar relatórios/exportações)
 openpyxl                 # Leitura e escrita de arquivos Excel (.xlsx)
 reportlab==4.2.2         # Geração e diagramação de PDFs para leitura astrológica (Bússola Quiz)
+pypdf==6.19.0            # Extração de texto de documentos PDF para Webhook de Memória da IA
 Pillow==12.3.0           # Processamento e geração da Capa Visual 1200x630 (Bússola Quiz - Imagem)
 
 # === MONITORAMENTO DO SISTEMA ===

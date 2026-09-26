@@ -203,15 +203,23 @@ def unblock_contact_by_phone(
         
     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
     
-    contact = db.query(BlockedContact).filter(
-        BlockedContact.client_id == client_id,
+    from models import Client
+    client = db.query(Client).filter(Client.id == client_id).first()
+    client_ids = [client_id]
+    if client and client.project_id:
+        sibling_clients = db.query(Client.id).filter(Client.project_id == client.project_id).all()
+        client_ids = [c.id for c in sibling_clients]
+
+    contacts = db.query(BlockedContact).filter(
+        BlockedContact.client_id.in_(client_ids),
         BlockedContact.phone.like(f"%{suffix}")
-    ).first()
+    ).all()
     
-    if not contact:
+    if not contacts:
         raise HTTPException(status_code=404, detail="Contato não encontrado na lista de bloqueio.")
         
-    db.delete(contact)
+    for c in contacts:
+        db.delete(c)
     db.commit()
     return None
 

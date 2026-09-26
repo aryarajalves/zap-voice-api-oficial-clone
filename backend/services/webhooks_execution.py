@@ -54,6 +54,11 @@ async def execute_webhook_resend_logic(
         logger.warning(f"⚠️ [RESEND_FAILED] Webhook #{history_id} não possui telefone no payload.")
         return {"status": "failed", "message": f"Nenhum telefone encontrado no payload do webhook {history_id}."}
 
+    from services.blocked_contacts_service import is_contact_blocked
+    if is_contact_blocked(db, x_client_id, phone):
+        logger.warning(f"🚫 [RESEND_BLOCKED] Contato {phone} está bloqueado na Blacklist.")
+        return {"status": "blocked", "message": f"O contato ({phone}) está bloqueado na Blacklist e não pode receber novos disparos."}
+
     # Encontrar mapeamentos correspondentes
     mappings = db.query(models.WebhookEventMapping).filter(
         models.WebhookEventMapping.integration_id == integration.id,
@@ -133,6 +138,9 @@ async def execute_webhook_resend_logic(
                     )
                     parsed_data["bussola_pdf_url"] = pdf_url
                     parsed_data["bussola_pdf_filename"] = display_filename
+                    parsed_data["document_content"] = bussola_msg
+                    parsed_data["media_url"] = pdf_url
+                    parsed_data["filename"] = display_filename
                     logger.info(f"📄 [RESEND_AUTO_PDF] PDF da Bússola gerado com sucesso: {pdf_url} ({display_filename})")
                 except Exception as pdf_err:
                     logger.error(f"❌ [RESEND_AUTO_PDF] Erro ao gerar PDF da Bússola no resend: {pdf_err}")
