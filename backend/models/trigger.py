@@ -260,6 +260,7 @@ class WebhookEventMapping(Base):
     followup_business_hours_end = Column(String, nullable=True, default="18:00")
     followup_business_hours_days = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, default=lambda: [0, 1, 2, 3, 4])
     button_actions = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    feedback_filter = Column(String, nullable=True, default=None)
     
     is_active = Column(Boolean, default=True)
     cost_per_message = Column(Float, default=0.0)

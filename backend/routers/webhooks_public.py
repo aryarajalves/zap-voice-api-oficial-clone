@@ -35,6 +35,7 @@ from core.webhook_security import (
     verify_kiwify_signature,
     verify_stripe_signature,
 )
+from services.utils.feedback_matcher import parse_feedback_filter_to_set
 
 router = APIRouter()
 
@@ -248,58 +249,68 @@ async def handle_external_webhook(
         # 4. Find Matching Mapping
         mapping = None
         product_name = extracted_data.get("product_name")
-        
+        detected_feedback = extracted_data.get("feedback_filter_detected")
+
+        def find_mapping_for(ev_type, prod_name):
+            q = db.query(models.WebhookEventMapping).filter(
+                models.WebhookEventMapping.integration_id == integration.id,
+                models.WebhookEventMapping.event_type == ev_type,
+                models.WebhookEventMapping.is_active == True,
+            )
+            if prod_name:
+                candidates = q.filter(models.WebhookEventMapping.product_name == prod_name).all()
+            else:
+                candidates = q.filter((models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "")).all()
+
+            if not candidates:
+                return None
+
+            # 1. Se foi detectado feedback específico (ex: "5", "skipped"), busca regra específica que case
+            if detected_feedback:
+                specific = []
+                for m in candidates:
+                    allowed = parse_feedback_filter_to_set(m.feedback_filter)
+                    if allowed is not None and str(detected_feedback).strip().lower() in allowed:
+                        specific.append((len(allowed), m))
+                if specific:
+                    # Ordena pelo mais específico (menor número de opções no filtro)
+                    specific.sort(key=lambda x: x[0])
+                    return specific[0][1]
+
+            # 2. Fallback: regra genérica (sem feedback_filter ou "all")
+            for m in candidates:
+                if parse_feedback_filter_to_set(m.feedback_filter) is None:
+                    return m
+
+            return None
+
         # 4.1. Event type + Specific product name
         if product_name:
-            mapping = db.query(models.WebhookEventMapping).filter(
-                models.WebhookEventMapping.integration_id == integration.id,
-                models.WebhookEventMapping.event_type == event_type,
-                models.WebhookEventMapping.is_active == True,
-                models.WebhookEventMapping.product_name == product_name
-            ).first()
+            mapping = find_mapping_for(event_type, product_name)
             
         # 4.2. Event type + No product name (generic mapping for all products)
         if not mapping:
-            mapping = db.query(models.WebhookEventMapping).filter(
-                models.WebhookEventMapping.integration_id == integration.id,
-                models.WebhookEventMapping.event_type == event_type,
-                models.WebhookEventMapping.is_active == True,
-                (models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "")
-            ).first()
+            mapping = find_mapping_for(event_type, None)
 
         # 4.2.1. Alias para leitura_concluida <-> checkout_pre_populado (Quiz Bússola)
         if not mapping and event_type == "leitura_concluida" and str(payload.get("event", "")).upper() == "PURCHASE_OUT_OF_SHOPPING_CART":
-            mapping = db.query(models.WebhookEventMapping).filter(
-                models.WebhookEventMapping.integration_id == integration.id,
-                models.WebhookEventMapping.event_type == "checkout_pre_populado",
-                models.WebhookEventMapping.is_active == True,
-                (models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "") | (models.WebhookEventMapping.product_name == product_name)
-            ).first()
+            if product_name:
+                mapping = find_mapping_for("checkout_pre_populado", product_name)
+            if not mapping:
+                mapping = find_mapping_for("checkout_pre_populado", None)
         elif not mapping and event_type == "checkout_pre_populado" and str(payload.get("tipo", "")).lower() == "leitura_concluida":
-            mapping = db.query(models.WebhookEventMapping).filter(
-                models.WebhookEventMapping.integration_id == integration.id,
-                models.WebhookEventMapping.event_type == "leitura_concluida",
-                models.WebhookEventMapping.is_active == True,
-                (models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "") | (models.WebhookEventMapping.product_name == product_name)
-            ).first()
+            if product_name:
+                mapping = find_mapping_for("leitura_concluida", product_name)
+            if not mapping:
+                mapping = find_mapping_for("leitura_concluida", None)
 
         # 4.3. 'outros' (catch-all) + Specific product name
         if not mapping and event_type != "outros" and product_name:
-            mapping = db.query(models.WebhookEventMapping).filter(
-                models.WebhookEventMapping.integration_id == integration.id,
-                models.WebhookEventMapping.event_type == "outros",
-                models.WebhookEventMapping.is_active == True,
-                models.WebhookEventMapping.product_name == product_name
-            ).first()
+            mapping = find_mapping_for("outros", product_name)
 
         # 4.4. 'outros' (catch-all) + No product name
         if not mapping and event_type != "outros":
-            mapping = db.query(models.WebhookEventMapping).filter(
-                models.WebhookEventMapping.integration_id == integration.id,
-                models.WebhookEventMapping.event_type == "outros",
-                models.WebhookEventMapping.is_active == True,
-                (models.WebhookEventMapping.product_name == None) | (models.WebhookEventMapping.product_name == "")
-            ).first()
+            mapping = find_mapping_for("outros", None)
 
         # Registra dinamicamente novos produtos descobertos no webhook
         if product_name:

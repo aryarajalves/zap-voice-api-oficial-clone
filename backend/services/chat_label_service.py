@@ -29,12 +29,14 @@ def apply_webhook_labels(
     raw_labels: Optional[Union[str, List[str]]] = None,
     source: str = "Webhook",
     contact_name: Optional[str] = None,
-    remove_raw_labels: Optional[Union[str, List[str]]] = None
+    remove_raw_labels: Optional[Union[str, List[str]]] = None,
+    create_if_missing: bool = False
 ) -> Optional[models.ChatConversation]:
     """
     Aplica e/ou remove etiquetas em uma conversa do Chat Local quando disparadas por um Webhook, API ou automação.
     Gera uma mensagem de sistema no histórico do chat com data e hora de Brasília.
     Dispara eventos WebSocket em tempo real.
+    Por padrão (create_if_missing=False), NÃO cria a conversa se ela ainda não existir no chat local.
     """
     if not phone or not client_id:
         return None
@@ -57,13 +59,17 @@ def apply_webhook_labels(
 
     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
 
-    # Buscar ou criar a conversa local
+    # Buscar conversa local existente
     convo = db.query(models.ChatConversation).filter(
         models.ChatConversation.client_id == client_id,
         models.ChatConversation.phone.like(f"%{suffix}")
     ).first()
 
     if not convo:
+        if not create_if_missing:
+            logger.info(f"ℹ️ [CHAT-LABEL-SERVICE] Nenhuma conversa local existente para {clean_phone}. Nenhuma conversa criada (aguardando envio/entrega de mensagem).")
+            return None
+
         convo = models.ChatConversation(
             client_id=client_id,
             phone=clean_phone,

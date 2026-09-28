@@ -51,6 +51,7 @@ class WebhookEventMappingBase(BaseModel):
     update_contact_on_trigger: Optional[bool] = Field(True, description="Atualizar/criar contato na aba Contatos quando o gatilho disparar")
     contact_save_fields: Optional[List[str]] = Field(None, description="Campos a salvar no contato (None = padrão)")
     button_actions: Optional[Dict[str, Any]] = Field(None, description="Ações de botões do template")
+    feedback_filter: Optional[str] = Field(None, description="Filtro de avaliação/estrelas (ex: 5, 4, 3, 2, 1, skipped, all)")
     is_active: Optional[bool] = Field(True, description="Indica se o mapeamento está ativo")
 
     @field_validator('button_actions', mode='before')

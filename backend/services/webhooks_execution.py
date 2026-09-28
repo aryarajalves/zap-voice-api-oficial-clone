@@ -14,6 +14,7 @@ from services.webhooks import (
 )
 from core.utils import robust_extract_labels
 from services.utils.bulk_helpers import resolve_template_body_with_sync
+from services.utils.feedback_matcher import parse_feedback_filter_to_set
 
 async def execute_webhook_resend_logic(
     history_id: int,
@@ -60,20 +61,36 @@ async def execute_webhook_resend_logic(
         return {"status": "blocked", "message": f"O contato ({phone}) está bloqueado na Blacklist e não pode receber novos disparos."}
 
     # Encontrar mapeamentos correspondentes
-    mappings = db.query(models.WebhookEventMapping).filter(
+    detected_feedback = parsed_data.get("feedback_filter_detected")
+    all_mappings = db.query(models.WebhookEventMapping).filter(
         models.WebhookEventMapping.integration_id == integration.id,
         models.WebhookEventMapping.event_type == event_type
     ).all()
     
     # Fallback para mapeamento 'outros' se não houver mapeamento específico
-    if not mappings and event_type != "outros":
+    if not all_mappings and event_type != "outros":
         logger.info(f"RESEND_FALLBACK | Webhook #{history_id} | Tentando fallback para 'outros'")
-        mappings = db.query(models.WebhookEventMapping).filter(
+        all_mappings = db.query(models.WebhookEventMapping).filter(
             models.WebhookEventMapping.integration_id == integration.id,
             models.WebhookEventMapping.event_type == "outros"
         ).all()
+
+    # Prioriza mapeamentos com feedback_filter específico ou faz fallback para genérico
+    if detected_feedback:
+        specific = []
+        for m in all_mappings:
+            allowed = parse_feedback_filter_to_set(m.feedback_filter)
+            if allowed is not None and str(detected_feedback).strip().lower() in allowed:
+                specific.append((len(allowed), m))
+        if specific:
+            specific.sort(key=lambda x: x[0])
+            mappings = [item[1] for item in specific]
+        else:
+            mappings = [m for m in all_mappings if parse_feedback_filter_to_set(m.feedback_filter) is None]
+    else:
+        mappings = [m for m in all_mappings if parse_feedback_filter_to_set(m.feedback_filter) is None]
     
-    logger.info(f"RESEND_SEARCH | Webhook #{history_id} | Evento: '{event_type}' | Mapeamentos: {len(mappings)}")
+    logger.info(f"RESEND_SEARCH | Webhook #{history_id} | Evento: '{event_type}' | Feedback: '{detected_feedback}' | Mapeamentos: {len(mappings)}")
 
     if not mappings:
         logger.info(f"RESEND_SKIP | Webhook #{history_id} ignorado: Nenhum mapeamento encontrado.")

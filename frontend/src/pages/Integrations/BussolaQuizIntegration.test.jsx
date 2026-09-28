@@ -126,4 +126,24 @@ describe('Bussola Quiz Integration Constants & Table Copy Action', () => {
       expect(screen.getByText('Copiado!')).toBeInTheDocument();
     });
   });
+
+  it('should include BUSSOLA_FEEDBACK_OPTIONS with all expected rating levels', () => {
+    const { BUSSOLA_FEEDBACK_OPTIONS } = require('./constants');
+    expect(BUSSOLA_FEEDBACK_OPTIONS).toBeDefined();
+    const values = BUSSOLA_FEEDBACK_OPTIONS.map(o => o.value);
+    expect(values).toContain('');
+    expect(values).toContain('skipped');
+    expect(values).toContain('5');
+    expect(values).toContain('4');
+    expect(values).toContain('3');
+    expect(values).toContain('2');
+    expect(values).toContain('1');
+  });
+
+  it('should include new quiz variables: estrelas, feedback_estrelas and feedback_pulou', () => {
+    const varKeys = BODY_VAR_OPTIONS.map(v => v.value);
+    expect(varKeys).toContain('estrelas');
+    expect(varKeys).toContain('feedback_estrelas');
+    expect(varKeys).toContain('feedback_pulou');
+  });
 });

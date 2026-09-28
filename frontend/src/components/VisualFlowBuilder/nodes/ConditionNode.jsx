@@ -220,6 +220,11 @@ const ConditionNode = ({ id, data }) => {
                                             <option value="follow">SEGUIR FLUXO</option>
                                             <option value="wait">AGUARDAR INÍCIO</option>
                                         </select>
+                                        {data.beforeAction === 'wait' && (
+                                            <span className="text-[8px] text-blue-600/90 dark:text-blue-300 font-medium italic mt-0.5">
+                                                ↳ Pausa o lead até o início e segue pela saída 'Durante'
+                                            </span>
+                                        )}
                                     </div>
                                     {(data.beforeAction === 'follow' || !data.beforeAction) && (
                                         <Handle id="before" type="source" position={Position.Right} className="w-3 h-3 bg-blue-500 !-right-2" />
@@ -240,6 +245,11 @@ const ConditionNode = ({ id, data }) => {
                                             <option value="follow">SEGUIR FLUXO</option>
                                             <option value="wait">AGUARDAR FIM</option>
                                         </select>
+                                        {data.betweenAction === 'wait' && (
+                                            <span className="text-[8px] text-green-600/90 dark:text-green-300 font-medium italic mt-0.5">
+                                                ↳ Pausa o lead até o fim e segue pela saída 'Depois'
+                                            </span>
+                                        )}
                                     </div>
                                     {(data.betweenAction === 'follow' || !data.betweenAction) && (
                                         <Handle id="between" type="source" position={Position.Right} className="w-3 h-3 bg-green-500 !-right-2" />
@@ -260,6 +270,11 @@ const ConditionNode = ({ id, data }) => {
                                             <option value="follow">SEGUIR FLUXO</option>
                                             <option value="wait">AGUARDAR FIM</option>
                                         </select>
+                                        {data.approachAction === 'wait' && (
+                                            <span className="text-[8px] text-amber-600/90 dark:text-amber-300 font-medium italic mt-0.5">
+                                                ↳ Pausa o lead até o fim e segue pela saída 'Depois'
+                                            </span>
+                                        )}
                                     </div>
                                     {(data.approachAction === 'follow' || !data.approachAction) && (
                                         <Handle id="approach" type="source" position={Position.Right} className="w-3 h-3 bg-amber-500 !-right-2" />
@@ -280,6 +295,11 @@ const ConditionNode = ({ id, data }) => {
                                             <option value="follow">SEGUIR FLUXO</option>
                                             <option value="stop">ENCERRAR FLUXO</option>
                                         </select>
+                                        {data.afterAction === 'stop' && (
+                                            <span className="text-[8px] text-red-600/90 dark:text-red-300 font-medium italic mt-0.5">
+                                                ↳ Encerra o funil para este lead
+                                            </span>
+                                        )}
                                     </div>
                                     {(data.afterAction === 'follow' || !data.afterAction) && (
                                         <Handle id="after" type="source" position={Position.Right} className="w-3 h-3 bg-red-500 !-right-2" />

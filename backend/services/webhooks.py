@@ -22,6 +22,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
     Processa a automação principal do webhook (disparo de funil ou template).
     """
     from database import SessionLocal
+    from sqlalchemy import cast, String
     import models
     from rabbitmq_client import rabbitmq
     
@@ -49,7 +50,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
             last_st = db.query(models.ScheduledTrigger).filter(
                 models.ScheduledTrigger.client_id == client_id,
                 models.ScheduledTrigger.contact_phone == phone,
-                models.ScheduledTrigger.integration_id == str(mapping.integration_id),
+                cast(models.ScheduledTrigger.integration_id, String) == str(mapping.integration_id),
                 models.ScheduledTrigger.event_type == history.event_type,
                 models.ScheduledTrigger.created_at >= datetime.now(timezone.utc) - timedelta(seconds=10)
             ).first()
@@ -119,7 +120,8 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                                 phone=phone,
                                 raw_labels=mapping.chatwoot_label,
                                 source=f"Webhook ({integration.name if integration else 'Integrador'})",
-                                contact_name=variables.get("name")
+                                contact_name=variables.get("name"),
+                                create_if_missing=False
                             )
                         except Exception as label_err:
                             logger.error(f"Erro ao aplicar etiquetas de chat no 24H_BLOCK: {label_err}")
@@ -132,7 +134,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 existing_trigger = db.query(models.ScheduledTrigger).filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.ScheduledTrigger.contact_phone == phone,
-                    models.ScheduledTrigger.integration_id == str(mapping.integration_id),
+                    cast(models.ScheduledTrigger.integration_id, String) == str(mapping.integration_id),
                     models.ScheduledTrigger.template_name == template_name,
                     models.ScheduledTrigger.status.notin_(["failed", "cancelled"])
                 ).first()
@@ -156,7 +158,7 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                 existing_trigger = db.query(models.ScheduledTrigger).filter(
                     models.ScheduledTrigger.client_id == client_id,
                     models.ScheduledTrigger.contact_phone == phone,
-                    models.ScheduledTrigger.integration_id == str(mapping.integration_id),
+                    cast(models.ScheduledTrigger.integration_id, String) == str(mapping.integration_id),
                     models.ScheduledTrigger.funnel_id == funnel_id,
                     models.ScheduledTrigger.status.notin_(["failed", "cancelled"])
                 ).first()
@@ -290,7 +292,8 @@ async def process_webhook_automation(client_id: int, mapping: any, variables: di
                         phone=phone,
                         raw_labels=mapping.chatwoot_label,
                         source=f"Webhook ({integration.name if integration else 'Integrador'})",
-                        contact_name=variables.get("name")
+                        contact_name=variables.get("name"),
+                        create_if_missing=False
                     )
                 except Exception as label_err:
                     logger.error(f"Erro ao aplicar etiquetas de chat no AUTO_SKIP: {label_err}")

@@ -10,6 +10,7 @@ from core.deps import get_current_user, get_validated_client_id
 from core.logger import logger
 from services.webhooks import parse_webhook_payload
 from services.leads import upsert_webhook_lead
+from services.utils.feedback_matcher import parse_feedback_filter_to_set
 
 router = APIRouter()
 
@@ -109,16 +110,33 @@ async def test_webhook_integration(
     detected_event = parsed.get("event_type") or "outros"
     
     # Busca mapeamento para popular as flags de exibição no frontend
-    mapping = db.query(models.WebhookEventMapping).filter(
-        models.WebhookEventMapping.integration_id == integration.id,
-        models.WebhookEventMapping.event_type == detected_event
-    ).first()
-    
-    if not mapping and detected_event != "outros":
-        mapping = db.query(models.WebhookEventMapping).filter(
+    detected_feedback = parsed.get("feedback_filter_detected")
+    mapping = None
+
+    def resolve_best_mapping_for(ev):
+        candidates = db.query(models.WebhookEventMapping).filter(
             models.WebhookEventMapping.integration_id == integration.id,
-            models.WebhookEventMapping.event_type == "outros"
-        ).first()
+            models.WebhookEventMapping.event_type == ev
+        ).all()
+        if not candidates:
+            return None
+        if detected_feedback:
+            specific = []
+            for m in candidates:
+                allowed = parse_feedback_filter_to_set(m.feedback_filter)
+                if allowed is not None and str(detected_feedback).strip().lower() in allowed:
+                    specific.append((len(allowed), m))
+            if specific:
+                specific.sort(key=lambda x: x[0])
+                return specific[0][1]
+        for m in candidates:
+            if parse_feedback_filter_to_set(m.feedback_filter) is None:
+                return m
+        return None
+
+    mapping = resolve_best_mapping_for(detected_event)
+    if not mapping and detected_event != "outros":
+        mapping = resolve_best_mapping_for("outros")
 
     # Prepara o processed_data
     processed_data = dict(parsed)

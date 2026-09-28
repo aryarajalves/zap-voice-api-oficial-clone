@@ -84,8 +84,62 @@ async def list_messages(
         messages = query.order_by(models.ChatMessage.timestamp.desc(), models.ChatMessage.id.desc()).all()
     messages.reverse()
 
+    wa_ids = [m.wa_message_id for m in messages if m.wa_message_id]
+    status_map = {}
+    if wa_ids:
+        clean_ids = [wid.replace("wamid.", "") for wid in wa_ids if wid]
+        all_lookup = list(set(wa_ids + clean_ids))
+        ms_records = db.query(models.MessageStatus).filter(models.MessageStatus.message_id.in_(all_lookup)).all()
+        for s in ms_records:
+            status_map[s.message_id] = s
+            status_map[f"wamid.{s.message_id}"] = s
+            status_map[s.message_id.replace("wamid.", "")] = s
+
+    from sqlalchemy.orm.attributes import flag_modified
+    has_updates = False
     result = []
     for m in messages:
+        meta = dict(m.meta_data or {})
+        st_record = status_map.get(m.wa_message_id) if m.wa_message_id else None
+
+        # 1. Enriquecer a partir do MessageStatus (para automações, disparos em massa e webhooks)
+        if st_record:
+            if not meta.get("sent_at") and st_record.timestamp:
+                meta["sent_at"] = st_record.timestamp.isoformat()
+            if st_record.status == 'read':
+                if not meta.get("read_at") and st_record.updated_at:
+                    meta["read_at"] = st_record.updated_at.isoformat()
+                if not meta.get("delivered_at"):
+                    meta["delivered_at"] = (st_record.updated_at or st_record.timestamp).isoformat() if (st_record.updated_at or st_record.timestamp) else None
+                meta["status"] = "read"
+            elif st_record.status == 'delivered':
+                if not meta.get("delivered_at") and st_record.updated_at:
+                    meta["delivered_at"] = st_record.updated_at.isoformat()
+                if not meta.get("status") or meta.get("status") == "sent":
+                    meta["status"] = "delivered"
+
+        # 2. Sent at consistente
+        if not meta.get("sent_at") and m.timestamp:
+            meta["sent_at"] = m.timestamp.isoformat()
+
+        cur_status = meta.get("status") or getattr(m, 'status', None) or "sent"
+
+        # 3. Fallbacks para mensagens lidas/entregues que ainda não tenham timestamps explícitos
+        if cur_status == 'read':
+            if not meta.get("read_at"):
+                meta["read_at"] = meta.get("delivered_at") or meta.get("sent_at") or (m.timestamp.isoformat() if m.timestamp else None)
+            if not meta.get("delivered_at"):
+                meta["delivered_at"] = meta.get("read_at") or meta.get("sent_at") or (m.timestamp.isoformat() if m.timestamp else None)
+        elif cur_status == 'delivered':
+            if not meta.get("delivered_at"):
+                meta["delivered_at"] = meta.get("sent_at") or (m.timestamp.isoformat() if m.timestamp else None)
+
+        if m.sender_type == 'user' and (meta != (m.meta_data or {}) or (cur_status != m.status and cur_status != 'sent')):
+            m.meta_data = meta
+            m.status = cur_status
+            flag_modified(m, "meta_data")
+            has_updates = True
+
         result.append({
             "id": m.id,
             "conversation_id": m.conversation_id,
@@ -96,11 +150,21 @@ async def list_messages(
             "media_url": m.media_url,
             "timestamp": m.timestamp.isoformat() if m.timestamp else None,
             "wa_message_id": m.wa_message_id,
-            "meta_data": m.meta_data,
-            "status": getattr(m, 'status', None) or (m.meta_data.get("status") if m.meta_data else "sent"),
+            "meta_data": meta,
+            "status": cur_status,
+            "read_at": meta.get("read_at"),
+            "delivered_at": meta.get("delivered_at"),
+            "sent_at": meta.get("sent_at") or (m.timestamp.isoformat() if m.timestamp else None),
             "quoted_message_id": m.quoted_message_id,
-            "is_starred": bool(m.is_starred or (m.meta_data and m.meta_data.get("is_starred")))
+            "is_starred": bool(m.is_starred or (meta and meta.get("is_starred")))
         })
+
+    if has_updates:
+        try:
+            db.commit()
+        except Exception as e_comm:
+            logger.warning(f"⚠️ Erro ao persistir enriquecimento de status de mensagens: {e_comm}")
+
     return result
 
 

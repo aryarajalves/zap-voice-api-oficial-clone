@@ -36,22 +36,18 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                     logger.warning(f"⚠️ [DEFERRED_POST_DELIVERY] client_id não encontrado para salvar chat local ({phone}).")
                     db.close()
                     return
-
                 # 1. Verificar se a mensagem de chat local já existe por wa_message_id
                 existing_chat_msg = db.query(models.ChatMessage).filter(
                     models.ChatMessage.wa_message_id == msg_id
                 ).first()
-                
                 if not existing_chat_msg:
                     clean_phone = "".join(filter(str.isdigit, str(phone)))
                     suffix = clean_phone[-8:] if len(clean_phone) >= 8 else clean_phone
-                        
                     # Buscar conversa local
                     chat_convo = db.query(models.ChatConversation).filter(
                         models.ChatConversation.client_id == client_id,
                         models.ChatConversation.phone.like(f"%{suffix}")
                     ).first()
-                    
                     is_new_convo = False
                     if not chat_convo:
                         # Se houver etiquetas no trigger (disparo), associá-las à nova conversa
@@ -59,7 +55,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                         if trigger and trigger.chatwoot_label:
                             from core.utils import robust_extract_labels
                             convo_labels = robust_extract_labels(trigger.chatwoot_label)
-
                         chat_convo = models.ChatConversation(
                             client_id=client_id,
                             phone=clean_phone,
@@ -86,20 +81,26 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                                         current_lower.append(nl.lower())
                                 chat_convo.labels = current_labels
                                 logger.info(f"🏷️ [CHAT-LOCAL-POST-DELIVERY] Mescladas etiquetas {new_labels} na conversa local existente {chat_convo.id}")
-
                     # Reconstruir metadados do template
                     template_name = message_record.template_name or (trigger.template_name if trigger else None)
                     if not template_name and message_record.content and message_record.content.startswith("[Template: "):
                         template_name = message_record.content.replace("[Template: ", "").replace("]", "")
-                    
+                    record_status = message_record.status or status or "sent"
+                    sent_time = message_record.timestamp.isoformat() if message_record.timestamp else datetime.now(timezone.utc).isoformat()
+                    updated_time = message_record.updated_at.isoformat() if message_record.updated_at else sent_time
                     meta_data = {
                         "is_template": True,
                         "template_name": template_name or "Desconhecido",
                         "language": "pt_BR",
                         "header": None,
-                        "buttons": []
+                        "buttons": [],
+                        "status": record_status,
+                        "sent_at": sent_time
                     }
-                    
+                    if record_status in ('delivered', 'read'):
+                        meta_data["delivered_at"] = updated_time
+                    if record_status == 'read':
+                        meta_data["read_at"] = updated_time
                     if template_name:
                         tpl_cache = db.query(models.WhatsAppTemplateCache).filter(
                             models.WhatsAppTemplateCache.client_id == client_id,
@@ -117,7 +118,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                                 btn_comp = next((c for c in tpl_cache.components if c.get("type") == "BUTTONS"), None)
                                 if btn_comp and btn_comp.get("buttons"):
                                     meta_data["buttons"] = [b.get("text") for b in btn_comp["buttons"]]
-                    
                     # Registrar a mensagem do template
                     chat_message = models.ChatMessage(
                         conversation_id=chat_convo.id,
@@ -125,21 +125,19 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                         message_type="template",
                         content=message_record.content,
                         wa_message_id=msg_id,
+                        status=record_status,
                         media_url=message_record.var5, # tpl_media_url que salvamos no var5
                         meta_data=meta_data
                     )
                     db.add(chat_message)
-                    
                     # Atualiza a conversa
                     chat_convo.last_message_content = message_record.content
                     chat_convo.unread_count = 0
                     chat_convo.last_message_at = datetime.now(timezone.utc)
                     db.commit()
                     logger.info(f"💾 [CHAT-LOCAL-POST-DELIVERY] Mensagem de template #{msg_id} salva localmente (Convo ID: {chat_convo.id})")
-                    
                     # Emitir eventos WebSocket para tempo real
                     from rabbitmq_client import rabbitmq
-                    
                     if is_new_convo:
                         payload_ws_convo = {
                             "id": chat_convo.id,
@@ -152,7 +150,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                             "last_message_at": chat_convo.last_message_at.isoformat() if chat_convo.last_message_at else None
                         }
                         await rabbitmq.publish_event("conversation_created", payload_ws_convo)
-                    
                     payload_ws = {
                         "id": chat_message.id,
                         "conversation_id": chat_message.conversation_id,
@@ -160,6 +157,10 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                         "message_type": chat_message.message_type,
                         "content": chat_message.content,
                         "media_url": chat_message.media_url,
+                        "status": chat_message.status,
+                        "read_at": meta_data.get("read_at"),
+                        "delivered_at": meta_data.get("delivered_at"),
+                        "sent_at": meta_data.get("sent_at"),
                         "meta_data": chat_message.meta_data,
                         "timestamp": chat_message.timestamp.isoformat() if chat_message.timestamp else datetime.now(timezone.utc).isoformat(),
                         "wa_message_id": chat_message.wa_message_id,
@@ -185,7 +186,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                             contact_name=trigger.contact_name
                         )
 
-                    
             except Exception as e_chat_sync:
                 logger.error(f"❌ [CHAT-LOCAL-POST-DELIVERY] Erro ao sincronizar template localmente pós-entrega: {e_chat_sync}")
 
@@ -218,7 +218,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
             if disc and disc.get("conversation_id"):
                 conversation_id = disc["conversation_id"]
                 cw = wah.ChatwootClient(client_id=trigger.client_id)
-                
                 # 1. Enviar nota privada se pendente
                 if has_pending_note:
                     try:
@@ -232,7 +231,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
                         logger.info(f"✅ [DEFERRED_POST_DELIVERY] Nota privada postada com sucesso na conversa Chatwoot {conversation_id}")
                     except Exception as cw_err:
                         logger.error(f"❌ [DEFERRED_POST_DELIVERY] Erro ao enviar nota privada para a conversa Chatwoot {conversation_id}: {cw_err}")
-
                 # 2. Aplicar etiquetas no Chatwoot se existirem
                 if has_chatwoot_labels:
                     try:
@@ -252,7 +250,6 @@ async def handle_deferred_post_delivery(trigger_id, message_id, status, msg_id, 
         db.close()
     except Exception as e:
         logger.error(f"❌ Erro no processamento adiado (Trigger {trigger_id}): {e}")
-
 
 async def handle_whatsapp_statuses(db, statuses: list, value: dict):
     """
@@ -283,7 +280,6 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                     models.MessageStatus.phone_number == recipient_norm,
                     models.MessageStatus.status == 'sent'
                 ).order_by(models.MessageStatus.id.desc()).first()
-                
                 if message_record:
                     logger.info(f"🔄 [STATUS_MATCH] Associando wamid {clean_id} ao MessageStatus ID {message_record.id} (anteriormente {message_record.message_id})")
                     message_record.message_id = clean_id
@@ -291,15 +287,12 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
             if message_record:
                 trigger = db.query(models.ScheduledTrigger).get(message_record.trigger_id) if message_record.trigger_id else None
                 old_status = message_record.status
-                
                 status_priority = {'sent': 1, 'delivered': 2, 'read': 3, 'failed': 0}
                 if status_priority.get(status, 0) > status_priority.get(old_status, 0) or status == 'failed':
                     message_record.status = status
                     message_record.updated_at = datetime.now(timezone.utc)
-                    
                     trigger_delivered = False
                     is_first_charge = False
-                    
                     if status == 'failed':
                         meta_errors = status_data.get("errors", [])
                         reason = "Erro desconhecido da Meta"
@@ -362,48 +355,22 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                                     "client_id": target_cid_fail
                                 }
                                 await rabbitmq.publish_event("new_message", payload_fail_ws)
-                            else:
-                                fail_convo = db.query(models.ChatConversation).filter(
-                                    models.ChatConversation.client_id == target_cid_fail,
-                                    models.ChatConversation.phone.like(f"%{p_suffix_fail}")
-                                ).first()
-                                if fail_convo:
-                                    fail_meta = {
-                                        "is_template": True,
-                                        "template_name": message_record.template_name or "Template",
-                                        "status": "failed",
-                                        "failure_reason": reason,
-                                        "can_retry": True
-                                    }
-                                    new_fail_msg = models.ChatMessage(
-                                        conversation_id=fail_convo.id,
-                                        sender_type="user",
-                                        message_type="template",
-                                        content=message_record.content or f"[Template: {message_record.template_name}]",
-                                        wa_message_id=msg_id,
-                                        meta_data=fail_meta
-                                    )
-                                    db.add(new_fail_msg)
-                                    fail_convo.last_message_content = new_fail_msg.content
-                                    fail_convo.last_message_at = datetime.now(timezone.utc)
-                                    db.commit()
-                                    db.refresh(new_fail_msg)
-
-                                    from rabbitmq_client import rabbitmq
-                                    payload_new_fail_ws = {
-                                        "id": new_fail_msg.id,
-                                        "conversation_id": new_fail_msg.conversation_id,
-                                        "sender_type": new_fail_msg.sender_type,
-                                        "message_type": new_fail_msg.message_type,
-                                        "content": new_fail_msg.content,
-                                        "meta_data": new_fail_msg.meta_data,
-                                        "timestamp": new_fail_msg.timestamp.isoformat() if new_fail_msg.timestamp else datetime.now(timezone.utc).isoformat(),
-                                        "client_id": target_cid_fail
-                                    }
-                                    await rabbitmq.publish_event("new_message", payload_new_fail_ws)
                         except Exception as e_fail_chat:
                             logger.error(f"❌ [CHAT-FAIL-SYNC] Erro ao sincronizar falha de template no chat: {e_fail_chat}")
+
                         if trigger:
+                            # Cancelar follow-ups agendados caso o disparo pai tenha falhado
+                            try:
+                                pending_fu = db.query(models.ScheduledTrigger).filter(
+                                    models.ScheduledTrigger.parent_id == trigger.id,
+                                    models.ScheduledTrigger.status.in_(["queued", "pending"])
+                                ).all()
+                                for fu in pending_fu:
+                                    fu.status = "cancelled"
+                                    fu.failure_reason = f"Disparo pai #{trigger.id} falhou na entrega ({reason})"
+                                    logger.info(f"🚫 [FOLLOW-UP-AUTO-CANCEL] Follow-up #{fu.id} cancelado pois disparo pai #{trigger.id} falhou.")
+                            except Exception as e_fu_cancel:
+                                logger.warning(f"⚠️ [FOLLOW-UP-AUTO-CANCEL] Erro ao cancelar follow-ups: {e_fu_cancel}")
                             is_bsud = str(message_record.phone_number).startswith("BR.")
                             if not is_bsud:
                                 try:
@@ -753,7 +720,32 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                         chat_msg.status = status
                         cur_meta = dict(chat_msg.meta_data or {})
                         cur_meta["status"] = status
+
+                        meta_raw_ts = status_data.get("timestamp")
+                        event_time = None
+                        if meta_raw_ts:
+                            try:
+                                event_time = datetime.fromtimestamp(float(meta_raw_ts), tz=timezone.utc).isoformat()
+                            except Exception:
+                                event_time = datetime.now(timezone.utc).isoformat()
+                        else:
+                            event_time = datetime.now(timezone.utc).isoformat()
+
+                        if status == 'read':
+                            cur_meta["read_at"] = event_time
+                            if "delivered_at" not in cur_meta:
+                                cur_meta["delivered_at"] = event_time
+                        elif status == 'delivered':
+                            cur_meta["delivered_at"] = event_time
+                        elif status == 'sent':
+                            cur_meta["sent_at"] = event_time
+
+                        if not cur_meta.get("sent_at") and chat_msg.timestamp:
+                            cur_meta["sent_at"] = chat_msg.timestamp.isoformat()
+
+                        from sqlalchemy.orm.attributes import flag_modified
                         chat_msg.meta_data = cur_meta
+                        flag_modified(chat_msg, "meta_data")
                         db.commit()
 
                         # Obter client_id para WebSocket
@@ -765,10 +757,14 @@ async def handle_whatsapp_statuses(db, statuses: list, value: dict):
                             "message_id": chat_msg.id,
                             "wa_message_id": chat_msg.wa_message_id,
                             "status": status,
+                            "meta_data": chat_msg.meta_data,
+                            "read_at": cur_meta.get("read_at"),
+                            "delivered_at": cur_meta.get("delivered_at"),
+                            "sent_at": cur_meta.get("sent_at"),
                             "client_id": c_id
                         }
                         await wah.rabbitmq.publish_event("message_status_updated", payload_ws_status)
-                        logger.info(f"👁️ [CHAT_STATUS_SYNC] Status '{status}' sincronizado para ChatMessage #{chat_msg.id} (Convo: {chat_msg.conversation_id})")
+                        logger.info(f"👁️ [CHAT_STATUS_SYNC] Status '{status}' sincronizado para ChatMessage #{chat_msg.id} (Convo: {chat_msg.conversation_id}, read_at: {cur_meta.get('read_at')})")
             except Exception as e_chat_status:
                 logger.warning(f"⚠️ [CHAT_STATUS_SYNC] Erro ao sincronizar status com ChatMessage: {e_chat_status}")
 

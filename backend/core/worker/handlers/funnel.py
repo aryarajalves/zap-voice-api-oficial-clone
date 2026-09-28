@@ -60,6 +60,17 @@ async def handle_funnel_execution(data: dict):
             db.commit()
             return
 
+        # Checagem de integridade de Follow-up (Disparo Pai)
+        if getattr(trigger, 'is_followup', False) and trigger.parent_id and isinstance(trigger.parent_id, int):
+            parent_trigger = db.query(models.ScheduledTrigger).get(trigger.parent_id)
+            if parent_trigger:
+                if parent_trigger.status in ['failed', 'cancelled'] or (parent_trigger.total_delivered or 0) == 0:
+                    logger.warning(f"🚫 [FOLLOWUP_BLOCKED] Disparo pai #{parent_trigger.id} não foi entregue com sucesso (status={parent_trigger.status}, delivered={parent_trigger.total_delivered}). Follow-up #{trigger.id} cancelado.")
+                    trigger.status = 'cancelled'
+                    trigger.failure_reason = f"Disparo pai #{parent_trigger.id} não foi entregue com sucesso (status={parent_trigger.status})"
+                    db.commit()
+                    return
+
         try:
             # Marcar como processando antes de começar
             if trigger.status != 'processing':

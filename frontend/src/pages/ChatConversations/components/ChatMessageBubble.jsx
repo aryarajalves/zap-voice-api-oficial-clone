@@ -37,7 +37,8 @@ export default function ChatMessageBubble({
     highlightedMsgId,
     onOpenContextMenu,
     onOpenPipelineByTriggerId,
-    onRetryTemplateMessage
+    onRetryTemplateMessage,
+    onOpenMessageInfo
 }) {
     const isSystem = msg.sender_type === 'system';
     const isMe = msg.sender_type === 'user';
@@ -209,13 +210,24 @@ export default function ChatMessageBubble({
                             {formatMessageTimestamp?.(msg.timestamp)}
                         </span>
                         {isMe && (msg.status === 'read' || msg.meta_data?.status === 'read') && (
-                            <span
-                                data-testid="message-read-status"
-                                title="Lida pelo contato"
-                                className="flex items-center text-[#53bdeb] drop-shadow-[0_0_3px_rgba(83,189,235,0.9)] ml-1"
+                            <button
+                                type="button"
+                                data-testid="message-ticks-status"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenMessageInfo?.(msg);
+                                }}
+                                className="flex items-center ml-1 cursor-pointer hover:opacity-100 hover:scale-110 active:scale-95 transition-all p-0.5 rounded outline-none"
+                                title="Ver dados e horário em que o contato visualizou a mensagem"
                             >
-                                <IoCheckmarkDone size={18} className="stroke-[2.5]" />
-                            </span>
+                                <span
+                                    data-testid="message-read-status"
+                                    title="Lida pelo contato"
+                                    className="flex items-center text-[#53bdeb] drop-shadow-[0_0_3px_rgba(83,189,235,0.9)]"
+                                >
+                                    <IoCheckmarkDone size={18} className="stroke-[2.5]" />
+                                </span>
+                            </button>
                         )}
                     </div>
                 </div>

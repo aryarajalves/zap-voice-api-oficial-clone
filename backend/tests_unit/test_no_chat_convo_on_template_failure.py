@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import models
 from core.worker.handlers.funnel import handle_funnel_execution
 from core.worker.handlers.whatsapp_status import handle_whatsapp_statuses, handle_deferred_post_delivery
@@ -136,3 +136,152 @@ async def test_template_failure_status_does_not_create_chat_convo(db_session, mo
     db_session.refresh(trigger)
     assert trigger.status == "failed"
     assert "131026" in trigger.failure_reason or "undeliverable" in trigger.failure_reason.lower()
+
+
+@pytest.mark.asyncio
+async def test_followup_auto_cancelled_when_parent_trigger_fails(db_session, mock_rabbitmq_session):
+    """
+    Testa que se o disparo pai de um template falha na entrega,
+    qualquer follow-up agendado para o mesmo contato é imediatamente cancelado.
+    """
+    client = models.Client(id=999, name="Test Client Followup")
+    db_session.add(client)
+    db_session.commit()
+
+    # Trigger pai (principal)
+    parent_trigger = models.ScheduledTrigger(
+        id=801,
+        client_id=999,
+        template_name="mensagem_principal",
+        contact_phone="5511999990001",
+        contact_name="Flavia Teste",
+        status="sent",
+        scheduled_time=datetime.now(timezone.utc),
+        is_bulk=False,
+        total_delivered=0
+    )
+    db_session.add(parent_trigger)
+    db_session.commit()
+
+    # Trigger filho (follow-up agendado)
+    followup_trigger = models.ScheduledTrigger(
+        id=802,
+        parent_id=801,
+        is_followup=True,
+        client_id=999,
+        template_name="mensagem_followup",
+        contact_phone="5511999990001",
+        contact_name="Flavia Teste",
+        status="queued",
+        scheduled_time=datetime.now(timezone.utc) + timedelta(hours=2),
+        is_bulk=False
+    )
+    db_session.add(followup_trigger)
+    db_session.commit()
+
+    ms = models.MessageStatus(
+        id=801,
+        trigger_id=801,
+        message_id="WAMID_PARENT_FAIL",
+        phone_number="5511999990001",
+        status="sent",
+        message_type="TEMPLATE",
+        content="[Template: mensagem_principal]"
+    )
+    db_session.add(ms)
+    db_session.commit()
+
+    statuses_payload = [
+        {
+            "id": "wamid.WAMID_PARENT_FAIL",
+            "status": "failed",
+            "recipient_id": "5511999990001",
+            "errors": [{"code": 131026, "title": "Message undeliverable"}]
+        }
+    ]
+
+    await handle_whatsapp_statuses(db_session, statuses_payload, {})
+
+    db_session.refresh(parent_trigger)
+    db_session.refresh(followup_trigger)
+
+    assert parent_trigger.status == "failed"
+    # O follow-up DEVE ter sido cancelado automaticamente!
+    assert followup_trigger.status == "cancelled"
+    assert "Disparo pai #801 falhou" in followup_trigger.failure_reason
+
+    # Se o worker tentar executar o follow-up cancelado, deve abortar imediatamente
+    mock_cw = MagicMock()
+    mock_cw.send_template = AsyncMock()
+    with patch("core.worker.handlers.funnel.ChatwootClient", return_value=mock_cw), \
+         patch("core.worker.handlers.funnel.SessionLocal", return_value=db_session):
+        await handle_funnel_execution({"trigger_id": 802})
+
+    mock_cw.send_template.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_trigger_failure_does_not_inject_error_in_existing_chat(db_session, mock_rabbitmq_session):
+    """
+    Testa que se já existe uma conversa no chat de meses atrás, mas um disparo externo
+    de webhook falhou na entrega, NENHUMA mensagem de erro é inserida na conversa.
+    """
+    client = models.Client(id=999, name="Test Client Chat Existente")
+    db_session.add(client)
+    db_session.commit()
+
+    # Conversa existente prévia
+    convo = models.ChatConversation(
+        id=555,
+        client_id=999,
+        phone="5511988880000",
+        contact_name="Contato Antigo",
+        status="open",
+        last_message_content="Conversa antiga",
+        last_message_at=datetime.now(timezone.utc) - timedelta(days=30)
+    )
+    db_session.add(convo)
+    db_session.commit()
+
+    # Disparo de webhook que falhou
+    trigger = models.ScheduledTrigger(
+        id=805,
+        client_id=999,
+        template_name="mensagem_webhook",
+        contact_phone="5511988880000",
+        contact_name="Contato Antigo",
+        status="sent",
+        scheduled_time=datetime.now(timezone.utc),
+        is_bulk=False
+    )
+    db_session.add(trigger)
+    db_session.commit()
+
+    ms = models.MessageStatus(
+        id=805,
+        trigger_id=805,
+        message_id="WAMID_EXT_FAIL",
+        phone_number="5511988880000",
+        status="sent",
+        message_type="TEMPLATE",
+        content="[Template: mensagem_webhook]"
+    )
+    db_session.add(ms)
+    db_session.commit()
+
+    statuses_payload = [
+        {
+            "id": "wamid.WAMID_EXT_FAIL",
+            "status": "failed",
+            "recipient_id": "5511988880000",
+            "errors": [{"code": 131026, "title": "Message undeliverable"}]
+        }
+    ]
+
+    await handle_whatsapp_statuses(db_session, statuses_payload, {})
+
+    # Nenhuma mensagem de erro deve ter sido inserida na conversa existente
+    msgs = db_session.query(models.ChatMessage).filter(
+        models.ChatMessage.conversation_id == 555
+    ).all()
+    assert len(msgs) == 0, "Disparo externo com falha NÃO deve inserir mensagens no chat!"

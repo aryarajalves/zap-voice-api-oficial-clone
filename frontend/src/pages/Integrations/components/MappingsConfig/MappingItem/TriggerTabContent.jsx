@@ -3,7 +3,9 @@ import { FiZap, FiSettings, FiInfo, FiFileText, FiEye } from 'react-icons/fi';
 import SearchableSelect from '../../SearchableSelect';
 import TemplatePreview from '../../../../../components/BulkSender/common/TemplatePreview';
 import { EVENT_HINTS } from './eventHints';
+import { BUSSOLA_FEEDBACK_OPTIONS } from '../../../constants';
 import BussolaPdfPreviewModal from '../../BussolaPdfPreviewModal';
+import FeedbackFilterMultiSelect, { formatFeedbackFilterDisplay } from '../FeedbackFilterMultiSelect';
 
 export default function TriggerTabContent({
   mapping,
@@ -98,6 +100,31 @@ export default function TriggerTabContent({
                 </select>
               </div>
             </div>
+
+            {/* Filtro Especial de Estrelas / Avaliação (Bússola Quiz) */}
+            {isBussolaPlatform && (
+              <div className="pt-3 border-t border-gray-100 dark:border-white/5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>⭐ Avaliação / Estrelas</span>
+                  </label>
+                  {mapping.feedback_filter && mapping.feedback_filter !== 'all' && (
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      {formatFeedbackFilterDisplay(mapping.feedback_filter)}
+                    </span>
+                  )}
+                </div>
+                <FeedbackFilterMultiSelect
+                  value={mapping.feedback_filter || ''}
+                  onChange={(val) => updateMapping(mIndex, 'feedback_filter', val || null)}
+                />
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                  {mapping.feedback_filter && mapping.feedback_filter !== 'all'
+                    ? `Dispara exclusivamente quando a avaliação corresponder a: ${formatFeedbackFilterDisplay(mapping.feedback_filter)}.`
+                    : 'Dispara para qualquer leitura concluída (com qualquer quantidade de estrelas ou se pulou). Age como fallback se não houver regra específica.'}
+                </p>
+              </div>
+            )}
 
             {EVENT_HINTS[mapping.event_type] && (
               <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-300 leading-relaxed">

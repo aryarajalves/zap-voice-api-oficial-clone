@@ -118,6 +118,10 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
             
             action = data.get(f"{result}Action", "follow")
             if action == "stop":
+                log_node_execution(
+                    db, trigger, current_node_id, "completed",
+                    f"Condição de data/hora ({result}): Fluxo encerrado conforme configurado."
+                )
                 return "break"
             elif action == "wait":
                 wait_until = start_dt if result == "before" else (end_dt if result in ["between", "approach"] else None)
@@ -129,7 +133,21 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
                         trigger.scheduled_time = wait_until.astimezone(timezone.utc)
                         trigger.current_node_id = next_node_id
                         db.commit()
+                        wait_until_br = wait_until.astimezone(tz)
+                        label_action = "início" if result == "before" else "fim"
+                        log_node_execution(
+                            db, trigger, current_node_id, "waiting", 
+                            f"Aguardando {label_action} até {wait_until_br.strftime('%d/%m/%Y às %H:%M')}", 
+                            {"target_time": wait_until.isoformat()}
+                        )
+                        logger.info(f"⏳ [CONDITION_DATE] Lead pausado no Nó {current_node_id}. Aguardando {label_action} até {wait_until_br.strftime('%d/%m/%Y %H:%M:%S')}. Próximo nó: {next_node_id} (via '{next_h}')")
                         return "stop"
+                    else:
+                        logger.warning(f"⚠️ [CONDITION_DATE] Ação 'wait' configurada para '{result}', mas nenhuma saída conectada em '{next_h}'.")
+                        log_node_execution(
+                            db, trigger, current_node_id, "completed",
+                            f"Condição avaliada como '{result}' (Aguardar), mas nenhuma saída conectada em '{next_h}'. Fluxo finalizado."
+                        )
                 return "break"
             else:
                 # Fallback: se avaliou 'approach' mas não há nó conectado em 'approach', tenta 'between'
@@ -137,6 +155,10 @@ async def handle_condition_node(db, trigger, node, chatwoot, contact_phone, edge
                     source_handle = 'between'
                 else:
                     source_handle = result
+                log_node_execution(
+                    db, trigger, current_node_id, "completed",
+                    f"Condição de data/hora avaliada como '{result}'. Seguindo pela saída correspondente."
+                )
 
     elif condition_type == "weekday":
         tz = zoneinfo.ZoneInfo('America/Sao_Paulo')

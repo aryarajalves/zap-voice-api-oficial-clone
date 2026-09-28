@@ -35,7 +35,10 @@ export default function ConversationLabelsList({
 
     return (
         <>
-            <div className={`flex flex-wrap items-center gap-1 ${className}`}>
+            <div
+                data-testid={isHeader ? 'chat-header-labels' : 'conversation-labels-list'}
+                className={`flex flex-wrap items-center gap-1 ${className}`}
+            >
                 {visibleLabels.map((label, idx) => {
                     const color = resolveColor(label);
                     if (isHeader) {

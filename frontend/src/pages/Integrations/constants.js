@@ -90,9 +90,22 @@ export const BODY_VAR_OPTIONS = [
   { value: 'quiz_espelho', label: '[Quiz] Espelho do Quiz' },
   { value: 'carta_titulo', label: '[Quiz] Título da Carta' },
   { value: 'carta_destaque', label: '[Quiz] Destaque da Carta' },
+  { value: 'estrelas', label: '[Quiz] Avaliação / Estrelas (1 a 5)' },
+  { value: 'feedback_estrelas', label: '[Quiz] Feedback Estrelas (1 a 5)' },
+  { value: 'feedback_pulou', label: '[Quiz] Pulou Avaliação (Sim / Não)' },
   { value: 'buyer.name', label: '[Hotmart] Nome Completo' },
   { value: 'Customer.full_name', label: '[Kiwify] Nome Completo' },
   { value: 'custom', label: 'Campo Personalizado / Fixo' },
+];
+
+export const BUSSOLA_FEEDBACK_OPTIONS = [
+  { value: '', label: 'Qualquer Avaliação (Padrão - Todos)' },
+  { value: 'skipped', label: 'Pulou Avaliação (Sem nota / Ignorado)' },
+  { value: '5', label: '5 Estrelas (⭐⭐⭐⭐⭐)' },
+  { value: '4', label: '4 Estrelas (⭐⭐⭐⭐)' },
+  { value: '3', label: '3 Estrelas (⭐⭐⭐)' },
+  { value: '2', label: '2 Estrelas (⭐⭐)' },
+  { value: '1', label: '1 Estrela (⭐)' },
 ];
 
 // Helper para normalizar chatwoot_label para sempre ser um array limpo de strings simples.

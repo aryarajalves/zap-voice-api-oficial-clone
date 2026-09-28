@@ -4,6 +4,7 @@ import ChatMessageBubble from './ChatMessageBubble';
 import PinnedMessageBanner from './PinnedMessageBanner';
 import MessageContextMenu from './MessageContextMenu';
 import ReactionEmojiPickerModal from './ReactionEmojiPickerModal';
+import MessageInfoModal from '../Modals/MessageInfoModal';
 import { getDateKey, formatDateSeparator } from '../utils/chatDateUtils';
 
 export default function ChatMessageList({
@@ -40,6 +41,7 @@ export default function ChatMessageList({
     });
 
     const [reactionPickerMsg, setReactionPickerMsg] = useState(null);
+    const [messageInfoModalMsg, setMessageInfoModalMsg] = useState(null);
 
     const handleOpenContextMenu = (e, msg) => {
         setContextMenu({
@@ -203,6 +205,7 @@ export default function ChatMessageList({
                                     onOpenContextMenu={handleOpenContextMenu}
                                     onOpenPipelineByTriggerId={onOpenPipelineByTriggerId}
                                     onRetryTemplateMessage={onRetryTemplateMessage}
+                                    onOpenMessageInfo={setMessageInfoModalMsg}
                                 />
                             </React.Fragment>
                         );
@@ -291,6 +294,14 @@ export default function ChatMessageList({
                     const targetMsgId = msg.wa_message_id || msg.wamid || msg.message_id || msg.id;
                     engine.sendReaction(targetMsgId, emoji);
                 }}
+            />
+
+            {/* Modal Informativo de Confirmação de Leitura e Horários */}
+            <MessageInfoModal
+                isOpen={Boolean(messageInfoModalMsg)}
+                onClose={() => setMessageInfoModalMsg(null)}
+                msg={messageInfoModalMsg}
+                selectedConvo={selectedConvo}
             />
         </div>
     );

@@ -15,6 +15,31 @@ def test_get_brasilia_now():
     # Brasília offset é GMT-3 (-03:00)
     assert now_br.tzinfo is not None
 
+def test_apply_webhook_labels_default_does_not_create_convo_if_missing(db_session: Session):
+    """Garante que por padrão (create_if_missing=False), apply_webhook_labels NÃO cria conversa se não existir."""
+    client = models.Client(name="Cliente Teste Sem Convo")
+    db_session.add(client)
+    db_session.commit()
+
+    phone = "5511999991111"
+
+    convo = apply_webhook_labels(
+        db=db_session,
+        client_id=client.id,
+        phone=phone,
+        raw_labels="lead_bussola",
+        source="Webhook",
+        create_if_missing=False
+    )
+    assert convo is None
+
+    # Nenhuma conversa no banco
+    existing = db_session.query(models.ChatConversation).filter(
+        models.ChatConversation.client_id == client.id,
+        models.ChatConversation.phone == phone
+    ).first()
+    assert existing is None
+
 def test_apply_webhook_labels_new_label(db_session: Session):
     # Setup
     client = models.Client(name="Cliente Teste Webhook Label")
@@ -23,14 +48,15 @@ def test_apply_webhook_labels_new_label(db_session: Session):
 
     phone = "5511999998888"
 
-    # Executar
+    # Executar com create_if_missing=True para testar criação
     convo = apply_webhook_labels(
         db=db_session,
         client_id=client.id,
         phone=phone,
         raw_labels="compra-aprovada",
         source="Webhook Kiwify",
-        contact_name="Ana Silva"
+        contact_name="Ana Silva",
+        create_if_missing=True
     )
 
     assert convo is not None
@@ -66,7 +92,8 @@ def test_apply_webhook_labels_duplicate_ignored(db_session: Session):
         client_id=client.id,
         phone=phone,
         raw_labels="vip",
-        source="Webhook Hotmart"
+        source="Webhook Hotmart",
+        create_if_missing=True
     )
     assert len(convo1.labels) == 1
 
@@ -99,7 +126,8 @@ def test_apply_webhook_labels_multiple_labels(db_session: Session):
         client_id=client.id,
         phone=phone,
         raw_labels=["lead-quente", "boleto-gerado"],
-        source="Webhook Eduzz"
+        source="Webhook Eduzz",
+        create_if_missing=True
     )
 
     assert "lead-quente" in convo.labels

@@ -372,28 +372,74 @@ describe('ChatMessageBubble Unit Tests', () => {
         expect(readIndicator.getAttribute('title')).toBe('Lida pelo contato');
     });
 
-    it('não renderiza nenhum vezinho quando mensagem do atendente ainda não foi lida', () => {
-        const sentMsg = {
+    it('renderiza tracinhos interagíveis azuis para mensagem lida e dispara onOpenMessageInfo ao clicar', () => {
+        const readMsg = {
             id: 22,
             sender_type: 'user',
             message_type: 'text',
-            content: 'Mensagem recém-enviada.',
+            content: 'Mensagem confirmada e lida.',
+            timestamp: new Date().toISOString(),
+            status: 'read'
+        };
+
+        const onOpenMessageInfoMock = vi.fn();
+
+        render(
+            <ChatMessageBubble
+                msg={readMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[readMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '17:10'}
+                onOpenMessageInfo={onOpenMessageInfoMock}
+            />
+        );
+
+        const ticksBtn = screen.getByTestId('message-ticks-status');
+        expect(ticksBtn).toBeInTheDocument();
+        expect(screen.getByTestId('message-read-status')).toBeInTheDocument();
+
+        fireEvent.click(ticksBtn);
+        expect(onOpenMessageInfoMock).toHaveBeenCalledWith(readMsg);
+    });
+
+    it('não exibe nenhum ícone ou botão de status caso a mensagem não tenha sido lida (ex: sent ou delivered)', () => {
+        const sentMsg = {
+            id: 221,
+            sender_type: 'user',
+            message_type: 'text',
+            content: 'Mensagem apenas enviada.',
             timestamp: new Date().toISOString(),
             status: 'sent'
         };
 
-        render(
+        const { rerender } = render(
             <ChatMessageBubble
                 msg={sentMsg}
                 selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
                 allMessages={[sentMsg]}
                 getMediaSrc={() => ''}
-                formatMessageTimestamp={() => '17:10'}
+                formatMessageTimestamp={() => '17:11'}
             />
         );
 
+        expect(screen.queryByTestId('message-ticks-status')).toBeNull();
         expect(screen.queryByTestId('message-read-status')).toBeNull();
-        expect(screen.queryByTestId('message-sent-status')).toBeNull();
+
+        // Testa delivered
+        const deliveredMsg = { ...sentMsg, id: 222, status: 'delivered' };
+        rerender(
+            <ChatMessageBubble
+                msg={deliveredMsg}
+                selectedConvo={{ id: 10, contact_name: 'Aryaraj', phone: '5585996123586' }}
+                allMessages={[deliveredMsg]}
+                getMediaSrc={() => ''}
+                formatMessageTimestamp={() => '17:12'}
+            />
+        );
+
+        expect(screen.queryByTestId('message-ticks-status')).toBeNull();
+        expect(screen.queryByTestId('message-read-status')).toBeNull();
     });
 
     it('não exibe indicador de leitura/envio do atendente em mensagens recebidas do contato', () => {

@@ -201,12 +201,22 @@ export function useChatWebSocketSync({
                     `wamid.${m.wa_message_id}` === targetWaId
                   );
                   if (matchId || matchWaId) {
+                    const updatedReadAt = payload.read_at || payload.meta_data?.read_at || m.read_at || m.meta_data?.read_at;
+                    const updatedDeliveredAt = payload.delivered_at || payload.meta_data?.delivered_at || m.delivered_at || m.meta_data?.delivered_at;
+                    const updatedSentAt = payload.sent_at || payload.meta_data?.sent_at || m.sent_at || m.meta_data?.sent_at || m.timestamp;
                     return {
                       ...m,
                       status: newStatus,
+                      read_at: updatedReadAt,
+                      delivered_at: updatedDeliveredAt,
+                      sent_at: updatedSentAt,
                       meta_data: {
                         ...(m.meta_data || {}),
-                        status: newStatus
+                        ...(payload.meta_data || {}),
+                        status: newStatus,
+                        read_at: updatedReadAt,
+                        delivered_at: updatedDeliveredAt,
+                        sent_at: updatedSentAt,
                       }
                     };
                   }

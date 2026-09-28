@@ -181,7 +181,71 @@ def parse_bussola_quiz(payload: dict, result: dict) -> None:
         if carta.get("porta"):
             result["carta_porta"] = json.dumps(carta.get("porta"), ensure_ascii=False) if isinstance(carta.get("porta"), (dict, list)) else str(carta.get("porta"))
 
-    # 13. Agrupa Variáveis e Campos Customizados
+    # 13. Avaliação / Feedback de Estrelas
+    raw_estrelas = (
+        payload.get("feedback_estrelas")
+        if payload.get("feedback_estrelas") is not None
+        else payload.get("estrelas")
+        if payload.get("estrelas") is not None
+        else payload.get("stars")
+        if payload.get("stars") is not None
+        else payload.get("nota")
+        if payload.get("nota") is not None
+        else gv(["data", "reading", "feedback_estrelas"])
+        if gv(["data", "reading", "feedback_estrelas"]) is not None
+        else gv(["data", "reading", "estrelas"])
+        if gv(["data", "reading", "estrelas"]) is not None
+        else gv(["data", "custom_fields", "estrelas"])
+        if gv(["data", "custom_fields", "estrelas"]) is not None
+        else gv(["data", "custom_fields", "feedback_estrelas"])
+    )
+
+    raw_pulou = (
+        payload.get("feedback_pulou")
+        if payload.get("feedback_pulou") is not None
+        else payload.get("pulou")
+        if payload.get("pulou") is not None
+        else payload.get("pulou_avaliacao")
+        if payload.get("pulou_avaliacao") is not None
+        else gv(["data", "reading", "feedback_pulou"])
+        if gv(["data", "reading", "feedback_pulou"]) is not None
+        else gv(["data", "custom_fields", "feedback_pulou"])
+        if gv(["data", "custom_fields", "feedback_pulou"]) is not None
+        else gv(["data", "custom_fields", "pulou"])
+    )
+
+    is_pulou = False
+    if isinstance(raw_pulou, bool):
+        is_pulou = raw_pulou
+    elif isinstance(raw_pulou, str):
+        is_pulou = raw_pulou.strip().lower() in ("true", "sim", "yes", "1")
+    elif isinstance(raw_pulou, (int, float)):
+        is_pulou = bool(raw_pulou)
+
+    estrelas_val = None
+    if raw_estrelas is not None and str(raw_estrelas).strip() != "":
+        try:
+            val_int = int(float(raw_estrelas))
+            if 1 <= val_int <= 5:
+                estrelas_val = val_int
+        except Exception:
+            pass
+
+    if is_pulou or estrelas_val is None:
+        feedback_filter_detected = "skipped"
+        feedback_pulou_str = "Sim"
+        estrelas_str = ""
+    else:
+        feedback_filter_detected = str(estrelas_val)
+        feedback_pulou_str = "Não"
+        estrelas_str = str(estrelas_val)
+
+    result["feedback_filter_detected"] = feedback_filter_detected
+    result["feedback_estrelas"] = estrelas_str
+    result["estrelas"] = estrelas_str
+    result["feedback_pulou"] = feedback_pulou_str
+
+    # 14. Agrupa Variáveis e Campos Customizados
     variables = result.get("variables") or {}
     custom_fields = result.get("custom_fields") or {}
 
@@ -204,6 +268,13 @@ def parse_bussola_quiz(payload: dict, result: dict) -> None:
         "carta_titulo": result.get("carta_titulo") or "",
         "carta_destaque": result.get("carta_destaque") or "",
         "origem": str(payload.get("origem") or "quiz_bussola"),
+        "estrelas": estrelas_str,
+        "feedback_estrelas": estrelas_str,
+        "stars": estrelas_str,
+        "nota": estrelas_str,
+        "feedback_pulou": feedback_pulou_str,
+        "pulou": feedback_pulou_str,
+        "feedback_filter_detected": feedback_filter_detected,
     }
 
     # Mescla variáveis adicionais dentro de data.custom_fields se existirem

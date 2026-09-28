@@ -235,6 +235,22 @@ export default function HistoryExtractedData({
           })()}
         </div>
 
+        {(processed.estrelas || processed.feedback_pulou || processed.feedback_filter_detected) && (
+          <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
+            <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Avaliação do Quiz:</span>
+            {processed.feedback_filter_detected === 'skipped' || processed.feedback_pulou === 'Sim' ? (
+              <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md text-[11px] border border-amber-500/20">
+                ⏭️ Pulou Avaliação
+              </span>
+            ) : (
+              <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md text-[11px] border border-amber-500/20 flex items-center gap-1">
+                ⭐ {processed.estrelas || processed.feedback_filter_detected} Estrela(s)
+                {processed.estrelas ? ` (${'★'.repeat(Math.min(5, Math.max(1, parseInt(processed.estrelas) || 1)))})` : ''}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex justify-between border-b border-blue-200/30 dark:border-blue-700/20 pb-1.5 md:col-span-2">
           <span className="text-gray-400 dark:text-gray-400 font-medium whitespace-nowrap">Etiquetas Internas (ZapVoice):</span>
           {processed.internal_tags ? (

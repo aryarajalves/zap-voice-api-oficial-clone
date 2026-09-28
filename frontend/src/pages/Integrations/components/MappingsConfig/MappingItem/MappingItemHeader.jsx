@@ -1,6 +1,7 @@
 import React from 'react';
 import { FiPlay, FiTrash2, FiChevronDown } from 'react-icons/fi';
 import { EVENT_TYPES } from '../../../constants';
+import { formatFeedbackFilterDisplay } from '../FeedbackFilterMultiSelect';
 
 export default function MappingItemHeader({
   mapping,
@@ -13,6 +14,9 @@ export default function MappingItemHeader({
 }) {
   const eventLabel = EVENT_TYPES.find(e => e.value === mapping.event_type)?.label || 'Evento';
   const selectedTemplate = templates.find(t => String(t.id) === String(mapping.template_id));
+  const feedbackBadge = mapping.feedback_filter && mapping.feedback_filter !== 'all'
+    ? formatFeedbackFilterDisplay(mapping.feedback_filter)
+    : null;
 
   return (
     <div
@@ -24,9 +28,16 @@ export default function MappingItemHeader({
           <FiPlay size={14} className={isExpanded ? 'fill-current' : ''} />
         </div>
         <div>
-          <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-widest">
-            Gatilho #{mIndex + 1}: {eventLabel}{mapping.product_name ? ` (${mapping.product_name})` : ''}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-widest">
+              Gatilho #{mIndex + 1}: {eventLabel}{mapping.product_name ? ` (${mapping.product_name})` : ''}
+            </span>
+            {feedbackBadge && (
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 normal-case tracking-normal">
+                {feedbackBadge}
+              </span>
+            )}
+          </div>
           {!isExpanded && mapping.template_id && (
             <div className="text-[9px] text-gray-500 font-bold mt-0.5">
               Template: {selectedTemplate?.name || '...'}
