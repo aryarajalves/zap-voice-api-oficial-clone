@@ -13,7 +13,7 @@ Sempre que você realizar uma alteração no código ou interface, você deve se
 2. **Descrição do Teste Real:** Proibido usar apenas "testado". Você deve descrever o fluxo: "Acessei a página X, cliquei no elemento Y e validei que o estado mudou para Z".
 3. **Smoke Test do Frontend:** Após reiniciar os containers, confirme que a página carregou (Status 200) e que não há uma "tela branca".
 4. **Execução de Testes e Fluxos:** 
-   - Rode os testes na pasta `tests/` e anexe o output do terminal.
+   - Rode os testes nas pastas do backend (`backend/tests_unit/` ou `backend/tests_e2e/`) e anexe o output do terminal.
    - **Teste de Fluxo Completo (Happy Path):** Realize o fluxo principal e valide a mudança de estado no banco de dados se necessário.
 5. **Verificação de Fluxo de Dados (Data-Flow):** 
    - Se a tela deveria listar itens, prove que a lista não está vazia. Listas vazias indevidas indicam falha no teste.
