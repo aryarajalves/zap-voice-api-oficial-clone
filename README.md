@@ -5,7 +5,7 @@ Versão estável com **Controle e Estimativa de Custos da Meta API (Nova Políti
 
 
 
-O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)** e ao **Chatwoot**. 
+O **ZapVoice** é um ecossistema completo e profissional de automação e marketing de alta performance integrado à **API Oficial do WhatsApp (Meta)**. 
 
 ---
 
@@ -19,17 +19,15 @@ graph TD
     B -->|Enfileiramento de Tarefas| C[RabbitMQ]
     C -->|Processamento Assíncrono| D[ZapVoice Worker]
     D -->|Envio de Mensagem| E[Meta WhatsApp API]
-    D -->|Registros e Sincronização| F[Chatwoot API]
-    F -->|Webhook de Interação| B
-    B -->|Sincronização de Conversas| G[Chat Local & Notas]
+    E -->|Status e Interações| B
+    B -->|Sincronização de Conversas| G[Chat Local & Atendimento]
 ```
 
 ### O Fluxo Geral:
 1. **Entrada de Leads**: O sistema recebe dados via webhooks (de plataformas de vendas como Kiwify, Hotmart ou Eduzz) ou por importações de arquivos e etiquetas de contatos.
 2. **Fila de Mensageria**: Para garantir estabilidade e evitar perdas de envios em picos de tráfego, todas as ações são enfileiradas através do **RabbitMQ**.
 3. **Worker**: O Worker consome as mensagens da fila, processa as substituições de variáveis, valida as regras de compliance (janela de 24h e lista de bloqueados) e faz os envios através da API Oficial da Meta.
-4. **Chatwoot**: Cada disparo cria ou atualiza uma conversa correspondente no Chatwoot do cliente, inserindo notas privadas de depuração de forma transparente.
-5. **Chat Local**: Armazenamento e listagem local das conversas sincronizadas, permitindo visualizar o histórico de mensagens, enviar templates de forma ativa e visualizar notas privadas diretamente no ZapVoice.
+4. **Chat e Atendimento Local**: Armazenamento e listagem local das conversas sincronizadas, permitindo visualizar o histórico de mensagens, enviar templates de forma ativa, adicionar notas internas e gerenciar etiquetas diretamente no ZapVoice.
 
 ---
 
@@ -51,7 +49,7 @@ Criação gráfica em estilo *drag-and-drop* de fluxos de conversação intelige
 *   **Condições Inteligentes (IA)**: Análise de resposta usando inteligência artificial da OpenAI (`gpt-4o-mini`) para ramificar o fluxo baseado na resposta livre do cliente.
 *   **Botões Interativos**: Mensagens com botões de clique rápido que ramificam o fluxo dependendo da escolha do cliente.
 
-### 4. Chat Local & Sincronização Chatwoot
+### 4. Chat Local & Atendimento
 Visualização e controle de conversas diretamente no painel do ZapVoice:
 *   **Mensagens e Templates**: Histórico de interações do cliente, notas de contexto do sistema e disparo manual de templates.
 *   **Ações de Resposta Rápida (Botões HSM)**: Permite configurar o comportamento ao clicar nos botões do template (Nenhuma ação, Interação com início de Funil automático, ou Bloqueio do contato imediato).
@@ -67,7 +65,7 @@ Visualização e controle de conversas diretamente no painel do ZapVoice:
 
 ### 5. API Keys e Segurança
 *   Geração e revogação de tokens de autenticação (`API Keys`) para garantir que apenas sistemas autorizados possam acionar webhooks públicos e rotas sensíveis do backend.
-*   **Auditoria e Guia de Segurança**: Consulte o arquivo [`SECURITY.md`](file:///c:/Users/aryar/.gemini/antigravity/scratch/Projetos%20Serios/Projeto%20-%20ZapVoice%20no%20Chatwoot/SECURITY.md) para o roadmap completo de blindagem, boas práticas ativas e diagnóstico de segurança da aplicação.
+*   **Auditoria e Guia de Segurança**: Consulte o arquivo [`SECURITY.md`](SECURITY.md) para o roadmap completo de blindagem, boas práticas ativas e diagnóstico de segurança da aplicação.
 
 ### 6. Integrações de Webhooks & Mapeamento de Contatos
 Integração nativa com as principais plataformas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark, Elementor, ZapGroup e YayForms**.
@@ -79,7 +77,7 @@ Integração nativa com as principais plataformas do mercado: **Hotmart, Kiwify,
 ### 7. Webhook Leads e Filtros de Contato (BSUD)
 Painel dedicado para qualificação e acompanhamento de contatos recebidos por webhooks e integrações:
 *   **Filtro de WhatsApp Qualificado (BSUD)**: Permite segmentar contatos que possuem número de WhatsApp ativo e válido ("💬 WhatsApp Válido") daqueles que não possuem conta ativa ("⚠️ Sem WhatsApp").
-*   **Segmentação Adicional**: Filtros integrados por status de bloqueio local, etiquetas (labels) do Chatwoot, busca textual e data de criação para facilitar ações de marketing.
+*   **Segmentação Adicional**: Filtros integrados por status de bloqueio local, etiquetas (labels) de atendimento, busca textual e data de criação para facilitar ações de marketing.
 
 ---
 
@@ -89,14 +87,13 @@ Para começar a operar no painel do ZapVoice, siga as etapas descritas abaixo:
 
 ### Passo 1: Acesso ao Painel
 1. Acesse o frontend no seu navegador em: `http://localhost:5176` (caso esteja rodando localmente).
-2. Utilize as credenciais padrão de desenvolvimento:
-   *   **E-mail**: `aryarajmarketing@gmail.com`
-   *   **Senha**: `123456`
+2. Utilize as credenciais que você configurou no seu arquivo `.env` do backend:
+   *   **E-mail**: Valor definido na variável `SUPER_ADMIN_EMAIL` (ex: `admin@seudominio.com`)
+   *   **Senha**: Valor definido na variável `SUPER_ADMIN_PASSWORD`
 
-### Passo 2: Configuração de Canais (WhatsApp & Chatwoot)
+### Passo 2: Configuração da Meta WhatsApp API
 Antes de realizar disparos, configure as conexões no modal de **Configurações** (ícone de engrenagem no menu lateral):
 1. **WhatsApp API**: Preencha as credenciais da Meta (`ID do Telefone`, `Token de Acesso Temporário ou Permanente` e `ID da Conta de Negócios`).
-2. **Chatwoot**: Insira a `URL do Chatwoot` e a `Chave de API do Usuário` (AccessToken) para que o sistema sincronize conversas, caixas de entrada (Inboxes) e envie notas privadas.
 
 ### Passo 3: Criar um Funil de Mensagens
 1. Acesse a aba **Funis de Mensagens** no menu lateral.
@@ -165,97 +162,6 @@ Content-Type: application/json
 4. Use no header: `Authorization: Bearer zv_live_...`
 
 > **Rate Limit:** 100 requisições por minuto por IP.
-
----
-
-## 🗒️ Changelog
-
-### v1.8.6 — Versão Estável (2026-09-12)
-- ✅ **Deduplicação Inteligente e Sincronização Segura de Contatos**: Algoritmo canônico universal (`55 + DDD + últimos 8 dígitos`) em `phone_utils.py` com tratamento de anomalias (zeros extras após DDD, variações de DDI, 8 vs 9 dígitos e trailing zeros). O botão "Sincronizar" na tela de Contatos varre toda a base, funde todas as etiquetas sem perda, unifica variáveis de template, BSUD, e-mails, conversas do chat, soma `total_events` e remove com segurança os registros redundantes.
-- ✅ **Prazo Limite de Envio e Fallback Automático de 24h no Disparo em Massa**: Opção de definir Data e Hora limite (`max_dispatch_time`) no Passo 3 do Disparo em Massa, com fallback automático de 24 horas a partir do início do disparo caso não preenchido. O Worker aborta disparos expirados com segurança e a tarefa agendada de limpeza libera mensagens presas na fila da Meta (`sent` há mais de 24h).
-- ✅ **Filtro de Contatos por Etiquetas do Chat ZapVoice na Condição Inteligente**: Suporte a seleção de etiquetas internas do chat nos nós de Condição Inteligente do Construtor de Funis com autocomplete em tempo real.
-- ✅ **Otimização de Performance no Disparo em Massa**: Mecânica de envio inteligente com cache em memória de mídias baixadas para evitar requisições redundantes de rede e correção na continuidade da iteração de lotes.
-
-### v1.8.2 — Versão Estável (2026-08-25)
-- ✅ **Identificação Inteligente de PIX no Webhook da Hotmart**: Corrigida a extração e resolução de status para pagamentos via PIX na Hotmart v2.0 enviados sob o evento `PURCHASE_BILLET_PRINTED`, garantindo a correta exibição do Método como "Pix" e Status Principal como "Pix Gerado", com preservação dos dados de `pix_code` e `pix_qrcode`.
-
-### v1.8.1 — Versão Estável (2026-08-17)
-- ✅ **Mensagens Rápidas e Automáticas no Atendimento**: Suporte completo a atalhos por barra `/` no chat e no modal maximizado, com substituição inteligente de variáveis dinâmicas (`{{nome}}`, `{{primeiro_nome}}`, `{{telefone}}`).
-- ✅ **Paginação e Rolagem Estilizada no Seletor de Respostas Rápidas**: Dropdown suspenso com paginação de 5 itens por página, botões de navegação, rolagem suave e sincronização automática da página com as setas do teclado.
-- ✅ **Modais de Configuração com Backdrop em Tela Cheia**: Integração com React Portals para que os modais de cadastro, edição e exclusão de mensagens rápidas cubram 100% da viewport e tela sem restrições de container.
-
-### v1.7.1 — Versão Estável (2026-08-11)
-- ✅ **Correção na Aplicação de Etiquetas em Lote (`TagContactsModal`)**: Ajustada a correspondência de telefones na adição de etiquetas para utilizar sanitização apenas de dígitos numéricos (`replace(/\D/g, '')`). Isso impede falhas na vinculação de etiquetas quando os telefones possuem formatações de string ligeiramente distintas.
-
-### v1.9.3 — Versão Estável (2026-09-17)
-- ✅ **Transferência de Contatos/Conversas entre Marcadores (`POST /api/chat/labels/transfer`)**: Ferramenta completa para transferir em massa conversas de uma etiqueta para outra, com suporte aos modos "Mover (Substituir)" e "Copiar (Adicionar)" e sincronização atômica nas conversas do Chat (`ChatConversation.labels`) e nos contatos/leads do CRM (`WebhookLead.tags`).
-- ✅ **Seletor Pesquisável de Etiquetas (`SearchableLabelSelect`)**: Dropdown inteligente customizado no padrão Dark/Glassmorphism com busca instantânea no topo, foco automático, exibição de cores, contagem de conversas e opção dinâmica de criar novas etiquetas diretamente pelo termo pesquisado.
-- ✅ **Busca em Tempo Real na Lista de Marcadores Cadastrados**: Campo de pesquisa dinâmico no cabeçalho de marcadores para encontrar rapidamente qualquer etiqueta cadastrada com recalculo automático da paginação.
-- ✅ **Paginação de Marcadores (Máximo 20 por página)**: Navegação limpa com botões de página e contadores claros, evitando overflow e poluição visual quando há dezenas de marcadores.
-- ✅ **Contagem Dinâmica de Conversas por Etiqueta**: Cálculo dinâmico em tempo real de quantas conversas utilizam cada etiqueta no chat, com suporte a plural/singular e contagem correta para marcadores cadastrados e legados.
-- ✅ **Ajuste de Altura e Scroll Suave no `BulkTagModal`**: Correção da invasão das bordas da tela ao adicionar etiquetas em massa, com `max-h-[85vh]`, cabeçalho e rodapé fixos e scroll interno suave.
-- ✅ **Documentação Técnica de APIs de Chat (`docs/API_CHAT_CONVERSAS_MENSAGENS.md`)**: Guia detalhado de consumo para integração com sistemas externos, documentando os endpoints de conversas e mensagens com exemplos práticos em cURL, Python e Node.js.
-
-### v1.9.1 — Versão Estável (2026-09-15)
-- ✅ **Gatilho Exclusivo de "Primeira Mensagem / Nova Conversa" no Funil**: Trava rígida a nível de banco e interface que garante que apenas um único funil por cliente possa ter o nó de gatilho de início de conversa ativo, prevenindo duplicação de fluxos e conflito de mensagens.
-- ✅ **Notificação e Acompanhamento de Início de Funil no Chat**: Exibição de card interativo no chat com botão "Ver Pipeline do Funil", permitindo visualizar etapas em tempo real, tags aplicadas e histórico da automação.
-- ✅ **Botão de Redisparo de Template em Falha**: Botão direto na mensagem de template com status `failed` para redisparo imediato com limpeza da trava de 24 horas.
-- ✅ **Filtro de Contatos "Não Bloqueados" no Chat e Leads**: Acesso rápido e permanente para filtrar contatos liberados tanto na aba de Atendimento quanto na aba de Leads/Contatos.
-- ✅ **Novo Modal de Deleção de Contato com Estados e Confirmação Segura**: Modal com transição suave entre confirmação, progresso (*"Deletando contato..."* com barra animada) e sucesso com botão de fechar, respeitando o padrão de design system.
-- ✅ **Otimização Extrema de Deleção em Massa (Bulk Delete SQL em Batch)**: Eliminação de loops N+1 no ORM para execução direta em blocos de 500 IDs no banco de dados, reduzindo o tempo de deleção de 3.000 a 10.000 contatos de vários minutos para menos de 1 a 2 segundos.
-- ✅ **Script de Carga e Estresse de Contatos**: Utilitário em `backend/scripts/seed_10k_contacts.py` para geração rápida de contatos e mensagens de teste em massa.
-
-### v2.0.0 — Versão Estável (2026-10-01)
-- ✅ **Gestão e Painel de Custos Meta API (Política de 01/10/2026)**: Implementação do serviço `FinancialMetaService` e do card `MetaCostsCard` com rastreamento da franquia mensal de 1.000 mensagens gratuitas de serviço, tarifação de excedentes a R$ 0,035/msg, marketing a R$ 0,35/template e utilidade a R$ 0,035/template, projeção de fechamento da fatura e barra de progresso em tempo real.
-- ✅ **Filtro por Mês Específico no Painel Financeiro**: Adicionado suporte ao parâmetro `month` no backend (`GET /api/financial/summary` e `GET /api/financial/meta-costs`) e seletor nativo de mês no frontend (`DispatchesFilterBar`) com botão de limpar e sincronização instantânea de métricas.
-- ✅ **Integração Nativa YayForms**: Parser completo de webhook para formulários online da plataforma YayForms (`webhook_platform_parsers/yayforms.py`), suportando respostas personalizadas, mapeamento de campos e disparos automatizados.
-- ✅ **Deduplicação de Estornos e Dedução de Chargeback**: Tratamento unificado de estornos no painel de vendas (`/api/financial/sales`), garantindo que tanto `reembolso` quanto `chargeback` debitem corretamente o faturamento líquido e prevenindo duplicações de reembolso sem compra aprovada correspondente.
-- ✅ **Auditoria de Segurança Integrada (100% Livre de Vulnerabilidades)**: Dependências do Python atualizadas (`urllib3==2.8.0`) e pacotes do React corrigidos via `npm audit fix`, resultando em 0 vulnerabilidades no `audit_security.py`.
-
-### v1.7.0 — Versão Estável (2026-08-11)
-- ✅ **Sincronização Exata do Contador de Pulados (`⏭️ total_skipped`)**: Corrigida a função `reconcile` que mantinha o valor anterior em `trigger.total_skipped` através de `max()`. Agora, o contador na linha do disparo reflete de forma dinâmica e precisa o número de contatos com status `skipped` (6 pulados), batendo 100% com a lista exibida ao abrir o modal.
-
-### v1.6.9 — Versão Estável (2026-08-11)
-- ✅ **Botão de Acesso Direto ao Chat nos Modais de Relatório**: Adicionado um botão roxo estilizado `💬 Chat` ao lado do número de cada contato no modal de detalhes do disparo (Enviados, Lidos, Interações, Fila, etc.). Quando o contato possui conversa criada/existente no Chatwoot / ZapVoice, o botão permite abrir diretamente o atendimento daquele contato em uma nova aba. (Disponíveis tags `backend-1.6.9` e `worker-1.6.9`).
-
-### v1.6.8 — Versão Estável (2026-08-11)
-- ✅ **Filtro de Contatos Pulados (Skipped 24h)**: Ao clicar no ícone de pular `⏭️`, o modal agora aplica corretamente o filtro `status_filter=skipped` no backend. A lista agora exibe exclusivamente os contatos que realmente foram pulados por envio recente de template nas últimas 24h, sem misturar com a lista completa do disparo. (Disponíveis tags `backend-1.6.8` e `worker-1.6.8`).
-
-### v1.6.7 — Versão Estável (2026-08-11)
-- ✅ **Validação Focada no Alcance do Disparo (N Primeiros Contatos Aptos)**: Ao clicar no botão `VALIDAR CANAIS & JANELAS`, o sistema agora valida exclusivamente os N primeiros contatos configurados em "Disparar para os N Primeiros" (ex: 80 contatos), evitando requisições ou requisições desnecessárias para a lista inteira de contatos.
-
-### v1.6.6 — Versão Estável (2026-08-11)
-- ✅ **Exportação CSV de Todos os Contatos Selecionados (Suporte Global a `selectAllPages`)**: Ao marcar a opção "Todos os X contatos estão selecionados", a exportação via CSV passa a baixar **todos os 1.277+ contatos** da base (respeitando os filtros ativos) em vez de limitar aos 50 contatos da primeira página visível.
-
-### v1.6.5 — Versão Estável (2026-08-11)
-- ✅ **Conversor Automático de Nome de País para DDI na Importação de Contatos**: Ao importar planilhas em que a coluna de DDI contém o nome do país em texto (ex: `Brasil`, `Portugal`, `Estados Unidos`, `Espanha`, `Itália`, `Austrália`, `Emirados Árabes Unidos`, `França`, `Canadá`, `Holanda`, `Suíça`, `Argentina`, etc.), o sistema converte automaticamente o nome para o código numérico do DDI correspondente (ex: `55`, `351`, `1`, `34`, `39`, `61`, `971`, `33`, `1`, `31`, `41`, `54`).
-
-### v1.6.4 — Versão Estável (2026-08-11)
-- ✅ **Dropdown Inteligente de Seleção de Etiquetas no Modal de Gerenciamento**: Substituição do campo de texto simples no `BulkTagModal` por seletor suspenso inteligente com campo de busca interna, suporte à criação de novas etiquetas na aba "Adicionar" e visualização de etiquetas existentes na aba "Remover".
-- ✅ **Filtro Duplo de Etiquetas no Cabeçalho (Inclusão "Ter" vs Exclusão "Não Ter")**: Permite filtrar a lista de contatos para exibir leads com determinada etiqueta ou ocultar contatos que possuem determinada tag (`exclude_tag`).
-- ✅ **Organização da Barra de Ações em 2 Linhas**: Reestruturação visual do cabeçalho da lista de contatos com divisão equilibrada das ferramentas de gestão e importação/exportação.
-- ✅ **Rotação Condicional por Sucesso no ManyChat**: A ponteira de rotação das contas do ManyChat só avança após o sucesso (`status == 'success'`) da integração, garantindo retentativa na mesma conta em caso de falha.
-- ✅ **Ajustes Finos de Interface e Camadas**: Correção do z-index e eliminação da barra de rolagem horizontal (`overflow-x-hidden`) no menu do modal de etiquetas.
-
-### v4.5.0 — Versão Estável (2026-08-10)
-- ✅ **Análise de Dúvidas de Atendimento com IA (OpenAI)**: Análise inteligente individual e em lote para conversas, gerando relatório de dúvidas não respondidas e opção de exportação em HTML e PDF.
-- ✅ **Popup Modal de Escolha de Cor para Novas Etiquetas**: Ao criar um novo marcador no chat, exibe modal centralizado com paleta de cores predefinidas + seletor customizado `<input type="color">` e pré-visualização ao vivo.
-- ✅ **Exibição da Quantidade de Caracteres por Etiqueta**: Exibição dinâmica da contagem de caracteres de cada marcador nos cards de atendimento, barra lateral e gerenciador de etiquetas.
-- ✅ **Trava Rígida de 20 Caracteres e Exibição Sem Truncar**: Limite de 20 caracteres nos inputs frontend e backend com suporte a quebra de linha (`break-words`) para mostrar o nome completo da etiqueta sem `...`.
-- ✅ **Anotações Privadas com Edição, Remoção com Confirm Popup e Modo Maximizado**: Popup com backdrop transparente para confirmação de exclusão e modal maximizado para digitação confortável.
-
-### v4.4.0 — Versão Estável (2026-07-14)
-- ✅ **Endpoint público de atualização de contatos** (`POST /api/contacts/{phone}/update`) com autenticação por API Key e rate limit de 100 req/min
-- ✅ **Novos campos na aba de Contatos**: `google_meet_link` (link do Google Meet) e `meeting_at` (data/hora da reunião agendada)
-- ✅ **Migração online automática**: colunas adicionadas automaticamente em tabelas existentes sem necessidade de intervenção manual
-- ✅ **Script de migração manual** incluído: `backend/add_meeting_columns_to_contacts.py`
-
-### v4.3.0
-- Configuração de Botões HSM no Chat
-- Regras de Bloqueio Rápido
-- Modais de Carregamento Premium
-- Integração de Webhook de Memória
-- Proteção de Sobrescrita de Nomes de Leads
 
 ---
 
