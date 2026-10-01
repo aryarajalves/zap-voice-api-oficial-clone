@@ -21,7 +21,7 @@ describe('SalesFinancial Modular Components', () => {
       expect(screen.getByText('R$ 15.450,50')).toBeDefined();
       expect(screen.getByText('Vendas Aprovadas')).toBeDefined();
       expect(screen.getByText('120')).toBeDefined();
-      expect(screen.getByText('Reembolsos')).toBeDefined();
+      expect(screen.getByText(/Reembolsos/i)).toBeDefined();
       expect(screen.getByText('3')).toBeDefined();
     });
   });

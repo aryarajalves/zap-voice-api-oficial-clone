@@ -7,7 +7,7 @@ export const PERIOD_OPTIONS = [
 
 export const STATUS_FILTER_OPTIONS = [
   { value: 'approved', label: 'Compra Aprovada' },
-  { value: 'refunded', label: 'Reembolso' },
+  { value: 'refunded', label: 'Reembolso / Chargeback' },
 ];
 
 export const PLATFORM_FILTER_OPTIONS = [
@@ -28,6 +28,7 @@ export const PLATFORM_FILTER_OPTIONS = [
   { value: 'pagtrust',  label: 'PagTrust' },
   { value: 'pepper',    label: 'Pepper' },
   { value: 'ticto',     label: 'Ticto' },
+  { value: 'yayforms',  label: 'YayForms' },
   { value: 'zapgroup',  label: 'ZapGroup' },
 ];
 

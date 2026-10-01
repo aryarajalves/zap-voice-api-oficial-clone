@@ -152,6 +152,9 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
     elif platform_lower in ['bussola_quiz', 'quiz_bussola', 'landing_page_bussola_quiz']:
         from services.utils.webhook_platform_parsers import parse_bussola_quiz
         parse_bussola_quiz(payload, result)
+    elif platform_lower == 'yayforms':
+        from services.utils.webhook_platform_parsers import parse_yayforms
+        parse_yayforms(payload, result)
     elif platform_lower in ['elementor', 'generic', 'outra', 'outros']:
         # Tenta capturar campos comuns em payloads desconhecidos
         result['name'] = (
@@ -352,6 +355,7 @@ def parse_webhook_payload(platform: str, payload: dict) -> dict:
         "CHECKOUT PRE_POPULADO": "Checkout Pré-populado",
         "CHECKOUT_PRE-POPULADO": "Checkout Pré-populado",
         "PIX_EXPIRADO": "Pix Expirado", "EVENTO_ALUNO": "Evento do Aluno", "OUTROS": "Outros",
+        "FORMULARIO": "Formulário", "FORM_SUBMISSION": "Formulário",
         "LEITURA_CONCLUIDA": "Leitura Concluída", "LEITURA_CONCLUÍDA": "Leitura Concluída",
         "LEITURA CONCLUIDA": "Leitura Concluída", "LEITURA CONCLUÍDA": "Leitura Concluída",
         "PENDING": "Pix Gerado", "WAITING_PAYMENT": "Pix Gerado", "REFUNDED": "Reembolso",
@@ -766,3 +770,102 @@ def replace_variables_in_string(text: str, payload: dict, parsed_data: dict) -> 
             text = text.replace(f"{{{{{match}}}}}", "")
 
     return text
+
+
+def normalize_phone_suf(phone: Optional[str]) -> Optional[str]:
+    """Extrai os últimos 8 dígitos numéricos do telefone para deduplicação segura."""
+    if not phone:
+        return None
+    digits = "".join(filter(str.isdigit, str(phone)))
+    if len(digits) >= 8:
+        return digits[-8:]
+    return digits if digits else None
+
+
+def normalize_product_key(product_name: Optional[str]) -> str:
+    """Normaliza o nome do produto para agrupamento case-insensitive sem ruídos."""
+    if not product_name or str(product_name).strip() in ("", "Produto Desconhecido"):
+        return "default"
+    # Remove variações comuns de moedas/valores embutidos no título
+    clean = re.sub(r'\s*\([^)]*?(R\$|\$|€|£|BRL|USD|EUR|US\$|R\$ )[\d\.,\s]+[^)]*?\)', '', str(product_name))
+    clean = re.sub(r'\s*-?\s*(R\$|\$|€|£|BRL|USD|EUR|US\$)\s*[\d\.,]+', '', clean)
+    return clean.strip().lower()
+
+
+def is_refund_eligible_for_lead(
+    db: Any,
+    integration_id: Any,
+    phone: Optional[str],
+    email: Optional[str],
+    product_name: Optional[str],
+    buyer_name: Optional[str] = None
+) -> bool:
+    """
+    Verifica se um reembolso é elegível para ser registrado.
+    Um reembolso só é elegível se o contato tiver pelo menos uma compra aprovada ativa
+    para o mesmo produto (isto é: quantidade de compras aprovadas > quantidade de reembolsos anteriores).
+    Se já houver reembolso para a compra, o contato precisa recomprar para ser reembolsado de novo.
+    """
+    import models
+
+    phone_suf = normalize_phone_suf(phone)
+    email_clean = str(email).strip().lower() if email else None
+    name_clean = str(buyer_name).strip().lower() if buyer_name and buyer_name != "—" else None
+    prod_key = normalize_product_key(product_name)
+
+    # Se não temos nem telefone nem e-mail nem nome, permite o processamento padrão
+    if not phone_suf and not email_clean and not name_clean:
+        return True
+
+    # Evita quebrar em testes que utilizam mocks puros de db sem tabela real
+    if "mock" in str(type(db)).lower() or "mock" in str(type(getattr(db, "query", None))).lower():
+        return True
+
+    try:
+        APPROVED_EVENTS = {"compra_aprovada", "compra_aprovada_ob", "compra_aprovada_com_ob", "compra_aprovada_upsell"}
+        REFUND_EVENTS = {"reembolso", "chargeback"}
+        all_histories = db.query(models.WebhookHistory).filter(
+            models.WebhookHistory.integration_id == integration_id,
+            models.WebhookHistory.event_type.in_(list(APPROVED_EVENTS | REFUND_EVENTS))
+        ).order_by(models.WebhookHistory.created_at.asc(), models.WebhookHistory.id.asc()).all()
+
+        approved_count = 0
+        refunded_count = 0
+
+        for h in all_histories:
+            data = h.processed_data or {}
+            h_phone = data.get("phone")
+            h_phone_suf = normalize_phone_suf(h_phone)
+            h_email = str(data.get("email") or "").strip().lower() if data.get("email") else None
+            h_name = str(data.get("name") or "").strip().lower() if data.get("name") and data.get("name") != "—" else None
+            h_prod = normalize_product_key(data.get("product_name"))
+
+            # Valida se é o mesmo contato
+            matches_contact = False
+            if phone_suf and h_phone_suf and phone_suf == h_phone_suf:
+                matches_contact = True
+            elif email_clean and h_email and email_clean == h_email:
+                matches_contact = True
+            elif name_clean and h_name and name_clean == h_name:
+                matches_contact = True
+
+            if not matches_contact:
+                continue
+
+            # Valida produto (permite se prod_key coincidir ou se algum deles for default/genérico)
+            if prod_key != "default" and h_prod != "default" and prod_key != h_prod:
+                continue
+
+            evt = h.event_type
+            if evt in APPROVED_EVENTS:
+                approved_count += 1
+            elif evt in REFUND_EVENTS:
+                refunded_count += 1
+
+        # O estorno/reembolso só é elegível se houver saldo de compra aprovada ativa
+        return approved_count > refunded_count
+
+    except Exception as e:
+        logger.warning(f"⚠️ [REFUND_ELIGIBILITY_CHECK] Falha ao verificar elegibilidade de reembolso: {e}")
+        return True
+

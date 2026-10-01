@@ -225,4 +225,7 @@ export const PLATFORM_EVENT_OPTIONS = {
         { value: 'leitura_concluida', label: 'Leitura Concluída (Quiz)' },
         { value: 'checkout_pre_populado', label: 'Checkout Pré-populado' },
     ],
+    yayforms: [
+        { value: 'formulario', label: 'Formulário (YayForms)' },
+    ],
 };

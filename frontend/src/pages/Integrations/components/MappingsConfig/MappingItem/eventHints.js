@@ -10,4 +10,5 @@ export const EVENT_HINTS = {
   leitura_concluida: '🔮 Disparado pelo Quiz da Bússola quando a leitura astrológica é concluída. Extrai {{mensagem}}, {{nascimento_data}}, {{cidade}}, {{quiz_area}} e dados da carta.',
   alteracao_vencimento: '📅 Disparado pela Hotmart quando a data de cobrança de uma assinatura é alterada (evento UPDATE_SUBSCRIPTION_CHARGE_DATE).',
   troca_de_plano: '🔄 Disparado pela Hotmart quando o assinante muda de plano (evento SWITCH_PLAN).',
+  formulario: '📝 Disparado pela YayForms quando um formulário é respondido e enviado pelo lead. Extrai nome, WhatsApp, e-mail, cidade e variáveis de todas as respostas.',
 };

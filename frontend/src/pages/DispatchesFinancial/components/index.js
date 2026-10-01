@@ -4,3 +4,4 @@ export { default as FinancialSummaryCards } from './FinancialSummaryCards';
 export { default as FinancialSavingsBar } from './FinancialSavingsBar';
 export { default as FinancialPeriodTable } from './FinancialPeriodTable';
 export { default as FinancialEmptyState } from './FinancialEmptyState';
+export { default as MetaCostsCard } from './MetaCostsCard';

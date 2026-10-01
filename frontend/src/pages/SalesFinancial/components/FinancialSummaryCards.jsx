@@ -40,9 +40,9 @@ export default function FinancialSummaryCards({ totals }) {
         icon="✅"
       />
       <StatCard
-        title="Reembolsos"
+        title="Reembolsos / Chargebacks"
         value={(totals.total_refunds || 0).toLocaleString('pt-BR')}
-        sub="Estornos efetuados"
+        sub="Estornos e contestações"
         color="purple"
         icon="🔄"
       />

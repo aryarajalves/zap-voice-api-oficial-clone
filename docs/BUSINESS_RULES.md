@@ -14,6 +14,7 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 - **Slugs Customizados**: Cada integração possui uma URL única (ex: `/api/webhooks/venda-vip`).
 - **Mapeamento de Eventos**: O usuário define qual Funil ou Template dispara para cada status (Boleto, Aprovado, Reembolso).
 - **Filtro de Produtos**: Possibilidade de ignorar eventos de produtos que não estão na "White List".
+- **Deduplicação e Validação de Reembolsos e Chargebacks**: Eventos de estorno (`reembolso` e `chargeback`) só são processados e contabilizados se o comprador possuir saldo de compra aprovada (`compra_aprovada`, `compra_aprovada_ob`, `compra_aprovada_com_ob`, `compra_aprovada_upsell`) ativa para o mesmo produto. Tanto no recebimento de webhooks quanto no cálculo do painel financeiro, o `chargeback` abate o faturamento líquido total e é listado na tabela de transações com o badge de estorno. Reenvios duplicados de reembolso/chargeback sem uma nova compra aprovada correspondente são automaticamente ignorados (`status="ignored"`, `reason="duplicate_refund_no_active_purchase"`), protegendo a integridade financeira das métricas.
 - **Webhook de Memória em Disparos em Massa**: Quando o Webhook de Memória do Agente está configurado, o sistema envia automaticamente para essa URL todas as mensagens de disparos em massa (Bulk) que são de fato entregues (status delivered/read) no WhatsApp do contato.
 
 ### 3. Regras de Cancelamento e Interrupção Inteligente
@@ -76,6 +77,14 @@ Este documento centraliza as definições de comportamento do sistema e os requi
 - **Segmentação Local (ZapVoice)**: Atua exclusivamente sobre o banco de contatos e leads do ZapVoice (`WebhookLead`). É utilizada para adicionar/remover tags de segmentação de contatos (usadas para filtros, listas e disparos em massa) ou gerenciar a Blacklist local (bloquear/desbloquear número). **Não altera marcadores/etiquetas da conversa no Chat.**
 - **Atendimento (Chat Local)**: Opção específica para o módulo de Atendimento/Chat. É a responsável por adicionar e remover etiquetas/marcadores diretamente na conversa do contato (`ChatConversation.labels`), além de permitir atualizar nome, notas privadas e responsável da conversa no Chat local.
 
+### 14. Política de Cobrança e Franquia da Meta Cloud API (Vigência 01/10/2026)
+- **Franquia de 1.000 Mensagens Gratuitas de Serviço**: Cada cliente/número possui uma cota mensal de 1.000 mensagens de serviço (atendimento SAC/chat livre) gratuitas. A contagem zera no primeiro dia de cada mês.
+- **Tarifação após a Cota**:
+  - Mensagens de serviço excedentes: **R$ 0,0350 por mensagem entregue**.
+  - Templates de utilidade/transacionais: **R$ 0,0350 por template**.
+  - Templates de marketing/promocionais: **R$ 0,3500 por template**.
+- **Painel Financeiro de Disparos**: Apresenta em tempo real a barra de consumo da franquia, a fatura acumulada e a projeção de fechamento no fim do mês.
+
 ---
 
 ## 🖥️ Detalhamento das Telas e UX
@@ -128,6 +137,19 @@ Abaixo, detalho cada tela identificada no sistema e as dúvidas que precisamos s
         - **Nome do Arquivo**: `Leitura_Bussola_{Primeiro_Nome}.pdf` (ou `Leitura_Bussola.pdf` como fallback).
         - **Entrega no WhatsApp**: O PDF gerado é enviado para o storage (MinIO/S3), injetando as variáveis `bussola_pdf_url` e `bussola_pdf_filename`. Pode ser anexado automaticamente ao cabeçalho tipo Documento (`Header Document`) dos templates da Meta selecionando a opção nativa "PDF Automático da Leitura (Bússola Quiz)".
         - **Visualizador de Renderização de PDF**: O painel do gatilho e a coluna de prévia contam com botão "Visualizar PDF", abrindo um modal interativo com campos de simulação editáveis (Nome, Data e Mensagem), visualização em tempo real do PDF renderizado em A4 e botão de download.
+- **Integração YayForms (Formulários Online - origem: `yayforms`)**:
+    - O payload enviado pelo YayForms suporta o status/evento principal `formulario` (com compatibilidade e fallback para `form_submission`).
+    - O sistema detecta automaticamente o nome do formulário/evento através de campos de cabeçalho (ex: "RETIRO CORAÇÃO CIGANO 2026") ou `formTitle`/`title`, mapeando-o como `product_name`.
+    - Extração automática de dados fundamentais do lead:
+        - `name`, `nome_completo` e `first_name`: capturados do campo de nome completo da resposta
+        - `phone` e `whatsapp`: normalizados com DDI e DDD
+        - `email`: extraído da resposta de e-mail do lead
+        - `cidade`, `estado`, `pais`: extraídos tanto de perguntas diretas de moradia/cidade quanto do bloco `geolocation`
+    - Mapeamento dinâmico de respostas como variáveis utilizáveis nos templates de mensagem e funis:
+        - `{{form_id}}` e `{{response_id}}`: IDs do formulário e da resposta
+        - `{{cidade}}`, `{{estado}}`, `{{pais}}`: Localização
+        - Slugs amigáveis gerados para cada pergunta do formulário (ex: `{{qual_area_da_sua_vida_mais_pede_transformacao_neste_momento}}`, `{{qual_faixa_representa_melhor_o_investimento}}`)
+        - Aliases semânticos automáticos: `{{investimento}}`, `{{area_transformacao}}`, `{{mudanca_concreta}}`, `{{experiencia_medicinas}}`, `{{interesse_consagrar}}`, `{{disponibilidade}}`, `{{saude_historico}}`, `{{momento_avancar}}`.
 
 ### 4. Gestão de Leads (`leads`)
 - **Propósito**: Visualizar os contatos que entraram via webhook e seu status.

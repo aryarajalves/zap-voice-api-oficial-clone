@@ -1,6 +1,6 @@
-# ⚡ ZapVoice - Automação WhatsApp API Oficial (v1.9.8 — Versão Estável)
+# ⚡ ZapVoice - Automação WhatsApp API Oficial (v2.0.0 — Versão Estável)
 
-Versão estável com **Mecânica Completa e Visual de Aguardar Início no Nó de Condição por Data/Hora**, **Exibição Restrita dos Dois Tiques Azuis no Chat (Apenas quando Mensagem For Lida)**, **Filtros Avançados de Avaliação por Estrelas (Ranges 1-3, 4-5, Pulou e Seleção Múltipla) no Quiz da Bússola**, **Proteção contra Criação Prematura de Conversas em Falha de Template (Chatwoot & Chat Local)**, **Extração e Envio do Conteúdo Real de Documentos Anexados para Webhooks de Memória IA**, **Exclusão Individual e em Lote com Backdrop Seguro no Histórico de Disparos**, **Auditoria de Segurança Integrada (pip-audit + npm audit 100% seguros)** e **Modularização Completa de Clean Code**.
+Versão estável com **Controle e Estimativa de Custos da Meta API (Nova Política de Outubro/2026 com Franquia de 1.000 Mensagens de Serviço e Filtro por Mês Específico)**, **Integração Nativa YayForms para Formulários Webhook**, **Tratamento Contábil de Chargeback e Deduplicação Inteligente de Estornos no Financeiro**, **Mecânica Completa e Visual de Aguardar Início no Nó de Condição por Data/Hora**, **Auditoria de Segurança Integrada (pip-audit + npm audit 100% seguros)** e **Modularização Completa de Clean Code**.
 
 
 
@@ -70,7 +70,7 @@ Visualização e controle de conversas diretamente no painel do ZapVoice:
 *   **Auditoria e Guia de Segurança**: Consulte o arquivo [`SECURITY.md`](file:///c:/Users/aryar/.gemini/antigravity/scratch/Projetos%20Serios/Projeto%20-%20ZapVoice%20no%20Chatwoot/SECURITY.md) para o roadmap completo de blindagem, boas práticas ativas e diagnóstico de segurança da aplicação.
 
 ### 6. Integrações de Webhooks & Mapeamento de Contatos
-Integração nativa com as principais plataformas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark, Elementor e ZapGroup**.
+Integração nativa com as principais plataformas do mercado: **Hotmart, Kiwify, Eduzz (checkout Sun, Nutror, MyEduzz), Guru, Kirvano, Greenn, Cakto, Braip, Ticto, HeroSpark, Elementor, ZapGroup e YayForms**.
 *   **Mapeamento Completo de Status**: Mapeamento inteligente de eventos como Compra Aprovada, Pix Gerado, Boleto Impresso, Cartão Recusado, Carrinho Abandonado, Reembolso, Chargeback, Assinatura Ativa/Cancelada e Troca de Plano.
 *   **Campos Customizados de Contato**: Permite configurar regras para extrair informações do payload do webhook (como e-mail, telefone, CPF, etc.) e salvá-los no contato local do lead.
 *   **Inteligência de Vendas Casadas**: Detecção automática de ofertas **Order Bump** e campanhas de **Upsell / Upgrade** baseadas no nome do produto ou tags do payload para evitar duplicação ou segmentar funis específicos.
@@ -204,6 +204,13 @@ Content-Type: application/json
 - ✅ **Novo Modal de Deleção de Contato com Estados e Confirmação Segura**: Modal com transição suave entre confirmação, progresso (*"Deletando contato..."* com barra animada) e sucesso com botão de fechar, respeitando o padrão de design system.
 - ✅ **Otimização Extrema de Deleção em Massa (Bulk Delete SQL em Batch)**: Eliminação de loops N+1 no ORM para execução direta em blocos de 500 IDs no banco de dados, reduzindo o tempo de deleção de 3.000 a 10.000 contatos de vários minutos para menos de 1 a 2 segundos.
 - ✅ **Script de Carga e Estresse de Contatos**: Utilitário em `backend/scripts/seed_10k_contacts.py` para geração rápida de contatos e mensagens de teste em massa.
+
+### v2.0.0 — Versão Estável (2026-10-01)
+- ✅ **Gestão e Painel de Custos Meta API (Política de 01/10/2026)**: Implementação do serviço `FinancialMetaService` e do card `MetaCostsCard` com rastreamento da franquia mensal de 1.000 mensagens gratuitas de serviço, tarifação de excedentes a R$ 0,035/msg, marketing a R$ 0,35/template e utilidade a R$ 0,035/template, projeção de fechamento da fatura e barra de progresso em tempo real.
+- ✅ **Filtro por Mês Específico no Painel Financeiro**: Adicionado suporte ao parâmetro `month` no backend (`GET /api/financial/summary` e `GET /api/financial/meta-costs`) e seletor nativo de mês no frontend (`DispatchesFilterBar`) com botão de limpar e sincronização instantânea de métricas.
+- ✅ **Integração Nativa YayForms**: Parser completo de webhook para formulários online da plataforma YayForms (`webhook_platform_parsers/yayforms.py`), suportando respostas personalizadas, mapeamento de campos e disparos automatizados.
+- ✅ **Deduplicação de Estornos e Dedução de Chargeback**: Tratamento unificado de estornos no painel de vendas (`/api/financial/sales`), garantindo que tanto `reembolso` quanto `chargeback` debitem corretamente o faturamento líquido e prevenindo duplicações de reembolso sem compra aprovada correspondente.
+- ✅ **Auditoria de Segurança Integrada (100% Livre de Vulnerabilidades)**: Dependências do Python atualizadas (`urllib3==2.8.0`) e pacotes do React corrigidos via `npm audit fix`, resultando em 0 vulnerabilidades no `audit_security.py`.
 
 ### v1.7.0 — Versão Estável (2026-08-11)
 - ✅ **Sincronização Exata do Contador de Pulados (`⏭️ total_skipped`)**: Corrigida a função `reconcile` que mantinha o valor anterior em `trigger.total_skipped` através de `max()`. Agora, o contador na linha do disparo reflete de forma dinâmica e precisa o número de contatos com status `skipped` (6 pulados), batendo 100% com a lista exibida ao abrir o modal.

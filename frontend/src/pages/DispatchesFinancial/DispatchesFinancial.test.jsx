@@ -45,13 +45,30 @@ const mockSummaryData = {
   ]
 };
 
+const mockMetaData = {
+  month: '2026-10',
+  rates: { marketing_rate: 0.35, service_rate: 0.035, utility_rate: 0.035, free_quota: 1000 },
+  counts: { marketing_count: 50, utility_count: 20, service_count: 1200, total_messages: 1270 },
+  quota: { total: 1000, used: 1000, remaining: 0, percent_used: 100.0, billable_service_count: 200 },
+  costs: { marketing_cost: 17.5, utility_cost: 0.7, service_cost: 7.0, total_cost: 25.2, savings_quota: 35.0, projected_total: 78.12 }
+};
+
 describe('DispatchesFinancial Module & Components', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    fetchWithAuth.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => mockSummaryData
+    fetchWithAuth.mockImplementation(async (url) => {
+      if (url.includes('/financial/meta-costs')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => mockMetaData
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => mockSummaryData
+      };
     });
   });
 
@@ -139,6 +156,11 @@ describe('DispatchesFinancial Module & Components', () => {
       expect(screen.getByText('R$ 220,00')).toBeInTheDocument();
       expect(screen.getByText('60% gratuito')).toBeInTheDocument();
       expect(screen.getByText('Brasília (GMT-3)')).toBeInTheDocument();
+
+      // Validação do Card da Nova Política de Cobrança da Meta
+      expect(screen.getByText(/Nova Política de Cobrança Meta/i)).toBeInTheDocument();
+      expect(screen.getByText(/1.000 grátis\/mês/i)).toBeInTheDocument();
+      expect(screen.getByText(/Projeção Fechamento/i)).toBeInTheDocument();
     });
 
     it('renderiza tabela de períodos com valores formatados', async () => {
@@ -193,6 +215,35 @@ describe('DispatchesFinancial Module & Components', () => {
         expect.anything(),
         mockActiveClient.id
       );
+    });
+
+    it('permite selecionar um mês específico e disparar nova busca com month param', async () => {
+      await act(async () => {
+        render(<DispatchesFinancial activeClient={mockActiveClient} />);
+      });
+
+      const monthInput = screen.getByLabelText(/Mês Específico:/i);
+      expect(monthInput).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.change(monthInput, { target: { value: '2026-10' } });
+      });
+
+      expect(fetchWithAuth).toHaveBeenCalledWith(
+        expect.stringContaining('month=2026-10'),
+        expect.anything(),
+        mockActiveClient.id
+      );
+
+      // Botão de Limpar aparece e limpa o filtro ao clicar
+      const clearBtn = screen.getByText('Limpar');
+      expect(clearBtn).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(clearBtn);
+      });
+
+      expect(monthInput.value).toBe('');
     });
   });
 });

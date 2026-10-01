@@ -5,7 +5,9 @@ import { fetchWithAuth } from '../../../AuthContext';
 export function useDispatchesFinancial(activeClient) {
   const [period, setPeriod] = useState('monthly');
   const [source, setSource] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [data, setData] = useState(null);
+  const [metaData, setMetaData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pageSize, setPageSize] = useState(20);
@@ -16,20 +18,33 @@ export function useDispatchesFinancial(activeClient) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchWithAuth(
-        `${API_URL}/financial/summary?period=${period}&source=${source}`,
-        {},
-        activeClient.id
-      );
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
-      const json = await res.json();
+      const summaryUrl = selectedMonth
+        ? `${API_URL}/financial/summary?period=${period}&source=${source}&month=${selectedMonth}`
+        : `${API_URL}/financial/summary?period=${period}&source=${source}`;
+      
+      const metaUrl = selectedMonth
+        ? `${API_URL}/financial/meta-costs?month=${selectedMonth}`
+        : `${API_URL}/financial/meta-costs`;
+
+      const [resSummary, resMeta] = await Promise.all([
+        fetchWithAuth(summaryUrl, {}, activeClient.id),
+        fetchWithAuth(metaUrl, {}, activeClient.id)
+      ]);
+
+      if (!resSummary.ok) throw new Error(`Erro ${resSummary.status}`);
+      const json = await resSummary.json();
       setData(json);
+
+      if (resMeta.ok) {
+        const metaJson = await resMeta.json();
+        setMetaData(metaJson);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [activeClient, period, source]);
+  }, [activeClient, period, source, selectedMonth]);
 
   useEffect(() => {
     fetchData();
@@ -88,6 +103,9 @@ export function useDispatchesFinancial(activeClient) {
     totalPages,
     visibleRows,
     pageRows,
+    metaData,
+    selectedMonth,
+    setSelectedMonth,
     fetchData
   };
 }

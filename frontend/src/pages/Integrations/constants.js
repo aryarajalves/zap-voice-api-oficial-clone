@@ -20,6 +20,7 @@ export const EVENT_TYPES = [
   { value: 'assinatura_atrasada', label: 'Assinatura Atrasada' },
   { value: 'assinatura_renovada', label: 'Assinatura Renovada' },
   { value: 'assinatura_vencida', label: 'Assinatura Vencida' },
+  { value: 'formulario', label: 'Formulário' },
   { value: 'form_submission', label: 'Formulário / Elementor' },
   { value: 'voto_enquete', label: 'Voto em Enquete (ZapGroup)' },
   { value: 'lead_extraido', label: 'Lead Extraído (ZapGroup)' },
@@ -48,6 +49,7 @@ export const PLATFORM_EVENT_TYPES = {
   herospark: ['compra_aprovada','compra_aprovada_com_ob','compra_aprovada_upsell','cartao_recusado','reembolso','chargeback','carrinho_abandonado','checkout_pre_populado','pix_gerado','pix_expirado','boleto_expirado','assinatura_cancelada','assinatura_atrasada','assinatura_renovada','outros'],
   pagtrust:  ['compra_aprovada','compra_aprovada_ob','compra_cancelada','cartao_recusado','reembolso','chargeback','carrinho_abandonado','checkout_pre_populado','pix_gerado','pix_expirado','boleto_impresso','outros'],
   elementor: ['form_submission','checkout_pre_populado','outros'],
+  yayforms:  ['formulario','form_submission','outros'],
   zapgroup:  ['voto_enquete','lead_extraido','compra_aprovada','carrinho_abandonado','checkout_pre_populado','outros'],
   bussola_quiz: ['leitura_concluida','checkout_pre_populado','compra_aprovada','carrinho_abandonado','outros'],
   quiz_bussola: ['leitura_concluida','checkout_pre_populado','compra_aprovada','carrinho_abandonado','outros'],
@@ -95,6 +97,9 @@ export const BODY_VAR_OPTIONS = [
   { value: 'feedback_pulou', label: '[Quiz] Pulou Avaliação (Sim / Não)' },
   { value: 'buyer.name', label: '[Hotmart] Nome Completo' },
   { value: 'Customer.full_name', label: '[Kiwify] Nome Completo' },
+  { value: 'form_id', label: '[YayForms] ID do Formulário' },
+  { value: 'response_id', label: '[YayForms] ID da Resposta' },
+  { value: 'investimento', label: '[YayForms] Faixa de Investimento' },
   { value: 'custom', label: 'Campo Personalizado / Fixo' },
 ];
 

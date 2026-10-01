@@ -5,7 +5,8 @@ import {
   FinancialSummaryCards,
   FinancialSavingsBar,
   FinancialPeriodTable,
-  FinancialEmptyState
+  FinancialEmptyState,
+  MetaCostsCard
 } from './components';
 
 export default function DispatchesFinancial({ activeClient }) {
@@ -14,7 +15,10 @@ export default function DispatchesFinancial({ activeClient }) {
     setPeriod,
     source,
     setSource,
+    selectedMonth,
+    setSelectedMonth,
     data,
+    metaData,
     totals,
     freeRatio,
     loading,
@@ -35,6 +39,8 @@ export default function DispatchesFinancial({ activeClient }) {
         setPeriod={setPeriod}
         source={source}
         setSource={setSource}
+        selectedMonth={selectedMonth}
+        setSelectedMonth={setSelectedMonth}
       />
 
       {loading && (
@@ -66,6 +72,8 @@ export default function DispatchesFinancial({ activeClient }) {
 
       {!loading && data && (
         <>
+          <MetaCostsCard metaData={metaData} loading={loading} />
+
           <FinancialSummaryCards totals={totals} freeRatio={freeRatio} />
 
           <FinancialSavingsBar totals={totals} freeRatio={freeRatio} />

@@ -103,10 +103,10 @@ def test_financial_sales_endpoint(client, db_session):
 
         # 4. Verify Totals (Net)
         totals = res_data["totals"]
-        assert totals["total_revenue"] == 99.00  # 199.90 + 99.00 - 199.90 (reembolso) = 99.00
-        assert totals["total_sales"] == 1        # 2 aprovadas - 1 reembolso = 1
-        assert totals["total_refunds"] == 1
-        assert totals["total_pending"] == 1
+        assert totals["total_revenue"] == 99.00, f"revenue: {totals}"
+        assert totals["total_sales"] == 1, f"sales: {totals}"
+        assert totals["total_refunds"] == 1, f"refunds: {totals}"
+        assert totals["total_pending"] == 1, f"pending: {totals}"
 
         # 5. Verify top products
         top_products = res_data["top_products"]

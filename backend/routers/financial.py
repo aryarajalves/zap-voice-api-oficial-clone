@@ -4,16 +4,36 @@ from sqlalchemy import func, case
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import pytz
+from collections import defaultdict
 import models
 from core.deps import get_current_user, get_db, get_validated_client_id
+from services.webhooks_utils import normalize_phone_suf, normalize_product_key
+from services.financial_meta_service import get_meta_costs_summary
 
 router = APIRouter()
+
+
+@router.get("/financial/meta-costs", summary="Custos Detalhados da Meta API (Regras Out/2026)")
+def get_meta_costs_endpoint(
+    month: Optional[str] = None, # Formato "YYYY-MM"
+    client_id: int = Depends(get_validated_client_id),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Retorna o consumo e estimativa de fatura da Meta API sob a nova política (01/10/2026):
+    - Franquia mensal de 1.000 mensagens de serviço gratuitas
+    - Tarifas por mensagem/template (Marketing, Utilidade, Serviço)
+    - Projeção de custo no fechamento do mês
+    """
+    return get_meta_costs_summary(db=db, client_id=client_id, target_month=month)
 
 
 @router.get("/financial/summary", summary="Resumo Financeiro de Disparos")
 def get_financial_summary(
     period: str = "monthly",  # daily, weekly, monthly, yearly
     source: str = "all",      # all, bulk, webhook, other
+    month: Optional[str] = None, # Formato "YYYY-MM" para filtrar por um mês específico
     client_id: int = Depends(get_validated_client_id),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -22,6 +42,7 @@ def get_financial_summary(
     Retorna resumo financeiro de disparos agrupados por período.
     Mostra quantos templates foram pagos vs gratuitos, custo total e economia estimada.
     source: 'all' | 'bulk' (disparo em massa) | 'webhook' (integração webhook) | 'other' (funil/manual)
+    month: Filtro opcional por mês específico ('YYYY-MM')
     """
 
 
@@ -51,6 +72,26 @@ def get_financial_summary(
             models.ScheduledTrigger.is_bulk != True,
             models.ScheduledTrigger.integration_id == None
         )
+
+    # Filter by specific month (YYYY-MM)
+    if month and month.strip():
+        try:
+            from calendar import monthrange
+            parts = month.strip().split("-")
+            m_year = int(parts[0])
+            m_month = int(parts[1])
+            _, last_day = monthrange(m_year, m_month)
+            tz_br = pytz.timezone('America/Sao_Paulo')
+            start_dt_br = tz_br.localize(datetime(m_year, m_month, 1, 0, 0, 0))
+            end_dt_br = tz_br.localize(datetime(m_year, m_month, last_day, 23, 59, 59, 999999))
+            start_dt_utc = start_dt_br.astimezone(timezone.utc)
+            end_dt_utc = end_dt_br.astimezone(timezone.utc)
+            query = query.filter(
+                models.ScheduledTrigger.created_at >= start_dt_utc,
+                models.ScheduledTrigger.created_at <= end_dt_utc
+            )
+        except Exception:
+            pass
 
     triggers = query.all()
 
@@ -266,7 +307,11 @@ def get_financial_sales(
         except ValueError:
             pass
 
-    histories = query.all()
+    histories = query.order_by(models.WebhookHistory.created_at.asc(), models.WebhookHistory.id.asc()).all()
+
+    # Rastreamento de compras ativas por contato e produto para evitar reembolsos duplicados
+    # Chave: (lead_key, product_key) -> int (saldo de compras aprovadas disponíveis para reembolso)
+    active_purchases_balance = defaultdict(int)
 
     totals = {
         "total_revenue": 0.0,
@@ -276,7 +321,6 @@ def get_financial_sales(
     }
 
     # Grouped by period buckets
-    from collections import defaultdict
     buckets = defaultdict(lambda: {
         "revenue": 0.0,
         "sales_count": 0,
@@ -335,6 +379,7 @@ def get_financial_sales(
         raw_status = data.get("raw_status") or h.status
         buyer_name = data.get("name") or "—"
         buyer_phone = data.get("phone") or ""
+        buyer_email = data.get("email") or ""
         
         # Filtro de etiqueta de contato (compara os 8 últimos dígitos do comprador com a conversa etiquetada)
         if matching_phones_for_label is not None:
@@ -351,9 +396,9 @@ def get_financial_sales(
             tx_status_category = "approved"
         elif evt in ["pix_gerado", "boleto_impresso"]:
             tx_status_category = "pending"
-        elif evt == "reembolso":
+        elif evt in ["reembolso", "chargeback"]:
             tx_status_category = "refunded"
-        elif evt in ["cartao_recusado", "pix_expirado", "chargeback"]:
+        elif evt in ["cartao_recusado", "pix_expirado"]:
             tx_status_category = "canceled"
 
         # Coleta todos os nomes de produto distintos (antes de qualquer filtro de produto)
@@ -370,15 +415,28 @@ def get_financial_sales(
         if product_list and p_name not in product_list:
             continue
 
-        # Apply status filter
-        status_list = [s.strip() for s in status.split(',') if s.strip() and s.strip() != 'all']
-        if status_list:
-            if tx_status_category not in status_list:
-                continue
-        else:
-            # Sem filtro específico: histórico de transações exibe apenas compra_aprovada e reembolso
-            if evt not in ['compra_aprovada', 'compra_aprovada_ob', 'compra_aprovada_com_ob', 'compra_aprovada_upsell', 'reembolso']:
-                continue
+        # Trava de Reembolso Duplicado:
+        # Vincula compras e reembolsos pelo contato (telefone ou e-mail) + produto.
+        # Se for reembolso mas o contato não tiver saldo de compra aprovada disponível, ignora.
+        lead_key = (
+            normalize_phone_suf(buyer_phone)
+            or (str(buyer_email).strip().lower() if buyer_email else None)
+            or (str(buyer_name).strip().lower() if buyer_name and buyer_name != "—" else None)
+        )
+        prod_key = normalize_product_key(p_name)
+        buyer_prod_token = (lead_key, prod_key) if lead_key else None
+
+        APPROVED_EVENTS = {"compra_aprovada", "compra_aprovada_ob", "compra_aprovada_com_ob", "compra_aprovada_upsell"}
+        REFUND_EVENTS = {"reembolso", "chargeback"}
+        if evt in APPROVED_EVENTS:
+            if buyer_prod_token:
+                active_purchases_balance[buyer_prod_token] += 1
+        elif evt in REFUND_EVENTS:
+            if buyer_prod_token:
+                if active_purchases_balance[buyer_prod_token] <= 0:
+                    # Reembolso ou Chargeback repetido/duplicado sem nova compra aprovada correspondente
+                    continue
+                active_purchases_balance[buyer_prod_token] -= 1
 
         # Classify totals
         # Adjust UTC to Brasilia Timezone for period grouping
@@ -387,8 +445,6 @@ def get_financial_sales(
             dt_utc = dt_utc.replace(tzinfo=timezone.utc)
         dt_br = dt_utc.astimezone(tz_br)
 
-        # Classify totals
-        APPROVED_EVENTS = {"compra_aprovada", "compra_aprovada_ob", "compra_aprovada_com_ob", "compra_aprovada_upsell"}
         if evt in APPROVED_EVENTS:
             totals["total_revenue"] += price_val
             totals["total_sales"] += 1
@@ -398,9 +454,10 @@ def get_financial_sales(
             day_key = dt_br.strftime("%Y-%m-%d")
             buckets[day_key]["revenue"] += price_val
             buckets[day_key]["sales_count"] += 1
-        elif evt == "reembolso":
+        elif evt in REFUND_EVENTS:
             totals["total_refunds"] += 1
             totals["total_revenue"] -= price_val
+            totals["total_sales"] = max(0, totals["total_sales"] - 1)
             product_stats[p_name]["total_revenue"] -= price_val
             
             day_key = dt_br.strftime("%Y-%m-%d")
@@ -408,6 +465,16 @@ def get_financial_sales(
             buckets[day_key]["sales_count"] -= 1
         elif evt in ["pix_gerado", "boleto_impresso"]:
             totals["total_pending"] += 1
+
+        # Apply status filter para a lista de transações
+        status_list = [s.strip() for s in status.split(',') if s.strip() and s.strip() != 'all']
+        if status_list:
+            if tx_status_category not in status_list:
+                continue
+        else:
+            # Sem filtro específico: histórico de transações exibe compra_aprovada, reembolso e chargeback
+            if evt not in ['compra_aprovada', 'compra_aprovada_ob', 'compra_aprovada_com_ob', 'compra_aprovada_upsell', 'reembolso', 'chargeback']:
+                continue
 
         EVENT_TYPE_LABELS = {
             "compra_aprovada": "Compra Aprovada",
@@ -429,6 +496,7 @@ def get_financial_sales(
             "assinatura_vencida": "Assinatura Vencida",
             "assinatura_renovada": "Assinatura Renovada",
             "form_submission": "Formulário",
+            "formulario": "Formulário",
             "evento_aluno": "Evento de Aluno",
             "outros": "Outro",
         }

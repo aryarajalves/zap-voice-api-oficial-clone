@@ -1,23 +1,56 @@
 import React from 'react';
 import { PERIOD_OPTIONS, SOURCE_OPTIONS } from '../constants';
 
-export default function DispatchesFilterBar({ period, setPeriod, source, setSource }) {
+export default function DispatchesFilterBar({
+  period,
+  setPeriod,
+  source,
+  setSource,
+  selectedMonth,
+  setSelectedMonth
+}) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2 flex-wrap">
-        {PERIOD_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setPeriod(opt.value)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              period === opt.value
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Filtros de Agrupamento */}
+        <div className="flex gap-2 flex-wrap">
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setPeriod(opt.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                period === opt.value
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Seletor de Mês Específico */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="filter-specific-month" className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
+            Mês Específico:
+          </label>
+          <input
+            id="filter-specific-month"
+            type="month"
+            value={selectedMonth || ''}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+          />
+          {selectedMonth && (
+            <button
+              onClick={() => setSelectedMonth('')}
+              title="Limpar filtro de mês"
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all cursor-pointer"
+            >
+              Limpar
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">

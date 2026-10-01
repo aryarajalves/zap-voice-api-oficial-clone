@@ -84,7 +84,7 @@ propcache==0.4.1         # Cache de propriedades (dependência interna)
 six==1.17.0              # Compatibilidade Python 2/3 (dependência de libs antigas)
 typing-inspection==0.4.2 # Inspeção de tipos em tempo de execução
 typing_extensions==4.15.0 # Tipos extras do Python para versões antigas
-urllib3==2.7.0           # Cliente HTTP de baixo nível (dependência do boto3)
+urllib3==2.8.0           # Cliente HTTP de baixo nível (dependência do boto3) - Atualizado v2.8.0 (Fix CVE-2026-97687/88/89)
 wrapt==2.0.1             # Decoradores avançados (dependência interna)
 yarl==1.22.0             # Manipulação de URLs (dependência do aio-pika)
 

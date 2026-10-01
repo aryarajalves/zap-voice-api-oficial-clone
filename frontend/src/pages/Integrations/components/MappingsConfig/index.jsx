@@ -21,13 +21,23 @@ const MappingsConfig = ({ formData, setFormData, templates, funnels, chatwootLab
   };
 
   const addMapping = () => {
+    const defaultEventType = platform === 'yayforms'
+      ? 'formulario'
+      : (platform === 'elementor'
+          ? 'form_submission'
+          : (platform === 'zapgroup'
+              ? 'voto_enquete'
+              : (['bussola_quiz', 'quiz_bussola'].includes(platform)
+                  ? 'leitura_concluida'
+                  : 'compra_aprovada')));
+
     setFormData({
       ...formData,
       mappings: [
         ...formData.mappings,
         {
           id: Date.now(),
-          event_type: 'compra_aprovada',
+          event_type: defaultEventType,
           template_id: '',
           funnel_id: '',
           delay_minutes: 0,

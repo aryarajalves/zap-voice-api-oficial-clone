@@ -19,6 +19,7 @@ export const PLATFORM_OPTIONS = [
   { value: 'pagtrust', label: 'PagTrust' },
   { value: 'pepper',   label: 'Pepper' },
   { value: 'ticto',    label: 'Ticto' },
+  { value: 'yayforms', label: 'YayForms' },
   { value: 'zapgroup', label: 'ZapGroup' },
 ];
 

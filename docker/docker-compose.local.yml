@@ -7,6 +7,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
     container_name: zapvoice_app
+    restart: unless-stopped
     ports:
       - "8000:8000"
     networks:
@@ -96,7 +97,7 @@ services:
     image: postgres:15-alpine
     container_name: zapvoice-postgres
     ports:
-      - "5435:5432"
+      - "5434:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=5f90d6ef-f64a-44c7-9d68-b928d50ceb8f

@@ -26,6 +26,7 @@ from services.webhooks import (
     process_webhook_automation,
     replace_variables_in_string,
 )
+from services.webhooks_utils import is_refund_eligible_for_lead
 
 from core.security import limiter
 from core.webhook_security import (
@@ -231,6 +232,16 @@ async def handle_external_webhook(
                     GLOBAL_DEDUPLICATION_LOCKS[dedup_lock_key] = {"timestamp": now, "history_id": orig_history_id}
                     return {"status": "ignored", "reason": "duplicate_event_lock", "history_id": orig_history_id}
 
+        # 2.2. Trava Inteligente de Reembolso e Chargeback:
+        # Só aceita se houver compra ativa anterior para o produto. Se já foi reembolsado/chargeback, só aceita de novo se recomprar.
+        if event_type in ["reembolso", "chargeback"]:
+            raw_email = extracted_data.get("email")
+            raw_prod = extracted_data.get("product_name")
+            raw_name = extracted_data.get("name")
+            if not is_refund_eligible_for_lead(db, integration.id, phone, raw_email, raw_prod, raw_name):
+                logger.warning(f"🚫 [REFUND_DUPLICATE_BLOCK] {event_type.capitalize()} ignorado para {phone or raw_email} no produto '{raw_prod}'. Não há compra ativa pendente de estorno.")
+                return {"status": "ignored", "reason": "duplicate_refund_no_active_purchase"}
+
         # 3. Create History Record EARLIER (to ensure logging)
         history = models.WebhookHistory(
             integration_id=integration.id,
@@ -303,6 +314,14 @@ async def handle_external_webhook(
                 mapping = find_mapping_for("leitura_concluida", product_name)
             if not mapping:
                 mapping = find_mapping_for("leitura_concluida", None)
+
+        # 4.2.2. Alias para formulario <-> form_submission
+        if not mapping and event_type in ("formulario", "form_submission"):
+            alt_ev = "form_submission" if event_type == "formulario" else "formulario"
+            if product_name:
+                mapping = find_mapping_for(alt_ev, product_name)
+            if not mapping:
+                mapping = find_mapping_for(alt_ev, None)
 
         # 4.3. 'outros' (catch-all) + Specific product name
         if not mapping and event_type != "outros" and product_name:

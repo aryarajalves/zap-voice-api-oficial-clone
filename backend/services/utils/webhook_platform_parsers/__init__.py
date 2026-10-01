@@ -28,6 +28,9 @@ from .crm_and_groups import (
 from .bussola_quiz import (
     parse_bussola_quiz,
 )
+from .yayforms import (
+    parse_yayforms,
+)
 
 __all__ = [
     "get_doc_label",
@@ -50,4 +53,5 @@ __all__ = [
     "parse_appmax",
     "parse_zapgroup",
     "parse_bussola_quiz",
+    "parse_yayforms",
 ]
